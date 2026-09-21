@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Journal · warm timeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FEFCE8;
+    --card:#FFFDF6;
+    --ink:#483523;
+    --ink-mid:#5A4630;
+    --ink-soft:#8A7458;
+    --faint:#AC9770;
+    --amber:#FFB534;
+    --amber-deep:#C87F14;
+    --coral:#FF7F50;
+    --coral-deep:#C2532E;
+    --thread:#E7D4A4;
+    --hand:'Caveat', cursive;
+    --sans:'Nunito', 'Segoe UI', sans-serif;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  button{ font-family:var(--sans); }
+  body{
+    margin:0; min-height:100vh; font-family:var(--sans);
+    display:grid; place-items:center; padding:34px 18px;
+    background: radial-gradient(1100px 700px at 62% 36%, rgba(255,181,52,.06), transparent 65%), #291F14;
+  }
+  /* fine film grain over the whole stage */
+  body::after{
+    content:""; position:fixed; inset:0; z-index:99; pointer-events:none; opacity:.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  }
+
+  .stage{ display:flex; align-items:center; gap:54px; }
+  .devwrap, .annot{ animation: rise .9s cubic-bezier(.2,.8,.3,1) both; }
+  .annot{ animation-delay:.18s; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(22px);} }
+
+  /* ---------- margin notes (desktop annotation) ---------- */
+  .annot{ width:238px; color:#B69A6D; }
+  .annot h2{ margin:0 0 4px; font-family:var(--hand); font-weight:600; font-size:27px; color:#EFD9A7; }
+  .arule{ border-top:1.5px dashed rgba(230,200,140,.4); margin:14px 0 18px; }
+  .pal{ list-style:none; margin:0 0 20px; padding:0; display:flex; flex-direction:column; gap:10px; }
+  .pal li{ display:flex; align-items:center; gap:10px; font-size:12px; }
+  .pal i{ width:15px; height:15px; border-radius:6px; background:var(--c); box-shadow:inset 0 0 0 1px rgba(255,255,255,.14); }
+  .pal code{ font-size:11.5px; font-weight:800; letter-spacing:.06em; color:#E6CE9C; }
+  .pal span{ margin-left:auto; color:#9B8256; font-style:italic; }
+  .an{ margin:0 0 13px; font-size:12.5px; line-height:1.65; }
+  .an.type{ color:#D9BE7F; font-family:var(--hand); font-size:17px; }
+
+  /* ---------- device ---------- */
+  .devwrap{ display:flex; flex-direction:column; }
+  .device{
+    position:relative; width:402px; height:864px; border-radius:48px;
+    background:#221A10; padding:11px;
+    box-shadow: inset 0 0 0 2px rgba(255,235,200,.05), inset 0 0 0 6px #120D07,
+                0 70px 120px -50px rgba(0,0,0,.75), 0 35px 70px -35px rgba(0,0,0,.55);
+  }
+  .side{ position:absolute; background:#3A2E1D; }
+  .side.pw{ right:-3px; top:210px; width:3.5px; height:74px; border-radius:0 3px 3px 0; }
+  .side.v1{ left:-3px; top:160px; width:3.5px; height:44px; border-radius:3px 0 0 3px; }
+  .side.v2{ left:-3px; top:214px; width:3.5px; height:44px; border-radius:3px 0 0 3px; }
+  .screen{
+    position:relative; width:100%; height:100%; border-radius:38px; overflow:hidden;
+    background:var(--paper); display:flex; flex-direction:column;
+  }
+  .punch{
+    position:absolute; top:11px; left:50%; transform:translateX(-50%);
+    width:13px; height:13px; border-radius:50%; background:#0E0A06; z-index:60;
+    box-shadow: inset 0 0 2px 1px rgba(255,255,255,.07), 0 0 0 2px rgba(20,14,8,.55);
+  }
+  .hint{ margin:18px 0 0; text-align:center; font-family:var(--hand); font-weight:600; font-size:19px; color:#C9A96B; }
+
+  /* ---------- status bar ---------- */
+  .statusbar{ flex:0 0 auto; height:38px; display:flex; align-items:center; justify-content:space-between; padding:8px 26px 0; color:var(--ink); }
+  .sb-time{ font-size:12.5px; font-weight:800; letter-spacing:.03em; }
+  .sb-ic{ display:flex; align-items:center; gap:7px; }
+  .sb-ic svg{ height:15px; width:auto; display:block; }
+
+  /* ---------- app header ---------- */
+  .apphead{ display:flex; justify-content:space-between; align-items:flex-start; padding:10px 20px 2px; }
+  .title{ margin:0; font-family:var(--hand); font-weight:700; font-size:46px; line-height:.9; color:var(--ink); }
+  .squig{ display:block; margin:7px 0 8px; }
+  .sub{ margin:0; font-size:11.5px; font-weight:700; letter-spacing:.17em; color:#A68F68; }
+  .fbtn{
+    margin-top:12px; width:42px; height:42px; border-radius:50%;
+    border:1px solid rgba(214,170,80,.4); background:rgba(255,181,52,.13); color:var(--ink-soft);
+    display:grid; place-items:center; cursor:pointer; overflow:hidden; position:relative; transition:.2s;
+  }
+  .fbtn svg{ width:19px; height:19px; }
+  .fbtn:active{ transform:scale(.92); }
+  .fbtn.hot{ background:rgba(255,181,52,.28); color:#B26E0F; border-color:rgba(226,166,70,.55); }
+  .fbtn.dot::after{ content:""; position:absolute; top:7px; right:7px; width:7px; height:7px; border-radius:50%; background:#E8A22C; box-shadow:0 0 0 2px var(--paper); }
+  .fcap{ min-height:26px; margin:0; padding:2px 20px 0; font-family:var(--hand); font-weight:600; font-size:19px; color:var(--amber-deep); opacity:0; transform:translateY(-4px); transition:.3s; }
+  .fcap.show{ opacity:1; transform:none; }
+
+  /* ---------- scroll body ---------- */
+  .scroller{
+    flex:1; overflow-y:auto; overflow-x:hidden; padding:0 18px 26px;
+    scrollbar-width:none; overscroll-behavior:contain;
+    -webkit-mask-image:linear-gradient(#000 calc(100% - 24px), transparent);
+            mask-image:linear-gradient(#000 calc(100% - 24px), transparent);
+  }
+  .scroller::-webkit-scrollbar{ display:none; }
+
+  .dgroup{ margin-top:26px; }
+  .dgroup:first-child{ margin-top:4px; }
+  .dhead{
+    position:sticky; top:0; z-index:6; display:flex; align-items:baseline; gap:10px;
+    padding:12px 0 10px 52px;
+    background:linear-gradient(var(--paper) 72%, rgba(254,252,232,0));
+  }
+  .dhead .seed{ position:absolute; left:15.5px; top:17px; width:10px; height:10px; border-radius:50%; background:#D9BE7F; box-shadow:0 0 0 3.5px var(--paper); }
+  .dname{ font-family:var(--hand); font-weight:700; font-size:27px; line-height:1; color:var(--ink); transition:font-size .25s; }
+  .ddate{ font-size:9.5px; font-weight:800; letter-spacing:.15em; text-transform:uppercase; color:#B4A382; }
+  .dhead.stuck .dname{ font-size:23px; }
+  .dhead.stuck::after{ content:""; position:absolute; left:52px; right:6px; bottom:6px; border-top:1.5px dashed var(--thread); }
+
+  /* entry row: mood bead on the stitched thread + card */
+  .entry{ position:relative; display:flex; gap:12px; align-items:flex-start; margin-bottom:17px; }
+  .entry::before{ content:""; position:absolute; left:19px; top:-17px; bottom:-1px; border-left:2px dashed var(--thread); z-index:0; }
+  .entry:last-child::before{ bottom:auto; height:37px; }
+  .marker{
+    position:relative; z-index:1; flex:0 0 40px; width:40px; height:40px; border-radius:50%;
+    display:grid; place-items:center;
+    box-shadow:0 0 0 4px var(--paper), 0 5px 12px -6px rgba(150,100,30,.35);
+  }
+  .marker svg{ width:20px; height:20px; display:block; }
+
+  .tape{
+    position:absolute; z-index:3; top:-8px; right:16px; width:72px; height:20px; border-radius:3px;
+    background:rgba(255,181,52,.32); transform:rotate(3.5deg); pointer-events:none;
+    box-shadow:0 3px 7px -3px rgba(140,95,30,.35);
+  }
+  .tape::after{ content:""; position:absolute; inset:0; border-radius:3px; background:repeating-linear-gradient(90deg, rgba(255,255,255,.16) 0 5px, rgba(255,255,255,0) 5px 11px); }
+  .tape.coral{ background:rgba(255,127,80,.30); right:22px; transform:rotate(-4deg); }
+
+  .card{
+    position:relative; flex:1; min-width:0; overflow:hidden;
+    background:var(--card); border:1px solid rgba(226,193,133,.5); border-radius:22px;
+    padding:13px 15px; cursor:pointer;
+    box-shadow:0 14px 30px -18px rgba(150,100,30,.30), 0 3px 8px -4px rgba(150,100,30,.12);
+    transform:rotate(var(--tilt,0deg)); transition:transform .2s ease, box-shadow .25s ease;
+  }
+  @media (hover:hover){
+    .card:hover{ transform:rotate(var(--tilt,0deg)) translateY(-2px); box-shadow:0 20px 38px -18px rgba(150,100,30,.38), 0 4px 10px -4px rgba(150,100,30,.14); }
+  }
+  .card:active{ transform:rotate(var(--tilt,0deg)) translateY(1px) scale(.992); }
+  .card:focus-visible{ outline:2px dashed #E8A22C; outline-offset:3px; }
+
+  .crow{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .etype{ font-size:9.5px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#AC9770; }
+  .etime{ font-size:11px; font-weight:700; color:var(--ink-soft); white-space:nowrap; }
+  .srow{ display:flex; align-items:center; gap:8px; margin-top:5px; }
+  .snippet{
+    margin:0; min-width:0; font-family:var(--hand); font-weight:600; font-size:21px; line-height:1.22; color:var(--ink-mid);
+    display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .chev{ flex:0 0 auto; width:15px; height:15px; color:#C6B28C; transition:transform .3s; }
+  .card.expanded .chev{ transform:rotate(180deg); }
+
+  .more{ max-height:0; opacity:0; overflow:hidden; margin:0; transition:max-height .5s cubic-bezier(.25,.9,.3,1), opacity .35s ease, margin .5s cubic-bezier(.25,.9,.3,1); }
+  .card.expanded .more{ max-height:320px; opacity:1; margin-top:10px; }
+  .mtext{ margin:0; font-family:var(--hand); font-weight:600; font-size:19px; line-height:1.32; color:#6B553A; }
+  .mdiv{ border-top:1.5px dashed var(--thread); margin:11px 0 9px; }
+  .mfoot{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .moodpill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:10.5px; font-weight:800; letter-spacing:.04em; }
+  .moodpill svg{ width:13px; height:13px; }
+  .mnote{ font-size:10px; font-weight:700; font-style:italic; letter-spacing:.02em; color:#BDA87F; white-space:nowrap; }
+
+  /* voice cards */
+  .vlabel{ margin:6px 0 0; font-family:var(--hand); font-weight:600; font-size:20px; color:var(--ink-mid); }
+  .vlabel.bump{ animation:vpop .35s ease; }
+  @keyframes vpop{ from{ opacity:.2; transform:translateY(3px);} }
+  .vrow{ display:flex; align-items:center; gap:11px; margin-top:9px; }
+  .vplay{
+    position:relative; flex:0 0 38px; width:38px; height:38px; border-radius:50%; border:none;
+    background:#4A3826; color:#FDF6E3; display:grid; place-items:center; cursor:pointer; overflow:hidden;
+    box-shadow:0 6px 14px -6px rgba(70,45,10,.5); transition:transform .15s;
+  }
+  .vplay:active{ transform:scale(.9); }
+  .vplay svg{ position:absolute; width:15px; height:15px; }
+  .vplay .ipau, .vplay .ire{ display:none; }
+  .vcard[data-phase="playing"] .ip{ display:none; } .vcard[data-phase="playing"] .ipau{ display:block; }
+  .vcard[data-phase="heard"] .ip{ display:none; }   .vcard[data-phase="heard"] .ire{ display:block; }
+  .wave{ position:relative; flex:1; min-width:0; height:30px; }
+  .bars{ display:flex; align-items:center; gap:3px; height:30px; width:100%; }
+  .bars.fill{ position:absolute; inset:0; clip-path:inset(0 100% 0 0); }
+  .bar{ flex:1 0 2px; max-width:4.6px; height:calc(var(--h) * 1%); border-radius:99px; background:#EAD6A6; }
+  .bars.fill .bar{ background:#E8A22C; }
+  .vcard.playing .bar{ animation:sway 1.15s ease-in-out calc(var(--i) * -0.08s) infinite alternate; }
+  @keyframes sway{ from{ transform:scaleY(.55);} to{ transform:scaleY(1.18);} }
+  .vcard.heard .wave{ animation:settle .6s ease; }
+  @keyframes settle{ from{ transform:scale(1.035);} }
+  .vsub{ margin:8px 0 0; font-size:10.5px; font-weight:600; font-style:italic; color:#B4A382; }
+
+  /* session cards */
+  .card.scard{ background:#FFF5EB; border-color:rgba(255,150,105,.42); }
+  .etype-s{ color:var(--coral-deep); }
+  .swith{ margin:6px 0 0; font-size:11.5px; font-weight:800; letter-spacing:.05em; color:var(--coral-deep); }
+
+  /* end of the timeline */
+  .endmark{ position:relative; display:flex; gap:12px; align-items:center; margin-top:24px; padding:6px 0 2px; }
+  .endmark::before{ content:""; position:absolute; left:19px; top:-20px; height:42px; border-left:2px dashed var(--thread); }
+  .endknot{ flex:0 0 40px; width:40px; height:40px; border-radius:50%; display:grid; place-items:center; background:#F6EDD2; color:#B26E0F; box-shadow:0 0 0 4px var(--paper), 0 5px 12px -6px rgba(150,100,30,.35); }
+  .endknot svg{ width:20px; height:20px; }
+  .loadmore{
+    border:1.5px dashed #DFB35F; background:rgba(255,181,52,.10); color:#B26E0F;
+    font-weight:700; font-size:13px; padding:9px 18px; border-radius:999px;
+    cursor:pointer; position:relative; overflow:hidden; transition:.2s;
+  }
+  .loadmore:hover{ background:rgba(255,181,52,.2); }
+  .loadmore:active{ transform:scale(.96); }
+  .firstpage .fp-t{ margin:0; font-family:var(--hand); font-weight:700; font-size:21px; color:var(--ink-mid); }
+  .firstpage .fp-s{ margin:3px 0 0; font-size:9.5px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#B4A382; }
+
+  /* ---------- bottom navigation ---------- */
+  .navbar{
+    flex:0 0 auto; display:flex; position:relative; z-index:20;
+    background:var(--card); border-top:1px solid rgba(226,193,133,.5);
+    box-shadow:0 -10px 26px -20px rgba(150,100,30,.4); padding:7px 8px 5px;
+  }
+  .tab{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:7px 0 5px; border:none; background:none; border-radius:14px;
+    color:#A78F6B; cursor:pointer; position:relative; overflow:hidden;
+    transition:color .2s, transform .12s;
+  }
+  .tab svg{ width:23px; height:23px; }
+  .tab span{ font-size:10.5px; font-weight:800; letter-spacing:.05em; }
+  .tab:active{ transform:scale(.93); }
+  .tab.active{ color:var(--amber-deep); }
+  .tab.active::after{ content:""; width:20px; margin-top:1px; border-top:2px dashed #E8A22C; }
+  .gbar{ flex:0 0 26px; display:flex; justify-content:center; align-items:center; background:var(--card); }
+  .gbar span{ width:112px; height:4.5px; border-radius:99px; background:#CDB98E; }
+
+  /* ---------- toast ---------- */
+  .toast{
+    position:absolute; left:50%; bottom:112px; transform:translate(-50%,16px);
+    display:flex; align-items:center; gap:8px; max-width:300px;
+    background:var(--card); color:var(--ink-mid); font-size:12px; font-weight:700;
+    padding:10px 16px; border-radius:999px; border:1px solid rgba(226,193,133,.6);
+    box-shadow:0 20px 40px -16px rgba(70,45,10,.45);
+    opacity:0; transition:.35s cubic-bezier(.3,1,.4,1); pointer-events:none; z-index:70;
+  }
+  .toast svg{ width:15px; height:15px; color:var(--amber-deep); flex:0 0 auto; }
+  .toast.show{ opacity:1; transform:translate(-50%,0); }
+
+  /* ---------- filter popover ---------- */
+  .fbackdrop{ position:absolute; inset:0; z-index:30; background:rgba(60,42,22,.08); opacity:0; visibility:hidden; transition:.25s; }
+  .fbackdrop.open{ opacity:1; visibility:visible; }
+  .fpop{
+    position:absolute; top:112px; right:16px; z-index:40; width:202px;
+    background:var(--card); border:1px solid rgba(226,193,133,.6); border-radius:18px; padding:8px;
+    box-shadow:0 30px 60px -22px rgba(80,55,15,.5);
+    opacity:0; visibility:hidden; transform:scale(.9) translateY(-8px); transform-origin:top right;
+    transition:.3s cubic-bezier(.3,1.4,.4,1);
+  }
+  .fpop.open{ opacity:1; visibility:visible; transform:none; }
+  .ftitle{ margin:4px 8px 6px; font-size:9.5px; font-weight:800; letter-spacing:.18em; text-transform:uppercase; color:#B4A382; }
+  .fopt{
+    width:100%; display:flex; align-items:center; gap:10px; padding:9px 10px;
+    border:none; background:none; border-radius:12px; font-weight:700; font-size:13px; color:#6B553A;
+    cursor:pointer; position:relative; overflow:hidden; transition:background .15s;
+  }
+  .fopt svg{ width:17px; height:17px; color:#A68F68; flex:0 0 auto; }
+  .fopt .fcheck{ margin-left:auto; width:15px; height:15px; color:#B26E0F; opacity:0; transition:.2s; }
+  .fopt.on{ background:rgba(255,181,52,.16); color:#A96A0D; }
+  .fopt.on svg{ color:#B26E0F; }
+  .fopt.on .fcheck{ opacity:1; }
+
+  /* ---------- ripple + reveals ---------- */
+  .rip{
+    position:absolute; border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle, rgba(255,181,52,.38), rgba(255,181,52,0) 68%);
+    transform:scale(0); animation:rip .6s ease-out forwards;
+  }
+  @keyframes rip{ 60%{ opacity:.9; } 100%{ transform:scale(1); opacity:0; } }
+  .reveal{ opacity:0; transform:translateY(12px); }
+  .reveal.in{
+    opacity:1; transform:translateY(0);
+    transition:opacity .55s ease var(--d,0ms), transform .55s cubic-bezier(.2,.8,.3,1) var(--d,0ms);
+  }
+
+  @media (max-width:1140px){ .annot{ display:none; } }
+  @media (max-width:460px){
+    .stage{ padding:14px 8px; }
+    .device{ width:100%; max-width:402px; height:min(864px, calc(100vh - 70px)); }
+    .hint{ font-size:17px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .reveal{ opacity:1; transform:none; }
+    .vcard .bar{ animation:none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- margin notes (presentation only) -->
+  <aside class="annot">
+    <h2>notes in the margin</h2>
+    <div class="arule"></div>
+    <ul class="pal">
+      <li><i style="--c:#FFB534"></i><code>#FFB534</code><span>ember</span></li>
+      <li><i style="--c:#FF7F50"></i><code>#FF7F50</code><span>coral</span></li>
+      <li><i style="--c:#FEFCE8; box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)"></i><code>#FEFCE8</code><span>paper</span></li>
+    </ul>
+    <p class="an">No numbers on this screen — moods are weather, not scores.</p>
+    <p class="an">A stitched thread carries the days; washi tape holds the loud ones.</p>
+    <p class="an">Voice notes replay as a breathing waveform.</p>
+    <p class="an type">Caveat for the hand, Nunito for the rest.</p>
+  </aside>
+
+  <div class="devwrap">
+    <div class="device">
+      <span class="side pw"></span><span class="side v1"></span><span class="side v2"></span>
+      <div class="screen">
+        <div class="punch"></div>
+
+        <div class="statusbar">
+          <span class="sb-time" id="sbTime">10:24</span>
+          <div class="sb-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 16v3M8.6 13v6M13.2 10v9M17.8 7v12"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4.5 10.8a10.4 10.4 0 0 1 15 0M7.4 13.6a6.2 6.2 0 0 1 9.2 0M10.2 16.4a2.3 2.3 0 0 1 3.6 0"/><circle cx="12" cy="19.2" r="1.2" fill="currentColor" stroke="none"/></svg>
+            <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="8" width="11.5" height="8" rx="2.2"/><path d="M20.3 10.6v2.8"/><rect x="8.1" y="10" width="5" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+          </div>
+        </div>
+
+        <header class="apphead">
+          <div>
+            <h1 class="title">Journal</h1>
+            <svg class="squig" width="116" height="13" viewBox="0 0 116 13" aria-hidden="true">
+              <path d="M3 8 C 32 2, 62 10, 112 5" fill="none" stroke="#FFB534" stroke-width="4.5" stroke-linecap="round"/>
+              <path d="M8 11 C 44 7, 78 11, 106 9" fill="none" stroke="#FFB534" stroke-width="2" stroke-linecap="round" opacity=".45"/>
+            </svg>
+            <p class="sub">your days, gently kept</p>
+          </div>
+          <button class="fbtn" id="fbtn" aria-label="Filter entries" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M4 6.6h6.6M15.8 6.6H20"/><circle cx="13" cy="6.6" r="2.4"/>
+              <path d="M4 12h2.6M11.2 12H20"/><circle cx="8.8" cy="12" r="2.4"/>
+              <path d="M4 17.4h9.4M18.6 17.4H20"/><circle cx="16" cy="17.4" r="2.4"/>
+            </svg>
+          </button>
+        </header>
+        <p class="fcap" id="fcap"></p>
+
+        <main class="scroller" id="scroller">
+          <div id="timeline"></div>
+        </main>
+
+        <div class="fbackdrop" id="fbackdrop"></div>
+        <div class="fpop" id="fpop" role="menu" aria-label="Filter journal"></div>
+
+        <div class="toast" id="toast">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.2v-7.4"/><path d="M12 13.8C12 9.8 9.2 7.6 5.9 7.6c0 4 2.8 6.2 6.1 6.2z"/><path d="M12 13.8c0-3.6 2.6-5.6 5.7-5.6 0 3.6-2.6 5.6-5.7 5.6z"/></svg>
+          <span id="toastMsg"></span>
+        </div>
+
+        <nav class="navbar" aria-label="Main navigation">
+          <button class="tab" data-tab="today">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.1"/><path d="M12 2.6v2.5M12 18.9v2.5M2.6 12h2.5M18.9 12h2.5M5.4 5.4l1.8 1.8M16.8 16.8l1.8 1.8M18.6 5.4l-1.8 1.8M7.2 16.8l-1.8 1.8"/></svg>
+            <span>Today</span>
+          </button>
+          <button class="tab active" data-tab="journal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.2C10 4.9 7.4 4.7 4.6 5.4v13.2c2.8-.7 5.4-.5 7.4.8 2-1.3 4.6-1.5 7.4-.8V5.4c-2.8-.7-5.4-.5-7.4.8z"/><path d="M12 6.2v13.2"/></svg>
+            <span>Journal</span>
+          </button>
+          <button class="tab" data-tab="insights">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-8.2"/><path d="M12 12.8C12 8.6 9 6.2 5.4 6.2c0 4.2 3 6.6 6.6 6.6z"/><path d="M12 12.8c0-3.9 2.8-6.1 6.2-6.1 0 3.9-2.8 6.1-6.2 6.1z"/></svg>
+            <span>Insights</span>
+          </button>
+          <button class="tab" data-tab="you">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.6" r="3.6"/><path d="M5.5 20.4c.9-3.9 3.5-5.6 6.5-5.6s5.6 1.7 6.5 5.6"/></svg>
+            <span>You</span>
+          </button>
+        </nav>
+        <div class="gbar"><span></span></div>
+      </div>
+    </div>
+    <p class="hint">go on — open a card, play a voice note, try the filter</p>
+  </div>
+</div>
+
+<script>
+/* ============ tiny icon library (hand-drawn, 2px round strokes) ============ */
+const GLYPH = {
+  sun:    `<circle cx="12" cy="12" r="4.1"/><path d="M12 2.6v2.5M12 18.9v2.5M2.6 12h2.5M18.9 12h2.5M5.4 5.4l1.8 1.8M16.8 16.8l1.8 1.8M18.6 5.4l-1.8 1.8M7.2 16.8l-1.8 1.8"/>`,
+  wave:   `<path d="M2.5 12c3.2-4.6 6.3-4.6 9.5 0s6.3 4.6 9.5 0"/>`,
+  cloud:  `<path d="M17.8 17.5H9.2a6.1 6.1 0 1 1 5.8-7.9h1.5a3.95 3.95 0 1 1 .3 7.9z"/>`,
+  moon:   `<path d="M20.6 13.2A8.6 8.6 0 1 1 10.8 3.4a6.8 6.8 0 0 0 9.8 9.8z"/>`,
+  mic:    `<rect x="9" y="2.6" width="6" height="11" rx="3"/><path d="M5.6 11a6.4 6.4 0 0 0 12.8 0"/><path d="M12 17.6V21"/><path d="M8.6 21h6.8"/>`,
+  video:  `<rect x="2.6" y="6.2" width="12.6" height="11.6" rx="3"/><path d="M15.8 10.4l4.6-2.7c.5-.3 1.1.1 1.1.7v7.2c0 .6-.6 1-1.1.7l-4.6-2.7"/>`,
+  pen:    `<path d="M4.2 19.8l1.1-4L16.5 4.6a2 2 0 0 1 2.9 2.9L8.2 18.7l-4 1.1z"/><path d="M14.6 6.4l2.9 2.9"/>`,
+  sparkle:`<path d="M12 3.4l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7 1.7-5z"/>`,
+  sprout: `<path d="M12 21v-8.2"/><path d="M12 12.8C12 8.6 9 6.2 5.4 6.2c0 4.2 3 6.6 6.6 6.6z"/><path d="M12 12.8c0-3.9 2.8-6.1 6.2-6.1 0 3.9-2.8 6.1-6.2 6.1z"/>`,
+  leaf:   `<path d="M12 21.2v-7.4"/><path d="M12 13.8C12 9.8 9.2 7.6 5.9 7.6c0 4 2.8 6.2 6.1 6.2z"/><path d="M12 13.8c0-3.6 2.6-5.6 5.7-5.6 0 3.6-2.6 5.6-5.7 5.6z"/>`,
+  check:  `<path d="M4.5 12.6l4.5 4.5L19.5 6.8"/>`,
+  chev:   `<path d="M6.5 9.5l5.5 5.5 5.5-5.5"/>`,
+};
+const svg = (name, cls='') =>
+  `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[name]}</svg>`;
+
+const PLAY_ICONS = `
+  <svg class="ip" viewBox="0 0 24 24"><path d="M8.6 6.1v11.8c0 .8.9 1.3 1.6.9l9.2-5.9c.6-.4.6-1.3 0-1.7L10.2 5.2c-.7-.4-1.6.1-1.6.9z" fill="currentColor"/></svg>
+  <svg class="ipau" viewBox="0 0 24 24"><rect x="7.2" y="5.6" width="3.4" height="12.8" rx="1.6" fill="currentColor"/><rect x="13.4" y="5.6" width="3.4" height="12.8" rx="1.6" fill="currentColor"/></svg>
+  <svg class="ire" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3.8 11a8.2 8.2 0 1 0 2.5-5.9L3.8 7.7"/><path d="M3.8 3.6v4.1h4.1"/></svg>`;
+
+/* ============ gentle mood vocabulary (warm hues only, no scores) ============ */
+const MOODS = {
+  sunny:  { word:'sunny',  bg:'#FBECC9', deep:'#B26E0F', glyph:'sun',   line:'you felt sunny'  },
+  calm:   { word:'steady', bg:'#E7EAD0', deep:'#75824F', glyph:'wave',  line:'you felt steady' },
+  tender: { word:'tender', bg:'#FBE6CF', deep:'#C05F35', glyph:'cloud', line:'you felt tender' },
+  quiet:  { word:'quiet',  bg:'#F2E6D8', deep:'#9A5F6B', glyph:'moon',  line:'you felt quiet'  },
+};
+
+/* ============ the journal itself ============ */
+const GROUPS = [
+  { label:'Today', date:'Thursday · March 14', entries:[
+    { type:'text', time:'09:12', mood:'sunny',
+      snippet:'Woke before the alarm. Coffee, the window open, the neighbour’s dog arguing with a pigeon.',
+      full:'Woke before the alarm and just lay there for a while, which almost never happens. Coffee with the window open — the neighbour’s dog was arguing with a pigeon and honestly, the pigeon was winning. Decided to take the long way in to work.' },
+    { type:'voice', time:'13:40', mood:'calm', seed:3, vibe:'a steady afternoon',
+      vsub:'a minute about the presentation, said out loud so it stopped circling' },
+    { type:'text', time:'21:05', mood:'tender', tape:true, tilt:'-.5deg',
+      snippet:'Long day. The shower helped. Two pages of reading before sleep — that counts.',
+      full:'Long day, the kind that settles into the shoulders. The shower helped more than expected. Read two whole pages before nodding off on the third — I’m counting it.' },
+  ]},
+  { label:'Yesterday', date:'Wednesday · March 13', entries:[
+    { type:'text', time:'08:30', mood:'quiet', tilt:'.45deg',
+      snippet:'Slow to start. Let myself be slow.',
+      full:'Slow to start — heavy lids, heavy limbs. Let myself be slow anyway: toast, tea, no rushing. Some mornings the kindest thing is to simply begin late.' },
+    { type:'session', time:'17:15', tape:true,
+      topic:'Grounding & better sleep', with:'Dr. Amara Rao',
+      summary:'You talked about the week’s wobble and sleep drifting later again. Amara walked you through the 4-7-8 breath and suggested leaving the phone in the kitchen overnight. She said “progress, not a parade” — it stuck.' },
+    { type:'voice', time:'22:30', mood:'calm', seed:7, vibe:'quiet and warm',
+      vsub:'a sleepy one — mostly just goodnight, out loud' },
+  ]},
+  { label:'Tuesday', date:'March 11', entries:[
+    { type:'text', time:'07:55', mood:'calm',
+      snippet:'Walked the long way to the bus stop. The plum trees are doing something brave.',
+      full:'Took the long way to the bus stop on purpose. The plum trees are doing something brave out there — full blossom in a cold wind. Stood under one for a minute, like visiting a friend.' },
+    { type:'text', time:'12:20', mood:'sunny', tape:true, tilt:'-.4deg',
+      snippet:'Lunch outside with Mira. Laughed until it was genuinely unreasonable.',
+      full:'Lunch outside with Mira in the thin March sun. We laughed until it was genuinely unreasonable — the kind where you have to put the fork down. Note to self: more Tuesdays exactly like this.' },
+    { type:'text', time:'20:15', mood:'tender',
+      snippet:'A wobbly hour after the news. The slow breathing helped, a little.',
+      full:'A wobbly hour after the news — chest tight, thoughts loud. Did the slow breathing Amara showed me; it helped, a little, which is still something. Washed up, warm milk, early bed.' },
+  ]},
+  { label:'Sunday', date:'March 9', entries:[
+    { type:'text', time:'10:05', mood:'sunny',
+      snippet:'Pancakes, unhurried. Sun on the tablecloth like it pays rent.',
+      full:'Pancakes, unhurried, batter everywhere. Sun on the tablecloth like it pays rent. We stayed at the table long after breakfast stopped being breakfast.' },
+    { type:'voice', time:'16:45', mood:'quiet', seed:11, vibe:'a grey-ish hour',
+      vsub:'talked through the Sunday-evening feeling without fixing it' },
+    { type:'text', time:'19:30', mood:'calm', tilt:'.4deg',
+      snippet:'Called Mum. Quiet evening, warm tea, early night.',
+      full:'Called Mum — she talked about her tomatoes for eleven minutes and I loved every second. Quiet evening after: warm tea, lights out early. A gentle end to a gentle week.' },
+  ]},
+];
+const OLDER = [
+  { label:'Saturday', date:'March 7', entries:[
+    { type:'text', time:'11:10', mood:'sunny',
+      snippet:'The farmers’ market. Bought far too many peonies. Zero regrets.',
+      full:'Wandered the farmers’ market with no list and no plan. Bought far too many peonies and a jar of honey from somebody’s cousin. Zero regrets, as intended.' },
+    { type:'voice', time:'15:30', mood:'tender', seed:5, vibe:'list-making, out loud',
+      vsub:'Sunday prep, spoken into the recorder like a letter' },
+    { type:'text', time:'20:00', mood:'calm',
+      snippet:'Early dinner, early lights. Simple is enough sometimes.',
+      full:'Early dinner, early lights, an old film half-watched. Simple is enough sometimes. Fell asleep before deciding otherwise.' },
+  ]},
+];
+
+/* ============ state ============ */
+const scroller = document.getElementById('scroller');
+const timeline = document.getElementById('timeline');
+const fcap     = document.getElementById('fcap');
+let filter = 'all', olderLoaded = false;
+
+/* ============ rendering ============ */
+const daypart = t => { const h = +t.slice(0,2); return h<12 ? 'morning' : h<18 ? 'afternoon' : h<22 ? 'evening' : 'night'; };
+
+function barsHTML(seed){
+  let out = '';
+  for(let i=0;i<28;i++){
+    let h = 18 + 70*Math.abs(Math.sin(i*.58 + seed*1.31)) * (.55 + .45*Math.abs(Math.cos(i*.37 + seed*.7)));
+    out += `<span class="bar" style="--h:${Math.min(96,Math.round(h))};--i:${i}"></span>`;
+  }
+  return out;
+}
+
+function entryHTML(e, idx){
+  const style = `--d:${Math.min(idx*70,420)}ms` + (e.tilt ? `;--tilt:${e.tilt}` : '');
+  const tape  = e.tape ? `<i class="tape${e.type==='session' ? ' coral' : ''}"></i>` : '';
+  const etime = `${e.time} · ${daypart(e.time)}`;
+
+  const marker = e.type === 'session'
+    ? `<span class="marker" style="background:#FEDBC0;color:#C2532E">${svg('video')}</span>`
+    : `<span class="marker" style="background:${MOODS[e.mood].bg};color:${MOODS[e.mood].deep}">${svg(MOODS[e.mood].glyph)}</span>`;
+
+  let inner = '', cls = 'card';
+  if(e.type === 'session'){
+    cls += ' scard';
+    inner = `
+      <div class="crow"><span class="etype etype-s">session</span><span class="etime">${etime}</span></div>
+      <div class="srow"><p class="snippet">${e.topic}</p>${svg('chev','chev')}</div>
+      <p class="swith">with ${e.with} · video call</p>
+      <div class="more">
+        <p class="mtext">${e.summary}</p>
+        <div class="mdiv"></div>
+        <div class="mfoot">
+          <span class="moodpill" style="background:#FEDBC0;color:#C2532E">${svg('video')}${e.with}</span>
+          <span class="mnote">thank you for showing up</span>
+        </div>
+      </div>`;
+  } else if(e.type === 'voice'){
+    cls += ' vcard';
+    inner = `
+      <div class="crow"><span class="etype">voice check-in</span><span class="etime">${etime}</span></div>
+      <p class="vlabel" data-orig="${e.vibe}">${e.vibe}</p>
+      <div class="vrow">
+        <button class="vplay" aria-label="Play voice note">${PLAY_ICONS}</button>
+        <div class="wave">
+          <div class="bars base">${barsHTML(e.seed)}</div>
+          <div class="bars fill">${barsHTML(e.seed)}</div>
+        </div>
+      </div>
+      <p class="vsub">${e.vsub}</p>`;
+  } else {
+    const m = MOODS[e.mood];
+    inner = `
+      <div class="crow"><span class="etype">journal note</span><span class="etime">${etime}</span></div>
+      <div class="srow"><p class="snippet">${e.snippet}</p>${svg('chev','chev')}</div>
+      <div class="more">
+        <p class="mtext">${e.full}</p>
+        <div class="mdiv"></div>
+        <div class="mfoot">
+          <span class="moodpill" style="background:${m.bg};color:${m.deep}">${svg(m.glyph)}${m.line}</span>
+          <span class="mnote">gently noted</span>
+        </div>
+      </div>`;
+  }
+
+  const focusable = e.type !== 'voice' ? ' tabindex="0" role="button" aria-expanded="false"' : '';
+  return `<article class="entry reveal" style="${style}">${tape}${marker}
+    <div class="${cls}" data-phase="idle"${focusable}>${inner}</div>
+  </article>`;
+}
+
+function endmarkHTML(){
+  if(olderLoaded){
+    return `<div class="endmark reveal">
+      <span class="endknot">${svg('leaf')}</span>
+      <div class="firstpage">
+        <p class="fp-t">the first page — March 7</p>
+        <p class="fp-s">this is where the journal begins</p>
+      </div>
+    </div>`;
+  }
+  return `<div class="endmark reveal">
+    <span class="endknot">${svg('leaf')}</span>
+    <button class="loadmore">further back…</button>
+  </div>`;
+}
+
+const matches = e => filter === 'all' || e.type === filter || (filter === 'written' && e.type === 'text');
+
+function render(){
+  if(active) stopVoice(active);
+  const src = olderLoaded ? [...GROUPS, ...OLDER] : GROUPS;
+  let html = '';
+  src.forEach(g => {
+    const es = g.entries.filter(matches);
+    if(!es.length) return;
+    html += `<section class="dgroup">
+      <div class="dhead reveal"><span class="seed"></span><span class="dname">${g.label}</span><span class="ddate">${g.date}</span></div>
+      <div class="thread">${es.map((e,i)=>entryHTML(e,i)).join('')}</div>
+    </section>`;
+  });
+  timeline.innerHTML = html + endmarkHTML();
+  observeAll();
+  checkSticky();
+}
+
+/* ============ soft reveals on scroll ============ */
+const io = new IntersectionObserver(entries => {
+  entries.forEach(en => { if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } });
+}, { root: scroller, threshold: .05, rootMargin: '0px 0px -4% 0px' });
+
+function observeAll(){
+  const vr = scroller.getBoundingClientRect();
+  scroller.querySelectorAll('.reveal:not(.in)').forEach(el => {
+    const r = el.getBoundingClientRect();
+    if(r.bottom < vr.top + 40){ el.classList.add('in'); }   // already scrolled past — keep visible
+    else io.observe(el);
+  });
+}
+
+/* ============ sticky date headers ============ */
+let stickRAF = null;
+function checkSticky(){
+  const top = scroller.getBoundingClientRect().top;
+  scroller.querySelectorAll('.dhead').forEach(h =>
+    h.classList.toggle('stuck', h.getBoundingClientRect().top - top <= 2));
+}
+scroller.addEventListener('scroll', () => {
+  if(stickRAF) return;
+  stickRAF = requestAnimationFrame(() => { stickRAF = null; checkSticky(); });
+}, { passive:true });
+
+/* ============ voice notes (visual playback) ============ */
+const DUR = 6500;
+let active = null, raf = null, t0 = 0;
+
+const setFill = (card, p) => {
+  card.querySelector('.bars.fill').style.clipPath = `inset(0 ${Math.max(0,100-p)}% 0 0)`;
+};
+function setLabel(card, txt){
+  const vl = card.querySelector('.vlabel');
+  vl.textContent = txt;
+  vl.classList.remove('bump'); void vl.offsetWidth; vl.classList.add('bump');
+}
+function stopVoice(card){
+  cancelAnimationFrame(raf); raf = null;
+  card.dataset.phase = 'idle'; card._p = 0;
+  card.classList.remove('playing');
+  setFill(card, 0);
+  setLabel(card, card.querySelector('.vlabel').dataset.orig);
+  if(active === card) active = null;
+}
+function finishVoice(card){
+  cancelAnimationFrame(raf); raf = null;
+  card.dataset.phase = 'heard'; card._p = 1;
+  card.classList.remove('playing'); card.classList.add('heard');
+  setLabel(card, 'gently heard');
+  active = null;
+}
+function tickVoice(){
+  if(!active) return;
+  const p = (performance.now() - t0) / DUR;
+  if(p >= 1){ setFill(active, 1); finishVoice(active); return; }
+  setFill(active, p);
+  raf = requestAnimationFrame(tickVoice);
+}
+function handleVoice(card){
+  const phase = card.dataset.phase || 'idle';
+  if(active && active !== card) stopVoice(active);
+  if(phase === 'playing'){                       // pause
+    card._p = (performance.now() - t0) / DUR;
+    card.dataset.phase = 'paused';
+    card.classList.remove('playing');
+    setLabel(card, 'paused · tap to carry on');
+    cancelAnimationFrame(raf); raf = null; active = null;
+    return;
+  }
+  if(phase === 'idle' || phase === 'heard'){ card._p = 0; card.classList.remove('heard'); }
+  t0 = performance.now() - (card._p || 0) * DUR;
+  card.dataset.phase = 'playing';
+  card.classList.add('playing');
+  setLabel(card, 'listening…');
+  active = card;
+  raf = requestAnimationFrame(tickVoice);
+}
+
+/* ============ interactions (delegated) ============ */
+scroller.addEventListener('click', ev => {
+  const lm = ev.target.closest('.loadmore');
+  if(lm){ olderLoaded = true; render(); return; }
+  const vp = ev.target.closest('.vplay');
+  if(vp){ handleVoice(vp.closest('.vcard')); return; }
+  const card = ev.target.closest('.card');
+  if(card && !card.classList.contains('vcard')){
+    const open = card.classList.toggle('expanded');
+    card.setAttribute('aria-expanded', open);
+  }
+});
+scroller.addEventListener('keydown', ev => {
+  if(ev.key !== 'Enter' && ev.key !== ' ') return;
+  const c = ev.target.closest('.card');
+  if(c && !c.classList.contains('vcard')){ ev.preventDefault(); c.classList.toggle('expanded'); }
+});
+
+/* warm ripple on anything pressable */
+document.addEventListener('pointerdown', e => {
+  const t = e.target.closest('.card, .tab, .fbtn, .vplay, .loadmore, .fopt');
+  if(!t) return;
+  const r = t.getBoundingClientRect();
+  const d = Math.max(r.width, r.height) * 1.9;
+  const s = document.createElement('span');
+  s.className = 'rip';
+  s.style.width = s.style.height = d + 'px';
+  s.style.left = (e.clientX - r.left - d/2) + 'px';
+  s.style.top  = (e.clientY - r.top  - d/2) + 'px';
+  t.appendChild(s);
+  s.addEventListener('animationend', () => s.remove());
+});
+
+/* ============ filter popover ============ */
+const fbtn = document.getElementById('fbtn');
+const fpop = document.getElementById('fpop');
+const fbackdrop = document.getElementById('fbackdrop');
+const FILTERS = [
+  { k:'all',     label:'Everything',     icon:'sparkle' },
+  { k:'written', label:'Written notes',  icon:'pen'     },
+  { k:'voice',   label:'Voice notes',    icon:'mic'     },
+  { k:'session', label:'Sessions',       icon:'video'   },
+];
+const CAPTIONS = { written:'just your written notes', voice:'just your voice notes', session:'just your sessions' };
+
+fpop.innerHTML = `<p class="ftitle">show me</p>` + FILTERS.map(f =>
+  `<button class="fopt${f.k === filter ? ' on' : ''}" data-f="${f.k}" role="menuitemradio">${svg(f.icon)}<span>${f.label}</span>${svg('check','fcheck')}</button>`
+).join('');
+
+function setPopover(open){
+  fpop.classList.toggle('open', open);
+  fbackdrop.classList.toggle('open', open);
+  fbtn.classList.toggle('hot', open);
+  fbtn.setAttribute('aria-expanded', open);
+}
+fbtn.addEventListener('click', () => setPopover(!fpop.classList.contains('open')));
+fbackdrop.addEventListener('click', () => setPopover(false));
+fpop.addEventListener('click', ev => {
+  const opt = ev.target.closest('.fopt');
+  if(!opt) return;
+  filter = opt.dataset.f;
+  fpop.querySelectorAll('.fopt').forEach(o => o.classList.toggle('on', o === opt));
+  setPopover(false);
+  if(filter === 'all'){ fcap.textContent = ''; fcap.classList.remove('show'); }
+  else { fcap.textContent = CAPTIONS[filter]; fcap.classList.add('show'); }
+  fbtn.classList.toggle('dot', filter !== 'all');
+  render();
+});
+
+/* ============ bottom navigation ============ */
+const toastEl = document.getElementById('toast');
+const toastMsg = document.getElementById('toastMsg');
+let toastT = null;
+function toast(msg){
+  toastMsg.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => toastEl.classList.remove('show'), 2400);
+}
+const NAVMSG = {
+  today:    'Today is just around the corner — this moment belongs to Journal.',
+  journal:  'You’re already here — nicely done.',
+  insights: 'Insights are still gathering their thoughts.',
+  you:      'The You page is warming its hands.',
+};
+document.querySelectorAll('.tab').forEach(t =>
+  t.addEventListener('click', () => toast(NAVMSG[t.dataset.tab])));
+
+/* ============ live status-bar clock ============ */
+function clock(){
+  const d = new Date();
+  document.getElementById('sbTime').textContent =
+    `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+clock(); setInterval(clock, 15000);
+
+/* ============ go ============ */
+render();
+</script>
+</body>
+</html>
