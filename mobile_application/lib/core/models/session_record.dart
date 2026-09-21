@@ -7,6 +7,7 @@ class SessionRecord {
     required this.createdAt,
     required this.mode,
     this.text,
+    this.mood,
     this.emotionResults = const [],
   });
 
@@ -14,6 +15,7 @@ class SessionRecord {
   final DateTime createdAt;
   final CaptureMode mode;
   final String? text;
+  final String? mood;
   final List<EmotionResult> emotionResults;
 
   Map<String, Object?> toMap() {
@@ -22,6 +24,7 @@ class SessionRecord {
       'createdAt': createdAt.toIso8601String(),
       'mode': mode.name,
       'text': text,
+      'mood': mood,
       'emotionResults': emotionResults
           .map((result) => result.toMap())
           .toList(),
@@ -41,6 +44,7 @@ class SessionRecord {
       createdAt: DateTime.tryParse(map['createdAt'] as String? ?? '') ?? DateTime.now(),
       mode: mode,
       text: map['text'] as String?,
+      mood: map['mood'] as String?,
       emotionResults: rawResults
           .whereType<Map<String, dynamic>>()
           .map(EmotionResult.fromMap)

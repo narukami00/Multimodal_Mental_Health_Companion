@@ -16,6 +16,7 @@ void main() {
       createdAt: timestamp,
       mode: CaptureMode.text,
       text: 'A note worth keeping.',
+      mood: 'steady',
       emotionResults: [
         EmotionResult(
           sessionId: 'session-1',
@@ -33,6 +34,7 @@ void main() {
     final restored = await repository.findById('session-1');
 
     expect(restored?.text, session.text);
+    expect(restored?.mood, 'steady');
     expect(restored?.createdAt, timestamp);
     expect(restored?.emotionResults.single.labels?.single.label, 'steady');
   });

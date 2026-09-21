@@ -26,6 +26,7 @@ class SessionController extends ChangeNotifier {
   Future<SessionRecord> saveSession({
     required CaptureMode mode,
     String? text,
+    String? mood,
   }) async {
     final sessionId = DateTime.now().microsecondsSinceEpoch.toString();
     final input = SessionInput(
@@ -39,6 +40,7 @@ class SessionController extends ChangeNotifier {
       createdAt: DateTime.now(),
       mode: mode,
       text: text,
+      mood: mood,
       emotionResults: emotionResults,
     );
 
