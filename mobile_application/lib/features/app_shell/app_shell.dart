@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/navigation/app_tab.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../checkin/check_in_mode_page.dart';
+import '../journal/journal_page.dart';
 import '../placeholders/feature_placeholder_page.dart';
 import '../sessions/session_controller.dart';
 import 'today_page.dart';
@@ -32,11 +33,7 @@ class _AppShellState extends State<AppShell> {
             primaryCard: HomeCardPriority.select(const HomeState()),
             onStartCheckIn: () => _openCheckIn(context),
           ),
-          const FeaturePlaceholderPage(
-            title: 'Your journal',
-            description: 'Past check-ins and reflections will live here.',
-            icon: Icons.auto_stories_outlined,
-          ),
+          JournalPage(sessionController: widget.sessionController),
           const FeaturePlaceholderPage(
             title: 'Your insights',
             description: 'Gentle patterns will appear here as your history grows.',
