@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -20,8 +22,15 @@ class OnboardingFlow extends StatefulWidget {
 class _OnboardingFlowState extends State<OnboardingFlow> {
   static const _pageCount = 4;
 
-  final _pageController = PageController();
-  int _currentPage = 0;
+  late final PageController _pageController;
+  late int _currentPage;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentPage = widget.repository.currentPage.clamp(0, _pageCount - 1).toInt();
+    _pageController = PageController(initialPage: _currentPage);
+  }
 
   @override
   void dispose() {
@@ -61,7 +70,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               child: PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (page) => setState(() => _currentPage = page),
+                onPageChanged: (page) {
+                  setState(() => _currentPage = page);
+                  unawaited(widget.repository.setCurrentPage(page));
+                },
                 children: const [
                   _WelcomePage(),
                   _WaysToCheckInPage(),

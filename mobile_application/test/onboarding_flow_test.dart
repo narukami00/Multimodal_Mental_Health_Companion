@@ -29,4 +29,17 @@ void main() {
     expect(repository.isComplete, isTrue);
     expect(find.text('Good to see you'), findsOneWidget);
   });
+
+  testWidgets('onboarding resumes from its saved page', (tester) async {
+    final repository = InMemoryOnboardingRepository();
+    await repository.setCurrentPage(2);
+
+    await tester.pumpWidget(
+      SolaceApp(onboardingRepository: repository),
+    );
+
+    expect(find.textContaining('Camera & mic are'), findsOneWidget);
+    expect(find.text('Allow access'), findsOneWidget);
+    expect(find.text("I'll use text"), findsOneWidget);
+  });
 }
