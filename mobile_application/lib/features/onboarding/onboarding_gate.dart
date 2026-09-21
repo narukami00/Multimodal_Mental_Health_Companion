@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/contracts/onboarding_repository.dart';
 import '../app_shell/app_shell.dart';
+import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../sessions/session_controller.dart';
 import 'onboarding_flow.dart';
@@ -11,12 +12,14 @@ class OnboardingGate extends StatefulWidget {
     required this.repository,
     required this.sessionController,
     required this.safetyController,
+    required this.profileController,
     super.key,
   });
 
   final OnboardingRepository repository;
   final SessionController sessionController;
   final SafetyController safetyController;
+  final ProfileController profileController;
 
   @override
   State<OnboardingGate> createState() => _OnboardingGateState();
@@ -37,6 +40,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
       return AppShell(
         sessionController: widget.sessionController,
         safetyController: widget.safetyController,
+        profileController: widget.profileController,
       );
     }
 

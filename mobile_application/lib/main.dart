@@ -4,10 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
 import 'data/contracts/onboarding_repository.dart';
 import 'data/repositories/shared_preferences_onboarding_repository.dart';
+import 'data/repositories/in_memory_profile_repository.dart';
 import 'data/repositories/in_memory_safety_event_repository.dart';
+import 'data/repositories/shared_preferences_profile_repository.dart';
 import 'data/repositories/shared_preferences_safety_event_repository.dart';
 import 'data/repositories/shared_preferences_session_repository.dart';
 import 'features/onboarding/onboarding_gate.dart';
+import 'features/profile/profile_controller.dart';
 import 'features/safety/safety_controller.dart';
 import 'features/sessions/session_controller.dart';
 import 'providers/mock/mock_providers.dart';
@@ -26,12 +29,17 @@ Future<void> main() async {
     repository: SharedPreferencesSafetyEventRepository(preferences),
   );
   await safetyController.load();
+  final profileController = ProfileController(
+    repository: SharedPreferencesProfileRepository(preferences),
+  );
+  await profileController.load();
 
   runApp(
     SolaceApp(
       onboardingRepository: SharedPreferencesOnboardingRepository(preferences),
       sessionController: sessionController,
       safetyController: safetyController,
+      profileController: profileController,
     ),
   );
 }
@@ -41,16 +49,22 @@ class SolaceApp extends StatelessWidget {
     required this.onboardingRepository,
     required this.sessionController,
     SafetyController? safetyController,
+    ProfileController? profileController,
     super.key,
-  }) : safetyController = safetyController ??
-            SafetyController(
-              screener: const KeywordSafetyScreener(),
-              repository: InMemorySafetyEventRepository(),
-            );
+  }) : safetyController =
+           safetyController ??
+           SafetyController(
+             screener: const KeywordSafetyScreener(),
+             repository: InMemorySafetyEventRepository(),
+           ),
+       profileController =
+           profileController ??
+           ProfileController(repository: InMemoryProfileRepository());
 
   final OnboardingRepository onboardingRepository;
   final SessionController sessionController;
   final SafetyController safetyController;
+  final ProfileController profileController;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +76,7 @@ class SolaceApp extends StatelessWidget {
         repository: onboardingRepository,
         sessionController: sessionController,
         safetyController: safetyController,
+        profileController: profileController,
       ),
     );
   }

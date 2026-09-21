@@ -5,6 +5,8 @@ import '../../core/navigation/app_tab.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../journal/journal_page.dart';
+import '../profile/profile_controller.dart';
+import '../profile/profile_page.dart';
 import '../placeholders/feature_placeholder_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -15,11 +17,13 @@ class AppShell extends StatefulWidget {
   const AppShell({
     required this.sessionController,
     required this.safetyController,
+    required this.profileController,
     super.key,
   });
 
   final SessionController sessionController;
   final SafetyController safetyController;
+  final ProfileController profileController;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -50,13 +54,13 @@ class _AppShellState extends State<AppShell> {
               JournalPage(sessionController: widget.sessionController),
               const FeaturePlaceholderPage(
                 title: 'Your insights',
-                description: 'Gentle patterns will appear here as your history grows.',
+                description:
+                    'Gentle patterns will appear here as your history grows.',
                 icon: Icons.insights_outlined,
               ),
-              const FeaturePlaceholderPage(
-                title: 'You',
-                description: 'Profile, privacy, sharing, and settings will live here.',
-                icon: Icons.person_outline,
+              ProfilePage(
+                profileController: widget.profileController,
+                safetyController: widget.safetyController,
               ),
             ],
           ),
@@ -95,7 +99,8 @@ class _AppShellState extends State<AppShell> {
       MaterialPageRoute<void>(
         builder: (_) => SupportResourcesPage(
           safetyController: widget.safetyController,
-          assessment: widget.safetyController.activeAssessment ??
+          assessment:
+              widget.safetyController.activeAssessment ??
               const SafetyAssessment.clear(),
           regionCode: Localizations.localeOf(context).countryCode ?? 'GLOBAL',
         ),

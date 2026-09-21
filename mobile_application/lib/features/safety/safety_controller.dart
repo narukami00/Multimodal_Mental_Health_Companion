@@ -9,8 +9,8 @@ class SafetyController extends ChangeNotifier {
   SafetyController({
     required SafetyScreener screener,
     required SafetyEventRepository repository,
-  })  : _screener = screener,
-        _repository = repository;
+  }) : _screener = screener,
+       _repository = repository;
 
   final SafetyScreener _screener;
   final SafetyEventRepository _repository;
@@ -39,7 +39,13 @@ class SafetyController extends ChangeNotifier {
     required String source,
     required String text,
   }) async {
-    final assessment = _screener.assess(text);
+    return assessSignal(source: source, assessment: _screener.assess(text));
+  }
+
+  Future<SafetyAssessment> assessSignal({
+    required String source,
+    required SafetyAssessment assessment,
+  }) async {
     if (assessment.level == SafetyLevel.clear) return assessment;
 
     final event = SafetyEvent(
