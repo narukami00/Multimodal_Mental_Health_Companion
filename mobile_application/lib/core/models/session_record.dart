@@ -15,4 +15,36 @@ class SessionRecord {
   final CaptureMode mode;
   final String? text;
   final List<EmotionResult> emotionResults;
+
+  Map<String, Object?> toMap() {
+    return {
+      'id': id,
+      'createdAt': createdAt.toIso8601String(),
+      'mode': mode.name,
+      'text': text,
+      'emotionResults': emotionResults
+          .map((result) => result.toMap())
+          .toList(),
+    };
+  }
+
+  factory SessionRecord.fromMap(Map<String, dynamic> map) {
+    final modeName = map['mode'] as String?;
+    final mode = CaptureMode.values.firstWhere(
+      (item) => item.name == modeName,
+      orElse: () => CaptureMode.text,
+    );
+    final rawResults = map['emotionResults'] as List<dynamic>? ?? const [];
+
+    return SessionRecord(
+      id: map['id'] as String? ?? '',
+      createdAt: DateTime.tryParse(map['createdAt'] as String? ?? '') ?? DateTime.now(),
+      mode: mode,
+      text: map['text'] as String?,
+      emotionResults: rawResults
+          .whereType<Map<String, dynamic>>()
+          .map(EmotionResult.fromMap)
+          .toList(),
+    );
+  }
 }
