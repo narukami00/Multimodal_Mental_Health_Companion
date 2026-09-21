@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stillpoint — You</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.0.6/400.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.0.6/600.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.0.6/700.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.0.6/800.css" rel="stylesheet" />
+<style>
+  :root{
+    --amber:#FFB534;
+    --amber-soft:#FFF3DC;
+    --amber-deep:#B57A12;
+    --coral:#FF7F50;
+    --coral-soft:#FFF1EA;
+    --coral-line:#FFDAC8;
+    --coral-ink:#B4522C;
+    --bg:#FEFCE8;
+    --card:#FFFFFF;
+    --ink:#3A3226;
+    --muted:#93887A;
+    --line:#F2ECDD;
+    --shadow:0 10px 26px -14px rgba(120,92,40,.30), 0 2px 6px -2px rgba(120,92,40,.10);
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:'Nunito',ui-rounded,system-ui,-apple-system,'Segoe UI',sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(900px 600px at 15% 0%, #FFF7DF 0%, rgba(255,247,223,0) 60%),
+      radial-gradient(700px 500px at 90% 100%, #FFEDE0 0%, rgba(255,237,224,0) 62%),
+      #F4EEE0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px 16px;
+  }
+
+  /* ============ DEVICE ============ */
+  .device{
+    position:relative;
+    width:393px;
+    height:852px;
+    background:var(--bg);
+    border-radius:46px;
+    box-shadow:
+      0 0 0 11px #1F1B16,
+      0 0 0 12.5px #3A332A,
+      0 44px 80px -28px rgba(58,50,38,.55),
+      0 12px 30px -12px rgba(58,50,38,.30);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .punch{
+    position:absolute;
+    top:14px; left:50%;
+    transform:translateX(-50%);
+    width:11px; height:11px;
+    border-radius:50%;
+    background:#191510;
+    box-shadow:inset 0 0 0 2px #2A241C;
+    z-index:60;
+  }
+
+  /* ============ STATUS BAR ============ */
+  .status{
+    height:44px;
+    flex:0 0 44px;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    padding:0 26px 6px;
+    font-size:13px;
+    font-weight:800;
+    letter-spacing:.2px;
+    color:#4A4133;
+    background:var(--bg);
+    z-index:40;
+  }
+  .status .sys{display:flex; align-items:center; gap:6px;}
+  .status svg{display:block;}
+
+  /* ============ SCREENS ============ */
+  .screen{
+    flex:1;
+    min-height:0;
+    display:none;
+    flex-direction:column;
+    background:var(--bg);
+  }
+  .screen.active{display:flex;}
+  .scroll{
+    flex:1;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding:6px 20px 26px;
+    scrollbar-width:none;
+  }
+  .scroll::-webkit-scrollbar{display:none;}
+
+  /* ============ HEADER / PROFILE ============ */
+  .top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 2px 20px;
+  }
+  .brandmark{
+    display:flex; align-items:center; gap:9px;
+    font-size:12.5px; font-weight:800; letter-spacing:.14em;
+    text-transform:uppercase; color:#B9A98C;
+  }
+  .brandmark .dotmark{
+    width:20px;height:20px;border-radius:7px;
+    background:linear-gradient(140deg,var(--amber),var(--coral));
+    box-shadow:0 4px 10px -4px rgba(255,127,80,.7);
+  }
+  .icon-btn{
+    width:38px;height:38px;border-radius:13px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.85);
+    display:grid;place-items:center;
+    color:#8E8272;
+    cursor:pointer;
+    transition:transform .18s cubic-bezier(.34,1.56,.64,1), background .2s, box-shadow .2s;
+  }
+  .icon-btn:active{transform:scale(.92); background:#fff;}
+
+  .profile{
+    display:flex;
+    align-items:center;
+    gap:15px;
+    padding:4px 2px 20px;
+  }
+  .avatar-ring{
+    position:relative;
+    width:74px;height:74px;flex:0 0 74px;
+    border-radius:26px;
+    padding:3px;
+    background:linear-gradient(150deg,#FFD88A,#FFB534 45%,#FF9A6A);
+    box-shadow:0 12px 24px -14px rgba(214,150,40,.85);
+  }
+  .avatar{
+    width:100%;height:100%;
+    border-radius:23px;
+    overflow:hidden;
+    background:#FFF6E4;
+    display:block;
+  }
+  .avatar svg{display:block;width:100%;height:100%;}
+  .presence{
+    position:absolute; right:-3px; bottom:-3px;
+    width:20px;height:20px;border-radius:50%;
+    background:#fff; display:grid;place-items:center;
+  }
+  .presence i{
+    width:11px;height:11px;border-radius:50%;
+    background:#8DCB8A; box-shadow:0 0 0 2.5px #fff;
+  }
+  .p-name{
+    margin:0;
+    font-size:23px; font-weight:800; letter-spacing:-.2px; line-height:1.15;
+    color:#332C21;
+  }
+  .p-sub{
+    margin:5px 0 0;
+    font-size:13.5px; font-weight:600; color:var(--muted); line-height:1.35;
+  }
+
+  /* ============ STREAK (gentle) ============ */
+  .rhythm{
+    display:flex; align-items:center; gap:13px;
+    background:linear-gradient(180deg,#FFFDF6,#FFFAEE);
+    border:1px solid #F6EFD9;
+    border-radius:22px;
+    padding:14px 16px;
+    margin-bottom:22px;
+    box-shadow:var(--shadow);
+  }
+  .rhythm .leaf{
+    width:38px;height:38px;flex:0 0 38px;border-radius:14px;
+    background:var(--amber-soft);
+    display:grid;place-items:center;color:var(--amber-deep);
+  }
+  .rhythm .rt{flex:1;min-width:0;}
+  .rhythm .rt strong{
+    display:block;font-size:14px;font-weight:800;color:#4A4133;letter-spacing:-.1px;
+  }
+  .rhythm .rt span{
+    display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-top:3px;line-height:1.35;
+  }
+  .days{display:flex;gap:5px;align-items:flex-end;padding-top:2px;}
+  .days i{
+    width:7px;height:7px;border-radius:50%;
+    background:#EFE6D2;display:block;
+  }
+  .days i.on{background:var(--amber);height:9px;width:9px;}
+  .days i.today{background:var(--coral);}
+
+  /* ============ SECTION LABEL ============ */
+  .sec-label{
+    font-size:11.5px; font-weight:800; letter-spacing:.13em; text-transform:uppercase;
+    color:#BCAC8E; padding:0 6px 10px;
+  }
+
+  /* ============ MENU ============ */
+  .card{
+    background:var(--card);
+    border:1px solid #F7F2E6;
+    border-radius:26px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    margin-bottom:18px;
+  }
+  .row{
+    position:relative;
+    width:100%;
+    display:flex; align-items:center; gap:14px;
+    padding:16px 16px;
+    background:transparent; border:0;
+    font-family:inherit; text-align:left;
+    cursor:pointer;
+    overflow:hidden;
+    transition:background .22s ease;
+  }
+  .row + .row{box-shadow:inset 0 1px 0 var(--line);}
+  .row:hover{background:#FFFDF5;}
+  .row:active{background:#FFFAEC;}
+  .tile{
+    width:40px;height:40px;flex:0 0 40px;border-radius:14px;
+    display:grid;place-items:center;
+    background:var(--amber-soft);
+    color:#C08A1E;
+    transition:transform .22s cubic-bezier(.34,1.56,.64,1);
+  }
+  .row:active .tile{transform:scale(.93);}
+  .row .txt{flex:1;min-width:0;}
+  .row .txt b{
+    display:block;font-size:15.2px;font-weight:700;color:#3B3327;letter-spacing:-.15px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .row .txt small{
+    display:block;font-size:12.4px;font-weight:600;color:var(--muted);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .chev{color:#D3C8B2;flex:0 0 auto;transition:transform .22s ease;}
+  .row:active .chev{transform:translateX(3px);}
+  .badge{
+    font-size:11px;font-weight:800;letter-spacing:.02em;
+    padding:4px 9px;border-radius:999px;
+    background:var(--amber-soft);color:var(--amber-deep);
+    flex:0 0 auto;
+  }
+  .badge.mute{background:#F4F1E7;color:#9A9182;}
+
+  /* ============ CRISIS ROW ============ */
+  .help{
+    position:relative;
+    display:flex; align-items:center; gap:14px;
+    width:100%;
+    padding:16px 16px 16px 18px;
+    border-radius:26px;
+    border:1px solid var(--coral-line);
+    background:linear-gradient(180deg,#FFF4EE,#FFEEE5);
+    box-shadow:0 10px 24px -16px rgba(255,127,80,.75);
+    cursor:pointer; text-align:left; font-family:inherit;
+    overflow:hidden;
+    margin-bottom:18px;
+    transition:transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .25s;
+  }
+  .help:hover{box-shadow:0 14px 28px -16px rgba(255,127,80,.9);}
+  .help:active{transform:scale(.985);}
+  .help::before{
+    content:"";position:absolute;left:0;top:16px;bottom:16px;width:4px;
+    border-radius:0 4px 4px 0;background:var(--coral);opacity:.85;
+  }
+  .help .tile{background:#FFE4D6;color:#D2603A;}
+  .help b{display:block;font-size:15.4px;font-weight:800;color:var(--coral-ink);letter-spacing:-.15px;}
+  .help small{display:block;font-size:12.4px;font-weight:600;color:#C08060;margin-top:3px;line-height:1.35;}
+  .help .chev{color:#E8A98C;}
+
+  /* ============ FOOTER ============ */
+  .foot{
+    text-align:center;
+    padding:6px 10px 4px;
+    font-size:12px; font-weight:600; color:#B5A98F; line-height:1.6;
+  }
+  .foot a{color:#A99C82;text-decoration:none;border-bottom:1px dashed #DCD2BB;padding-bottom:1px;}
+
+  /* ============ BOTTOM NAV ============ */
+  .nav{
+    flex:0 0 auto;
+    display:flex;
+    align-items:stretch;
+    gap:4px;
+    padding:9px 12px 20px;
+    background:rgba(255,255,255,.96);
+    border-top:1px solid #F3EDDF;
+    box-shadow:0 -10px 26px -22px rgba(120,92,40,.55);
+    backdrop-filter:blur(8px);
+  }
+  .tab{
+    position:relative;
+    flex:1;
+    border:0;background:transparent;
+    font-family:inherit;
+    padding:7px 2px 5px;
+    border-radius:18px;
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    cursor:pointer;
+    color:#A2988A;
+    transition:color .22s ease, transform .22s cubic-bezier(.34,1.56,.64,1);
+  }
+  .tab span{font-size:11px;font-weight:800;letter-spacing:.01em;}
+  .tab:active{transform:scale(.93);}
+  .tab.active{color:var(--amber-deep);}
+  .tab.active::after{
+    content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:26px;height:3.5px;border-radius:0 0 6px 6px;
+    background:linear-gradient(90deg,var(--amber),var(--coral));
+  }
+  .tab.active .tico{transform:translateY(-1px) scale(1.06);}
+  .tico{transition:transform .25s cubic-bezier(.34,1.56,.64,1);}
+
+  /* ============ PLACEHOLDER SCREENS ============ */
+  .ph{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:40px;gap:14px;
+  }
+  .ph .blob{
+    width:88px;height:88px;border-radius:32px;
+    background:linear-gradient(150deg,var(--amber-soft),#FFE7D8);
+    display:grid;place-items:center;color:var(--amber-deep);
+    box-shadow:var(--shadow);
+  }
+  .ph h2{margin:0;font-size:22px;font-weight:800;letter-spacing:-.3px;color:#4A4133;}
+  .ph p{margin:0;font-size:14px;font-weight:600;color:var(--muted);line-height:1.6;max-width:250px;}
+
+  /* ============ TOAST ============ */
+  .toast{
+    position:absolute;left:50%;bottom:110px;transform:translate(-50%,18px);
+    background:#403829;color:#FFF6E2;
+    font-size:13px;font-weight:700;
+    padding:11px 18px;border-radius:999px;
+    box-shadow:0 16px 30px -14px rgba(40,32,18,.7);
+    opacity:0;pointer-events:none;
+    transition:opacity .28s ease, transform .28s cubic-bezier(.34,1.56,.64,1);
+    z-index:80;white-space:nowrap;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0);}
+
+  /* ripple */
+  .ripple{
+    position:absolute;border-radius:50%;transform:scale(0);
+    background:rgba(255,181,52,.24);
+    animation:rip .58s ease-out forwards;pointer-events:none;
+  }
+  .help .ripple{background:rgba(255,127,80,.20);}
+  @keyframes rip{to{transform:scale(2.6);opacity:0;}}
+
+  @media (max-height:900px){
+    .device{transform:scale(.92);}
+  }
+  @media (max-width:430px){
+    body{padding:0;background:var(--bg);}
+    .device{width:100%;height:100dvh;border-radius:0;box-shadow:none;}
+    .punch{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="device">
+  <div class="punch"></div>
+
+  <!-- STATUS BAR -->
+  <div class="status">
+    <div>9:41</div>
+    <div class="sys">
+      <svg width="17" height="12" viewBox="0 0 17 12" fill="none"><rect x="0" y="8" width="3" height="4" rx="1" fill="#4A4133"/><rect x="4.5" y="5.5" width="3" height="6.5" rx="1" fill="#4A4133"/><rect x="9" y="3" width="3" height="9" rx="1" fill="#4A4133"/><rect x="13.5" y="0.5" width="3" height="11.5" rx="1" fill="#4A4133" opacity=".35"/></svg>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 10.6 1.9 5a8.6 8.6 0 0 1 12.2 0L8 10.6Z" fill="#4A4133" opacity=".9"/><path d="M8 6.3 5.2 3.7a5.6 5.6 0 0 1 5.6 0L8 6.3Z" fill="#4A4133" opacity=".45"/></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x=".7" y=".7" width="21" height="11.6" rx="3.6" stroke="#4A4133" stroke-opacity=".45" stroke-width="1.2"/><rect x="2.6" y="2.6" width="15" height="7.8" rx="2.2" fill="#4A4133"/><path d="M23.6 4.6v3.8c1-.4 1.6-1.1 1.6-1.9s-.6-1.5-1.6-1.9Z" fill="#4A4133" fill-opacity=".5"/></svg>
+    </div>
+  </div>
+
+  <!-- ================= YOU SCREEN ================= -->
+  <section class="screen active" id="screen-you">
+    <div class="scroll">
+
+      <div class="top">
+        <div class="brandmark"><span class="dotmark"></span> Stillpoint</div>
+        <button class="icon-btn" data-act="Edit profile" aria-label="Edit profile">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7.5 18.5 3.8 19.4l.9-3.7L16.5 3.5Z"/></svg>
+        </button>
+      </div>
+
+      <!-- PROFILE -->
+      <div class="profile">
+        <div class="avatar-ring">
+          <div class="avatar">
+            <!-- inline SVG avatar -->
+            <svg viewBox="0 0 100 100" aria-label="Profile avatar">
+              <defs>
+                <linearGradient id="bgA" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#FFF3DA"/><stop offset="1" stop-color="#FFE6D4"/>
+                </linearGradient>
+                <linearGradient id="swA" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#FFC busy"/><stop offset="0" stop-color="#FFC45C"/><stop offset="1" stop-color="#FFB534"/>
+                </linearGradient>
+              </defs>
+              <rect width="100" height="100" fill="url(#bgA)"/>
+              <circle cx="50" cy="86" r="9" fill="#FFD9B8" opacity=".55"/>
+              <path d="M14 100c4-20 18-30 36-30s32 10 36 30Z" fill="url(#swA)"/>
+              <path d="M50 70c-9 0-16 3-21 8 6 5 13 8 21 8s15-3 21-8c-5-5-12-8-21-8Z" fill="#FF9E6B" opacity=".35"/>
+              <rect x="43" y="52" width="14" height="18" rx="7" fill="#E9B48C"/>
+              <ellipse cx="50" cy="42" rx="23" ry="25" fill="#F6C79E"/>
+              <path d="M27 40c0-16 10-25 23-25s23 9 23 25c0 3-1 5-2 6-2-9-6-14-13-15-6 3-16 4-24 1-4 3-6 8-6 14-1-1-1-3-1-6Z" fill="#4A3A2C"/>
+              <path d="M26 44c-2-1-4 1-4 4s2 5 4 5Z" fill="#F6C79E"/><path d="M74 44c2-1 4 1 4 4s-2 5-4 5Z" fill="#F6C79E"/>
+              <path d="M38 43c2-2 6-2 8 0" stroke="#4A3A2C" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+              <path d="M54 43c2-2 6-2 8 0" stroke="#4A3A2C" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+              <path d="M44 54c3 3 9 3 12 0" stroke="#B4654A" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+              <circle cx="36" cy="50" r="3.6" fill="#FF9E86" opacity=".45"/>
+              <circle cx="64" cy="50" r="3.6" fill="#FF9E86" opacity=".45"/>
+            </svg>
+          </div>
+          <div class="presence"><i></i></div>
+        </div>
+        <div>
+          <h1 class="p-name">Maya Okonkwo</h1>
+          <p class="p-sub">With Stillpoint since March 2025</p>
+        </div>
+      </div>
+
+      <!-- GENTLE RHYTHM -->
+      <div class="rhythm">
+        <div class="leaf">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+        </div>
+        <div class="rt">
+          <strong>12 days of checking in</strong>
+          <span>No pressure — your pace is already enough.</span>
+        </div>
+        <div class="days" aria-hidden="true">
+          <i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on today"></i><i></i>
+        </div>
+      </div>
+
+      <div class="sec-label">Your care</div>
+
+      <div class="card">
+        <button class="row" data-act="Habit & medication tracking">
+          <span class="tile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          </span>
+          <span class="txt">
+            <b>Habit &amp; medication tracking</b>
+            <small>Morning routine · 2 reminders</small>
+          </span>
+          <span class="badge">3 of 4</span>
+          <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        </button>
+
+        <button class="row" data-act="Export my data">
+          <span class="tile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 20h16"/></svg>
+          </span>
+          <span class="txt">
+            <b>Export my data</b>
+            <small>Journal, moods &amp; tracking as PDF</small>
+          </span>
+          <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        </button>
+
+        <button class="row" data-act="Therapist view">
+          <span class="tile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3.4"/><path d="M17 11h5M19.5 8.5v5"/></svg>
+          </span>
+          <span class="txt">
+            <b>Therapist view</b>
+            <small>Shared with Dr. Amara Reid</small>
+          </span>
+          <span class="badge mute">On</span>
+          <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        </button>
+
+        <button class="row" data-act="Privacy & data settings">
+          <span class="tile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.6 8-10V5.5L12 2.6 4 5.5V12c0 6.4 8 10 8 10Z"/><path d="m9.2 12 2 2 3.6-3.8"/></svg>
+          </span>
+          <span class="txt">
+            <b>Privacy &amp; data settings</b>
+            <small>On-device first · nothing sold</small>
+          </span>
+          <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        </button>
+      </div>
+
+      <div class="sec-label">Support</div>
+
+      <!-- CRISIS — calm, findable, coral-tinted (not alarming) -->
+      <button class="help" data-act="Crisis resources & support">
+        <span class="tile">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7.5-4.3-7.5-9.6A4.4 4.4 0 0 1 12 8.4a4.4 4.4 0 0 1 7.5 3C19.5 16.7 12 21 12 21Z"/></svg>
+        </span>
+        <span class="txt">
+          <b>Crisis resources &amp; support</b>
+          <small>Someone to talk to, any hour — text, call or chat</small>
+        </span>
+        <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+      </button>
+
+      <div class="card">
+        <button class="row" data-act="App settings">
+          <span class="tile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9c.26.6.84 1 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.03Z"/></svg>
+          </span>
+          <span class="txt">
+            <b>App settings</b>
+            <small>Theme, sounds, notifications &amp; language</small>
+          </span>
+          <span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        </button>
+      </div>
+
+      <p class="foot">Stillpoint 2.4.1 · Made gently<br/><a href="#" data-act="Sign out">Sign out</a></p>
+    </div>
+  </section>
+
+  <!-- ================= OTHER SCREENS ================= -->
+  <section class="screen" id="screen-today">
+    <div class="ph">
+      <div class="blob"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg></div>
+      <h2>Today</h2>
+      <p>This screen lives outside the “You” design. Tap <b>You</b> to head back to your profile and settings.</p>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-journal">
+    <div class="ph">
+      <div class="blob"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.8A1.8 1.8 0 0 1 5.8 3H19v18H5.8A1.8 1.8 0 0 1 4 19.2Z"/><path d="M8 7.5h7M8 11.5h7M8 15.5h4"/></svg></div>
+      <h2>Journal</h2>
+      <p>Your entries stay private and on-device. Tap <b>You</b> to return to profile &amp; settings.</p>
+    </div>
+  </section>
+
+  <section class="screen" id="screen-insights">
+    <div class="ph">
+      <div class="blob"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M7 19v-5.5M12 19V7.5M17 19v-8"/></svg></div>
+      <h2>Insights</h2>
+      <p>Patterns and gentle summaries appear here. Tap <b>You</b> to go back.</p>
+    </div>
+  </section>
+
+  <!-- ================= BOTTOM NAV ================= -->
+  <nav class="nav">
+    <button class="tab" data-tab="today" aria-label="Today">
+      <span class="tico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg></span>
+      <span>Today</span>
+    </button>
+    <button class="tab" data-tab="journal" aria-label="Journal">
+      <span class="tico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 5.2A2 2 0 0 1 6.5 3.2H19.5v17.6H6.5a2 2 0 0 1-2-2Z"/><path d="M8.4 7.8h7M8.4 11.6h7M8.4 15.4h4"/></svg></span>
+      <span>Journal</span>
+    </button>
+    <button class="tab" data-tab="insights" aria-label="Insights">
+      <span class="tico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.2h16"/><path d="M7.2 19.2v-5.4M12 19.2V7.4M16.8 19.2v-8"/></svg></span>
+      <span>Insights</span>
+    </button>
+    <button class="tab active" data-tab="you" aria-label="You" aria-current="page">
+      <span class="tico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20c1.2-3.7 4-5.6 7.2-5.6s6 1.9 7.2 5.6"/></svg></span>
+      <span>You</span>
+    </button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function(){
+  var toast = document.getElementById('toast');
+  var toastTimer = null;
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toast.classList.remove('show'); }, 1900);
+  }
+
+  /* ripple on any tappable row */
+  function ripple(e){
+    var host = e.currentTarget;
+    var rect = host.getBoundingClientRect();
+    var size = Math.max(rect.width, rect.height);
+    var x = (e.clientX || (rect.left + rect.width/2)) - rect.left - size/2;
+    var y = (e.clientY || (rect.top + rect.height/2)) - rect.top - size/2;
+    var dot = document.createElement('span');
+    dot.className = 'ripple';
+    dot.style.width = dot.style.height = size + 'px';
+    dot.style.left = x + 'px';
+    dot.style.top = y + 'px';
+    host.appendChild(dot);
+    setTimeout(function(){ dot.remove(); }, 600);
+  }
+
+  /* menu rows + help card */
+  document.querySelectorAll('.row, .help, .icon-btn').forEach(function(el){
+    el.addEventListener('click', function(e){
+      ripple(e);
+      var label = el.getAttribute('data-act') || 'Menu';
+      if(label === 'Crisis resources & support'){
+        showToast('Opening support — 988 · text HOME to 741741');
+      } else if(label === 'Sign out'){
+        e.preventDefault();
+        showToast('Signed out. Take care of yourself 💛');
+      } else {
+        showToast(label);
+      }
+    });
+  });
+
+  /* bottom navigation */
+  var tabs = document.querySelectorAll('.tab');
+  tabs.forEach(function(tab){
+    tab.addEventListener('click', function(){
+      var key = tab.getAttribute('data-tab');
+      tabs.forEach(function(t){ t.classList.remove('active'); t.removeAttribute('aria-current'); });
+      tab.classList.add('active');
+      tab.setAttribute('aria-current','page');
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+      var target = document.getElementById('screen-' + key);
+      if(target){
+        target.classList.add('active');
+        var sc = target.querySelector('.scroll');
+        if(sc) sc.scrollTop = 0;
+      }
+    });
+  });
+
+  /* subtle entrance */
+  var items = document.querySelectorAll('#screen-you .profile, #screen-you .rhythm, #screen-you .sec-label, #screen-you .card, #screen-you .help, #screen-you .foot');
+  items.forEach(function(el, i){
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(10px)';
+    el.style.transition = 'opacity .5s ease ' + (i*55) + 'ms, transform .5s cubic-bezier(.22,1,.36,1) ' + (i*55) + 'ms';
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

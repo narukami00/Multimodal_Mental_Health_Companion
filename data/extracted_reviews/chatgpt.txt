@@ -1,0 +1,301 @@
+Multimodal Emotion Recognition for a Real-Time Mental-Health Monitoring Application
+Literature Review, Research Gap Analysis, and System Requirement Mapping
+Executive finding. The proposed system is not merely a facial-expression classifier or speech-emotion classifier. The closest research problem is multimodal emotion recognition (MER), especially multimodal emotion recognition in conversations (MERC), where text, acoustic/prosodic and visual signals are fused under temporal and speaker context. The literature shows that the strongest research opportunities for your project are not 'add three models and concatenate them'; they are asynchronous alignment, adaptive fusion, missing/noisy modality handling, calibrated confidence, continuous temporal modeling, and psychologically defensible explanations.
+Project baseline. The supplied project proposal defines facial video + voice as inputs, facial analysis, MFCC/pitch/spectral speech features, CNN/ViT and LSTM/Transformer families, multimodal fusion, confidence/trend visualization, and evaluation under lighting/noise/speaking-style variation. It also names FER2013, AffectNet, RAVDESS and CREMA-D as candidate datasets.
+1. Scope and terminology
+This review uses MER for multimodal emotion recognition and MERC when the task is explicitly conversational/utterance-level. A 'trimodal' system here means text + audio + visual; an audiovisual system is audio + visual without text. Your intended live camera-and-microphone experience is closest to trimodal MERC, but it also adds a streaming segmentation problem that benchmark papers usually simplify by giving pre-segmented utterances.
+Venue status is separated into conference tier and journal quartile because Q1/Q2/Q3 is primarily a journal-ranking concept. The ICORE 2026 portal lists AAAI, ACL and ACM Multimedia as A* conferences; the report therefore uses conference-tier language instead of forcing a Q1 label onto conferences.
+2. Research landscape in one page
+3. Curated core papers: the papers closest to the proposed system
+Priority is based on conceptual fit to a live English-only camera + microphone + transcript system, venue quality, influence on subsequent MER/MERC architecture, and relevance to real-world deployment. The list is curated rather than mathematically exhaustive; a literal 'every paper' inventory would be both unstable and less useful than a ranked research set.
+4. Detailed reading notes: top 12 papers to read first
+1. M3ER: Multiplicative Multimodal Emotion Recognition using Facial, Textual, and Speech Cues
+Mittal et al. (2020) — AAAI 2020. Top conference (AAAI; ICORE 2026 A*)
+Research issue: How to fuse co-occurring multimodal emotion cues while remaining robust when one modality is noisy or ineffective.
+Input: Utterance-level facial, textual and speech features from IEMOCAP and CMU-MOSEI.
+Output: Emotion classification with a fused prediction.
+Methodology: Data-driven multiplicative fusion; a CCA-based modality check identifies ineffective modalities; proxy features replace unreliable modalities.
+Limitations / gap: Benchmark-driven and largely utterance-level; the proxy-modality mechanism is not the same as true missing-modality uncertainty. Does not solve continuous live segmentation, personalization, or clinical validity.
+Links: Paper | arXiv
+2. MELD: A Multimodal Multi-Party Dataset for Emotion Recognition in Conversations
+Poria et al. (2019) — ACL 2019. Top conference (ACL; ICORE 2026 A*)
+Research issue: Provide a realistic multimodal, multi-party conversational benchmark for utterance-level emotion recognition.
+Input: ~13k utterances in 1,433 Friends dialogues; aligned text/audio/visual streams.
+Output: Seven emotion labels plus sentiment labels for each utterance.
+Methodology: Dataset creation/annotation plus strong baselines; models can exploit textual, acoustic, visual and dialogue-context information.
+Limitations / gap: Acted TV dialogue is not equivalent to spontaneous private mental-health conversations; class imbalance is substantial; speaker/context distribution is narrow; visual/audio reliability can be imperfect.
+Links: Paper | GitHub
+3. Multimodal Language Analysis in the Wild: CMU-MOSEI Dataset and Interpretable Dynamic Fusion Graph
+Zadeh et al. (2018) — ACL 2018. Top conference (ACL; ICORE 2026 A*)
+Research issue: Create a large-scale in-the-wild multimodal benchmark and model interactions among asynchronous modalities.
+Input: Asynchronous words, facial/visual features and acoustic features from online videos.
+Output: Sentiment and emotion-intensity predictions.
+Methodology: CMU-MOSEI dataset plus Dynamic Fusion Graph (DFG), designed to model modality interactions while preserving interpretability.
+Limitations / gap: Centered on multimodal language/sentiment-style tasks rather than a clinical emotion-monitoring setting; labels are not a direct measure of mental-health state; feature extraction and segmentation assumptions matter.
+Links: Paper | ACL 2018
+4. MulT: Multimodal Transformer for Unaligned Multimodal Language Sequences
+Tsai et al. (2019) — ACL 2019. Top conference (ACL; ICORE 2026 A*)
+Research issue: Handle asynchronous sampling rates and long-range cross-modal dependencies without explicit hard alignment.
+Input: Unaligned multimodal time series.
+Output: Task prediction from fused multimodal representation; widely reused for sentiment/emotion.
+Methodology: Directional pairwise cross-modal attention; each target modality attends to source modality sequences, followed by temporal/self-attention fusion.
+Limitations / gap: Fusion is powerful but computationally expensive; it is not inherently a live-stream segmentation solution and does not itself solve confidence calibration or modality reliability.
+Links: Paper | GitHub
+5. Self-attention fusion for audiovisual emotion recognition with incomplete data
+Chumachenko, Iosifidis & Gabbouj (2022) — ICPR 2022. Major pattern-recognition conference
+Research issue: Recognize emotion when one audiovisual modality is absent or noisy.
+Input: Audio/video emotion clips with intentionally missing/noisy modalities.
+Output: Emotion label.
+Methodology: Raw-data audiovisual encoders with alternative fusion mechanisms plus modality dropout during training.
+Limitations / gap: Bimodal rather than tri-modal; incomplete-modality training does not fully address semantic contradictions among text, audio and face; dataset conditions are still controlled relative to a consumer application.
+Links: Paper | GitHub
+6. M2FNet: Multi-modal Fusion Network for Emotion Recognition in Conversation
+Chudasama et al. (2022) — CVPR Workshops 2022. Major computer-vision workshop
+Research issue: Exploit all three conversational modalities instead of relying mainly on text.
+Input: Conversational transcript, audio and face/video streams.
+Output: Utterance emotion; reported performance on MELD and IEMOCAP.
+Methodology: Multi-head attention-based fusion; audio/visual feature extractor trained with adaptive-margin triplet loss to produce emotion-relevant representations.
+Limitations / gap: Workshop venue; relies on benchmark feature pipelines; does not address true mental-health validation or open-vocabulary/fine-grained explanation.
+Links: Paper | IEEE
+7. Noise-Resistant Multimodal Transformer for Emotion Recognition
+Liu et al. (2025) — International Journal of Computer Vision (IJCV), 133:3020-3040. Top journal; IJCV is Q1
+Research issue: Noisy multimodal sequences contain semantically useless regions that can dominate fusion.
+Input: Multimodal video/text/audio sequences with noisy segments.
+Output: Emotion recognition.
+Methodology: Noise-resistant multimodal Transformer that explicitly suppresses irrelevant/noisy temporal information and improves multimodal representation quality.
+Limitations / gap: Still benchmark-oriented; the paper tackles noise but not the broader uncertainty problem of conflicting modalities, individual baselines, or clinical interpretation.
+Links: Paper metadata | DBLP
+8. Fusing pairwise modalities for emotion recognition in conversations
+Fan, Lin, Mao & Cambria (2024) — Information Fusion 106, 102306. Q1 journal (SCImago 2025)
+Research issue: Complex inter-modal relationships and redundancy make naive all-at-once fusion brittle.
+Input: MERC conversational modalities.
+Output: Conversation emotion classification.
+Methodology: Pairwise modality management plus a density loss to reduce redundant representations and improve robustness.
+Limitations / gap: Pairwise fusion can miss higher-order interactions among all three modalities; it does not directly solve temporal streaming, explanation, personalization, or mental-health outcome validation.
+Links: Paper
+9. Multimodal Emotion Recognition Calibration in Conversations
+Tu et al. (2024) — ACM Multimedia 2024. Top conference (ACM MM; ICORE 2026 A*)
+Research issue: A classifier can be accurate yet confidently wrong, especially after modality/context corruption.
+Input: MERC utterances with multimodal corruption/uncertainty cases.
+Output: Emotion label plus better-calibrated confidence.
+Methodology: CMERC: curriculum learning, hybrid supervised contrastive learning, and confidence constraints to calibrate predictive confidence without changing the backbone architecture.
+Limitations / gap: Calibration is necessary but not equivalent to trustworthy explanation; confidence is still model confidence, not a clinical probability of an underlying mental state.
+Links: Paper PDF | GitHub
+10. Emotion-LLaMA: Multimodal Emotion Recognition and Reasoning with Instruction Tuning
+Cheng et al. (2024) — arXiv 2024; reported as a modern multimodal emotion-reasoning line. Recent foundation-model direction
+Research issue: Traditional classifiers recognize labels but struggle to integrate audio and subtle facial cues or explain their decisions.
+Input: Multimodal samples including audio, visual content and text/captions.
+Output: Emotion labels and natural-language emotion reasoning.
+Methodology: Emotion-specific encoders align audio/visual/text into a shared space, then a LLaMA-based model is instruction-tuned for emotion recognition and reasoning; introduces MERR and evaluates MER tasks.
+Limitations / gap: Large-model cost/latency; reasoning may be plausible rather than faithful; dataset mixture and generated explanations can create evaluation leakage; clinical validity remains unaddressed.
+Links: Paper | GitHub
+11. MERBench: A Unified Evaluation Benchmark for Multimodal Emotion Recognition
+Lian et al. (2024) — arXiv / benchmark. Benchmark paper / infrastructure
+Research issue: Published MER methods often use different features, splits, evaluation settings and pretraining choices, making comparisons unfair.
+Input: Standardized multimodal benchmark inputs.
+Output: Comparable benchmark metrics and analysis.
+Methodology: Unified benchmark protocol covering feature extraction, fusion, robustness, fine-tuning and pretraining; introduces MER2023 and an open toolkit.
+Limitations / gap: Benchmark unification cannot solve dataset validity; MER2023 is Chinese, whereas your target is English; models can still overfit benchmark conventions.
+Links: Paper | Code | Dataset
+12. EMOE: Modality-Specific Enhanced Dynamic Emotion Experts
+Fang et al. (2025) — CVPR 2025. Top conference (CVPR)
+Research issue: Different samples need different modality weights; fusion can erase modality-specific predictive power.
+Input: Multimodal emotion inputs.
+Output: Emotion prediction.
+Methodology: Mixture of Modality Experts to dynamically weight modalities per sample, plus unimodal distillation to preserve modality-specific knowledge.
+Limitations / gap: Dynamic weights are useful but not automatically interpretable; benchmark data may not reflect consumer camera/microphone quality or spontaneous behavior.
+Links: Paper
+5. Supporting papers and building blocks
+DialogueRNN: An Attentive RNN for Emotion Detection in Conversations — AAAI 2019. Speaker-specific recurrent states; essential for temporal/speaker context, but primarily conversational rather than full tri-modal fusion.
+DialogueGCN: A Graph Convolutional Neural Network for Emotion Recognition in Conversation — EMNLP-IJCNLP 2019. Graph context with self/inter-speaker dependencies; useful for modeling evolving conversational state.
+COSMIC: COmmonSense knowledge for eMotion Identification in Conversations — Findings EMNLP 2020. Adds commonsense, mental state, event and causal relations; useful when words alone are ambiguous.
+DialogueCRN: Contextual Reasoning Networks for Emotion Recognition in Conversations — ACL 2021. Iterative contextual reasoning for emotion clues; relevant to your 'why' explanation goal but not a full multimodal live system.
+Learning Modality-Specific Representations with Self-Supervised Multi-Task Learning for Multimodal Sentiment Analysis — AAAI 2021. Separates shared and modality-specific information with generated unimodal supervision; useful for preserving voice/face-specific cues.
+Improving Multimodal Fusion with Hierarchical Mutual Information Maximization for Multimodal Sentiment Analysis — EMNLP 2021. Uses mutual-information maximization at two levels to improve cross-modal fusion.
+UniMSE: Towards Unified Multimodal Sentiment Analysis and Emotion Recognition — EMNLP 2022. Unifies multimodal sentiment and emotion using shared knowledge, syntactic/semantic fusion and contrastive learning.
+Emotion-Anchored Contrastive Learning Framework for Emotion Recognition in Conversation — Findings NAACL 2024. Separates similar emotions using label anchors and contrastive learning; useful for happiness/excitement-type confusion.
+DFEW: A Large-Scale Database for Recognizing Dynamic Facial Expressions in the Wild — ACM MM 2020. Large-scale dynamic face benchmark with real-world pose, occlusion and illumination variation.
+MAFW: A Large-scale, Multi-modal, Compound Affective Database for Dynamic Facial Expression Recognition in the Wild — ACM MM 2022. 10,045 video-audio clips; supports richer compound affect labels and multimodal dynamic face analysis.
+The Ryerson Audio-Visual Database of Emotional Speech and Song (RAVDESS) — PLOS ONE 2018. Validated North American English audiovisual emotion dataset with face-and-voice, face-only and voice-only versions.
+Emotional Expressions Reconsidered: Challenges to Inferring Emotion From Human Facial Movements — Psychological Science in the Public Interest 2019. Critical psychological grounding: facial movements have limited reliability, specificity and generalizability for inferring discrete emotions.
+6. Datasets: what to use, what each dataset teaches you, and why none is sufficient alone
+7. The strongest research gaps for this exact project
+Gap 1 — Live segmentation and alignment
+Most benchmark papers receive pre-segmented utterances. Your app must infer when one emotional unit ends and another begins, while video/audio/text are sampled at different rates. This is a core streaming problem, not a minor preprocessing detail.
+Gap 2 — Contradictory modalities
+A person may say 'I'm fine' while sounding flat and showing sadness, or smile while discussing something distressing. Existing work often asks which modality helps prediction, but a practical system must explicitly represent disagreement rather than force one fused label.
+Gap 3 — Expression is not equivalent to inner state
+A facial movement can be socially strategic, ambiguous, culturally variable, or unrelated to emotion. The psychological literature specifically identifies limited reliability, specificity and generalizability in mapping facial movements to discrete emotions. This is especially important when the product framing mentions mental health.
+Gap 4 — Calibration and uncertainty
+Your proposal includes a confidence score. CMERC shows why raw softmax confidence is not enough: corruption can produce increased confidence. A useful system should estimate uncertainty and indicate when evidence is insufficient or contradictory.
+Gap 5 — Continuous state vs. utterance label
+MERC benchmarks mostly predict an emotion for each utterance. Your dashboard wants trends over time. That introduces smoothing, temporal hysteresis, change-point detection, baseline personalization and aggregation over minutes/hours/days.
+Gap 6 — Personalization
+Population-trained models assume that expressive behavior maps similarly across people. Your application would benefit from a lightweight personal baseline: typical speaking rate, pitch range, facial activity and neutral expression, without treating deviations as pathology.
+Gap 7 — Explanations are weakly grounded
+Attention weights, prototype similarities and LLM-generated rationales are not automatically causal explanations. A robust 'why' should report evidence by modality, time range and uncertainty (e.g., 'vocal pitch increased during this phrase; facial AU pattern supported sadness; words were neutral').
+Gap 8 — Mental-health construct validity
+Emotion recognition and mental-health monitoring are different prediction targets. A model can recognize 'sadness' accurately without demonstrating that it can detect depression, anxiety or distress severity. A project should therefore frame the first product as affect/emotion monitoring, not diagnosis.
+Gap 9 — Real-world domain shift
+Lighting, camera angle, microphone quality, background noise, glasses, facial occlusion, accent, speaking style and spontaneous behavior can break benchmark assumptions. Domain-shift testing must be designed from the start.
+Gap 10 — English is simpler but not simple
+Restricting to English avoids multilingual representation issues, but speech emotion still varies with accent, dialect, culture, age, gender and code-switching. English-only should be treated as a scope boundary, not as a guarantee of uniformity.
+8. Requirements analysis for the proposed system
+9. Evidence-backed architecture direction
+The literature suggests a research architecture with separate modality encoders, a shared time axis, adaptive cross-modal interaction and a context/trend layer. A reasonable starting hypothesis is:
+Camera -> face detection/tracking -> quality estimation -> temporal visual encoder (ViT/3D-CNN/face-AU or learned facial tokens)
+Microphone -> speech activity detection -> SSL speech encoder + prosody features (pitch/F0, energy, rate, pauses, spectral descriptors)
+Audio -> ASR -> word/subword timestamps -> language encoder (e.g., BERT/RoBERTa-family or a compact modern encoder)
+Time alignment -> word/audio/video windows anchored on utterance or phrase segments
+Adaptive fusion -> cross-modal attention or dynamic mixture-of-experts; add modality dropout/noise simulation during training
+Context layer -> short-term temporal Transformer or graph/context model with speaker history
+Prediction layer -> categorical emotion + optional valence/arousal + calibrated confidence + disagreement/insufficient-evidence flag
+Explanation layer -> modality evidence summaries grounded in observed time windows, not free-form unsupported reasoning
+Trend layer -> confidence-weighted smoothing and longitudinal aggregation
+This is a research direction, not a claim that one cited paper already solves the full pipeline. The literature supports each component separately; integrating all of them into a low-latency, uncertainty-aware, personalized English streaming system is where the project can become a meaningful systems contribution.
+10. What should count as the research contribution?
+A streaming trimodal emotion model that performs alignment and segmentation online rather than relying on pre-segmented benchmark utterances.
+An adaptive fusion mechanism that can explicitly down-weight unreliable or contradictory face/audio/text evidence.
+A calibrated emotion output with an 'insufficient evidence' state, rather than always returning a confident class.
+A grounded explanation format that reports what each modality contributed and where in time, instead of treating LLM-generated prose as proof.
+A realistic cross-dataset and cross-person evaluation protocol: train on public datasets, test across held-out speakers/datasets, then evaluate a small spontaneous real-world set under controlled consent.
+A longitudinal trend layer that turns per-utterance emotion into a stable monitoring signal without equating emotion trends with a psychiatric diagnosis.
+11. Evaluation plan suggested by the literature
+12. Recommended reading order
+1) MELD — understand the tri-modal conversational benchmark and its assumptions.
+2) M3ER — understand direct face/text/speech fusion and modality reliability.
+3) MulT — understand asynchronous cross-modal attention.
+4) M2FNet — inspect a tri-modal conversational architecture close to the proposed application.
+5) Noise-Resistant Multimodal Transformer — understand robustness to noisy temporal regions.
+6) GCNet + modality-dropout work — understand incomplete/missing modality scenarios.
+7) CMERC — understand why a confidence score needs calibration.
+8) EMOE + pairwise fusion — understand adaptive modality weighting and interaction.
+9) Emotion-LLaMA + VEGA — understand the current 'recognize + reason + ground' direction.
+10) Barrett et al. — use this to keep the mental-health framing scientifically defensible.
+13. Practical recommendation for the project proposal
+The proposal should be reframed slightly from 'detect a person's mental health from face and voice' toward 'estimate momentary emotional state from synchronized facial, vocal and linguistic cues, with uncertainty and longitudinal trend analysis.' That wording matches the actual research field and reduces the risk of implying clinical diagnosis. Your current proposal already identifies privacy, real-world robustness, facial/voice fusion, confidence scores and future behavioral/physiological extensions; these are strong anchors for the literature-backed version of the project.
+The most defensible novelty is not inventing yet another CNN + LSTM fusion block. A stronger undergraduate/system-design contribution would be a well-engineered, reproducible streaming pipeline with adaptive fusion, missing-modality robustness, calibration, and a grounded explanation protocol, evaluated across multiple English datasets and real-world perturbations.
+14. Source and venue notes
+Journal quartile statements in this report refer to publicly accessible SCImago/Scopus-derived information where stated. Conference 'top tier' is expressed through established conference rankings/venue reputation rather than Q1 labels. ICORE 2026 records AAAI, ACL and ACM Multimedia as A*; journal examples used here include Information Fusion, Pattern Recognition, Expert Systems with Applications, IJCV and TPAMI, with the latter journals treated as Q1/top-tier where the cited ranking source supports it.
+15. References
+[1] Mittal et al. (2020). M3ER: Multiplicative Multimodal Emotion Recognition using Facial, Textual, and Speech Cues. AAAI 2020. Additional: arXiv
+[2] Poria et al. (2019). MELD: A Multimodal Multi-Party Dataset for Emotion Recognition in Conversations. ACL 2019. Additional: GitHub
+[3] Zadeh et al. (2018). Multimodal Language Analysis in the Wild: CMU-MOSEI Dataset and Interpretable Dynamic Fusion Graph. ACL 2018. Additional: ACL 2018
+[4] Tsai et al. (2019). MulT: Multimodal Transformer for Unaligned Multimodal Language Sequences. ACL 2019. Additional: GitHub
+[5] Chumachenko, Iosifidis & Gabbouj (2022). Self-attention fusion for audiovisual emotion recognition with incomplete data. ICPR 2022. Additional: GitHub
+[6] Chudasama et al. (2022). M2FNet: Multi-modal Fusion Network for Emotion Recognition in Conversation. CVPR Workshops 2022. Additional: IEEE
+[7] Liu et al. (2025). Noise-Resistant Multimodal Transformer for Emotion Recognition. International Journal of Computer Vision (IJCV), 133:3020-3040. Additional: DBLP
+[8] Fan, Lin, Mao & Cambria (2024). Fusing pairwise modalities for emotion recognition in conversations. Information Fusion 106, 102306.
+[9] Tu et al. (2024). Multimodal Emotion Recognition Calibration in Conversations. ACM Multimedia 2024. Additional: GitHub
+[10] Cheng et al. (2024). Emotion-LLaMA: Multimodal Emotion Recognition and Reasoning with Instruction Tuning. arXiv 2024; reported as a modern multimodal emotion-reasoning line. Additional: GitHub
+[11] Lian et al. (2024). MERBench: A Unified Evaluation Benchmark for Multimodal Emotion Recognition. arXiv / benchmark. Additional: Code | Dataset
+[12] Fang et al. (2025). EMOE: Modality-Specific Enhanced Dynamic Emotion Experts. CVPR 2025.
+[13] Hu, Kollias & Yang (2025). Grounding Emotion Recognition with Visual Prototypes: VEGA - Revisiting CLIP in MERC. ACM Multimedia 2025. Additional: GitHub
+[14] Boitel, Mohasseb & Haig (2025). MIST: Multimodal emotion recognition using DeBERTa for text, Semi-CNN for speech, ResNet-50 for facial, and 3D-CNN for motion analysis. Expert Systems with Applications 270, 126236. Additional: Publisher record
+[15] Zhang et al. (2026). SENTI: Semantic Enhancement and Relation Propagation Network for multimodal emotion recognition in conversations. Pattern Recognition, DOI 10.1016/j.patcog.2026.114019. Additional: DBLP
+[16] Li et al. (2026). HiRoC: selective history routing and disagreement-aware calibration for multimodal conversational emotion recognition. Journal of King Saud University Computer and Information Sciences 38 (2026).
+[17] Xiang, Zhu & Cambria (2026). Integrating audio-visual text generation with contrastive learning for enhanced multimodal emotion analysis. Information Fusion 127, 103809.
+[18] Lian et al. (2023). GCNet: Graph Completion Network for Incomplete Multimodal Learning in Conversation. IEEE TPAMI 45(7): 8419-8432.
+[19] DialogueRNN: An Attentive RNN for Emotion Detection in Conversations. AAAI 2019.
+[20] DialogueGCN: A Graph Convolutional Neural Network for Emotion Recognition in Conversation. EMNLP-IJCNLP 2019.
+[21] COSMIC: COmmonSense knowledge for eMotion Identification in Conversations. Findings EMNLP 2020.
+[22] DialogueCRN: Contextual Reasoning Networks for Emotion Recognition in Conversations. ACL 2021.
+[23] Learning Modality-Specific Representations with Self-Supervised Multi-Task Learning for Multimodal Sentiment Analysis. AAAI 2021.
+[24] Improving Multimodal Fusion with Hierarchical Mutual Information Maximization for Multimodal Sentiment Analysis. EMNLP 2021.
+[25] UniMSE: Towards Unified Multimodal Sentiment Analysis and Emotion Recognition. EMNLP 2022.
+[26] Emotion-Anchored Contrastive Learning Framework for Emotion Recognition in Conversation. Findings NAACL 2024.
+[27] DFEW: A Large-Scale Database for Recognizing Dynamic Facial Expressions in the Wild. ACM MM 2020.
+[28] MAFW: A Large-scale, Multi-modal, Compound Affective Database for Dynamic Facial Expression Recognition in the Wild. ACM MM 2022.
+[29] The Ryerson Audio-Visual Database of Emotional Speech and Song (RAVDESS). PLOS ONE 2018.
+[30] Emotional Expressions Reconsidered: Challenges to Inferring Emotion From Human Facial Movements. Psychological Science in the Public Interest 2019.
+Appendix A. Direct repository shortlist
+MELD official
+MulT official
+MISA
+Self-MM
+MMIM / Multimodal-InfoMax
+M3ER paper
+Audiovisual emotion recognition with incomplete data
+CMERC
+Emotion-LLaMA
+VEGA
+MERBench toolkit
+Note on reproducibility: repository links can change, disappear or become stale. They should be pinned by commit/tag when you begin implementation, and paper-reported preprocessing/features should be preserved in your experiment log.
+Research layer | What researchers optimize | Representative papers | Relevance to your system | Main unresolved issue
+Datasets/benchmarks | Realism, labels, modalities, reproducibility | CMU-MOSEI; MELD; RAVDESS; DFEW; MAFW | Provides training/evaluation sources | Most datasets are acted/media-derived, not spontaneous personal conversations
+Fusion | How modalities interact | MulT; M3ER; M2FNet; pairwise fusion | Direct architectural precedent | Static fusion can overtrust weak or contradictory modalities
+Context | Conversation history, speaker state | DialogueRNN; DialogueGCN; DialogueCRN; COSMIC | Needed for sentence-by-sentence interpretation | Live personal monitoring has no clean dialogue-turn boundaries
+Robustness | Missing/noisy modality | M3ER; modality dropout; GCNet; noise-resistant Transformer | Camera/mic quality varies in practice | Need explicit online reliability estimation
+Calibration | Confidence should reflect uncertainty | CMERC | Matches your requested confidence score | Confidence is not the same as clinical certainty or causal explanation
+Foundation models | General multimodal reasoning/explanation | Emotion-LLaMA; VEGA | Matches your 'what emotion and why' requirement | Cost, latency, faithfulness, benchmark leakage
+Psychological validity | Whether expression predicts actual emotion | Barrett et al. review; EMER line | Critical for mental-health framing | Facial/voice cues are probabilistic social signals, not direct ground truth
+Priority | Paper | Venue / tier | Modalities | Key method | Main gap for your project
+1 | M3ER: Multiplicative Multimodal Emotion Recognition using Facial, Textual, and Speech Cues | AAAI 2020
+Top conference (AAAI; ICORE 2026 A*) | Face + text + speech | Data-driven multiplicative fusion; a CCA-based modality check identifies ineffective modalities; proxy features replace unreliable modalities. | Benchmark-driven and largely utterance-level; the proxy-modality mechanism is not the same as true missing-modality uncertainty. Does not solve continuous live segmentation, personalization, or clinical validity.
+2 | MELD: A Multimodal Multi-Party Dataset for Emotion Recognition in Conversations | ACL 2019
+Top conference (ACL; ICORE 2026 A*) | Audio + video + text | Dataset creation/annotation plus strong baselines; models can exploit textual, acoustic, visual and dialogue-context information. | Acted TV dialogue is not equivalent to spontaneous private mental-health conversations; class imbalance is substantial; speaker/context distribution is narrow; visual/audio reliability can be imperfect.
+3 | Multimodal Language Analysis in the Wild: CMU-MOSEI Dataset and Interpretable Dynamic Fusion Graph | ACL 2018
+Top conference (ACL; ICORE 2026 A*) | Vision + audio + text | CMU-MOSEI dataset plus Dynamic Fusion Graph (DFG), designed to model modality interactions while preserving interpretability. | Centered on multimodal language/sentiment-style tasks rather than a clinical emotion-monitoring setting; labels are not a direct measure of mental-health state; feature extraction and segmentation assumptions matter.
+4 | MulT: Multimodal Transformer for Unaligned Multimodal Language Sequences | ACL 2019
+Top conference (ACL; ICORE 2026 A*) | Vision + audio + text | Directional pairwise cross-modal attention; each target modality attends to source modality sequences, followed by temporal/self-attention fusion. | Fusion is powerful but computationally expensive; it is not inherently a live-stream segmentation solution and does not itself solve confidence calibration or modality reliability.
+5 | Self-attention fusion for audiovisual emotion recognition with incomplete data | ICPR 2022
+Major pattern-recognition conference | Audio + video | Raw-data audiovisual encoders with alternative fusion mechanisms plus modality dropout during training. | Bimodal rather than tri-modal; incomplete-modality training does not fully address semantic contradictions among text, audio and face; dataset conditions are still controlled relative to a consumer application.
+6 | M2FNet: Multi-modal Fusion Network for Emotion Recognition in Conversation | CVPR Workshops 2022
+Major computer-vision workshop | Audio + video + text | Multi-head attention-based fusion; audio/visual feature extractor trained with adaptive-margin triplet loss to produce emotion-relevant representations. | Workshop venue; relies on benchmark feature pipelines; does not address true mental-health validation or open-vocabulary/fine-grained explanation.
+7 | Noise-Resistant Multimodal Transformer for Emotion Recognition | International Journal of Computer Vision (IJCV), 133:3020-3040
+Top journal; IJCV is Q1 | Video + text + audio | Noise-resistant multimodal Transformer that explicitly suppresses irrelevant/noisy temporal information and improves multimodal representation quality. | Still benchmark-oriented; the paper tackles noise but not the broader uncertainty problem of conflicting modalities, individual baselines, or clinical interpretation.
+8 | Fusing pairwise modalities for emotion recognition in conversations | Information Fusion 106, 102306
+Q1 journal (SCImago 2025) | Text + audio + visual | Pairwise modality management plus a density loss to reduce redundant representations and improve robustness. | Pairwise fusion can miss higher-order interactions among all three modalities; it does not directly solve temporal streaming, explanation, personalization, or mental-health outcome validation.
+9 | Multimodal Emotion Recognition Calibration in Conversations | ACM Multimedia 2024
+Top conference (ACM MM; ICORE 2026 A*) | Text + audio + visual | CMERC: curriculum learning, hybrid supervised contrastive learning, and confidence constraints to calibrate predictive confidence without changing the backbone architecture. | Calibration is necessary but not equivalent to trustworthy explanation; confidence is still model confidence, not a clinical probability of an underlying mental state.
+10 | Emotion-LLaMA: Multimodal Emotion Recognition and Reasoning with Instruction Tuning | arXiv 2024; reported as a modern multimodal emotion-reasoning line
+Recent foundation-model direction | Audio + visual + text | Emotion-specific encoders align audio/visual/text into a shared space, then a LLaMA-based model is instruction-tuned for emotion recognition and reasoning; introduces MERR and evaluates MER tasks. | Large-model cost/latency; reasoning may be plausible rather than faithful; dataset mixture and generated explanations can create evaluation leakage; clinical validity remains unaddressed.
+11 | MERBench: A Unified Evaluation Benchmark for Multimodal Emotion Recognition | arXiv / benchmark
+Benchmark paper / infrastructure | Audio + language + visual | Unified benchmark protocol covering feature extraction, fusion, robustness, fine-tuning and pretraining; introduces MER2023 and an open toolkit. | Benchmark unification cannot solve dataset validity; MER2023 is Chinese, whereas your target is English; models can still overfit benchmark conventions.
+12 | EMOE: Modality-Specific Enhanced Dynamic Emotion Experts | CVPR 2025
+Top conference (CVPR) | Vision + acoustics + language | Mixture of Modality Experts to dynamically weight modalities per sample, plus unimodal distillation to preserve modality-specific knowledge. | Dynamic weights are useful but not automatically interpretable; benchmark data may not reflect consumer camera/microphone quality or spontaneous behavior.
+13 | Grounding Emotion Recognition with Visual Prototypes: VEGA - Revisiting CLIP in MERC | ACM Multimedia 2025
+Top conference (ACM MM; ICORE 2026 A*) | Visual + audio + text | CLIP-based emotion-specific visual prototypes/anchors, stochastic anchor sampling, dual-branch architecture and self-distillation. | Prototype semantics still depend on discrete categories; CLIP priors may encode cultural/style biases; no direct solution to long-form live monitoring.
+14 | MIST: Multimodal emotion recognition using DeBERTa for text, Semi-CNN for speech, ResNet-50 for facial, and 3D-CNN for motion analysis | Expert Systems with Applications 270, 126236
+Q1 journal (SCImago 2025) | Text + speech + face + motion | DeBERTa text encoder, Semi-CNN speech encoder, ResNet-50 facial encoder, 3D-CNN motion encoder, followed by multimodal integration. | Four-modality benchmark system is computationally heavier; real-time consumer deployment and personalized/clinical validation remain open.
+15 | SENTI: Semantic Enhancement and Relation Propagation Network for multimodal emotion recognition in conversations | Pattern Recognition, DOI 10.1016/j.patcog.2026.114019
+Q1 journal (Pattern Recognition) | Text + audio + vision | Modality-aware semantic enhancement using a data-driven primary modality plus distribution-aware relation propagation over cross-modal relations. | Pre-extracted feature pipelines remain a bottleneck; gains on benchmarks do not establish robustness in uncontrolled personal video; deployment and calibration are outside the main scope.
+16 | HiRoC: selective history routing and disagreement-aware calibration for multimodal conversational emotion recognition | Journal of King Saud University Computer and Information Sciences 38 (2026)
+Very recent journal direction | Multimodal conversational inputs | Selective history routing and disagreement-aware calibration, designed to retain useful conversational history while controlling uncertainty. | Very recent; broader independent replication and cross-dataset validation are still needed.
+17 | Integrating audio-visual text generation with contrastive learning for enhanced multimodal emotion analysis | Information Fusion 127, 103809
+Q1 journal (Information Fusion) | Audio + visual + generated text | Dual audio-visual text generators create fine-grained emotional descriptions; contrastive learning aligns generated captions with raw multimodal features. | Text generation adds compute and another potential failure mode; generated explanations may not be faithful evidence; tests reported on MOSI/MOSEI do not equal mental-health monitoring validity.
+18 | GCNet: Graph Completion Network for Incomplete Multimodal Learning in Conversation | IEEE TPAMI 45(7): 8419-8432
+Q1 journal; TPAMI is top-tier | Multimodal conversation | Speaker GNN + Temporal GNN; joint classification and reconstruction objectives to exploit complete and incomplete data. | Reconstruction can recover a statistical surrogate, not the actual missing signal; quality depends on the learned graph/context; still benchmark based.
+Dataset | Task | Modalities / character | Why useful | Critical limitation
+IEMOCAP | Multimodal conversational emotion | Text + audio + visual; acted dyadic conversations | Excellent primary fusion benchmark; common in MERC | Acted; small relative to foundation-model scale; speaker/session split must be respected
+MELD | Multimodal multi-party conversation | Audio + video + text; 1,433 dialogues / ~13k utterances | Best fit for conversational context and modality fusion | TV-series distribution; class imbalance; imperfect visual/audio alignment/reliability
+CMU-MOSEI | Large-scale in-the-wild multimodal language | Vision + audio + text | Good scale and asynchronous multimodal learning | More sentiment/emotion-intensity oriented than clinical emotional-state tracking
+RAVDESS | English audiovisual emotion | North American English; face+voice, face-only, voice-only | Very useful for audio-visual pretraining and controlled ablations | Actors and scripted/acted emotion; not spontaneous
+CREMA-D | English audiovisual speech emotion | Audio + face; multiple actors | Useful additional cross-speaker benchmark | Acted and categorical; not a natural personal conversation
+AffectNet / FER2013 | Facial expression | Images/facial expressions | Useful for visual encoder pretraining | Image-level or image-centric; does not capture speech context or temporal dynamics
+DFEW | Dynamic facial expression in the wild | Video; large-scale movie clips | Tests pose/illumination/occlusion robustness | Video-derived labels are not the same as genuine internal emotion
+MAFW | Multimodal dynamic affect | 10,045 video-audio clips; compound affect labels | Important for compound/fine-grained visual-audio affect | Restricted non-commercial research use; source-domain/cultural issues
+MER2024 / MERBench | Robust practical MER benchmark | Audio + language + visual; multiple challenge tracks | Useful for robustness/noise/open-vocabulary benchmarking | Recent benchmark conventions may not match English consumer data
+ID | Requirement area | Interpretation
+R1 | Multimodal capture | Camera video + microphone audio + ASR transcript
+R2 | Asynchronous alignment | Map words, audio frames and face frames onto a common time axis
+R3 | Utterance segmentation | Detect sentence/phrase boundaries using pause duration, ASR segmentation and conversational turn cues
+R4 | Facial dynamics | Track face identity/quality, expression/action-unit or learned visual tokens, not a single still frame
+R5 | Speech emotion | Use both SSL speech representation and interpretable prosodic features such as F0/pitch, energy, rate and pauses
+R6 | Text emotion | Use contextual language representation; preserve the exact words for semantic evidence
+R7 | Adaptive fusion | Learn sample-specific modality contributions and model disagreement
+R8 | Missing/noisy modality handling | Continue sensibly when video/audio quality drops
+R9 | Temporal context | Use recent utterances and speaker-specific history, not only the current sentence
+R10 | Uncertainty/calibration | Return calibrated confidence and an abstain/insufficient-evidence state
+R11 | Explainability | Return modality-specific evidence spans and an overall reason, clearly marked as model inference
+R12 | Trend layer | Aggregate utterance predictions into a time-series representation with smoothing and uncertainty
+R13 | Privacy | Prefer on-device or edge processing where practical; avoid retaining raw face/audio unless explicitly needed
+R14 | Evaluation | Report macro-F1/UAR/WAR as appropriate, confusion matrices, calibration metrics, latency, missing-modality robustness and cross-person generalization
+Dimension | Metrics | Reason
+Classification | Macro-F1, weighted-F1, UAR/WAR, per-class recall | Avoid accuracy hiding minority-class failures; relevant because neutral and common classes can dominate.
+Calibration | ECE, Brier score, reliability diagrams | Directly motivated by CMERC and high-stakes use.
+Robustness | Missing audio/video, added noise, blur/occlusion, lighting changes | Directly motivated by modality-dropout, noise-resistant and MERBench lines.
+Generalization | Cross-dataset and speaker-disjoint evaluation | Separates true multimodal learning from memorization of actor/show/source style.
+Streaming | Real-time factor, end-to-end latency, segmentation delay | Your application is interactive, unlike offline benchmark evaluation.
+Explanation quality | Evidence faithfulness / human agreement | Do not evaluate explanation only by fluency.
+Longitudinal stability | Temporal variance, change-point detection quality | Needed for trend dashboards rather than isolated labels.

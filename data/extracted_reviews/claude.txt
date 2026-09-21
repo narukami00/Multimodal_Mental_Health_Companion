@@ -1,0 +1,269 @@
+Literature Review & Requirement Analysis
+Multimodal (Facial, Voice, Text) Emotion Recognition for
+AI-Based Mental Health Emotion Monitoring
+Prepared in support of the project proposal:
+"AI-Based Mental Health Emotion Monitoring from Facial and Voice Features Using Multimodal Artificial Intelligence"
+0. Scope, Method, and How to Use This Review
+This review was compiled by searching across top-tier venues in affective computing, computer vision, speech processing, NLP, and multimodal machine learning: NeurIPS, CVPR/CVPRW, ICCV, ACL/EMNLP/NAACL, Interspeech/ICASSP, IEEE Transactions on Affective Computing (TAFFC), Information Fusion, Pattern Recognition, Expert Systems with Applications, and the ABAW (Affective Behavior Analysis in-the-Wild) and MER (Multimodal Emotion Recognition) workshop challenge series. Since your project's own scope spans facial expression analysis, speech emotion recognition, and their fusion, this review is organized the same way: facial-only work, speech-only work, text/conversational work, fully multimodal fusion architectures, LLM-based/generalist approaches, and finally work specific to your actual target domain — mental health and depression/distress detection from these same signals. Priority was given to papers combining video/face with audio, per your instruction, while single-modality (audio-only or text-only) papers were kept where they represent foundational or SOTA building blocks you will likely reuse as encoders inside a fused pipeline.
+Each entry lists: the problem being solved, the exact input/output contract, the core methodology, and — most important for your requirement analysis — explicit limitations and gaps. Section 8 converts these gaps into a direct gap analysis against your proposal, and Section 9 gives requirement-analysis takeaways (functional and non-functional requirements implied by the literature).
+1. Foundational & Landscape Surveys (Read These First)
+These give you the taxonomy of the entire field — fusion strategies (early/late/hybrid/attention-based), dataset landscape, and open problems. Use them as your Chapter 2 backbone.
+A Survey of Deep Learning-Based Multimodal Emotion Recognition: Speech, Text, and Face
+Entropy (MDPI), 2023   |   Q1 Journal
+Link: https://www.mdpi.com/1099-4300/25/10/1440
+Problem: Lack of a focused, deep-learning-specific review of MER combining speech, text, and face — prior surveys were either too broad (all affective computing) or outdated (pre-deep-learning).
+Input / Output: Not a model — a meta-analysis. Reviews datasets (input types: audio waveforms, video frames, transcripts) and the fusion-to-emotion-label output pipelines of ~80+ papers.
+Methodology: Systematic taxonomy of (a) unimodal feature extraction methods per modality, (b) fusion methods — feature-level (early), decision-level (late), and model-level (hybrid/attention), and (c) evaluation protocols.
+Limitations / Gaps identified: Notes persistent gaps in: cross-corpus generalization (models overfit to one dataset's recording conditions), poor handling of missing/noisy modalities, and a near-total lack of real-world (as opposed to acted/lab) evaluation data.
+Multimodal Emotion Recognition with Deep Learning: Advancements, Challenges, and Future Directions
+Information Fusion, Vol. 105, 2024 (Elsevier)   |   Q1 Journal — high-impact (IF ~18)
+Link: https://doi.org/10.1016/j.inffus.2023.102218
+Problem: Synthesizes how multimodal fusion of speech, text, facial expression, and physiological signals improves on unimodal emotion recognition, and where deep architectures still fail.
+Input / Output: Survey; catalogs input modalities (face/video, speech, text, EEG/physiological) mapped to categorical (Ekman's 6) or dimensional (valence-arousal) emotion outputs.
+Methodology: Structured comparison of CNN/RNN/Transformer/GNN-based fusion methods; explicit discussion of attention-based and graph-based fusion as the emerging dominant paradigm over simple concatenation.
+Limitations / Gaps identified: Flags (1) the modality heterogeneity gap between continuous signals (audio/video) and discrete text, (2) lack of standard benchmarks for real-world/in-the-wild robustness, (3) minimal explainability in fusion decisions — directly relevant to your 'why' requirement in the emotion output.
+A Survey on Multimodal Emotion Recognition: Methods, Datasets, and Future Directions
+Computers, Materials & Continua (CMC / Tech Science Press), 2025   |   Q1/Q2 Journal (recent, covers 2021–2025)
+Link: https://www.techscience.com/cmc/v87n2/66647/html
+Problem: Most existing surveys are already stale given the 2024–2025 shift toward foundation models; this one specifically consolidates the LLM/foundation-model era of MER.
+Input / Output: Survey covering visual, acoustic, textual, and sensor-based embeddings and their fusion into emotion predictions.
+Methodology: Chronological analysis 2021→2025 emphasizing how pre-trained encoders (CLIP, wav2vec, BERT-family) and self-supervised learning replaced hand-crafted features; also covers graph-reasoning fusion and generative recovery of missing modalities.
+Limitations / Gaps identified: Explicitly states the field remains 'fragmented' due to differences in feature alignment, temporal synchronization, modality reliability, and robustness to noisy/missing input — precisely the conditions your real-world deployment (users on random webcams/mics) will face.
+2. Facial Expression Recognition (FER) — Vision-Only Backbone
+Since your pipeline needs a face-emotion sub-model as one branch of the fusion network, these are the current best-in-class architectures and their exact benchmark numbers (RAF-DB / AffectNet / FERPlus are the three standard leaderboards).
+POSTER: A Pyramid Cross-Fusion Transformer Network for Facial Expression Recognition
+ICCV Workshops (CVF/IEEE), 2023   |   Top-tier CV conference workshop
+Link: https://arxiv.org/abs/2204.04083
+Problem: Three core FER problems: inter-class similarity (e.g., fear vs. surprise look alike), intra-class discrepancy (same emotion looks different across people), and scale sensitivity (face size/pose variance).
+Input / Output: Input: single face image (cropped/aligned). Output: discrete emotion class (7 or 8 classes depending on dataset).
+Methodology: A 'pyramid cross-fusion transformer' that fuses two streams — raw image features and facial-landmark features — using cross-attention, plus a multi-scale/pyramid structure to handle scale variance.
+Limitations / Gaps identified: Static-image only — no temporal modeling, so it cannot use how an expression evolves over a spoken sentence (a gap directly relevant to your video-based, continuous-speech scenario). Also trained/tested on curated datasets (RAF-DB 92.05%, AffectNet 67.31%, FERPlus 91.62%), which are still closer to posed/semi-wild photos than an uncontrolled webcam feed.
+POSTER++: A Simpler and Stronger Facial Expression Recognition Network
+Pattern Recognition (Elsevier), 2024   |   Q1 Journal
+Link: https://arxiv.org/abs/2301.12149
+Problem: POSTER's own limitation — high parameter count/compute cost — making it impractical for real-time or mobile deployment.
+Input / Output: Same as POSTER: single face image → emotion class.
+Methodology: Simplifies the cross-fusion design (removes redundant landmark stream stages, uses a lighter vision backbone) while retaining accuracy, explicitly targeting deployability.
+Limitations / Gaps identified: Still single-frame/static; still requires a separate face-detection+alignment preprocessing stage; accuracy on 'in-the-wild' compound/ambiguous expressions remains materially below lab-condition accuracy.
+Spatio-Temporal Transformer for Dynamic Facial Expression Recognition in the Wild
+ACM Multimedia (ACM MM), 2022   |   Top-tier multimedia conference
+Link: https://arxiv.org/abs/2205.04749
+Problem: Directly addresses your requirement: FER from video (dynamic facial expression recognition, DFER), not single images — expressions must be tracked across frames/time.
+Input / Output: Input: a short video clip (sequence of frames) of a face. Output: single emotion label for the clip.
+Methodology: A spatio-temporal transformer applies self-attention both across spatial regions of the face and across the time dimension, learning which frames/moments carry the most emotional signal (analogous to your need to weight moments where the user is actively speaking vs. silent).
+Limitations / Gaps identified: Trained on DFEW/AFEW-style short clips with a single dominant emotion label per clip; does not handle continuously varying emotion within one long recording, nor does it fuse audio — you'd need to adapt this class of model to segment-then-classify per utterance, which is exactly the segmentation problem you described (deciding sentence/utterance boundaries from pause gaps).
+Deep Facial Expression Recognition: A Survey
+IEEE Transactions on Affective Computing (TAFFC), 2020 (still the most-cited FER survey; widely cited by 2024–2025 papers)   |   Q1 Journal
+Link: https://doi.org/10.1109/TAFFC.2020.2981446
+Problem: Comprehensive taxonomy of deep FER: pipelines, datasets, and the specific 'in-the-wild' challenges (illumination, pose, occlusion, identity bias).
+Input / Output: Survey — covers both static-image and dynamic-sequence FER pipelines.
+Methodology: Breaks FER into preprocessing (face detection/alignment/normalization), deep feature learning (CNN/RNN/GAN-based), and the two families of methods: static-frame FER vs. dynamic-sequence FER.
+Limitations / Gaps identified: Identifies illumination, head-pose variation, and identity/demographic bias as the three dominant real-world failure modes — all directly applicable to a webcam-based application where you cannot control lighting or camera angle.
+AffectNet+: A Database for Enhancing Facial Expression Recognition with Soft-Labels
+arXiv 2024 (dataset/benchmark paper, submitted to a CV venue)   |   Dataset paper, CV community
+Link: https://arxiv.org/abs/2410.22506
+Problem: Original AffectNet uses single hard labels per image, but real facial expressions are often ambiguous/compound (e.g., simultaneously sad and angry) — hard labels throw away real signal and inflate reported accuracy gaps between models.
+Input / Output: Re-annotated AffectNet images with soft/probabilistic labels across emotion categories instead of one-hot labels.
+Methodology: Crowd re-annotation protocol producing a distribution over emotions per image; benchmarks how existing SOTA FER models perform when evaluated against soft ground truth.
+Limitations / Gaps identified: Confirms that reported 60–70% 'accuracy' numbers on AffectNet are partly an artifact of forcing single-label ground truth; real emotion expression is genuinely multi-label/fuzzy — a design implication for your system's output format (confidence-distribution output, which your proposal already plans, is the right call).
+3. Speech Emotion Recognition (SER) — Audio-Only Backbone
+Self-supervised speech models (wav2vec 2.0, HuBERT) have replaced hand-crafted MFCC-only pipelines as the SOTA approach since ~2021. Since your proposal lists MFCC/pitch/spectrogram features, note that most current top-venue work now uses these pretrained encoders instead of or in addition to MFCCs.
+Exploring Wav2vec 2.0 Fine-Tuning for Improved Speech Emotion Recognition
+ICASSP 2023 (IEEE Intl. Conf. on Acoustics, Speech and Signal Processing)   |   Top-tier speech-processing conference
+Link: https://arxiv.org/abs/2110.06309
+Problem: How to best fine-tune a large self-supervised speech model (wav2vec 2.0, pretrained on raw audio for ASR) for the very different downstream task of emotion recognition.
+Input / Output: Input: raw speech waveform. Output: categorical emotion class (IEMOCAP's 4-class: angry/happy/neutral/sad, a very common SER benchmark subset).
+Methodology: Compares vanilla fine-tuning (V-FT) against task-adaptive pretraining (TAPT) and a proposed pseudo-label TAPT (P-TAPT); establishes new SOTA on IEMOCAP.
+Limitations / Gaps identified: Sensitive to how much labeled data is available per speaker/session; performance degrades under low-resource fine-tuning; IEMOCAP itself is scripted/semi-acted dialogue, not spontaneous real-world speech — a domain-shift risk for your app's real users.
+A Fine-Tuned Wav2vec 2.0/HuBERT Benchmark for Speech Emotion Recognition, Speaker Verification and Spoken Language Understanding
+arXiv / IEEE SLT 2022 workshop   |   Widely cited (600+) SER benchmark paper
+Link: https://arxiv.org/abs/2111.02735
+Problem: Establishes whether self-supervised ASR-style pretraining transfers usefully to non-ASR speech tasks, emotion recognition among them.
+Input / Output: Raw waveform in; weighted accuracy on IEMOCAP SER out (79.58% speaker-dependent, 73.01% speaker-independent).
+Methodology: Full vs. partial fine-tuning of wav2vec 2.0/HuBERT with a lightweight downstream classification head.
+Limitations / Gaps identified: Speaker-independent setting (i.e., emotion recognition generalizing to a person the model has never heard) drops accuracy by ~6.5 points from the speaker-dependent setting — a critical gap since your application will meet entirely new users/voices every session.
+HCAM: Hierarchical Cross Attention Model for Multi-Modal Emotion Recognition
+arXiv 2023 (referenced widely in 2024-25 SER/MER challenge papers, e.g., Interspeech-affiliated work)   |   Strong community adoption
+Link: https://arxiv.org/abs/2304.06910
+Problem: Standard concatenation-based audio+text fusion ignores that emotional cues are unevenly distributed in time — some words/moments carry more emotional weight than others.
+Input / Output: Speech + corresponding transcript in; emotion class out (IEMOCAP).
+Methodology: A hierarchical attention structure: word-level cross-attention between audio and text first, then utterance-level attention aggregates across the dialogue/session context (i.e., considers previous utterances, not just the current one).
+Limitations / Gaps identified: No visual/facial modality at all (bimodal audio+text only); relies on accurate ASR transcription as input — errors in speech-to-text propagate directly into wrong text-embedding cues, a real risk if you add live ASR.
+Decoding Emotions: A Comprehensive Multilingual Study of Speech Models for Speech Emotion Recognition
+arXiv 2023 (Interspeech-style benchmark study)   |   Comprehensive benchmark, high citation velocity
+Link: https://arxiv.org/abs/2308.08713
+Problem: Prior SER benchmark comparisons of self-supervised models were mostly English/single-language; unclear which pretrained speech backbone (wav2vec2, HuBERT, WavLM, Whisper-encoder, etc.) generalizes best.
+Input / Output: Raw audio across multiple languages/corpora in; emotion class out.
+Methodology: Systematic benchmarking of multiple SSL speech encoders across multiple SER corpora with consistent downstream classifier heads, isolating the encoder as the only variable.
+Limitations / Gaps identified: Explicitly notes English-only fits your project scope, which simplifies your model choice, but the paper flags that even 'best' models show large corpus-to-corpus variance — i.e., picking a backbone requires testing on data resembling your actual deployment (spontaneous conversational monologue, not acted lines).
+4. Text-Based & Conversational Emotion Recognition (ERC)
+Even though your primary signals are face and voice, the words being said are a third information source your own proposal architecture will eventually need (via ASR transcript) — these are the top ERC (Emotion Recognition in Conversation) approaches, which also solve a problem structurally identical to yours: segmenting a continuous conversation into emotion-labeled utterances.
+MMGCN: Multimodal Fusion via Deep Graph Convolution Network for Emotion Recognition in Conversation
+ACL 2021 (Association for Computational Linguistics)   |   Top-tier NLP conference (*CL)
+Link: https://aclanthology.org/2021.acl-long.440/
+Problem: Emotion in conversation depends on context (what was said/felt earlier in the dialogue) and on multiple speakers, not just the current isolated utterance.
+Input / Output: Input: sequence of utterances, each with audio+visual+text features, across a multi-turn dialogue. Output: emotion label per utterance.
+Methodology: Builds a graph where each utterance (per modality) is a node; edges capture intra-speaker temporal dependency and inter-modality dependency; graph convolution propagates context across the whole conversation. Evaluated on IEMOCAP and MELD.
+Limitations / Gaps identified: Requires the full conversation graph to be built before inference — not naturally streaming/real-time, which conflicts with your live-camera, on-the-fly requirement; also assumes speaker-turn segmentation is already solved/given.
+COGMEN: COntextualized GNN-based Multimodal Emotion RecognitioN
+NAACL 2022 (North American ACL)   |   Top-tier NLP conference
+Link: https://arxiv.org/abs/2205.02455
+Problem: Extends MMGCN-style graph approaches by more explicitly separating 'local' context (immediate inter/intra-speaker dependency) from 'global' context (the whole conversation's arc).
+Input / Output: Multimodal utterance sequence in; per-utterance emotion label out (IEMOCAP, MELD benchmarks).
+Methodology: Graph Transformer architecture combining local relational-position encodings with global self-attention across the dialogue graph.
+Limitations / Gaps identified: Same batch/offline-graph limitation as MMGCN; benchmark datasets (IEMOCAP is scripted, MELD is TV-show dialogue) are stylistically distant from a single user talking to a camera alone, which is your actual use case (monologue, not multi-party conversation) — an important structural gap.
+MELD: A Multimodal Multi-Party Dataset for Emotion Recognition in Conversations
+ACL 2019 (dataset paper underlying nearly all ERC work above)   |   Top-tier NLP conference — foundational dataset
+Link: https://arxiv.org/abs/1810.02508
+Problem: Prior emotion datasets (e.g., IEMOCAP) were either single/two-speaker or lab-recorded; MELD provides naturalistic multi-party TV-show dialogue with aligned audio, video, and text.
+Input / Output: ~13,000 utterances from the show 'Friends', each with audio+video+transcript, labeled with 7 emotions and sentiment polarity.
+Methodology: Dataset construction (source: TV show, splits, annotation protocol) — not a model.
+Limitations / Gaps identified: Scripted/acted performance (professional actors), not spontaneous emotion; heavy dataset imbalance toward 'neutral'; used almost universally as the standard MER benchmark despite these acted-emotion caveats — worth explicitly flagging in your own limitations section if you use it.
+5. Core Multimodal Fusion Architectures (Face + Voice [+ Text])
+This is the section most directly reusable as your project's core architecture — how to combine the three modalities once each has its own embedding.
+Multimodal Transformer for Unaligned Multimodal Language Sequences (MulT)
+ACL 2019 — still the most-cited baseline architecture in 2024–2025 MER papers   |   Top-tier NLP conference (*CL) — foundational architecture
+Link: https://aclanthology.org/P19-1656/
+Problem: Text, audio, and video signals are sampled at different rates and are not naturally time-aligned (a word doesn't map cleanly to one video frame or one audio frame) — most prior fusion methods needed pre-aligned, hand-synced data.
+Input / Output: Input: three parallel time-series — language (word embeddings), visual (per-frame facial features), acoustic (per-frame audio features). Output: sentiment/emotion score or class.
+Methodology: Introduces 'directional pairwise cross-modal attention': each modality attends to every other modality across all time steps without requiring pre-alignment, then a self-attention transformer fuses the results. Outperformed prior SOTA by 10–15% on CMU-MOSI, CMU-MOSEI, and IEMOCAP.
+Limitations / Gaps identified: Quadratic attention cost across all modality-pairs and time steps — computationally expensive for long, continuous recordings (a concern for a live/continuous monitoring app rather than short clips); doesn't handle a modality being fully absent (e.g., camera off) gracefully.
+MISA: Modality-Invariant and -Specific Representations for Multimodal Sentiment Analysis
+ACM Multimedia (ACM MM) 2020   |   Top-tier multimedia conference
+Link: https://arxiv.org/abs/2005.03545
+Problem: Naively fusing modalities conflates information that is shared across modalities (e.g., general sentence-level sentiment) with information unique to one modality (e.g., a vocal tremor with no textual trace), which hurts the fusion model's ability to learn either well.
+Input / Output: Text + audio + visual features in; sentiment/emotion prediction out (CMU-MOSI/MOSEI).
+Methodology: Projects each modality into two learned subspaces — a modality-invariant (shared) space and a modality-specific (private) space — using similarity and difference losses, then fuses both for final prediction.
+Limitations / Gaps identified: The invariant/specific split is a soft, learned separation, not guaranteed to be semantically clean; still evaluated on short, single-utterance clips rather than continuous multi-minute sessions.
+WavFusion: Towards Wav2vec 2.0 Multimodal Speech Emotion Recognition
+arXiv 2024 (submitted to a speech-processing venue)   |   Recent (2024), strong empirical results
+Link: https://arxiv.org/abs/2412.05558
+Problem: Most multimodal SER fusion methods treat audio and its paired text as equally reliable, but they carry heterogeneous and sometimes conflicting emotional evidence (e.g., sarcasm: positive words, negative tone).
+Input / Output: Speech (via wav2vec 2.0 embeddings) + text in; emotion class out (IEMOCAP, MELD).
+Methodology: Gated cross-modal attention plus an explicit 'homogeneous feature discrepancy learning' objective that pushes the model to notice and reconcile disagreement between modalities rather than just averaging them.
+Limitations / Gaps identified: Bimodal only (audio+text — no face/video); the discrepancy-learning objective adds training complexity/hyperparameters that could be brittle outside the two benchmark datasets tested.
+SUN Team's Contribution to ABAW 2024: Audio-Visual Valence-Arousal Estimation and Expression Recognition
+CVPR Workshops (CVPRW) 2024 — ABAW Challenge   |   Top-tier CV conference workshop / competitive challenge
+Link: https://arxiv.org/abs/2403.12609
+Problem: Standard lab-trained audio-visual emotion models perform well on clean data but degrade sharply on 'in-the-wild' footage — exactly the ABAW challenge's stated goal (ecological validity).
+Input / Output: Video (face) + audio in; either continuous valence-arousal scores or discrete expression class out, evaluated on the AffWild2 in-the-wild dataset.
+Methodology: Separately fine-tunes a CNN for the video stream and a speech embedding model (PDEM) for audio, then compares several temporal-modeling and fusion strategies (early vs. late, attention-based) on top of these embeddings.
+Limitations / Gaps identified: Explicitly reports that despite best efforts, in-the-wild performance remains well below lab-controlled benchmarks — direct evidence that your project's own 'robustness under real-world conditions' objective (lighting, noise, natural speaking style) is the field's known hardest open problem, not a solved one.
+AV-Mixup / CH-SIMS v2.0: Make Acoustic and Visual Cues Matter
+ACM International Conference on Multimodal Interaction (ICMI) 2022   |   Top-tier multimodal-interaction conference
+Link: https://dl.acm.org/doi/10.1145/3536221.3556630
+Problem: In many multimodal sentiment datasets, text dominates the prediction and audio/visual cues are effectively ignored by the model (a 'modality laziness' problem) even when they should matter.
+Input / Output: Text + audio + visual features in; sentiment intensity/emotion out (CH-SIMS v2.0 dataset, Mandarin but methodology is language-agnostic).
+Methodology: An AV-Mixup data augmentation technique that mixes acoustic/visual features across training samples specifically to force the model to rely on them, combined with a consistency-regularization module.
+Limitations / Gaps identified: Confirms empirically that naive multimodal training can silently degrade into unimodal (text-dominant) behavior — a critical design warning for your fusion module: you must explicitly validate that facial and vocal signal are contributing, not just being nominally present in the architecture.
+6. LLM-Based & Generalist Multimodal Emotion Understanding (2024–2025 Frontier)
+The newest direction in the field (2024 onward) is using large multimodal models (GPT-4V-class or fine-tuned LLaMA-based models) not just to classify an emotion but to explain the reasoning — directly matching your stated requirement of '...and why' in the output.
+Emotion-LLaMA: Multimodal Emotion Recognition and Reasoning with Instruction Tuning
+NeurIPS 2024 (Conference on Neural Information Processing Systems)   |   Top-tier ML conference — one of the 3-4 most prestigious AI venues worldwide
+Link: https://arxiv.org/abs/2406.11161
+Problem: Existing multimodal LLMs (e.g., GPT-4V) cannot process audio at all and fail to recognize subtle facial micro-expressions, making them unsuitable for genuine multimodal emotion reasoning out of the box.
+Input / Output: Input: audio + video (visual) + text, via emotion-specific encoders. Output: not just an emotion label, but a natural-language explanation of why that emotion was inferred (emotion + reasoning).
+Methodology: Introduces the MERR dataset (28,618 coarse-grained + 4,487 fine-grained emotion-reasoning annotated samples) and fine-tunes a modified LLaMA model with audio/visual encoders aligned into the LLM's token space via instruction tuning, in two training stages (coarse pretraining, then fine-grained instruction tuning).
+Limitations / Gaps identified: Heavy compute/data requirements (large annotated reasoning dataset, LLM-scale fine-tuning) — likely infeasible for a student/early-stage project to fully reproduce, but its output format (label + explanation) is exactly the target UX your proposal describes and is worth adopting as a design pattern even with a smaller custom classifier.
+GPT-4V with Emotion: A Zero-Shot Benchmark for Generalized Emotion Recognition
+Information Fusion, Vol. 108, 2024 (Elsevier) — also circulated as arXiv 2312.04293   |   Q1 Journal
+Link: https://arxiv.org/abs/2312.04293
+Problem: First systematic, quantitative test of whether a general-purpose multimodal LLM (GPT-4V), with zero task-specific training, can do emotion recognition competitively against specialized models.
+Input / Output: Images/video/text across 21 benchmark datasets and 6 sub-tasks (facial emotion, dynamic facial emotion, micro-expression, visual sentiment, tweet sentiment, multimodal emotion) in; emotion prediction out.
+Methodology: Prompts GPT-4V directly (no fine-tuning) across all 21 datasets and compares against published specialized-model baselines.
+Limitations / Gaps identified: GPT-4V shows strong general visual understanding and can meaningfully integrate multimodal cues and even temporal information, but explicitly and reproducibly fails at micro-expression recognition (too subtle/specialized) and cannot process audio directly at all — a clear signal that a bespoke trained model (as your proposal plans) is still necessary rather than just wrapping a general API.
+AffectGPT: Dataset and Framework for Explainable Multimodal Emotion Recognition
+arXiv 2024 / ICML-affiliated workshop lineage (same author group as MER2024 challenge)   |   Actively cited emerging line of work
+Link: https://arxiv.org/abs/2407.07653
+Problem: Even reasoning-capable models like Emotion-LLaMA need a standardized dataset/framework to make 'explainable' emotion recognition comparable across research groups.
+Input / Output: Audio+visual+text in; emotion label plus free-text explanation out.
+Methodology: Proposes both a new dataset and a framework standardizing how explanation quality is evaluated (not just label accuracy).
+Limitations / Gaps identified: Evaluating the quality of a generated natural-language explanation is inherently harder and less standardized than evaluating a classification accuracy number — the paper itself flags this measurement problem as unresolved, relevant if your own system needs to justify 'why' an emotion was detected.
+7. Domain-Specific: Mental Health, Depression & Distress Detection
+This is the section closest to your actual product. It uses the same facial+voice(+text) inputs as general emotion recognition, but targets a clinical/mental-health outcome instead of a basic emotion label — worth treating as your most important reference cluster.
+Harnessing Multimodal Approaches for Depression Detection Using Large Language Models and Facial Expressions
+npj Mental Health Research (Nature Portfolio), 2024   |   Q1 Journal — Nature-family journal
+Link: https://www.nature.com/articles/s44184-024-00112-8
+Problem: Depression screening traditionally relies on subjective self-report questionnaires (e.g., PHQ-8); the paper investigates whether facial expression + LLM-processed interview transcript can approximate/support that screening automatically.
+Input / Output: Input: video (facial expressions) + interview transcript, from the DAIC-WOZ / E-DAIC clinical interview dataset (participant talks to a virtual/human-controlled interviewer 'Ellie'). Output: depression risk / PHQ-8-aligned severity indicator.
+Methodology: Combines facial-expression feature extraction with an LLM-based analysis of the interview transcript; compares against unimodal baselines.
+Limitations / Gaps identified: Explicitly a research/screening-support tool, not a diagnostic one; DAIC-WOZ is a structured clinical interview (fixed question set, calm interviewer), which is a much more controlled setting than a user freely talking to a webcam at home — an important domain-shift caveat for your app.
+Bidirectional Cross-Modal Attention with Adaptive Thresholding for Multimodal Depression Detection Across EATD-Corpus and DAIC-WOZ
+BioMedInformatics (MDPI), 2025   |   Q2 Journal
+Link: https://doi.org/10.3390/biomedinformatics6050070
+Problem: Depression datasets are small and heavily class-imbalanced (far fewer depressed than non-depressed samples), which causes models to overfit or trivially predict the majority class.
+Input / Output: Audio + text in (two corpora: Chinese EATD-Corpus, English DAIC-WOZ); binary depressed/non-depressed classification out, with F1/recall/precision reported.
+Methodology: Bidirectional cross-modal attention between audio and text, SMOTE-based oversampling for class imbalance, plus adaptive decision thresholding and probability ensembling to stabilize predictions.
+Limitations / Gaps identified: No visual/facial modality at all in this particular paper (audio+text only); cross-corpus generalization (a model trained on one language/corpus applied to the other) is explicitly tested and shown to be imperfect, underscoring that a model trained on public datasets will need real recalibration on your own users' data.
+IMDD-Net: Integrative Multimodal Depression Detection Network (video-audio-text)
+PMC/peer-reviewed journal, 2024–2025 (open access)   |   Peer-reviewed journal
+Link: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12504862/
+Problem: Existing depression-detection networks rarely combine local (frame/segment-level) and global (session-level) features across all three modalities simultaneously.
+Input / Output: Video + audio + text in (all three modalities, matching your proposal directly); depression severity estimate out.
+Methodology: Kronecker-product-based multimodal fusion to model deep cross-modal interactions; MFCC + eGeMAPS acoustic features (local + global statistics) combined with periodic video-frame sampling.
+Limitations / Gaps identified: Kronecker-product fusion has a dimensionality explosion problem as more modalities/features are added, raising compute cost; like other DAIC-WOZ-based work, trained on structured clinical interviews rather than spontaneous unscripted speech.
+Multi-Modal LLM for Depression Detection by Integrating Text, Audio, and Video
+arXiv 2025 (submitted to an ML/health-informatics venue)   |   Recent (2025), state-of-the-art on DAIC-WoZ
+Link: https://arxiv.org/abs/2511.19877
+Problem: First reported attempt (per the authors) at a true tri-modal (text+audio+video) LLM-based depression detector, versus prior work that was mostly bimodal (text+audio only).
+Input / Output: Text + audio + video in; depression classification out, on DAIC-WoZ.
+Methodology: Built on Qwen2-Audio (an audio-native LLM) augmented with a self-supervised vision encoder and parameter-efficient fine-tuning (LoRA-style), rather than training a bespoke classifier from scratch.
+Limitations / Gaps identified: The authors themselves explicitly disclaim the model for research use only — not for clinical diagnosis, treatment, or intervention — and note the general LLM risks of hallucination and bias, a disclaimer your own project should adopt verbatim in its own scope statement given it targets 'mental health monitoring.'
+DAIC-WOZ / E-DAIC: Distress Analysis Interview Corpus
+Originating from AVEC (Audio/Visual Emotion Challenge) series; USC ICT   |   Foundational clinical dataset — used across nearly all papers in this section
+Link: https://dcapswoz.ict.usc.edu/
+What it is: The standard public benchmark for multimodal (audio, video, text-transcript) depression/anxiety/PTSD screening: interviews between real participants and 'Ellie,' a human-controlled virtual agent, labeled with PHQ-8 depression severity scores.
+Why it matters to you: It is the closest existing public dataset, in structure, to what your app will collect (a person talking to a camera/mic, with derivable text via ASR) — strongly recommended as your first external benchmark before collecting your own 'custom dataset for real-world evaluation' as stated in your proposal.
+Limitations / Gaps identified: Only ~189 (DAIC-WOZ) to 275 (E-DAIC) participants — small by deep-learning standards, and heavily imbalanced toward non-depressed; a fixed, calm interview format rather than free unscripted speech; several recent papers (see IMDD-Net entry) note possible label leakage/shortcut learning risk (e.g., models learning to detect an interviewer's follow-up-question pattern rather than genuine affective cues) — worth being aware of before you build evaluation protocols around it.
+8. Direct Gap Analysis Against Your Proposal
+Mapping the literature's known open problems onto your specific proposed system design (Sections 3, 5, and 6 of your proposal document).
+9. Requirement Analysis Takeaways
+9.1 Functional Requirements Implied by the Literature
+Face detection + alignment preprocessing stage is a prerequisite for every FER paper reviewed (POSTER, POSTER++, DFER Transformer) — your pipeline needs this as an explicit, separate module, not an assumption baked into the classifier.
+A voice-activity-detection / utterance-segmentation module is needed before per-utterance classification, since no reviewed model performs this from raw continuous audio+video end-to-end.
+An explicit 'modality contribution check' (ablation-style, at inference time or as a periodic validation) is warranted given documented 'modality laziness' risk in fusion training.
+Cross-corpus / cross-condition evaluation should be built into your test plan from the start (train on public datasets — FER2013/AffectNet/RAVDESS/CREMA-D as you propose — but evaluate on your own collected 'in-the-wild' data early, not only at the end), since every survey reviewed flags this generalization gap as the field's central unsolved problem.
+Output should include a confidence/probability distribution across emotions rather than a single hard label, both because your proposal already plans this and because the AffectNet+ paper shows single hard labels lose real information for genuinely ambiguous/compound expressions.
+9.2 Non-Functional Requirements Implied by the Literature
+Real-time performance is achievable but requires deliberate architecture choices: the edge-deployment papers reviewed (Section 5/8) show 21ms–200ms latency is possible via quantization, knowledge distillation, and lightweight backbones (ShuffleNet, DistilHuBERT/MobileViT-class models) — full Transformer-scale fusion models (MulT-style) are unlikely to hit real-time targets without these techniques.
+Privacy: on-device/federated approaches exist as concrete, citable precedent (not just a policy statement) if your later product roadmap needs to process camera/mic data locally rather than sending it to a server.
+Robustness to missing modality (camera off, mic muted, or poor lighting/noisy environment) should be a designed-for failure mode, not an edge case discovered late — several fusion papers (MISA, CH-SIMS v2.0/AV-Mixup) exist specifically because naive fusion breaks when one modality's signal quality drops.
+Ethical/scope framing: every mental-health-adjacent paper reviewed (DAIC-WOZ-based depression detection, Multi-Modal LLM for Depression Detection) explicitly and prominently disclaims clinical/diagnostic use — your project should adopt equivalent language from the outset given your application's stated 'mental health monitoring' framing, to stay aligned with how this exact research community frames responsible deployment.
+10. Reference Dataset Summary Table
+11. Suggested Reading Order & Code Repositories
+For a project at requirement-analysis stage, this is a practical order to read/implement in:
+1. Read Section 1 surveys fully — they will anchor your literature review chapter and give you citation-ready taxonomy language.
+2. Skim Section 2 (FER) and Section 3 (SER) entries to pick your two unimodal backbones — POSTER++ (or a lighter ViT-FER model) for face, fine-tuned wav2vec2/HuBERT for voice.
+3. Study MulT and MISA (Section 5) closely — these are the two most implementable, well-documented fusion architectures with public code, and are the natural starting point for your own fusion module.
+4. Read the DAIC-WOZ-based papers (Section 7) as your closest domain analogues before finalizing your own evaluation protocol.
+5. Treat Emotion-LLaMA / GPT-4V-with-Emotion (Section 6) as aspirational/future-work reference points (per your proposal's own 'Future Extensions' section), not as your MVP target.
+Code repositories (public, directly usable)
+MulT (Multimodal Transformer) — official PyTorch implementation: https://github.com/yaohungt/Multimodal-Transformer
+MulT — community reproduction: https://github.com/Eurus-Holmes/MulT
+POSTER (Pyramid Cross-Fusion Transformer FER): https://github.com/zczcwh/POSTER
+GPT-4V with Emotion — evaluation code: https://github.com/zeroQiaoba/gpt4v-emotion
+wav2vec 2.0 / HuBERT SER fine-tuning benchmark (Wang et al.): https://github.com/s3prl/s3prl
+MMGCN (Multimodal Fusion via Graph Convolution for ERC): https://github.com/hujingwen6666/MMGCN
+COGMEN (Contextualized GNN Multimodal ER): https://github.com/exploration-lab/COGMEN
+DAIC-WOZ / E-DAIC dataset access (USC ICT): https://dcapswoz.ict.usc.edu/
+Emotion-LLaMA (official project page/code): https://github.com/ZebangCheng/Emotion-LLaMA
+Your proposal component | What the literature shows | Implication / open gap
+Facial Emotion Analysis (CNN / ViT on face) | POSTER/POSTER++ and vision-transformer FER models achieve 90%+ on RAF-DB but only ~63–67% on AffectNet 7/8-class, and drop further on truly in-the-wild footage (ABAW challenge results). | Expect materially lower real-world accuracy than published lab benchmarks. Budget for an in-the-wild robustness evaluation stage, not just a leaderboard-style benchmark run.
+Voice Emotion Analysis (MFCC + LSTM/Transformer) | MFCC-based models are now consistently outperformed by self-supervised encoders (wav2vec 2.0 / HuBERT) fine-tuned for SER, per multiple 2021–2024 papers. | Consider using a pretrained wav2vec2/HuBERT encoder (fine-tuned) as your audio branch instead of/alongside hand-crafted MFCC+LSTM, for a meaningful accuracy gain with less feature-engineering effort.
+Multimodal Fusion ('combining facial and voice features') | MulT, MISA, WavFusion, and the ABAW-2024 papers show attention-based / cross-modal fusion consistently beats simple early/late concatenation fusion, but also that naive fusion can degrade into one modality dominating ('modality laziness', per the CH-SIMS v2.0/AV-Mixup paper). | Plan an explicit ablation study (facial-only vs. voice-only vs. fused) as your proposal's Section 4 already promises — and specifically test whether the fused model is actually using both modalities, not just defaulting to the stronger one.
+'Uncertain sentence boundaries' / continuous speech segmentation | ERC literature (MMGCN, COGMEN) assumes utterance boundaries are already given by dataset annotation; DFER video models (Spatio-Temporal Transformer) assume short, pre-trimmed clips. No paper found solves live, un-annotated utterance segmentation end-to-end for this exact use case. | This is a genuine open engineering problem in your design, not a solved research problem — you will likely need a voice-activity-detection (VAD) + pause-based segmentation heuristic as a pragmatic first solution, rather than expecting to find an off-the-shelf model for it.
+Non-speaking facial expression baseline ('while not speaking, what expression does the user have') | Not directly addressed in mainstream FER/SER literature, which almost universally assumes emotion is being actively expressed/elicited during the labeled window. | A genuine gap and a potential distinct contribution of your project — modeling a person's 'resting'/baseline facial affect as a comparison signal against their in-speech affect appears to be an under-explored angle worth highlighting as your own novel contribution.
+Privacy-preserving AI (Section 4, item 4 of proposal) | Real-time edge/on-device papers (e.g., federated-learning CNN emotion recognition, ultra-low-power edge transformer fusion) explicitly target this as a design goal, showing techniques like knowledge distillation, quantization, and local (on-device) inference. | These edge-deployment papers (Section 9 note below) give you concrete architectural options (distillation, quantization, federated learning) to satisfy your stated privacy objective rather than treating it as a vague aspiration.
+'Confidence score' output + explanation of why | GPT-4V-with-Emotion and Emotion-LLaMA both explicitly target label+explanation output, but at LLM scale/cost; smaller classifiers in the FER/SER literature output only a softmax confidence vector with no explanation. | A lightweight explanation layer (e.g., attention-weight visualization over which modality/segment drove the prediction, rather than full natural-language reasoning) may be the more feasible middle ground for a student/early-stage project than a full LLaMA-scale reasoning model.
+Mental-health monitoring / dashboard use case | DAIC-WOZ-based depression-detection literature is the closest existing analogue, but it targets a single binary/severity clinical outcome (depressed vs. not), not general moment-to-moment emotion tracking across a session. | You will likely need to bridge two literatures that don't currently talk to each other much: general-purpose MER (many emotions, short-term) and clinical depression detection (one outcome, long-term/session-level) — worth stating this bridging as an explicit part of your research contribution.
+Dataset | Modalities | Size / scope | Best for
+FER2013 | Facial images (static) | ~35,000 grayscale images, 7 classes | Baseline FER pretraining (already in your proposal)
+AffectNet / AffectNet+ | Facial images (static) | ~1M images (AffectNet); soft-labeled subset in AffectNet+ | Larger-scale, more challenging FER benchmark; AffectNet+ better reflects label ambiguity
+RAF-DB | Facial images (static) | ~30,000 images, basic + compound emotions | Standard FER leaderboard comparison (POSTER/POSTER++ report on this)
+RAVDESS | Speech + song + facial video, acted | 24 actors, 8 emotions | Multimodal (audio+video) acted-emotion benchmark, already in your proposal
+CREMA-D | Speech + facial video, acted | 91 actors, 6 emotions, 7,442 clips | Audio-visual SER, cross-corpus robustness testing partner to RAVDESS
+IEMOCAP | Speech + video + text, dyadic scripted/improvised | 10 actors, ~12 hours, dimensional + categorical labels | Standard multimodal ERC/SER benchmark used by MulT, MISA, HCAM, WavFusion, COGMEN, MMGCN
+MELD | Speech + video + text, multi-party TV dialogue | ~13,000 utterances from 'Friends' | Multi-party conversational MER (MMGCN, COGMEN benchmark)
+CMU-MOSI / CMU-MOSEI | Speech + video + text, monologue opinion videos | MOSEI: 23,500+ sentences, largest sentiment+emotion multimodal set | Closest existing public analogue to a single user speaking to a camera (your app's core scenario)
+AffWild2 (ABAW challenge) | Facial video, in-the-wild | ~2.8M frames, valence-arousal + expression labels | In-the-wild robustness benchmarking — directly addresses your 'real-world conditions' objective
+DAIC-WOZ / E-DAIC | Speech + video + text, clinical interview | 189 (DAIC) / 275 (E-DAIC) participants, PHQ-8 labels | Closest existing dataset to your mental-health monitoring end-goal

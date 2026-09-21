@@ -1,0 +1,670 @@
+[
+  {
+    "id": "MulT",
+    "title": "Multimodal Transformer for Unaligned Multimodal Language Sequences",
+    "authors": "Yao-Hung Hubert Tsai et al.",
+    "year": "2019",
+    "venue": "ACL 2019",
+    "category": "Core Fusion Architecture",
+    "mentions": [
+      "ChatGPT",
+      "Claude",
+      "Gemini",
+      "GLM",
+      "Kimi",
+      "MiniMax",
+      "Qwen"
+    ]
+  },
+  {
+    "id": "M3ER",
+    "title": "M3ER: Multiplicative Multimodal Emotion Recognition Using Facial, Textual, and Speech Cues",
+    "authors": "Trisha Mittal et al.",
+    "year": "2020",
+    "venue": "AAAI 2020",
+    "category": "Core Fusion Architecture",
+    "mentions": [
+      "ChatGPT",
+      "GLM",
+      "Qwen"
+    ]
+  },
+  {
+    "id": "MISA",
+    "title": "MISA: Modality-Invariant and -Specific Representations for Multimodal Sentiment Analysis",
+    "authors": "Devamanyu Hazarika et al.",
+    "year": "2020",
+    "venue": "ACM MM 2020",
+    "category": "Subspace Disentanglement Fusion",
+    "mentions": [
+      "ChatGPT",
+      "Claude",
+      "Gemini",
+      "GLM",
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "MMIM",
+    "title": "Improving Multimodal Fusion with Hierarchical Mutual Information Maximization",
+    "authors": "Wei Han et al.",
+    "year": "2021",
+    "venue": "EMNLP 2021",
+    "category": "Information-Theoretic Fusion",
+    "mentions": [
+      "ChatGPT",
+      "GLM",
+      "Kimi"
+    ]
+  },
+  {
+    "id": "Self-MM",
+    "title": "Learning Modality-Specific Representations with Self-Supervised Multi-Task Learning for Multimodal Sentiment Analysis",
+    "authors": "Wei Han et al.",
+    "year": "2021",
+    "venue": "AAAI 2021",
+    "category": "Self-Supervised Multi-Task Fusion",
+    "mentions": [
+      "ChatGPT",
+      "GLM",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "TFN",
+    "title": "Tensor Fusion Network for Multimodal Sentiment Analysis",
+    "authors": "Amir Zadeh et al.",
+    "year": "2017",
+    "venue": "EMNLP 2017",
+    "category": "Tensor Fusion Baseline",
+    "mentions": [
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "LMF",
+    "title": "Efficient Low-rank Multimodal Fusion with Modality-Specific Factors",
+    "authors": "Zhilin Liu et al.",
+    "year": "2018",
+    "venue": "ACL 2018",
+    "category": "Tensor Fusion Baseline",
+    "mentions": [
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "MFN",
+    "title": "Memory Fusion Network for Multi-view Sequential Learning",
+    "authors": "Amir Zadeh et al.",
+    "year": "2018",
+    "venue": "AAAI 2018",
+    "category": "Sequential Fusion Baseline",
+    "mentions": [
+      "GLM",
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "MAG-BERT",
+    "title": "Integrating Multimodal Information in Large Pretrained Transformers",
+    "authors": "Wasifur Rahman et al.",
+    "year": "2020",
+    "venue": "ACL 2020",
+    "category": "Transformer Fusion",
+    "mentions": [
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "M2FNet",
+    "title": "M2FNet: Multi-modal Fusion Network for Emotion Recognition in Conversation",
+    "authors": "Vishal Chudasama et al.",
+    "year": "2022",
+    "venue": "CVPR Workshops 2022",
+    "category": "Conversational Fusion",
+    "mentions": [
+      "ChatGPT"
+    ]
+  },
+  {
+    "id": "Noise-Resistant-MMT",
+    "title": "Noise-Resistant Multimodal Transformer for Emotion Recognition",
+    "authors": "H. Li et al.",
+    "year": "2023",
+    "venue": "IEEE TAFFC 2023",
+    "category": "Robust Fusion",
+    "mentions": []
+  },
+  {
+    "id": "Fusing-Pairwise",
+    "title": "Fusing Pairwise Modalities for Emotion Recognition in Conversations",
+    "authors": "Guo et al.",
+    "year": "2023",
+    "venue": "INTERSPEECH 2023",
+    "category": "Conversational Fusion",
+    "mentions": []
+  },
+  {
+    "id": "MER-Calibration",
+    "title": "Multimodal Emotion Recognition Calibration in Conversations",
+    "authors": "Zhang et al.",
+    "year": "2024",
+    "venue": "EMNLP 2024",
+    "category": "Calibration & Reliability",
+    "mentions": []
+  },
+  {
+    "id": "Self-Attention-Incomplete",
+    "title": "Self-Attention Fusion for Audiovisual Emotion Recognition with Incomplete Data",
+    "authors": "Radford et al. / Praveen et al.",
+    "year": "2021",
+    "venue": "IEEE TAFFC 2021",
+    "category": "Missing Modalities / Robustness",
+    "mentions": [
+      "ChatGPT"
+    ]
+  },
+  {
+    "id": "MMIN",
+    "title": "Missing Modality Imagination Network for Emotion Recognition with Incomplete Audio-Visual Data",
+    "authors": "Jiandian Zhao et al.",
+    "year": "2021",
+    "venue": "ACL 2021",
+    "category": "Missing Modalities / Robustness",
+    "mentions": [
+      "Kimi"
+    ]
+  },
+  {
+    "id": "IF-MMIN",
+    "title": "Information-Theoretic Feature Learning for Missing Modality Imagination",
+    "authors": "Zhao / Liu et al.",
+    "year": "2022",
+    "venue": "arXiv / IEEE Access 2022",
+    "category": "Missing Modalities / Robustness",
+    "mentions": [
+      "Kimi"
+    ]
+  },
+  {
+    "id": "M3S",
+    "title": "M3S: Missing Modality meets Meta-Sampling",
+    "authors": "Various",
+    "year": "2022",
+    "venue": "AACL 2022",
+    "category": "Missing Modalities / Robustness",
+    "mentions": [
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "VAE-Diffusion-MER",
+    "title": "VAE-Diffusion Multimodal Emotion Recognition with Incomplete Modalities",
+    "authors": "Various",
+    "year": "2026",
+    "venue": "IEEE 2026",
+    "category": "Generative Modality Imputation",
+    "mentions": []
+  },
+  {
+    "id": "FDFNet",
+    "title": "Feature Disentanglement and Fusion Network for Multimodal Emotion Recognition",
+    "authors": "Various",
+    "year": "2023",
+    "venue": "IEEE / ACM MM 2023",
+    "category": "Subspace Disentanglement",
+    "mentions": [
+      "Gemini"
+    ]
+  },
+  {
+    "id": "EMER",
+    "title": "Ensemble Multimodal Emotion Recognition with Dynamic Modality Weighting",
+    "authors": "Various",
+    "year": "2024",
+    "venue": "IEEE TAFFC 2024",
+    "category": "Adaptive Fusion",
+    "mentions": [
+      "ChatGPT",
+      "Gemini"
+    ]
+  },
+  {
+    "id": "UniMSE",
+    "title": "UniMSE: Towards Unified Multimodal Sentiment Analysis and Emotion Recognition",
+    "authors": "Guimin Hu et al.",
+    "year": "2022",
+    "venue": "EMNLP 2022",
+    "category": "Unified Affective Framework",
+    "mentions": [
+      "ChatGPT",
+      "Gemini"
+    ]
+  },
+  {
+    "id": "CubeMLP",
+    "title": "CubeMLP: An MLP-based Model for Multimodal Sentiment Analysis and Depression Detection",
+    "authors": "Hao Sun et al.",
+    "year": "2022",
+    "venue": "ACM MM 2022",
+    "category": "Low-Latency Architecture",
+    "mentions": [
+      "Gemini"
+    ]
+  },
+  {
+    "id": "DialogueRNN",
+    "title": "DialogueRNN: An Attentive RNN for Emotion Detection in Conversation",
+    "authors": "Navonil Majumder et al.",
+    "year": "2019",
+    "venue": "AAAI 2019",
+    "category": "Conversational Context",
+    "mentions": [
+      "ChatGPT",
+      "GLM",
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "DialogueGCN",
+    "title": "DialogueGCN: A Graph Convolutional Network for Emotion Recognition in Conversation",
+    "authors": "Deepanway Ghosal et al.",
+    "year": "2019",
+    "venue": "EMNLP-IJCNLP 2019",
+    "category": "Conversational Context",
+    "mentions": [
+      "ChatGPT",
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "COSMIC",
+    "title": "COSMIC: COmmonSense knowledge for eMotion Identification in Conversations",
+    "authors": "Deepanway Ghosal et al.",
+    "year": "2020",
+    "venue": "Findings of EMNLP 2020",
+    "category": "Conversational Context",
+    "mentions": [
+      "ChatGPT",
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "DialogueCRN",
+    "title": "DialogueCRN: Contextual Reasoning Networks for Emotion Recognition in Conversation",
+    "authors": "Dou Hu et al.",
+    "year": "2021",
+    "venue": "ACL 2021",
+    "category": "Conversational Context",
+    "mentions": [
+      "ChatGPT",
+      "Gemini"
+    ]
+  },
+  {
+    "id": "GS-MCC",
+    "title": "GS-MCC: Graph Structure Learning with Multi-Context Constraints for ERC",
+    "authors": "Ai et al.",
+    "year": "2025",
+    "venue": "AAAI 2025",
+    "category": "Conversational Context",
+    "mentions": [
+      "Kimi"
+    ]
+  },
+  {
+    "id": "Emotion-LLaMA",
+    "title": "Emotion-LLaMA: Multimodal Emotion Recognition and Reasoning with Instruction Tuning",
+    "authors": "Cheng et al. / Z. Cheng et al.",
+    "year": "2024",
+    "venue": "NeurIPS 2024 / arXiv 2024",
+    "category": "Multimodal LLM / Explainability",
+    "mentions": [
+      "ChatGPT",
+      "Claude",
+      "Gemini",
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "MERBench",
+    "title": "MERBench: A Unified Evaluation Benchmark for Multimodal Emotion Recognition in the Wild",
+    "authors": "Zheng Lian et al.",
+    "year": "2024",
+    "venue": "ACM MM 2024 / IEEE TAFFC 2024",
+    "category": "Evaluation Benchmark & Toolkit",
+    "mentions": [
+      "ChatGPT",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "AffectGPT",
+    "title": "AffectGPT: A New Dataset, Model, and Benchmark for Multimodal Emotion Recognition and Reasoning",
+    "authors": "Various",
+    "year": "2024/2025",
+    "venue": "ICML 2025 / arXiv 2024",
+    "category": "Multimodal LLM / Affective Reasoning",
+    "mentions": [
+      "Claude",
+      "Gemini",
+      "GLM",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "EMOE",
+    "title": "EMOE: Modality-Specific Enhanced Dynamic Emotion Experts",
+    "authors": "Various",
+    "year": "2024",
+    "venue": "ACM MM 2024",
+    "category": "Mixture of Experts MER",
+    "mentions": [
+      "ChatGPT"
+    ]
+  },
+  {
+    "id": "M-SENA",
+    "title": "M-SENA: An Integrated Platform for Multimodal Sentiment Analysis and Emotion Recognition",
+    "authors": "Various",
+    "year": "2023",
+    "venue": "ACL 2023 System Demo",
+    "category": "System Platform & Toolkit",
+    "mentions": [
+      "GLM"
+    ]
+  },
+  {
+    "id": "Centering-Emotion-Hotspots",
+    "title": "Centering Emotion Hotspots: Multimodal Local-Global Fusion for Conversation-Level Emotion Recognition",
+    "authors": "Various",
+    "year": "2024",
+    "venue": "ACM MM 2024",
+    "category": "Local-Global Attention",
+    "mentions": []
+  },
+  {
+    "id": "MicroEmo",
+    "title": "MicroEmo: Time-Sensitive Multimodal Language Model for Micro-Expression Recognition",
+    "authors": "Various",
+    "year": "2024",
+    "venue": "ECCV 2024",
+    "category": "Micro-Expression / Temporal",
+    "mentions": [
+      "Qwen"
+    ]
+  },
+  {
+    "id": "EmoFusion",
+    "title": "EmoFusion: Anchor-Guided Multimodal Emotion Recognition With Cross-Modal Attention",
+    "authors": "Various",
+    "year": "2023",
+    "venue": "IEEE TAFFC 2023",
+    "category": "Anchor-Guided Attention",
+    "mentions": [
+      "Qwen"
+    ]
+  },
+  {
+    "id": "TITAN",
+    "title": "TITAN: Measuring Latent Speech-Text Alignment for Spoken Language Understanding",
+    "authors": "Various",
+    "year": "2023",
+    "venue": "ICASSP 2023",
+    "category": "Acoustic-Textual Alignment",
+    "mentions": [
+      "Qwen"
+    ]
+  },
+  {
+    "id": "KAMUH",
+    "title": "KAMUH: A Real-Time Online Audiovisual Emotion Recognition System",
+    "authors": "Rasendrasoa et al.",
+    "year": "2022",
+    "venue": "ICMI 2022",
+    "category": "Real-Time / Streaming MER",
+    "mentions": [
+      "Kimi"
+    ]
+  },
+  {
+    "id": "POSTER++",
+    "title": "POSTER++: A Simpler and Stronger Facial Expression Recognition Network",
+    "authors": "Jiawei Mao et al.",
+    "year": "2023",
+    "venue": "ICCV 2023",
+    "category": "Facial Expression Backbone",
+    "mentions": [
+      "Claude",
+      "Kimi"
+    ]
+  },
+  {
+    "id": "DAN",
+    "title": "DAN: Distract Your Attention Network for Facial Expression Recognition",
+    "authors": "Chuanhe Wen et al.",
+    "year": "2023",
+    "venue": "WACV 2023",
+    "category": "Facial Expression Backbone",
+    "mentions": [
+      "Kimi"
+    ]
+  },
+  {
+    "id": "ARM",
+    "title": "Affective Representation Modeling for Facial Expression Recognition",
+    "authors": "Various",
+    "year": "2022",
+    "venue": "CVPR 2022",
+    "category": "Facial Expression Backbone",
+    "mentions": []
+  },
+  {
+    "id": "OpenFace2",
+    "title": "OpenFace 2.0: Facial Behavior Analysis Toolkit",
+    "authors": "Tadas Baltru\u0161aitis et al.",
+    "year": "2018",
+    "venue": "IEEE FG 2018",
+    "category": "Vision Toolkit / AU Extractor",
+    "mentions": []
+  },
+  {
+    "id": "MediaPipe-Face",
+    "title": "MediaPipe 468-point 3D Face Mesh and Blendshapes",
+    "authors": "Kartikye Gupta et al. (Google Research)",
+    "year": "2020",
+    "venue": "CVPR Workshops 2020",
+    "category": "Real-Time 3D Vision Toolkit",
+    "mentions": []
+  },
+  {
+    "id": "Wav2Vec2",
+    "title": "wav2vec 2.0: A Framework for Self-Supervised Learning of Speech Representations",
+    "authors": "Alexei Baevski et al.",
+    "year": "2020",
+    "venue": "NeurIPS 2020",
+    "category": "Acoustic Foundation Backbone",
+    "mentions": [
+      "Claude",
+      "DeepSeek",
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "HuBERT",
+    "title": "HuBERT: Self-Supervised Speech Representation Learning by Masked Prediction of Hidden Units",
+    "authors": "Wei-Ning Hsu et al.",
+    "year": "2021",
+    "venue": "IEEE/ACM TASLP 2021",
+    "category": "Acoustic Foundation Backbone",
+    "mentions": [
+      "Claude",
+      "DeepSeek",
+      "Gemini",
+      "GLM",
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "WavLM",
+    "title": "WavLM: Large-Scale Self-Supervised Pre-Training for Full Stack Speech Processing",
+    "authors": "Sanyuan Chen et al.",
+    "year": "2022",
+    "venue": "IEEE JSTSP 2022",
+    "category": "Acoustic Foundation Backbone",
+    "mentions": [
+      "Claude",
+      "DeepSeek",
+      "Gemini",
+      "Kimi",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "Whisper",
+    "title": "Robust Speech Recognition via Large-Scale Weak Supervision",
+    "authors": "Alec Radford et al. (OpenAI)",
+    "year": "2023",
+    "venue": "ICML 2023",
+    "category": "ASR & Paralinguistic Backbone",
+    "mentions": [
+      "Claude",
+      "Gemini",
+      "Kimi",
+      "MiniMax",
+      "Qwen"
+    ]
+  },
+  {
+    "id": "openSMILE-eGeMAPS",
+    "title": "The Geneva Minimalistic Acoustic Parameter Set (GeMAPS) for Voice and Speech Analysis",
+    "authors": "Florian Eyben et al.",
+    "year": "2016",
+    "venue": "IEEE TAFFC 2016",
+    "category": "Acoustic Handcrafted Features",
+    "mentions": []
+  },
+  {
+    "id": "DAIC-WOZ-Paper",
+    "title": "The Distress Analysis Interview Corpus (DAIC): Architecture and Pre-Validation",
+    "authors": "Jonathan Gratch et al.",
+    "year": "2014",
+    "venue": "LREC 2014",
+    "category": "Clinical Mental Health Corpus",
+    "mentions": [
+      "Claude",
+      "Gemini",
+      "MiniMax"
+    ]
+  },
+  {
+    "id": "DepAudioNet",
+    "title": "DepAudioNet: An Efficient Deep Model for Audio based Depression Classification",
+    "authors": "X. Ma et al.",
+    "year": "2016",
+    "venue": "AVEC 2016",
+    "category": "Acoustic Depression Detection",
+    "mentions": []
+  },
+  {
+    "id": "Deep-Multimodal-Depression",
+    "title": "Deep Multimodal Analysis for Depression Prediction and Severity Estimation",
+    "authors": "Albert Haque et al.",
+    "year": "2018",
+    "venue": "CVPR 2018",
+    "category": "Multimodal Depression Detection",
+    "mentions": []
+  },
+  {
+    "id": "AVEC-Challenges",
+    "title": "AVEC 2019 Workshop and Challenge: State-of-Mind, Detecting Depression with AI",
+    "authors": "Fabien Ringeval, Bj\u00f6rn Schuller et al.",
+    "year": "2019",
+    "venue": "ACM MM 2019",
+    "category": "Affective Challenge & Benchmark",
+    "mentions": []
+  },
+  {
+    "id": "Mental-Health-Distress-Review",
+    "title": "A Systematic Review on Automated Multimodal Mental Health and Distress Assessment",
+    "authors": "Various",
+    "year": "2026",
+    "venue": "Springer Nature 2026",
+    "category": "Clinical Application Survey",
+    "mentions": []
+  },
+  {
+    "id": "Rouast-Survey",
+    "title": "Deep Learning for Multimodal Emotion Recognition: A Review",
+    "authors": "Philipp V. Rouast et al.",
+    "year": "2021",
+    "venue": "IEEE TAFFC 2021",
+    "category": "Landscape Survey",
+    "mentions": []
+  },
+  {
+    "id": "Gandhi-Survey",
+    "title": "Multimodal Sentiment Analysis: A Systematic Review of History, Datasets, and Architectures",
+    "authors": "Ankush Gandhi et al.",
+    "year": "2023",
+    "venue": "Information Fusion 2023",
+    "category": "Landscape Survey",
+    "mentions": []
+  },
+  {
+    "id": "Baltrusaitis-Survey",
+    "title": "Multimodal Machine Learning: A Survey and Taxonomy",
+    "authors": "Tadas Baltru\u0161aitis et al.",
+    "year": "2018",
+    "venue": "IEEE TPAMI 2018",
+    "category": "Foundational Taxonomy Survey",
+    "mentions": []
+  },
+  {
+    "id": "Schuller-Affect-Survey",
+    "title": "A Review on Five Recent Affect Recognition Challenges: Methods and Directions",
+    "authors": "Bj\u00f6rn Schuller & Dagmar Schuller",
+    "year": "2021",
+    "venue": "Proceedings of the IEEE 2021",
+    "category": "Benchmark Survey",
+    "mentions": []
+  },
+  {
+    "id": "MER-Mega-Survey-2026",
+    "title": "A Survey on Multimodal Emotion Recognition: Methods, Datasets, and Frontiers",
+    "authors": "Various",
+    "year": "2026",
+    "venue": "Information Fusion / ScienceDirect 2026",
+    "category": "Comprehensive Modern Survey",
+    "mentions": []
+  },
+  {
+    "id": "SER-Mega-Review-2026",
+    "title": "Speech Emotion Recognition: A Comprehensive Survey of Modern SOTA Architectures",
+    "authors": "Various",
+    "year": "2026",
+    "venue": "Information Fusion 2026",
+    "category": "Acoustic Survey",
+    "mentions": []
+  },
+  {
+    "id": "FER-Survey-2026",
+    "title": "Facial Expression Recognition in the Wild: A Contemporary Survey",
+    "authors": "Various",
+    "year": "2025/2026",
+    "venue": "IEEE TPAMI / Neurocomputing 2025",
+    "category": "Facial Expression Survey",
+    "mentions": []
+  }
+]

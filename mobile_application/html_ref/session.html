@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session Detail — Journal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-400-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-600-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-700-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-800-normal.css">
+<style>
+  :root{
+    --primary:#FFB534;
+    --secondary:#FF7F50;
+    --bg:#FEFCE8;
+    --card:#FFFDF6;
+    --ink:#4A3B2A;
+    --muted:#9C8B72;
+    --line:#F1E7CE;
+    --calm-fg:#6E8F63;   --calm-bg:#EDF4E9;  --calm-dot:#8FB083;
+    --warm-fg:#A97410;   --warm-bg:#FFF1D6;  --warm-dot:#FFB534;
+    --tense-fg:#C05B33;  --tense-bg:#FFE9DE; --tense-dot:#FF7F50;
+    --hes-fg:#9A6B4F;    --hes-bg:#F6EBDF;   --hes-dot:#C89B7B;
+    --shadow:0 10px 26px rgba(122,90,40,.10), 0 2px 6px rgba(122,90,40,.06);
+    --shadow-soft:0 4px 14px rgba(122,90,40,.08);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:'Nunito',system-ui,sans-serif;
+    background:radial-gradient(1200px 700px at 20% 0%, #FFF6DE 0%, #F6EFDD 55%, #EFE6D2 100%);
+    display:flex;align-items:center;justify-content:center;
+    padding:28px 16px;color:var(--ink);
+  }
+  .stage-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  .stage-label{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#B49B72;}
+
+  /* ---------- Phone frame ---------- */
+  .phone{
+    width:390px;height:844px;background:#2B241C;border-radius:48px;padding:10px;
+    box-shadow:0 40px 80px rgba(74,59,42,.35), 0 12px 28px rgba(74,59,42,.22);
+    position:relative;
+  }
+  .screen{
+    width:100%;height:100%;background:var(--bg);border-radius:39px;overflow:hidden;
+    display:flex;flex-direction:column;position:relative;
+  }
+  .punch{
+    position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    width:11px;height:11px;border-radius:50%;background:#1D1812;z-index:30;
+  }
+
+  /* ---------- Status bar ---------- */
+  .statusbar{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 24px 6px;font-size:13px;font-weight:800;color:#6B5A43;flex:0 0 auto;
+  }
+  .statusbar .sicons{display:flex;gap:6px;align-items:center;}
+  .statusbar svg{display:block;}
+
+  /* ---------- App bar ---------- */
+  .appbar{
+    display:flex;align-items:center;gap:10px;padding:8px 16px 12px;flex:0 0 auto;
+  }
+  .back-btn{
+    width:40px;height:40px;border-radius:14px;border:none;background:#FFF6E0;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:var(--shadow-soft);transition:transform .18s ease, background .18s ease;
+  }
+  .back-btn:active{transform:scale(.92);background:#FFEDC7;}
+  .appbar-meta{flex:1;min-width:0;}
+  .appbar-date{font-size:16px;font-weight:800;color:var(--ink);line-height:1.2;}
+  .appbar-sub{font-size:11.5px;font-weight:600;color:var(--muted);}
+  .mode-pill{
+    display:flex;align-items:center;gap:2px;background:#FFF6E0;border-radius:999px;
+    padding:5px 6px;box-shadow:var(--shadow-soft);
+  }
+  .mode-ic{
+    width:28px;height:28px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    color:#C9B48C;
+  }
+  .mode-ic.on{background:var(--primary);color:#fff;box-shadow:0 3px 8px rgba(255,181,52,.45);}
+
+  /* ---------- Scroll area ---------- */
+  .scroll{
+    flex:1;overflow-y:auto;overscroll-behavior:contain;
+    padding:2px 16px 26px;scrollbar-width:none;
+  }
+  .scroll::-webkit-scrollbar{display:none;}
+  .scroll-fade{
+    position:absolute;left:0;right:0;bottom:0;height:34px;pointer-events:none;
+    background:linear-gradient(to top, var(--bg) 30%, rgba(254,252,232,0));z-index:5;
+  }
+  .home-bar{
+    position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+    width:120px;height:4px;border-radius:99px;background:#D9C9A6;z-index:6;
+  }
+
+  /* ---------- Summary card ---------- */
+  .summary{
+    background:var(--card);border-radius:24px;box-shadow:var(--shadow);
+    padding:0 0 18px;overflow:hidden;margin-bottom:18px;
+  }
+  .summary-band{height:10px;display:flex;}
+  .summary-band span{flex:1;}
+  .summary-band .b1{background:var(--calm-dot);flex:2.2;border-radius:0;}
+  .summary-band .b2{background:var(--warm-dot);flex:1;}
+  .summary-band .b3{background:var(--tense-dot);flex:.8;}
+  .summary-band .b4{background:var(--calm-dot);flex:1;}
+  .summary-inner{padding:16px 20px 0;}
+  .summary-kicker{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .summary-head{font-size:23px;font-weight:800;line-height:1.25;color:var(--ink);}
+  .summary-head em{font-style:normal;color:var(--secondary);}
+  .summary-sub{font-size:13.5px;font-weight:600;color:#8A7A61;margin-top:6px;line-height:1.5;}
+  .summary-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .spill{
+    font-size:12px;font-weight:700;padding:7px 12px;border-radius:999px;
+    display:inline-flex;align-items:center;gap:7px;
+  }
+  .spill i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .spill.calm{background:var(--calm-bg);color:var(--calm-fg);} .spill.calm i{background:var(--calm-dot);}
+  .spill.warm{background:var(--warm-bg);color:var(--warm-fg);} .spill.warm i{background:var(--warm-dot);}
+  .spill.tense{background:var(--tense-bg);color:var(--tense-fg);} .spill.tense i{background:var(--tense-dot);}
+  .spill.notice{background:#FFF6E0;color:#A97410;border:1.5px dashed #EBC98A;}
+  .spill.notice i{background:linear-gradient(90deg,var(--primary) 50%,var(--secondary) 50%);}
+
+  /* ---------- Section headers ---------- */
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;margin:4px 2px 12px;}
+  .sec-title{font-size:15px;font-weight:800;color:var(--ink);}
+  .sec-link{
+    border:none;background:none;font-family:inherit;font-size:12.5px;font-weight:800;
+    color:#C98A2E;cursor:pointer;padding:4px 2px;
+  }
+  .sec-link:active{opacity:.6;}
+
+  /* ---------- Timeline ---------- */
+  .timeline{position:relative;padding-left:26px;}
+  .timeline::before{
+    content:"";position:absolute;left:8px;top:14px;bottom:14px;width:2.5px;
+    border-radius:99px;background:linear-gradient(var(--calm-dot),var(--warm-dot) 40%,var(--tense-dot) 62%,var(--calm-dot));
+    opacity:.45;
+  }
+  .moment{position:relative;margin-bottom:10px;}
+  .moment .node{
+    position:absolute;left:-24px;top:20px;width:13px;height:13px;border-radius:50%;
+    background:#fff;border:3px solid var(--calm-dot);box-shadow:0 0 0 3px var(--bg);
+  }
+  .moment[data-state="warm"] .node{border-color:var(--warm-dot);}
+  .moment[data-state="tense"] .node{border-color:var(--tense-dot);}
+  .moment[data-state="hesitant"] .node{border-color:var(--hes-dot);}
+  .m-card{
+    background:var(--card);border-radius:18px;box-shadow:var(--shadow-soft);
+    padding:13px 14px;cursor:pointer;transition:box-shadow .25s ease, transform .2s ease;
+  }
+  .m-card:active{transform:scale(.985);}
+  .moment.open .m-card{box-shadow:var(--shadow);}
+  .m-top{display:flex;align-items:center;gap:8px;}
+  .m-time{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.04em;flex:0 0 auto;}
+  .m-tag{
+    font-size:10.5px;font-weight:800;padding:3.5px 9px;border-radius:999px;letter-spacing:.02em;
+  }
+  .m-tag.calm{background:var(--calm-bg);color:var(--calm-fg);}
+  .m-tag.warm{background:var(--warm-bg);color:var(--warm-fg);}
+  .m-tag.tense{background:var(--tense-bg);color:var(--tense-fg);}
+  .m-tag.hesitant{background:var(--hes-bg);color:var(--hes-fg);}
+  .m-spacer{flex:1;}
+  .duo-dot{
+    width:16px;height:16px;border-radius:50%;border:none;cursor:pointer;flex:0 0 auto;
+    background:linear-gradient(100deg,var(--primary) 50%,var(--secondary) 50%);
+    box-shadow:0 0 0 3px #FFF3DC, 0 2px 6px rgba(255,127,80,.35);
+    transition:transform .2s ease, box-shadow .2s ease;position:relative;
+  }
+  .duo-dot:active{transform:scale(.85);}
+  .duo-dot[aria-pressed="true"]{box-shadow:0 0 0 3px #FFE9DE, 0 2px 8px rgba(255,127,80,.5);}
+  .duo-dot::after{
+    content:"";position:absolute;inset:-6px;border-radius:50%;
+    border:1.5px solid rgba(255,127,80,.0);transition:border-color .25s;
+  }
+  .duo-dot[aria-pressed="true"]::after{border-color:rgba(255,127,80,.35);}
+  .chev{flex:0 0 auto;color:#C9B48C;transition:transform .3s ease;}
+  .moment.open .chev{transform:rotate(180deg);}
+  .m-snippet{
+    font-size:14px;font-weight:700;color:var(--ink);line-height:1.45;margin-top:7px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .moment.open .m-snippet{-webkit-line-clamp:unset;}
+  .m-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.4,0,.2,1);}
+  .moment.open .m-body{grid-template-rows:1fr;}
+  .m-body-inner{overflow:hidden;}
+  .m-full{
+    font-size:13px;font-weight:600;color:#7C6B52;line-height:1.6;
+    margin-top:8px;padding-top:10px;border-top:1.5px dashed var(--line);
+  }
+  .m-voice{
+    margin-top:9px;font-size:12px;font-weight:700;color:#8A7A61;
+    display:flex;align-items:center;gap:7px;
+  }
+  .m-voice svg{flex:0 0 auto;color:var(--secondary);}
+  .m-note{
+    display:none;margin-top:10px;background:#FFF6E0;border-radius:14px;padding:10px 12px;
+    font-size:12.5px;font-weight:700;color:#A0651C;line-height:1.5;
+    align-items:flex-start;gap:9px;animation:noteIn .35s ease;
+  }
+  .moment.show-note .m-note{display:flex;}
+  .m-note .nd{
+    flex:0 0 auto;width:12px;height:12px;border-radius:50%;margin-top:2px;
+    background:linear-gradient(100deg,var(--primary) 50%,var(--secondary) 50%);
+  }
+  @keyframes noteIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+
+  /* ---------- Face view card ---------- */
+  .face-card{
+    background:var(--card);border-radius:22px;box-shadow:var(--shadow-soft);
+    padding:15px 16px;margin:20px 0 4px;
+  }
+  .face-head{display:flex;align-items:center;gap:9px;}
+  .face-head .fi{
+    width:30px;height:30px;border-radius:10px;background:var(--warm-bg);color:#C98A2E;
+    display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+  }
+  .face-title{font-size:14px;font-weight:800;flex:1;}
+  .face-title small{display:block;font-size:11px;font-weight:700;color:var(--muted);}
+  .switch{
+    width:46px;height:27px;border-radius:999px;background:#E8DCC0;border:none;cursor:pointer;
+    position:relative;transition:background .3s ease;flex:0 0 auto;
+  }
+  .switch::after{
+    content:"";position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;
+    background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.18);transition:left .3s cubic-bezier(.4,0,.2,1);
+  }
+  .switch[aria-checked="true"]{background:var(--primary);}
+  .switch[aria-checked="true"]::after{left:22px;}
+  .face-body{display:grid;grid-template-rows:1fr;transition:grid-template-rows .4s ease, opacity .3s ease;opacity:1;}
+  .face-card.off .face-body{grid-template-rows:0fr;opacity:0;}
+  .face-body-inner{overflow:hidden;}
+  .seg{
+    display:flex;background:#F6EEDB;border-radius:999px;padding:4px;margin-top:14px;
+  }
+  .seg button{
+    flex:1;border:none;background:none;font-family:inherit;font-size:12.5px;font-weight:800;
+    color:#A08C67;padding:8px 0;border-radius:999px;cursor:pointer;transition:all .25s ease;
+  }
+  .seg button.active{background:#fff;color:#C98A2E;box-shadow:0 3px 8px rgba(122,90,40,.14);}
+  .face-stage{
+    position:relative;height:150px;margin-top:14px;border-radius:18px;
+    background:linear-gradient(160deg,#FFF6E0,#FFEFE0);overflow:hidden;
+  }
+  .face{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    opacity:0;transform:scale(.94);transition:opacity .45s ease, transform .45s ease;
+  }
+  .face.active{opacity:1;transform:scale(1);}
+  .face-cap{
+    font-size:12.5px;font-weight:700;color:#8A7A61;text-align:center;margin-top:11px;line-height:1.5;
+    min-height:36px;transition:opacity .3s ease;
+  }
+
+  /* ---------- Note / tag section ---------- */
+  .about-card{
+    background:var(--card);border-radius:22px;box-shadow:var(--shadow-soft);
+    padding:16px;margin-top:18px;
+  }
+  .about-title{font-size:14px;font-weight:800;margin-bottom:3px;}
+  .about-sub{font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:12px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{
+    border:1.5px solid var(--line);background:#FFFDF6;border-radius:999px;
+    font-family:inherit;font-size:12.5px;font-weight:800;color:#8A7A61;
+    padding:8px 14px;cursor:pointer;transition:all .22s ease;
+  }
+  .chip:active{transform:scale(.94);}
+  .chip.on{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 4px 10px rgba(255,181,52,.4);}
+  .saved-notes{display:flex;flex-direction:column;gap:8px;margin-top:4px;}
+  .saved-note{
+    background:#FFF6E0;border-radius:14px;padding:10px 13px;font-size:12.5px;font-weight:700;
+    color:#7C6B52;line-height:1.5;display:flex;gap:8px;align-items:flex-start;animation:noteIn .35s ease;
+  }
+  .saved-note .ntag{
+    flex:0 0 auto;font-size:10px;font-weight:800;color:#C98A2E;background:#FFEDC7;
+    border-radius:999px;padding:2.5px 8px;margin-top:1px;letter-spacing:.05em;text-transform:uppercase;
+  }
+  .composer{display:flex;gap:9px;margin-top:13px;}
+  .composer input{
+    flex:1;border:1.5px solid var(--line);background:#FFFDF6;border-radius:999px;
+    font-family:inherit;font-size:13px;font-weight:700;color:var(--ink);
+    padding:11px 16px;outline:none;transition:border-color .2s ease, box-shadow .2s ease;
+  }
+  .composer input::placeholder{color:#C4B291;font-weight:600;}
+  .composer input:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(255,181,52,.18);}
+  .composer button{
+    width:44px;height:44px;flex:0 0 auto;border:none;border-radius:50%;background:var(--secondary);
+    color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 6px 14px rgba(255,127,80,.4);transition:transform .18s ease;
+  }
+  .composer button:active{transform:scale(.9);}
+  .end-space{height:10px;}
+</style>
+</head>
+<body>
+<div class="stage-wrap">
+  <div class="stage-label">Journal · Session detail</div>
+
+  <div class="phone">
+    <div class="screen">
+      <div class="punch"></div>
+
+      <!-- Status bar -->
+      <div class="statusbar">
+        <span>8:42</span>
+        <span class="sicons">
+          <svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M1 4.2C4.9.7 10.1.7 14 4.2" stroke="#6B5A43" stroke-width="1.7" stroke-linecap="round"/><path d="M3.4 6.8c2.4-2.1 5.8-2.1 8.2 0" stroke="#6B5A43" stroke-width="1.7" stroke-linecap="round"/><circle cx="7.5" cy="9.8" r="1.6" fill="#6B5A43"/></svg>
+          <svg width="13" height="12" viewBox="0 0 13 12" fill="none"><rect x="1" y="2" width="9" height="8" rx="2.4" stroke="#6B5A43" stroke-width="1.5"/><rect x="2.6" y="3.6" width="5" height="4.8" rx="1.2" fill="#6B5A43"/><path d="M11.4 4.6v2.8" stroke="#6B5A43" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </span>
+      </div>
+
+      <!-- App bar -->
+      <div class="appbar">
+        <button class="back-btn" aria-label="Back to Journal">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="#8A6B33" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="appbar-meta">
+          <div class="appbar-date">Tue, Sep 15 · 8:42 PM</div>
+          <div class="appbar-sub">23 min · with Alex</div>
+        </div>
+        <div class="mode-pill" aria-label="Session modes: text, voice, video">
+          <span class="mode-ic" title="Text transcript">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H9l-5 4V5z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="mode-ic" title="Voice">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="2.2"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </span>
+          <span class="mode-ic on" title="Video on">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="12" height="12" rx="3" stroke="currentColor" stroke-width="2.2"/><path d="M15 11l6-3v8l-6-3" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+      </div>
+
+      <!-- Scrollable content -->
+      <div class="scroll" id="scroll">
+
+        <!-- Summary card -->
+        <section class="summary">
+          <div class="summary-band" aria-hidden="true">
+            <span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span>
+          </div>
+          <div class="summary-inner">
+            <div class="summary-kicker">How this session felt</div>
+            <div class="summary-head">Mostly calm, <em>some tension</em></div>
+            <div class="summary-sub">An easy, warm catch-up overall — with two moments where the words and the voice didn't quite travel together.</div>
+            <div class="summary-pills">
+              <span class="spill calm"><i></i>Calm most of the way</span>
+              <span class="spill warm"><i></i>Warm openings &amp; close</span>
+              <span class="spill tense"><i></i>Tension near the middle</span>
+              <span class="spill notice"><i></i>2 worth noticing</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Timeline -->
+        <div class="sec-head">
+          <span class="sec-title">Moments</span>
+          <button class="sec-link" id="expandAll">Expand all</button>
+        </div>
+
+        <div class="timeline" id="timeline">
+
+          <div class="moment" data-state="warm">
+            <span class="node"></span>
+            <div class="m-card">
+              <div class="m-top">
+                <span class="m-time">8:42</span>
+                <span class="m-tag warm">Warm</span>
+                <span class="m-spacer"></span>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="m-snippet">"Hey! Good to see you — it's been such a while."</div>
+              <div class="m-body"><div class="m-body-inner">
+                <div class="m-full">"Hey! Good to see you — it's been such a while. I was just thinking about you the other day, actually."</div>
+                <div class="m-voice"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 3-9 2 3h4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Voice: bright, quick to rise, laughing at the edges</div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="moment" data-state="calm">
+            <span class="node"></span>
+            <div class="m-card">
+              <div class="m-top">
+                <span class="m-time">8:44</span>
+                <span class="m-tag calm">Calm</span>
+                <span class="m-spacer"></span>
+                <button class="duo-dot" aria-pressed="false" aria-label="Something worth noticing here"></button>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="m-snippet">"Work has been… fine. Busy, but fine."</div>
+              <div class="m-body"><div class="m-body-inner">
+                <div class="m-full">"Work has been… fine. Busy, but fine. You know how it goes around launch season."</div>
+                <div class="m-voice"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 3-9 2 3h4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Voice: even words, but the pace slowed on "fine"</div>
+                <div class="m-note"><span class="nd"></span><span>Words sounded calm, voice tone suggested tension.</span></div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="moment" data-state="calm">
+            <span class="node"></span>
+            <div class="m-card">
+              <div class="m-top">
+                <span class="m-time">8:47</span>
+                <span class="m-tag calm">Calm</span>
+                <span class="m-spacer"></span>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="m-snippet">"We shipped the project last week, so that weight is finally off."</div>
+              <div class="m-body"><div class="m-body-inner">
+                <div class="m-full">"We shipped the project last week, so that weight is finally off. I've been sleeping in on weekends as a reward."</div>
+                <div class="m-voice"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 3-9 2 3h4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Voice: settled, long unhurried sentences</div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="moment" data-state="tense">
+            <span class="node"></span>
+            <div class="m-card">
+              <div class="m-top">
+                <span class="m-time">8:51</span>
+                <span class="m-tag tense">Tension</span>
+                <span class="m-spacer"></span>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="m-snippet">"I just haven't been sleeping great, to be honest."</div>
+              <div class="m-body"><div class="m-body-inner">
+                <div class="m-full">"I just haven't been sleeping great, to be honest. My head is still half at my desk at midnight."</div>
+                <div class="m-voice"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 3-9 2 3h4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Voice: quieter, tighter toward the end of sentences</div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="moment" data-state="hesitant">
+            <span class="node"></span>
+            <div class="m-card">
+              <div class="m-top">
+                <span class="m-time">8:53</span>
+                <span class="m-tag hesitant">Hesitant</span>
+                <span class="m-spacer"></span>
+                <button class="duo-dot" aria-pressed="false" aria-label="Something worth noticing here"></button>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="m-snippet">"It's fine though, really — I manage."</div>
+              <div class="m-body"><div class="m-body-inner">
+                <div class="m-full">"It's fine though, really — I manage. Everyone runs on too little sleep these days, right?"</div>
+                <div class="m-voice"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 3-9 2 3h4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Voice: quick reassurance, a beat too fast</div>
+                <div class="m-note"><span class="nd"></span><span>Said "it's fine", but the pace sped up and the face tightened while speaking.</span></div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="moment" data-state="warm">
+            <span class="node"></span>
+            <div class="m-card">
+              <div class="m-top">
+                <span class="m-time">8:58</span>
+                <span class="m-tag warm">Warm</span>
+                <span class="m-spacer"></span>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="m-snippet">"Actually… talking about it does help a little. Thanks for asking."</div>
+              <div class="m-body"><div class="m-body-inner">
+                <div class="m-full">"Actually… talking about it does help a little. Thanks for asking. Not many people do."</div>
+                <div class="m-voice"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 3-9 2 3h4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Voice: softening, a small real laugh at the end</div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="moment" data-state="calm">
+            <span class="node"></span>
+            <div class="m-card">
+              <div class="m-top">
+                <span class="m-time">9:05</span>
+                <span class="m-tag calm">Calm</span>
+                <span class="m-spacer"></span>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="m-snippet">"Maybe I'll take that weekend trip after all. The lake one."</div>
+              <div class="m-body"><div class="m-body-inner">
+                <div class="m-full">"Maybe I'll take that weekend trip after all. The lake one. No laptop — I'll actually leave it home this time."</div>
+                <div class="m-voice"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 3-9 2 3h4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Voice: light, forward-leaning, planning out loud</div>
+              </div></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Face view (video was on) -->
+        <section class="face-card" id="faceCard">
+          <div class="face-head">
+            <span class="fi">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="12" height="12" rx="3" stroke="currentColor" stroke-width="2.2"/><path d="M15 11l6-3v8l-6-3" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="face-title">Face view<small>Video was on for this session</small></span>
+            <button class="switch" id="faceSwitch" role="switch" aria-checked="true" aria-label="Toggle face view"></button>
+          </div>
+          <div class="face-body"><div class="face-body-inner">
+            <div class="seg" role="tablist">
+              <button class="active" id="segRest">Resting</button>
+              <button id="segSpeech">In speech</button>
+            </div>
+            <div class="face-stage">
+              <!-- Resting face -->
+              <div class="face active" id="faceRest">
+                <svg width="130" height="130" viewBox="0 0 120 120" fill="none">
+                  <circle cx="60" cy="60" r="46" fill="#FFFDF6"/>
+                  <path d="M28 52c2-20 16-30 32-30s30 10 32 30c-8-8-18-11-32-11s-24 3-32 11z" fill="#A97455"/>
+                  <ellipse cx="60" cy="66" rx="30" ry="31" fill="#F8DDBE"/>
+                  <path d="M44 64q5 5 10 0" stroke="#6B4F3A" stroke-width="3" stroke-linecap="round"/>
+                  <path d="M66 64q5 5 10 0" stroke="#6B4F3A" stroke-width="3" stroke-linecap="round"/>
+                  <path d="M53 82q7 5 14 0" stroke="#C05B33" stroke-width="3" stroke-linecap="round"/>
+                  <circle cx="41" cy="74" r="5" fill="#FFB534" opacity=".35"/>
+                  <circle cx="79" cy="74" r="5" fill="#FFB534" opacity=".35"/>
+                </svg>
+              </div>
+              <!-- In-speech face -->
+              <div class="face" id="faceSpeech">
+                <svg width="130" height="130" viewBox="0 0 120 120" fill="none">
+                  <circle cx="60" cy="60" r="46" fill="#FFF3DC"/>
+                  <path d="M28 52c2-20 16-30 32-30s30 10 32 30c-8-8-18-11-32-11s-24 3-32 11z" fill="#A97455"/>
+                  <ellipse cx="60" cy="66" rx="30" ry="31" fill="#F8DDBE"/>
+                  <path d="M43 55q6-3 11-1" stroke="#6B4F3A" stroke-width="2.6" stroke-linecap="round"/>
+                  <path d="M66 54q5-2 11 1" stroke="#6B4F3A" stroke-width="2.6" stroke-linecap="round"/>
+                  <circle cx="49" cy="63" r="3.2" fill="#6B4F3A"/>
+                  <circle cx="71" cy="63" r="3.2" fill="#6B4F3A"/>
+                  <ellipse cx="60" cy="82" rx="8" ry="6.5" fill="#C05B33"/>
+                  <ellipse cx="60" cy="84.5" rx="4.5" ry="2.6" fill="#FF7F50" opacity=".7"/>
+                  <circle cx="40" cy="73" r="5" fill="#FF7F50" opacity=".3"/>
+                  <circle cx="80" cy="73" r="5" fill="#FF7F50" opacity=".3"/>
+                </svg>
+              </div>
+            </div>
+            <div class="face-cap" id="faceCap">Settled and soft at the start — brows relaxed, easy half-smile.</div>
+          </div></div>
+        </section>
+
+        <!-- About / note -->
+        <section class="about-card">
+          <div class="about-title">What was this about?</div>
+          <div class="about-sub">Tag the event, or leave a line for future-you.</div>
+          <div class="chips" id="chips">
+            <button class="chip">Friend</button>
+            <button class="chip">Work</button>
+            <button class="chip">Family</button>
+            <button class="chip">Health</button>
+            <button class="chip">Plans</button>
+            <button class="chip">Just catching up</button>
+          </div>
+          <div class="saved-notes" id="savedNotes"></div>
+          <div class="composer">
+            <input type="text" id="noteInput" placeholder="Add a note…" aria-label="Add a note">
+            <button id="noteSave" aria-label="Save note">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <div class="end-space"></div>
+      </div>
+
+      <div class="scroll-fade"></div>
+      <div class="home-bar"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ----- Expandable moments -----
+  document.querySelectorAll('.moment .m-card').forEach(function(card){
+    card.addEventListener('click', function(ev){
+      if (ev.target.closest('.duo-dot')) return;
+      card.closest('.moment').classList.toggle('open');
+    });
+  });
+
+  // ----- Incongruence dual-tone dots: one-line explanation on tap -----
+  document.querySelectorAll('.duo-dot').forEach(function(dot){
+    dot.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      var moment = dot.closest('.moment');
+      var pressed = dot.getAttribute('aria-pressed') === 'true';
+      dot.setAttribute('aria-pressed', pressed ? 'false' : 'true');
+      moment.classList.toggle('show-note', !pressed);
+      if (!pressed) moment.classList.add('open');
+    });
+  });
+
+  // ----- Expand / collapse all -----
+  var expandBtn = document.getElementById('expandAll');
+  expandBtn.addEventListener('click', function(){
+    var moments = document.querySelectorAll('.moment');
+    var anyClosed = Array.prototype.some.call(moments, function(m){ return !m.classList.contains('open'); });
+    moments.forEach(function(m){ m.classList.toggle('open', anyClosed); });
+    expandBtn.textContent = anyClosed ? 'Collapse all' : 'Expand all';
+  });
+
+  // ----- Face view toggle + two-state segmented visual -----
+  var faceSwitch = document.getElementById('faceSwitch');
+  var faceCard = document.getElementById('faceCard');
+  faceSwitch.addEventListener('click', function(){
+    var on = faceSwitch.getAttribute('aria-checked') === 'true';
+    faceSwitch.setAttribute('aria-checked', on ? 'false' : 'true');
+    faceCard.classList.toggle('off', on);
+  });
+
+  var segRest = document.getElementById('segRest');
+  var segSpeech = document.getElementById('segSpeech');
+  var faceRest = document.getElementById('faceRest');
+  var faceSpeech = document.getElementById('faceSpeech');
+  var faceCap = document.getElementById('faceCap');
+  function setFace(which){
+    var resting = which === 'rest';
+    segRest.classList.toggle('active', resting);
+    segSpeech.classList.toggle('active', !resting);
+    faceRest.classList.toggle('active', resting);
+    faceSpeech.classList.toggle('active', !resting);
+    faceCap.style.opacity = 0;
+    setTimeout(function(){
+      faceCap.textContent = resting
+        ? 'Settled and soft at the start — brows relaxed, easy half-smile.'
+        : 'Mid-sentence about work — brow lightly drawn, mouth busy ahead of the words.';
+      faceCap.style.opacity = 1;
+    }, 180);
+  }
+  segRest.addEventListener('click', function(){ setFace('rest'); });
+  segSpeech.addEventListener('click', function(){ setFace('speech'); });
+
+  // ----- Event tags -----
+  document.querySelectorAll('#chips .chip').forEach(function(chip){
+    chip.addEventListener('click', function(){ chip.classList.toggle('on'); });
+  });
+
+  // ----- Note composer -----
+  var noteInput = document.getElementById('noteInput');
+  var noteSave = document.getElementById('noteSave');
+  var savedNotes = document.getElementById('savedNotes');
+  function saveNote(){
+    var txt = noteInput.value.trim();
+    if (!txt) { noteInput.focus(); return; }
+    var row = document.createElement('div');
+    row.className = 'saved-note';
+    var tag = document.createElement('span');
+    tag.className = 'ntag';
+    tag.textContent = 'Note';
+    var body = document.createElement('span');
+    body.textContent = txt;
+    row.appendChild(tag); row.appendChild(body);
+    savedNotes.appendChild(row);
+    noteInput.value = '';
+    row.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+  noteSave.addEventListener('click', saveNote);
+  noteInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') saveNote(); });
+
+  // ----- Back button (demo feedback) -----
+  document.querySelector('.back-btn').addEventListener('click', function(){
+    document.getElementById('scroll').scrollTo({top:0, behavior:'smooth'});
+  });
+</script>
+</body>
+</html>

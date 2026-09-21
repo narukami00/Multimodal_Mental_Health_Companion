@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sol · Text Chat Flow — Hi-Fi Mockups & Spec</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-400-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-600-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-700-normal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/fonts/nunito@latest/latin-800-normal.css">
+<style>
+:root{
+  --amber:#FFB534;
+  --amber-deep:#E89B14;
+  --amber-tint:#FFE7BC;
+  --amber-tint2:#FFDFA3;
+  --coral:#FF7F50;
+  --coral-ink:#A63D16;
+  --coral-tint:#FFE2D4;
+  --cream:#FEFCE8;
+  --surface:#FFFDF4;
+  --bubble-ai:#FFF8E8;
+  --ink:#46382A;
+  --ink-soft:#94836B;
+  --ink-faint:#B7A98F;
+  --key-bg:#F6EFDD;
+  --e1:0 2px 8px rgba(122,90,40,.08);
+  --e2:0 6px 18px rgba(122,90,40,.12);
+  --e3:0 -8px 32px rgba(122,90,40,.16);
+  --page:#F7F1E1;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:'Nunito',sans-serif;
+  background:var(--page);
+  background-image:radial-gradient(1200px 500px at 80% -10%, rgba(255,181,52,.14), transparent 60%),
+                   radial-gradient(900px 500px at 10% 110%, rgba(255,127,80,.10), transparent 60%);
+  color:var(--ink);
+  padding:48px 24px 96px;
+}
+.wrap{max-width:1680px;margin:0 auto}
+
+/* ---------- page hero ---------- */
+.hero{display:flex;align-items:center;gap:24px;margin-bottom:12px;flex-wrap:wrap}
+.hero-blob{width:84px;height:84px;flex:none}
+.hero h1{font-size:34px;font-weight:800;letter-spacing:-.5px}
+.hero h1 em{font-style:normal;color:var(--amber-deep)}
+.hero p{color:var(--ink-soft);font-size:15px;margin-top:4px;max-width:640px;line-height:1.5}
+.hero-tags{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.tag{font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:999px;background:#fff;box-shadow:var(--e1);color:var(--ink-soft)}
+.tag.amber{background:var(--amber-tint);color:#7A5B1E}
+.tag.coral{background:var(--coral-tint);color:var(--coral-ink)}
+
+.section{margin-top:72px}
+.section-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.section-num{font-size:13px;font-weight:800;color:var(--amber-deep);background:var(--amber-tint);border-radius:999px;padding:4px 12px}
+.section h2{font-size:24px;font-weight:800;letter-spacing:-.3px}
+.section .sub{color:var(--ink-soft);font-size:14px;margin-bottom:28px;max-width:760px;line-height:1.55}
+
+/* ---------- frames grid ---------- */
+.frames{display:flex;flex-wrap:wrap;gap:44px;justify-content:center;align-items:flex-start}
+.frame-unit{width:392px}
+.frame-label{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.frame-label .n{width:26px;height:26px;border-radius:50%;background:var(--amber);color:#5C4313;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:var(--e1)}
+.frame-label h3{font-size:16px;font-weight:800}
+.frame-label .live-pill{font-size:10.5px;font-weight:800;color:#fff;background:var(--coral);padding:3px 9px;border-radius:999px;letter-spacing:.4px}
+.frame-desc{font-size:12.5px;color:var(--ink-soft);line-height:1.5;margin:-8px 0 14px 36px}
+.frame-specs{margin-top:14px;margin-left:4px;font-size:11.5px;color:var(--ink-faint);line-height:1.6;border-left:3px solid var(--amber-tint2);padding-left:12px}
+.frame-specs b{color:var(--ink-soft);font-weight:700}
+
+/* ---------- phone ---------- */
+.phone{
+  width:360px;height:800px;
+  background:var(--cream);
+  border-radius:42px;
+  border:9px solid #2E2519;
+  box-shadow:0 24px 60px rgba(60,40,10,.22), 0 4px 12px rgba(60,40,10,.12);
+  position:relative;overflow:hidden;
+  display:flex;flex-direction:column;
+  margin-left:16px;
+}
+.phone .inner{position:absolute;inset:0;display:flex;flex-direction:column}
+.notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:110px;height:22px;background:#2E2519;border-radius:999px;z-index:60}
+
+/* status bar */
+.statusbar{height:36px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 24px 0;font-size:11.5px;font-weight:700;color:var(--ink)}
+.statusbar.dark{color:#FFF6E8}
+.sb-right{display:flex;align-items:center;gap:5px}
+.sb-signal{display:flex;gap:2px;align-items:flex-end}
+.sb-signal i{width:3px;background:currentColor;border-radius:1px;display:block}
+.sb-signal i:nth-child(1){height:4px}.sb-signal i:nth-child(2){height:6px}.sb-signal i:nth-child(3){height:8px}.sb-signal i:nth-child(4){height:10px;opacity:.35}
+.sb-batt{width:20px;height:10px;border:1.5px solid currentColor;border-radius:3px;position:relative;opacity:.9}
+.sb-batt::after{content:"";position:absolute;inset:1.5px;width:65%;background:currentColor;border-radius:1px}
+.sb-batt::before{content:"";position:absolute;right:-4px;top:2.5px;width:2px;height:4px;background:currentColor;border-radius:0 1px 1px 0}
+
+/* ---------- soft shape avatar ---------- */
+.blob{
+  background:radial-gradient(circle at 32% 28%, #FFE3A6 0%, #FFB534 42%, #FF9A5C 72%, #FF7F50 100%);
+  border-radius:58% 42% 55% 45% / 48% 55% 45% 52%;
+  animation:breathe 6s ease-in-out infinite, morph 14s ease-in-out infinite;
+  box-shadow:0 8px 22px rgba(255,150,60,.32), inset 0 0 18px rgba(255,255,255,.38);
+  position:relative;flex:none;
+}
+.blob::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  background:radial-gradient(circle at 70% 75%, rgba(255,127,80,.5), transparent 55%);
+  mix-blend-mode:multiply;opacity:.5;
+}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.055)}}
+@keyframes morph{
+  0%,100%{border-radius:58% 42% 55% 45% / 48% 55% 45% 52%}
+  50%{border-radius:46% 54% 44% 56% / 57% 44% 56% 43%}
+}
+.blob-sm{width:24px;height:24px;box-shadow:0 3px 8px rgba(255,150,60,.3), inset 0 0 8px rgba(255,255,255,.4)}
+.blob-md{width:56px;height:56px}
+.blob-lg{width:118px;height:118px}
+.blob-xl{width:164px;height:164px}
+.blob-ring{position:relative;display:flex;align-items:center;justify-content:center}
+.blob-ring::before,.blob-ring::after{content:"";position:absolute;border-radius:50%;border:1.5px solid rgba(255,181,52,.4);animation:ripple 5s ease-out infinite}
+.blob-ring::after{animation-delay:2.5s}
+@keyframes ripple{0%{width:120px;height:120px;opacity:.7}100%{width:260px;height:260px;opacity:0}}
+
+/* ---------- app header ---------- */
+.app-header{
+  height:56px;flex:none;display:flex;align-items:center;gap:6px;
+  padding:0 10px;background:rgba(254,252,232,.92);backdrop-filter:blur(6px);
+  border-bottom:1px solid rgba(180,150,90,.14);z-index:20;
+}
+.hdr-btn{
+  width:40px;height:40px;border:none;background:transparent;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;color:var(--ink);cursor:pointer;
+  transition:background .15s;
+}
+.hdr-btn:hover{background:rgba(255,181,52,.14)}
+.hdr-btn svg{width:21px;height:21px}
+.hdr-presence{flex:1;display:flex;align-items:center;gap:9px;min-width:0}
+.hdr-presence .txt{min-width:0}
+.hdr-presence .name{font-size:15px;font-weight:800;line-height:1.15;letter-spacing:-.2px}
+.hdr-presence .state{font-size:10.5px;font-weight:600;color:var(--ink-soft);display:flex;align-items:center;gap:5px}
+.hdr-presence .state::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--amber);animation:glowdot 3.4s ease-in-out infinite}
+@keyframes glowdot{0%,100%{box-shadow:0 0 0 0 rgba(255,181,52,.5)}50%{box-shadow:0 0 0 4px rgba(255,181,52,0)}}
+.hdr-heart{color:var(--coral)}
+.hdr-divider{width:1px;height:22px;background:rgba(180,150,90,.22);margin:0 2px}
+
+/* ---------- utility row (end session + mode hint) ---------- */
+.utility-row{
+  flex:none;height:38px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;gap:10px;
+}
+.end-btn{
+  border:none;cursor:pointer;display:flex;align-items:center;gap:6px;
+  background:var(--coral-tint);color:var(--coral-ink);
+  font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;
+  padding:7px 14px;border-radius:999px;min-height:32px;
+  box-shadow:0 2px 6px rgba(166,61,22,.10);transition:transform .12s;
+}
+.end-btn:active{transform:scale(.96)}
+.end-btn svg{width:13px;height:13px}
+.mode-hint{font-size:10.5px;font-weight:600;color:var(--ink-faint);font-style:italic;text-align:right}
+
+/* ---------- chat area ---------- */
+.chat{
+  flex:1;overflow-y:auto;overscroll-behavior:contain;
+  padding:10px 16px 14px;display:flex;flex-direction:column;gap:14px;
+  scrollbar-width:none;
+}
+.chat::-webkit-scrollbar{display:none}
+.cluster-time{align-self:center;font-size:10.5px;font-weight:700;color:var(--ink-faint);letter-spacing:.4px;padding:2px 12px;background:rgba(255,225,170,.28);border-radius:999px}
+.msg-row{display:flex;gap:8px;align-items:flex-end;max-width:100%}
+.msg-row.ai{justify-content:flex-start}
+.msg-row.user{justify-content:flex-end}
+.msg-avatar{width:24px;height:24px;flex:none;margin-bottom:2px}
+.msg-avatar.spacer{visibility:hidden}
+.bubble{
+  max-width:246px;padding:11px 15px;font-size:14px;line-height:1.55;font-weight:600;
+  letter-spacing:-.1px;
+}
+.bubble.ai{
+  background:var(--bubble-ai);color:var(--ink);
+  border-radius:20px 20px 20px 7px;
+  box-shadow:0 3px 10px rgba(122,90,40,.09);
+}
+.bubble.user{
+  background:linear-gradient(135deg,#FFE9C4,#FFDCA0);
+  color:#54400F;
+  border-radius:20px 20px 7px 20px;
+  box-shadow:0 3px 10px rgba(232,155,20,.16);
+}
+.msg-gap{height:-8px}
+.stack-tight{margin-top:-8px}
+
+/* typing / thinking indicator */
+.thinking-bubble{
+  background:var(--bubble-ai);border-radius:20px 20px 20px 7px;
+  padding:14px 18px;display:flex;align-items:center;gap:12px;
+  box-shadow:0 3px 10px rgba(122,90,40,.09);
+}
+.think-blob{width:26px;height:26px;animation:breathe 3.2s ease-in-out infinite, morph 8s ease-in-out infinite;filter:saturate(.9)}
+.think-txt{font-size:11.5px;font-weight:700;color:var(--ink-faint);letter-spacing:.2px}
+.think-shimmer{display:flex;gap:5px;align-items:center}
+.think-shimmer i{width:5px;height:5px;border-radius:50%;background:var(--amber);opacity:.35;animation:shimmer 2.4s ease-in-out infinite}
+.think-shimmer i:nth-child(2){animation-delay:.4s}.think-shimmer i:nth-child(3){animation-delay:.8s}
+@keyframes shimmer{0%,100%{opacity:.25;transform:scale(.85)}50%{opacity:.8;transform:scale(1.1)}}
+
+/* quick reply chips */
+.chip-row{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 2px 32px}
+.chip{
+  border:1.5px solid rgba(255,181,52,.55);background:#FFF9E9;color:#7A5B1E;
+  font-family:'Nunito',sans-serif;font-size:12.5px;font-weight:700;
+  padding:9px 15px;border-radius:999px;cursor:pointer;min-height:36px;
+  box-shadow:0 2px 6px rgba(122,90,40,.06);transition:transform .12s, background .15s;
+}
+.chip:hover{background:var(--amber-tint)}
+.chip:active{transform:scale(.95)}
+.chip.quiet{border-color:rgba(180,150,90,.3);color:var(--ink-soft);background:transparent;box-shadow:none}
+
+/* media bubbles */
+.photo-bubble{
+  border-radius:20px 20px 7px 20px;overflow:hidden;max-width:220px;
+  box-shadow:0 4px 12px rgba(232,155,20,.2);background:#fff;
+}
+.photo-img{height:118px;background:linear-gradient(160deg,#FFD98E 0%,#FFB534 38%,#FF9A6B 70%,#FF7F50 100%);position:relative}
+.photo-img::after{content:"";position:absolute;left:0;right:0;bottom:0;height:44%;background:linear-gradient(transparent,rgba(120,60,20,.28))}
+.photo-img::before{content:"";position:absolute;top:16px;right:20px;width:22px;height:22px;border-radius:50%;background:#FFF3D0;box-shadow:0 0 18px 6px rgba(255,243,208,.7)}
+.photo-cap{padding:9px 13px;font-size:12.5px;font-weight:700;color:#54400F;background:linear-gradient(135deg,#FFE9C4,#FFDCA0)}
+.voice-bubble{
+  display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#FFE9C4,#FFDCA0);
+  border-radius:20px 20px 7px 20px;padding:12px 15px;min-width:180px;
+  box-shadow:0 3px 10px rgba(232,155,20,.16);
+}
+.voice-play{width:34px;height:34px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--amber-deep);flex:none;box-shadow:var(--e1)}
+.voice-play svg{width:14px;height:14px;margin-left:2px}
+.voice-meta{font-size:10.5px;font-weight:800;color:#8A6A1C;margin-top:3px}
+
+/* ---------- input dock ---------- */
+.dock{flex:none;padding:8px 12px 10px;background:linear-gradient(transparent, rgba(254,252,232,.9) 30%);}
+.input-bar{
+  display:flex;align-items:center;gap:6px;
+  background:var(--surface);border-radius:28px;height:54px;padding:0 7px;
+  box-shadow:var(--e2);border:1px solid rgba(255,225,170,.6);
+}
+.ib-btn{
+  width:40px;height:40px;border-radius:50%;border:none;background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--ink-soft);flex:none;
+  transition:background .15s, color .15s, transform .12s;font-family:'Nunito',sans-serif;
+}
+.ib-btn:hover{background:rgba(255,181,52,.14);color:var(--ink)}
+.ib-btn:active{transform:scale(.92)}
+.ib-btn svg{width:22px;height:22px}
+.ib-field{
+  flex:1;border:none;outline:none;background:transparent;font-family:'Nunito',sans-serif;
+  font-size:14px;font-weight:600;color:var(--ink);min-width:0;height:100%;
+}
+.ib-field::placeholder{color:var(--ink-faint);font-weight:600}
+.send-slot{position:relative;width:42px;height:42px;flex:none}
+.send-slot .ib-btn{position:absolute;inset:0;transition:opacity .18s, transform .18s}
+.send-slot .hidden-btn{opacity:0;transform:scale(.6);pointer-events:none}
+.send-btn-on{
+  background:var(--amber)!important;color:#5C4313!important;
+  box-shadow:0 4px 12px rgba(232,155,20,.4);
+}
+.send-btn-on:hover{background:var(--amber-deep)!important}
+
+/* recording dock */
+.record-bar{
+  display:flex;align-items:center;gap:10px;
+  background:var(--surface);border-radius:28px;height:54px;padding:0 8px;
+  box-shadow:var(--e2);border:1.5px solid rgba(255,127,80,.4);
+}
+.rec-cancel{width:40px;height:40px;border-radius:50%;border:none;background:var(--coral-tint);color:var(--coral-ink);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;font-family:'Nunito',sans-serif}
+.rec-cancel svg{width:16px;height:16px}
+.rec-center{flex:1;display:flex;align-items:center;gap:10px;min-width:0}
+.wave{display:flex;align-items:center;gap:3px;height:26px;flex:1;overflow:hidden}
+.wave i{width:3.5px;border-radius:2px;background:linear-gradient(#FFB534,#FF7F50);display:block;animation:waveAnim 1.6s ease-in-out infinite}
+@keyframes waveAnim{0%,100%{height:20%}50%{height:100%}}
+.rec-time{font-size:12px;font-weight:800;color:var(--coral-ink);font-variant-numeric:tabular-nums;flex:none}
+.rec-hint{font-size:10.5px;font-weight:700;color:var(--ink-faint);flex:none}
+.send-round{
+  width:42px;height:42px;border-radius:50%;border:none;background:var(--amber);color:#5C4313;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;
+  box-shadow:0 4px 12px rgba(232,155,20,.4);font-family:'Nunito',sans-serif;
+}
+.send-round svg{width:19px;height:19px}
+
+/* ---------- keyboard ---------- */
+.keyboard{flex:none;background:var(--key-bg);padding:8px 6px 14px;border-top:1px solid rgba(180,150,90,.18)}
+.kb-row{display:flex;gap:5px;justify-content:center;margin-bottom:7px}
+.kb-key{
+  height:38px;border-radius:8px;background:#FFFDF6;box-shadow:0 1.5px 3px rgba(122,90,40,.14);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:#5C4E38;flex:1;max-width:34px;
+}
+.kb-key.wide{max-width:52px;font-size:11px;background:#F1E8D2;color:var(--ink-soft)}
+.kb-key.space{max-width:170px}
+.kb-key.amber{background:var(--amber);color:#5C4313;max-width:52px}
+
+/* ---------- scrim + sheets ---------- */
+.scrim{
+  position:absolute;inset:0;background:rgba(70,56,42,.38);backdrop-filter:blur(1.5px);
+  opacity:0;pointer-events:none;transition:opacity .25s;z-index:40;
+}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:50;
+  background:var(--surface);border-radius:28px 28px 0 0;
+  box-shadow:var(--e3);padding:10px 20px 26px;
+  transform:translateY(110%);transition:transform .32s cubic-bezier(.32,.72,.28,1);
+}
+.sheet.on{transform:translateY(0)}
+.grabber{width:40px;height:4.5px;border-radius:999px;background:rgba(180,150,90,.35);margin:2px auto 14px}
+.sheet-title{font-size:15.5px;font-weight:800;text-align:center;letter-spacing:-.2px}
+.sheet-sub{font-size:12px;font-weight:600;color:var(--ink-soft);text-align:center;margin-top:3px;line-height:1.5}
+
+/* attachment sheet */
+.attach-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:18px 0 14px}
+.attach-opt{
+  border:none;background:transparent;cursor:pointer;font-family:'Nunito',sans-serif;
+  display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 2px;border-radius:18px;
+  transition:background .15s, transform .12s;min-height:96px;
+}
+.attach-opt:hover{background:rgba(255,181,52,.12)}
+.attach-opt:active{transform:scale(.94)}
+.attach-ic{
+  width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  box-shadow:var(--e1);
+}
+.attach-ic svg{width:23px;height:23px}
+.ic-amber{background:var(--amber-tint);color:#8A6A1C}
+.ic-peach{background:#FFE9D6;color:#B05A2A}
+.ic-sand{background:#F5EDD8;color:#7A6A4A}
+.ic-coral{background:var(--coral-tint);color:var(--coral-ink)}
+.attach-opt span{font-size:11.5px;font-weight:700;color:var(--ink)}
+.sheet-dismiss{
+  width:100%;border:none;background:transparent;cursor:pointer;font-family:'Nunito',sans-serif;
+  font-size:13.5px;font-weight:800;color:var(--ink-soft);padding:13px;border-radius:999px;min-height:48px;
+  transition:background .15s;
+}
+.sheet-dismiss:hover{background:rgba(180,150,90,.12)}
+
+/* support sheet */
+.support-list{display:flex;flex-direction:column;gap:10px;margin:18px 0 10px}
+.support-item{
+  display:flex;align-items:center;gap:13px;background:#FFF9EC;border:1.5px solid rgba(255,127,80,.25);
+  border-radius:18px;padding:13px 15px;cursor:pointer;transition:transform .12s, background .15s;
+  text-align:left;font-family:'Nunito',sans-serif;min-height:64px;
+}
+.support-item:hover{background:#FFF3DF}
+.support-item:active{transform:scale(.98)}
+.support-ic{width:40px;height:40px;border-radius:50%;background:var(--coral-tint);color:var(--coral-ink);display:flex;align-items:center;justify-content:center;flex:none}
+.support-ic svg{width:19px;height:19px}
+.support-item .t{font-size:13.5px;font-weight:800;color:var(--ink)}
+.support-item .d{font-size:11px;font-weight:600;color:var(--ink-soft);margin-top:1px;line-height:1.4}
+
+/* end-confirm sheet */
+.end-sheet-body{text-align:center;padding:6px 8px 4px}
+.end-actions{display:flex;gap:10px;margin-top:20px}
+.btn{
+  flex:1;border:none;cursor:pointer;font-family:'Nunito',sans-serif;border-radius:999px;
+  font-size:14px;font-weight:800;padding:14px;min-height:50px;transition:transform .12s;
+}
+.btn:active{transform:scale(.97)}
+.btn-amber{background:var(--amber);color:#5C4313;box-shadow:0 5px 14px rgba(232,155,20,.35)}
+.btn-coral-soft{background:var(--coral-tint);color:var(--coral-ink);box-shadow:0 4px 10px rgba(166,61,22,.12)}
+
+/* ---------- empty state ---------- */
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 34px 10px;text-align:center}
+.empty-state h2{font-size:24px;font-weight:800;letter-spacing:-.4px;margin:26px 0 10px}
+.empty-state p{font-size:14px;font-weight:600;color:var(--ink-soft);line-height:1.6;max-width:270px}
+.empty-chips{display:flex;flex-direction:column;gap:9px;margin-top:30px;width:100%;max-width:264px}
+.empty-chips .chip{width:100%;text-align:center;padding:12px 15px;font-size:13px;min-height:44px}
+.empty-foot{margin-top:26px;font-size:11px;font-weight:700;color:var(--ink-faint);display:flex;align-items:center;gap:6px}
+
+/* ---------- ended state ---------- */
+.ended{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 28px;text-align:center}
+.ended .check-wrap{position:relative;margin-bottom:24px}
+.ended .check{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff}
+.ended .check svg{width:34px;height:34px;stroke-width:3}
+.ended h2{font-size:22px;font-weight:800;letter-spacing:-.4px;margin-bottom:10px}
+.ended p{font-size:13.5px;font-weight:600;color:var(--ink-soft);line-height:1.65;max-width:268px}
+.journal-card{
+  margin-top:26px;width:100%;background:var(--surface);border-radius:20px;padding:16px 18px;
+  box-shadow:var(--e2);border:1px solid rgba(255,225,170,.7);text-align:left;
+}
+.journal-card .jc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.journal-card .jc-date{font-size:11px;font-weight:800;color:var(--amber-deep);letter-spacing:.5px;text-transform:uppercase}
+.journal-card .jc-saved{font-size:10.5px;font-weight:800;color:#7A5B1E;background:var(--amber-tint);padding:4px 10px;border-radius:999px;display:flex;align-items:center;gap:5px}
+.journal-card .jc-saved svg{width:11px;height:11px;stroke-width:3.5}
+.journal-card .jc-quote{font-size:13px;font-weight:600;color:var(--ink);line-height:1.55;font-style:italic;border-left:3px solid var(--amber-tint2);padding-left:12px}
+.journal-card .jc-sub{font-size:11px;font-weight:700;color:var(--ink-faint);margin-top:10px}
+.ended-actions{margin-top:28px;width:100%;display:flex;flex-direction:column;gap:6px}
+.ended-link{border:none;background:transparent;cursor:pointer;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;color:var(--amber-deep);padding:12px;min-height:44px}
+
+/* ---------- call reference screen ---------- */
+.call-bg{flex:1;background:linear-gradient(165deg,#FFF3D6 0%,#FEE9C8 45%,#FBDFC4 100%);display:flex;flex-direction:column;align-items:center;position:relative}
+.call-top{margin-top:56px;text-align:center}
+.call-top .who{font-size:17px;font-weight:800}
+.call-top .mode{font-size:11.5px;font-weight:700;color:var(--ink-soft);margin-top:3px;display:flex;gap:6px;align-items:center;justify-content:center}
+.call-top .mode::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber);animation:glowdot 3s infinite}
+.call-mid{flex:1;display:flex;align-items:center;justify-content:center}
+.caption-card{
+  position:absolute;bottom:132px;left:32px;right:32px;background:rgba(255,253,244,.9);
+  border-radius:20px;padding:15px 18px;box-shadow:var(--e2);text-align:center;
+}
+.caption-card .sp{font-size:10.5px;font-weight:800;color:var(--amber-deep);letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px}
+.caption-card .tx{font-size:14px;font-weight:700;color:var(--ink);line-height:1.5}
+.call-controls{position:absolute;bottom:44px;left:0;right:0;display:flex;justify-content:center;gap:22px;align-items:center}
+.cc-btn{width:58px;height:58px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--e2);font-family:'Nunito',sans-serif}
+.cc-btn svg{width:24px;height:24px}
+.cc-mic{background:var(--amber);color:#5C4313}
+.cc-cam{background:var(--surface);color:var(--ink-soft);border:1.5px solid rgba(180,150,90,.25)}
+.cc-end{background:var(--coral);color:#fff;width:66px;height:66px;box-shadow:0 8px 20px rgba(255,127,80,.4)}
+.cc-end svg{width:27px;height:27px}
+
+/* toast */
+.toast{
+  position:absolute;left:50%;bottom:150px;transform:translateX(-50%) translateY(12px);
+  background:rgba(70,56,42,.92);color:#FFF3D6;font-size:12.5px;font-weight:700;
+  padding:11px 18px;border-radius:999px;display:flex;align-items:center;gap:9px;
+  opacity:0;pointer-events:none;transition:all .3s;z-index:70;white-space:nowrap;
+}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast .blob-sm{width:16px;height:16px}
+
+/* ---------- spec section ---------- */
+.tokens-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.token-card{background:#fff;border-radius:20px;padding:18px 20px;box-shadow:var(--e1)}
+.token-card h4{font-size:12px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:14px}
+.swatch-row{display:flex;align-items:center;gap:11px;margin-bottom:10px}
+.swatch{width:34px;height:34px;border-radius:11px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06), var(--e1)}
+.swatch-row .nm{font-size:12.5px;font-weight:800;color:var(--ink)}
+.swatch-row .hx{font-size:11px;font-weight:700;color:var(--ink-faint);font-family:monospace}
+.spec-list{font-size:12.5px;font-weight:600;color:var(--ink-soft);line-height:1.9}
+.spec-list b{color:var(--ink);font-weight:800}
+
+.comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px;margin-top:24px}
+.comp-card{background:#fff;border-radius:22px;padding:20px 22px;box-shadow:var(--e1);border-top:4px solid var(--amber-tint2)}
+.comp-card.c-coral{border-top-color:#FFC4AB}
+.comp-card h4{font-size:15px;font-weight:800;margin-bottom:4px}
+.comp-card .role{font-size:11.5px;font-weight:700;color:var(--amber-deep);margin-bottom:10px}
+.comp-card.c-coral .role{color:var(--coral)}
+.comp-card table{width:100%;border-collapse:collapse;font-size:12px}
+.comp-card td{padding:4.5px 0;vertical-align:top;line-height:1.45;font-weight:600;color:var(--ink-soft)}
+.comp-card td:first-child{width:86px;font-weight:800;color:var(--ink);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding-right:8px}
+
+/* rationale */
+.rationale-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.r-card{background:#fff;border-radius:22px;padding:22px 24px;box-shadow:var(--e1)}
+.r-card .r-ic{width:44px;height:44px;border-radius:14px;background:var(--amber-tint);display:flex;align-items:center;justify-content:center;margin-bottom:13px;color:#8A6A1C}
+.r-card .r-ic svg{width:22px;height:22px}
+.r-card.coral .r-ic{background:var(--coral-tint);color:var(--coral-ink)}
+.r-card h4{font-size:15px;font-weight:800;margin-bottom:7px;letter-spacing:-.2px}
+.r-card p{font-size:13px;font-weight:600;color:var(--ink-soft);line-height:1.65}
+
+/* open questions */
+.q-list{display:flex;flex-direction:column;gap:12px;max-width:900px}
+.q-item{background:#fff;border-radius:18px;padding:16px 20px;box-shadow:var(--e1);display:flex;gap:14px;align-items:flex-start}
+.q-item .qn{width:26px;height:26px;border-radius:50%;background:var(--coral-tint);color:var(--coral-ink);font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none;margin-top:2px}
+.q-item .qt{font-size:13.5px;font-weight:800;margin-bottom:3px}
+.q-item .qd{font-size:12.5px;font-weight:600;color:var(--ink-soft);line-height:1.6}
+
+.footer-note{margin-top:80px;text-align:center;font-size:12px;font-weight:700;color:var(--ink-faint)}
+.footer-note .blob-sm{display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:6px}
+@media (max-width:460px){
+  body{padding:28px 8px 60px}
+  .phone{transform:scale(.86);transform-origin:top left;margin-left:0}
+  .frame-unit{width:320px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ================= HERO ================= -->
+  <div class="hero">
+    <div class="blob hero-blob"></div>
+    <div>
+      <h1>Sol <em>·</em> Text Chat Flow</h1>
+      <p>High-fidelity mockups + component spec for the text-first conversation screen — the quiet sibling of the existing voice/call experience. Android · 360 × 800 dp · Nunito · MVP prototype.</p>
+      <div class="hero-tags">
+        <span class="tag amber">Single focus per screen</span>
+        <span class="tag">Non-punitive · warm</span>
+        <span class="tag coral">Trust-first: voice, camera, attach always optional</span>
+        <span class="tag">No scores · no streaks · no red</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 1. MOCKUPS ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">01</span><h2>Screen states</h2></div>
+    <p class="sub">Seven states, plus the existing call screen for continuity reference. Frame 02 is a <b>live prototype</b> — type, tap chips, open the attachment sheet, hold a voice note, or end the session; every interaction works.</p>
+
+    <div class="frames">
+
+      <!-- ============ FRAME 1 · EMPTY / FIRST OPEN ============ -->
+      <div class="frame-unit">
+        <div class="frame-label"><span class="n">1</span><h3>First open · gentle greeting</h3></div>
+        <p class="frame-desc">No intake questions. The companion's soft shape breathes at center — the same motif as the call screen — so the product feels inhabited, not bootstrapped. Three quiet starters, including an escape hatch ("Not sure yet").</p>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="inner">
+            <div class="statusbar"><span>9:41</span><div class="sb-right"><div class="sb-signal"><i></i><i></i><i></i><i></i></div><div class="sb-batt"></div></div></div>
+            <div class="app-header">
+              <button class="hdr-btn" aria-label="Back to Today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+              <div class="hdr-presence">
+                <div class="blob blob-sm"></div>
+                <div class="txt"><div class="name">Sol</div><div class="state">here with you</div></div>
+              </div>
+              <button class="hdr-btn hdr-heart" aria-label="Crisis support"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.9-10-9.3C.4 8.6 2.4 5 6 5c2 0 3.4 1.1 4 2.3h4C14.6 6.1 16 5 18 5c3.6 0 5.6 3.6 4 6.7C19.5 16.1 12 21 12 21z" transform="scale(.92) translate(1,0)"/></svg></button>
+              <button class="hdr-btn" aria-label="Switch to voice call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></button>
+            </div>
+            <div class="empty-state">
+              <div class="blob blob-lg"></div>
+              <h2>Hi. I'm Sol.</h2>
+              <p>No pressure to have the right words. Whatever's on your mind — big, small, or tangled — is enough to start.</p>
+              <div class="empty-chips">
+                <button class="chip">Just checking in</button>
+                <button class="chip">Something's weighing on me</button>
+                <button class="chip quiet">Not sure yet…</button>
+              </div>
+              <div class="empty-foot">💬 Text, 🎙 voice notes, 📞 a call — whatever feels easiest today.</div>
+            </div>
+            <div class="dock">
+              <div class="input-bar">
+                <button class="ib-btn" aria-label="Add attachment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+                <input class="ib-field" placeholder="Say whatever's on your mind…" readonly>
+                <div class="send-slot">
+                  <button class="ib-btn" aria-label="Record voice note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+                  <button class="ib-btn hidden-btn send-btn-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-specs"><b>Header</b> 56dp · <b>blob</b> 118dp, 6s breathe · <b>chips</b> ≤3, 44dp min-height · <b>input pill</b> h54, r28, e2 shadow · tab bar hidden</div>
+      </div>
+
+      <!-- ============ FRAME 2 · ACTIVE CONVERSATION (LIVE) ============ -->
+      <div class="frame-unit">
+        <div class="frame-label"><span class="n">2</span><h3>Active conversation</h3><span class="live-pill">LIVE — TAP ME</span></div>
+        <p class="frame-desc">The core screen. AI bubbles cream-left, user bubbles amber-tint-right, one low-key timestamp per cluster, quiet quick-reply chips, and the input pill pinned above the keyboard with exactly three controls (+ · field · mic/send shared slot). Try everything.</p>
+        <div class="phone" id="livePhone">
+          <div class="notch"></div>
+          <div class="inner">
+            <div class="statusbar"><span>9:41</span><div class="sb-right"><div class="sb-signal"><i></i><i></i><i></i><i></i></div><div class="sb-batt"></div></div></div>
+            <div class="app-header">
+              <button class="hdr-btn" aria-label="Back to Today" onclick="liveToast('Saved & back to Today')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+              <div class="hdr-presence">
+                <div class="blob blob-sm"></div>
+                <div class="txt"><div class="name">Sol</div><div class="state">listening</div></div>
+              </div>
+              <button class="hdr-btn hdr-heart" aria-label="Crisis support" onclick="openSheet('supportSheet')"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.9-10-9.3C.4 8.6 2.4 5 6 5c2 0 3.4 1.1 4 2.3h4C14.6 6.1 16 5 18 5c3.6 0 5.6 3.6 4 6.7C19.5 16.1 12 21 12 21z" transform="scale(.92) translate(1,0)"/></svg></button>
+              <button class="hdr-btn" aria-label="Switch to voice call" onclick="liveToast('Opening the voice room…')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></button>
+            </div>
+            <div class="utility-row">
+              <button class="end-btn" onclick="openSheet('endSheet')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>End session</button>
+              <span class="mode-hint">switch to voice or call anytime</span>
+            </div>
+            <div class="chat" id="liveChat">
+              <div class="cluster-time">Today · 9:38 PM</div>
+              <div class="msg-row ai">
+                <div class="blob blob-sm msg-avatar"></div>
+                <div class="bubble ai">I'm glad you're here. 💛 How's today sitting with you — anything you'd like to unpack, or just be with for a bit?</div>
+              </div>
+              <div class="msg-row user">
+                <div class="bubble user">Rough one honestly. Work spiralled and I couldn't switch my brain off after.</div>
+              </div>
+              <div class="msg-row ai stack-tight">
+                <div class="msg-avatar spacer"></div>
+                <div class="bubble ai">That sounds exhausting — the day keeps running even after it's over. What was the heaviest part?</div>
+              </div>
+              <div class="msg-row user">
+                <div class="bubble user">Feeling like I'm behind on everything, no matter what I do.</div>
+              </div>
+              <div class="msg-row ai stack-tight">
+                <div class="msg-avatar spacer"></div>
+                <div class="bubble ai">Like the bar keeps moving. That's a heavy thing to carry alone. What usually helps — even a little — when it feels like this?</div>
+              </div>
+              <div class="chip-row" id="liveChips">
+                <button class="chip" onclick="chipSend(this)">Tell me more</button>
+                <button class="chip" onclick="chipSend(this)">Not sure</button>
+                <button class="chip quiet" onclick="chipSend(this)">I'd rather not say</button>
+              </div>
+            </div>
+            <div class="dock" id="liveDock">
+              <div class="input-bar" id="liveInputBar">
+                <button class="ib-btn" aria-label="Add attachment" onclick="openSheet('attachSheet')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+                <input class="ib-field" id="liveInput" placeholder="Say whatever's on your mind…" autocomplete="off">
+                <div class="send-slot">
+                  <button class="ib-btn" id="micBtn" aria-label="Record voice note" onclick="startRecording()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+                  <button class="ib-btn hidden-btn send-btn-on" id="sendBtn" aria-label="Send" onclick="sendLive()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+                </div>
+              </div>
+              <div class="record-bar" id="liveRecordBar" style="display:none">
+                <button class="rec-cancel" aria-label="Cancel recording" onclick="cancelRecording()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+                <div class="rec-center">
+                  <div class="wave" id="liveWave"></div>
+                  <span class="rec-time" id="recTime">0:00</span>
+                </div>
+                <span class="rec-hint">tap to send</span>
+                <button class="send-round" aria-label="Send voice note" onclick="sendVoiceNote()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+              </div>
+            </div>
+            <div class="keyboard" id="liveKb"></div>
+
+            <!-- scrim + sheets -->
+            <div class="scrim" id="liveScrim" onclick="closeSheets()"></div>
+
+            <div class="sheet" id="attachSheet">
+              <div class="grabber"></div>
+              <div class="sheet-title">Add something, if you'd like</div>
+              <div class="sheet-sub">Everything here is optional. Words are always enough.</div>
+              <div class="attach-grid">
+                <button class="attach-opt" onclick="attachPick('Photo')"><div class="attach-ic ic-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M21 15l-5-5-9 9"/></svg></div><span>Photo</span></button>
+                <button class="attach-opt" onclick="attachPick('Camera')"><div class="attach-ic ic-peach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></svg></div><span>Camera</span></button>
+                <button class="attach-opt" onclick="attachPick('File')"><div class="attach-ic ic-sand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5"/></svg></div><span>File</span></button>
+                <button class="attach-opt" onclick="attachPick('Mood sticker')"><div class="attach-ic ic-coral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg></div><span>Sticker</span></button>
+              </div>
+              <button class="sheet-dismiss" onclick="closeSheets()">Maybe later</button>
+            </div>
+
+            <div class="sheet" id="supportSheet">
+              <div class="grabber"></div>
+              <div class="sheet-title">You're not alone 💛</div>
+              <div class="sheet-sub">Real humans, any hour. Reaching out is a strength, not a last resort.</div>
+              <div class="support-list">
+                <button class="support-item"><div class="support-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></div><div><div class="t">Talk with a counsellor</div><div class="d">Free · confidential · 24/7 crisis line</div></div></button>
+                <button class="support-item"><div class="support-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg></div><div><div class="t">Text a counsellor</div><div class="d">Quiet, no speaking needed</div></div></button>
+                <button class="support-item"><div class="support-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"/></svg></div><div><div class="t">My grounding plan</div><div class="d">The steps we made together</div></div></button>
+              </div>
+              <button class="sheet-dismiss" onclick="closeSheets()">I'm okay for now</button>
+            </div>
+
+            <div class="sheet" id="endSheet">
+              <div class="grabber"></div>
+              <div class="end-sheet-body">
+                <div class="blob blob-md" style="margin:6px auto 14px"></div>
+                <div class="sheet-title">End for now?</div>
+                <div class="sheet-sub">Everything you've shared will be quietly saved to your Journal. You can come back any time — Sol won't mind.</div>
+                <div class="end-actions">
+                  <button class="btn btn-coral-soft" onclick="endSession()">End gently</button>
+                  <button class="btn btn-amber" onclick="closeSheets()">Stay a while</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="toast" id="liveToast"><div class="blob blob-sm"></div><span id="liveToastTxt"></span></div>
+          </div>
+        </div>
+        <div class="frame-specs"><b>Bubbles</b> max-w 246dp · r20 (tail 7) · pad 11/15 · 14sp/1.55 · <b>cluster gap</b> 14, in-cluster 6 · <b>chips</b> h36 quiet-outline · <b>dock</b> 3 controls max · touch targets ≥ 48dp hit area</div>
+      </div>
+
+      <!-- ============ FRAME 3 · THINKING ============ -->
+      <div class="frame-unit">
+        <div class="frame-label"><span class="n">3</span><h3>Sol is listening / thinking</h3></div>
+        <p class="frame-desc">Instead of bouncing dots, a miniature soft shape pulses slowly inside the reply bubble — the companion "gathering thought." Calm 3.2s cycle, whisper-quiet caption. Waiting feels like presence, not latency.</p>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="inner">
+            <div class="statusbar"><span>9:42</span><div class="sb-right"><div class="sb-signal"><i></i><i></i><i></i><i></i></div><div class="sb-batt"></div></div></div>
+            <div class="app-header">
+              <button class="hdr-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+              <div class="hdr-presence">
+                <div class="blob blob-sm"></div>
+                <div class="txt"><div class="name">Sol</div><div class="state">thinking…</div></div>
+              </div>
+              <button class="hdr-btn hdr-heart"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.9-10-9.3C.4 8.6 2.4 5 6 5c2 0 3.4 1.1 4 2.3h4C14.6 6.1 16 5 18 5c3.6 0 5.6 3.6 4 6.7C19.5 16.1 12 21 12 21z" transform="scale(.92) translate(1,0)"/></svg></button>
+              <button class="hdr-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></button>
+            </div>
+            <div class="utility-row">
+              <button class="end-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>End session</button>
+              <span class="mode-hint">switch to voice or call anytime</span>
+            </div>
+            <div class="chat">
+              <div class="cluster-time">Today · 9:41 PM</div>
+              <div class="msg-row ai">
+                <div class="blob blob-sm msg-avatar"></div>
+                <div class="bubble ai">What usually helps — even a little — when it feels like this?</div>
+              </div>
+              <div class="msg-row user">
+                <div class="bubble user">Walking, I think. But I haven't managed it in weeks.</div>
+              </div>
+              <div class="msg-row ai stack-tight">
+                <div class="msg-avatar spacer"></div>
+                <div class="thinking-bubble">
+                  <div class="blob think-blob"></div>
+                  <div>
+                    <div class="think-shimmer"><i></i><i></i><i></i></div>
+                    <div class="think-txt" style="margin-top:5px">Sol is taking this in…</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="dock">
+              <div class="input-bar">
+                <button class="ib-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+                <input class="ib-field" placeholder="Say whatever's on your mind…" readonly>
+                <div class="send-slot">
+                  <button class="ib-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+                  <button class="ib-btn hidden-btn send-btn-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+                </div>
+              </div>
+            </div>
+            <div class="keyboard kb-static"></div>
+          </div>
+        </div>
+        <div class="frame-specs"><b>Think blob</b> 26dp, 3.2s pulse · <b>caption</b> 11.5sp ink-faint · indicator lives inside an AI-shaped bubble so the reply "arrives" in place, no layout jump</div>
+      </div>
+
+      <!-- ============ FRAME 4 · VOICE RECORDING ============ -->
+      <div class="frame-unit">
+        <div class="frame-label"><span class="n">4</span><h3>Voice-note recording</h3></div>
+        <p class="frame-desc">The pill morphs in place — no modal, keyboard stays. Warm amber→coral waveform breathes; timer is the only number on screen. Cancel sits left (coral-tinted, not red), send right (amber), far apart against slip-taps. Never a red REC dot.</p>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="inner">
+            <div class="statusbar"><span>9:43</span><div class="sb-right"><div class="sb-signal"><i></i><i></i><i></i><i></i></div><div class="sb-batt"></div></div></div>
+            <div class="app-header">
+              <button class="hdr-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+              <div class="hdr-presence">
+                <div class="blob blob-sm"></div>
+                <div class="txt"><div class="name">Sol</div><div class="state">listening to your voice</div></div>
+              </div>
+              <button class="hdr-btn hdr-heart"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.9-10-9.3C.4 8.6 2.4 5 6 5c2 0 3.4 1.1 4 2.3h4C14.6 6.1 16 5 18 5c3.6 0 5.6 3.6 4 6.7C19.5 16.1 12 21 12 21z" transform="scale(.92) translate(1,0)"/></svg></button>
+              <button class="hdr-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></button>
+            </div>
+            <div class="utility-row">
+              <button class="end-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>End session</button>
+              <span class="mode-hint">switch to voice or call anytime</span>
+            </div>
+            <div class="chat">
+              <div class="cluster-time">Today · 9:41 PM</div>
+              <div class="msg-row ai">
+                <div class="blob blob-sm msg-avatar"></div>
+                <div class="bubble ai">What usually helps — even a little — when it feels like this?</div>
+              </div>
+              <div class="msg-row user">
+                <div class="voice-bubble">
+                  <div class="voice-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+                  <div style="flex:1"><div class="wave" style="height:20px"><i style="animation-play-state:paused;height:40%"></i><i style="animation-play-state:paused;height:70%"></i><i style="animation-play-state:paused;height:55%"></i><i style="animation-play-state:paused;height:90%"></i><i style="animation-play-state:paused;height:60%"></i><i style="animation-play-state:paused;height:35%"></i><i style="animation-play-state:paused;height:75%"></i><i style="animation-play-state:paused;height:50%"></i><i style="animation-play-state:paused;height:85%"></i><i style="animation-play-state:paused;height:45%"></i><i style="animation-play-state:paused;height:65%"></i><i style="animation-play-state:paused;height:30%"></i></div><div class="voice-meta">0:12 · voice note</div></div>
+                </div>
+              </div>
+              <div class="msg-row ai stack-tight">
+                <div class="msg-avatar spacer"></div>
+                <div class="bubble ai">I heard you. Keep going whenever you're ready — I'm right here. 🧡</div>
+              </div>
+            </div>
+            <div class="dock">
+              <div class="record-bar" style="border-color:rgba(255,127,80,.5)">
+                <button class="rec-cancel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+                <div class="rec-center">
+                  <div class="wave" id="staticWave"></div>
+                  <span class="rec-time">0:07</span>
+                </div>
+                <span class="rec-hint">recording…</span>
+                <button class="send-round"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+              </div>
+            </div>
+            <div class="keyboard kb-static"></div>
+          </div>
+        </div>
+        <div class="frame-specs"><b>Record bar</b> h54 r28, coral-tint hairline (soft, not alarm) · <b>waveform</b> 3.5dp bars, amber→coral gradient, 1.6s ease · cancel↔send separated by full bar width</div>
+      </div>
+
+      <!-- ============ FRAME 5 · ATTACHMENT SHEET ============ -->
+      <div class="frame-unit">
+        <div class="frame-label"><span class="n">5</span><h3>Attachment bottom sheet</h3></div>
+        <p class="frame-desc">Four equal-weight, unranked options in one calm row — no "recommended" tile, no camera-first bias. Mood sticker included: it lets tired users express without words. Dismissal is a full-width "Maybe later," and the scrim tap also closes.</p>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="inner">
+            <div class="statusbar"><span>9:44</span><div class="sb-right"><div class="sb-signal"><i></i><i></i><i></i><i></i></div><div class="sb-batt"></div></div></div>
+            <div class="app-header">
+              <button class="hdr-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+              <div class="hdr-presence">
+                <div class="blob blob-sm"></div>
+                <div class="txt"><div class="name">Sol</div><div class="state">listening</div></div>
+              </div>
+              <button class="hdr-btn hdr-heart"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.9-10-9.3C.4 8.6 2.4 5 6 5c2 0 3.4 1.1 4 2.3h4C14.6 6.1 16 5 18 5c3.6 0 5.6 3.6 4 6.7C19.5 16.1 12 21 12 21z" transform="scale(.92) translate(1,0)"/></svg></button>
+              <button class="hdr-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></button>
+            </div>
+            <div class="chat" style="filter:saturate(.9)">
+              <div class="msg-row ai">
+                <div class="blob blob-sm msg-avatar"></div>
+                <div class="bubble ai">Would a picture say it better than words sometimes? That's welcome too.</div>
+              </div>
+            </div>
+            <div class="dock">
+              <div class="input-bar">
+                <button class="ib-btn" style="background:rgba(255,181,52,.2);color:var(--ink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+                <input class="ib-field" placeholder="Say whatever's on your mind…" readonly>
+                <div class="send-slot">
+                  <button class="ib-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+                  <button class="ib-btn hidden-btn send-btn-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+                </div>
+              </div>
+            </div>
+            <div class="scrim on"></div>
+            <div class="sheet on">
+              <div class="grabber"></div>
+              <div class="sheet-title">Add something, if you'd like</div>
+              <div class="sheet-sub">Everything here is optional. Words are always enough.</div>
+              <div class="attach-grid">
+                <button class="attach-opt"><div class="attach-ic ic-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M21 15l-5-5-9 9"/></svg></div><span>Photo</span></button>
+                <button class="attach-opt"><div class="attach-ic ic-peach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></svg></div><span>Camera</span></button>
+                <button class="attach-opt"><div class="attach-ic ic-sand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5"/></svg></div><span>File</span></button>
+                <button class="attach-opt"><div class="attach-ic ic-coral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg></div><span>Sticker</span></button>
+              </div>
+              <button class="sheet-dismiss">Maybe later</button>
+            </div>
+          </div>
+        </div>
+        <div class="frame-specs"><b>Sheet</b> r28 top corners, e3 upward shadow · <b>tiles</b> 4-equal grid, 96dp min-height, 52dp icon circles · <b>dismiss</b> full-width 48dp "Maybe later" · scrim 38% warm ink</div>
+      </div>
+
+      <!-- ============ FRAME 6 · SUPPORT SHEET ============ -->
+      <div class="frame-unit">
+        <div class="frame-label"><span class="n">6</span><h3>Crisis support sheet</h3></div>
+        <p class="frame-desc">Opened from the heart in the header — same location in every state, findable in the dark. Coral is used as warmth, never alarm: no sirens, no red banners, no "ARE YOU OK?" modal. The dismiss ("I'm okay for now") carries zero guilt.</p>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="inner">
+            <div class="statusbar"><span>9:45</span><div class="sb-right"><div class="sb-signal"><i></i><i></i><i></i><i></i></div><div class="sb-batt"></div></div></div>
+            <div class="app-header">
+              <button class="hdr-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+              <div class="hdr-presence">
+                <div class="blob blob-sm"></div>
+                <div class="txt"><div class="name">Sol</div><div class="state">here with you</div></div>
+              </div>
+              <button class="hdr-btn hdr-heart" style="background:var(--coral-tint)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.9-10-9.3C.4 8.6 2.4 5 6 5c2 0 3.4 1.1 4 2.3h4C14.6 6.1 16 5 18 5c3.6 0 5.6 3.6 4 6.7C19.5 16.1 12 21 12 21z" transform="scale(.92) translate(1,0)"/></svg></button>
+              <button class="hdr-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></button>
+            </div>
+            <div class="chat">
+              <div class="msg-row ai">
+                <div class="blob blob-sm msg-avatar"></div>
+                <div class="bubble ai">Thank you for trusting me with this. Would it be okay if I stayed right here while you breathe for a moment?</div>
+              </div>
+            </div>
+            <div class="dock">
+              <div class="input-bar">
+                <button class="ib-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+                <input class="ib-field" placeholder="Say whatever's on your mind…" readonly>
+                <div class="send-slot">
+                  <button class="ib-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+                  <button class="ib-btn hidden-btn send-btn-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+                </div>
+              </div>
+            </div>
+            <div class="scrim on"></div>
+            <div class="sheet on">
+              <div class="grabber"></div>
+              <div class="sheet-title">You're not alone 💛</div>
+              <div class="sheet-sub">Real humans, any hour. Reaching out is a strength, not a last resort.</div>
+              <div class="support-list">
+                <button class="support-item"><div class="support-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></div><div><div class="t">Talk with a counsellor</div><div class="d">Free · confidential · 24/7 crisis line</div></div></button>
+                <button class="support-item"><div class="support-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg></div><div><div class="t">Text a counsellor</div><div class="d">Quiet, no speaking needed</div></div></button>
+                <button class="support-item"><div class="support-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"/></svg></div><div><div class="t">My grounding plan</div><div class="d">The steps we made together</div></div></button>
+              </div>
+              <button class="sheet-dismiss">I'm okay for now</button>
+            </div>
+          </div>
+        </div>
+        <div class="frame-specs"><b>Heart icon</b> fixed top-right in every state · <b>items</b> 64dp min-height, coral-tint icons · language warm & invitational, zero alarm iconography</div>
+      </div>
+
+      <!-- ============ FRAME 7 · ENDED ============ -->
+      <div class="frame-unit">
+        <div class="frame-label"><span class="n">7</span><h3>Session ended · saved to Journal</h3></div>
+        <p class="frame-desc">After "End gently": a quiet closing card. No duration stat, no message count, no mood score — just a human summary line and one coral exit. The Journal preview quotes the user's own words back gently, framed as kept-safe, not graded.</p>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="inner">
+            <div class="statusbar"><span>9:58</span><div class="sb-right"><div class="sb-signal"><i></i><i></i><i></i><i></i></div><div class="sb-batt"></div></div></div>
+            <div class="app-header">
+              <button class="hdr-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+              <div class="hdr-presence">
+                <div class="blob blob-sm" style="animation-duration:9s;opacity:.75"></div>
+                <div class="txt"><div class="name">Sol</div><div class="state">resting · see you soon</div></div>
+              </div>
+              <div style="width:80px"></div>
+            </div>
+            <div class="ended">
+              <div class="check-wrap">
+                <div class="blob blob-md"></div>
+                <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div>
+              </div>
+              <h2>That's enough for today.</h2>
+              <p>You showed up for yourself, and that matters. Everything you shared has been tucked safely into your Journal.</p>
+              <div class="journal-card">
+                <div class="jc-head">
+                  <span class="jc-date">Monday evening</span>
+                  <span class="jc-saved"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Saved</span>
+                </div>
+                <div class="jc-quote">"Feeling like I'm behind on everything… walking usually helps, even a little."</div>
+                <div class="jc-sub">A thread to pick up whenever you want — no rush, no deadline.</div>
+              </div>
+              <div class="ended-actions">
+                <button class="btn btn-coral-soft">Back to Today</button>
+                <button class="ended-link">Read it in my Journal →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-specs"><b>Exit</b> coral-tint pill (coral reserved for end/exit) · <b>secondary</b> amber text-link to Journal · input dock removed — the only way forward is a kind one</div>
+      </div>
+
+      <!-- ============ FRAME 8 · CALL REFERENCE ============ -->
+      <div class="frame-unit">
+        <div class="frame-label"><span class="n">✦</span><h3>Existing call screen (reference)</h3></div>
+        <p class="frame-desc">Shown for continuity: the chat header carries a mini version of this exact breathing shape, the thinking indicator reuses it, and the empty state presents it full-size. Same gradients, same motion language, same coral "end." One companion, two voices.</p>
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="inner">
+            <div class="statusbar dark"><span>9:46</span><div class="sb-right"><div class="sb-signal"><i></i><i></i><i></i><i></i></div><div class="sb-batt"></div></div></div>
+            <div class="call-bg">
+              <div class="call-top">
+                <div class="who">Sol</div>
+                <div class="mode">voice room · connected</div>
+              </div>
+              <div class="call-mid"><div class="blob-ring"><div class="blob blob-xl"></div></div></div>
+              <div class="caption-card">
+                <div class="sp">Sol</div>
+                <div class="tx">…and if today was a lot, that's okay too. I'm just going to sit here with you for a moment.</div>
+              </div>
+              <div class="call-controls">
+                <button class="cc-btn cc-mic" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+                <button class="cc-btn cc-end" aria-label="End call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z" transform="rotate(135 12 12)"/></svg></button>
+                <button class="cc-btn cc-cam" aria-label="Camera off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/><path d="M3 3l18 18"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-specs"><b>Shared DNA</b> · blob gradient #FFE3A6→#FFB534→#FF7F50 · 6s breathe · coral end action · cream surfaces · Nunito throughout</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= 2. COMPONENT SPEC ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">02</span><h2>Design tokens & component spec</h2></div>
+    <p class="sub">All dimensions in dp/sp at a 360×800 frame. Tokens shared with the call screen so the two surfaces ship as one system.</p>
+
+    <div class="tokens-grid">
+      <div class="token-card">
+        <h4>Color</h4>
+        <div class="swatch-row"><div class="swatch" style="background:#FFB534"></div><div><div class="nm">Primary · Amber</div><div class="hx">#FFB534 — send, active states</div></div></div>
+        <div class="swatch-row"><div class="swatch" style="background:linear-gradient(135deg,#FFE9C4,#FFDCA0)"></div><div><div class="nm">User bubble tint</div><div class="hx">#FFE9C4 → #FFDCA0 · ink #54400F</div></div></div>
+        <div class="swatch-row"><div class="swatch" style="background:#FF7F50"></div><div><div class="nm">Secondary · Coral</div><div class="hx">#FF7F50 — end/exit, support accent</div></div></div>
+        <div class="swatch-row"><div class="swatch" style="background:#FFE2D4"></div><div><div class="nm">Coral tint</div><div class="hx">#FFE2D4 · text #A63D16 (AA)</div></div></div>
+        <div class="swatch-row"><div class="swatch" style="background:#FEFCE8"></div><div><div class="nm">Background · Cream</div><div class="hx">#FEFCE8</div></div></div>
+        <div class="swatch-row"><div class="swatch" style="background:#FFF8E8"></div><div><div class="nm">AI bubble surface</div><div class="hx">#FFF8E8 · ink #46382A (AA 8.9:1)</div></div></div>
+        <div class="swatch-row" style="margin-bottom:0"><div class="swatch" style="background:radial-gradient(circle at 32% 28%,#FFE3A6,#FFB534 45%,#FF7F50)"></div><div><div class="nm">Companion blob gradient</div><div class="hx">#FFE3A6 → #FFB534 → #FF9A5C → #FF7F50</div></div></div>
+      </div>
+      <div class="token-card">
+        <h4>Typography · Nunito</h4>
+        <div class="spec-list">
+          <b>Bubble body</b> — 14sp / 600 / lh 1.55<br>
+          <b>Header name</b> — 15sp / 800<br>
+          <b>Presence state</b> — 10.5sp / 600 ink-soft<br>
+          <b>Sheet title</b> — 15.5sp / 800<br>
+          <b>Chips</b> — 12.5sp / 700<br>
+          <b>Timestamps / hints</b> — 10.5sp / 700 ink-faint, clustered only<br>
+          <b>Buttons</b> — 14sp / 800
+        </div>
+      </div>
+      <div class="token-card">
+        <h4>Radius · Spacing · Elevation</h4>
+        <div class="spec-list">
+          <b>Radius</b> — bubble 20 (tail corner 7) · input pill 28 · chips & buttons 999 · sheet 28 top · cards 20 · icon circle 50%<br>
+          <b>Spacing</b> — screen margin 16 · cluster gap 14 · in-cluster 6 (–8 overlap) · bubble pad 11×15 · dock pad 8/12<br>
+          <b>Elevation</b> — e1 0 2 8 /8% · e2 0 6 18 /12% (bubbles, input) · e3 0 −8 32 /16% (sheets). Warm brown shadows only, never gray-black.<br>
+          <b>Motion</b> — breathe 6s · think pulse 3.2s · wave 1.6s · sheet 320ms ease-out · all honor reduced-motion
+        </div>
+      </div>
+      <div class="token-card">
+        <h4>Touch & accessibility</h4>
+        <div class="spec-list">
+          <b>Minimum target</b> — 48×48dp hit areas (40dp visuals carry +4dp padding halos)<br>
+          <b>Contrast</b> — body ink on all bubbles ≥ 7:1 · button labels ≥ 4.6:1 · faint captions used only for non-essential meta<br>
+          <b>Separation</b> — cancel ↔ send on record bar at opposite ends · End session top-left utility row, far from bottom-right send<br>
+          <b>Motion</b> — no flashing; all pulses slow (>3s) and dim-safe
+        </div>
+      </div>
+    </div>
+
+    <div class="comp-grid">
+      <div class="comp-card">
+        <h4>Header</h4><div class="role">Presence, not chrome</div>
+        <table>
+          <tr><td>Height</td><td>56dp, cream @92% + blur, 1dp warm hairline below</td></tr>
+          <tr><td>Left</td><td>Back arrow 40dp target → returns to Today</td></tr>
+          <tr><td>Center</td><td>Blob 24dp (breathing) + "Sol" + presence line ("here with you" / "listening" / "thinking…")</td></tr>
+          <tr><td>Right</td><td>Heart (coral, support sheet) · Call (neutral, hands off to call UI). Equal visual weight — neither promoted.</td></tr>
+        </table>
+      </div>
+      <div class="comp-card">
+        <h4>Message bubbles</h4><div class="role">Short, breathable, human</div>
+        <table>
+          <tr><td>AI</td><td>Left · #FFF8E8 · r 20/20/20/7 · e1 · 24dp blob avatar on cluster's first message only</td></tr>
+          <tr><td>User</td><td>Right · amber gradient tint · r 20/20/7/20 · ink #54400F</td></tr>
+          <tr><td>Width</td><td>max 246dp (~68%) — forces short turns, prevents text walls</td></tr>
+          <tr><td>Time</td><td>Pill divider per cluster only ("Today · 9:41 PM"), never per message</td></tr>
+        </table>
+      </div>
+      <div class="comp-card">
+        <h4>Input bar</h4><div class="role">The one primary action</div>
+        <table>
+          <tr><td>Shell</td><td>h54 · r28 · surface #FFFDF4 · e2 · amber hairline</td></tr>
+          <tr><td>Controls</td><td>Exactly 3: "+" (40dp) · field ("Say whatever's on your mind…") · shared mic/send slot (42dp)</td></tr>
+          <tr><td>Send</td><td>Amber circle, cross-fades in only when field has content; mic recedes to ghost</td></tr>
+          <tr><td>Dock</td><td>Pinned above keyboard; keyboard never covers the conversation's last line</td></tr>
+        </table>
+      </div>
+      <div class="comp-card">
+        <h4>Voice recorder state</h4><div class="role">Calm, cancellable, non-alarming</div>
+        <table>
+          <tr><td>Morph</td><td>Same pill swaps contents in place — no modal, no red REC dot</td></tr>
+          <tr><td>Waveform</td><td>3.5dp bars, amber→coral gradient, 1.6s ease cycle + elapsed mm:ss (only number shown)</td></tr>
+          <tr><td>Actions</td><td>Cancel (coral-tint ×) far-left · Send (amber ↑) far-right</td></tr>
+          <tr><td>Sent note</td><td>User-tint bubble: play button + frozen waveform + duration</td></tr>
+        </table>
+      </div>
+      <div class="comp-card">
+        <h4>Attachment sheet</h4><div class="role">Equal choices, easy exit</div>
+        <table>
+          <tr><td>Options</td><td>Photo · Camera · File · Mood sticker — identical size/weight, no ordering bias</td></tr>
+          <tr><td>Copy</td><td>"Add something, if you'd like. Everything here is optional. Words are always enough."</td></tr>
+          <tr><td>Dismiss</td><td>"Maybe later" full-width 48dp + scrim tap + grabber swipe</td></tr>
+          <tr><td>Tiles</td><td>4-col grid · 96dp min-height · 52dp tinted icon circles · 11.5sp labels</td></tr>
+        </table>
+      </div>
+      <div class="comp-card">
+        <h4>Quick-reply chips</h4><div class="role">A ladder out of blank-page paralysis</div>
+        <table>
+          <tr><td>Count</td><td>Max 3, only when contextually useful; always includes a low-commitment escape ("I'd rather not say")</td></tr>
+          <tr><td>Style</td><td>Outlined amber hairline, h36, r999, 12.5sp/700 — quieter than any bubble</td></tr>
+          <tr><td>Behavior</td><td>Tap = send immediately; row disappears after use, never pinned</td></tr>
+        </table>
+      </div>
+      <div class="comp-card c-coral">
+        <h4>End session + ended card</h4><div class="role">An exit that feels like a tuck-in</div>
+        <table>
+          <tr><td>Trigger</td><td>Coral-tint pill, top-left utility row (max distance from send), with italic hint "switch to voice or call anytime"</td></tr>
+          <tr><td>Confirm</td><td>Gentle bottom sheet — "Stay a while" (amber, primary) vs "End gently" (coral). Staying is the highlighted option; leaving is never discouraged.</td></tr>
+          <tr><td>Ended</td><td>Blob + check · "That's enough for today." · Journal card quoting user's own words · coral "Back to Today" · no counts, scores, or streaks</td></tr>
+        </table>
+      </div>
+      <div class="comp-card c-coral">
+        <h4>Support (crisis) sheet</h4><div class="role">Findable, calm, never intrusive</div>
+        <table>
+          <tr><td>Entry</td><td>Heart icon, fixed top-right in every state — muscle-memory location</td></tr>
+          <tr><td>Content</td><td>Voice line · Text line · My grounding plan. Coral-tint icons on warm cards; zero sirens, zero red.</td></tr>
+          <tr><td>Dismiss</td><td>"I'm okay for now" — guilt-free wording, full-width target</td></tr>
+          <tr><td>Rule</td><td>Only ever user-opened in MVP; proactive escalation is an open question (see §04)</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 3. RATIONALE ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">03</span><h2>Design rationale</h2></div>
+    <p class="sub">How the screen honors the non-negotiables.</p>
+    <div class="rationale-grid">
+      <div class="r-card">
+        <div class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/></svg></div>
+        <h4>Single focus, protected</h4>
+        <p>The tab bar disappears; the header shrinks to back + presence + two peer icons; the input bar carries exactly three controls with mic and send sharing one slot. On any screen there is only ever <b>one amber thing</b> to press. The end-session row is a whisper in the corner, present but never competing.</p>
+      </div>
+      <div class="r-card">
+        <div class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7.5-4.9-10-9.3C.4 8.6 2.4 5 6 5c2 0 3.4 1.1 4 2.3h4C14.6 6.1 16 5 18 5c3.6 0 5.6 3.6 4 6.7C19.5 16.1 12 21 12 21z"/></svg></div>
+        <h4>Non-punitive by construction</h4>
+        <p>No streaks, no scores, no "you missed a day." The ended state thanks the user in human language and quotes <i>their</i> words back — proof they were heard, not measured. Every chip set includes "I'd rather not say" as a first-class, unembarrassed option; the sheet dismissals say "Maybe later" and "I'm okay for now."</p>
+      </div>
+      <div class="r-card">
+        <div class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg></div>
+        <h4>Human-readable first</h4>
+        <p>The only numbers anywhere are a clock time per cluster and a voice-note duration. No emotion labels, no confidence, no analytics. Timestamps are grouped so the transcript reads like a conversation, not a log file. The Journal card says "Monday evening," never "14 messages · 82% sentiment."</p>
+      </div>
+      <div class="r-card">
+        <div class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"/></svg></div>
+        <h4>Trust-first optionality</h4>
+        <p>Voice, camera, call, and attachments are peers: identical tile weights, no badges, no "new" flags, no empty-state nagging. Recording can always be cancelled without sending, and cancelling costs nothing. The crisis heart sits in the same pixel in every state, and opening it is private — Sol never comments on it in-thread.</p>
+      </div>
+      <div class="r-card">
+        <div class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="9" r="5"/><circle cx="15" cy="15" r="5"/></svg></div>
+        <h4>One companion, two modes</h4>
+        <p>The same breathing soft-shape appears at three scales — full-size greeting (echoing the call avatar), 24dp header presence, and 26dp thinking pulse — so text and voice read as one being, not two products. Shared gradient, shared coral "end" semantics, shared cream surfaces and Nunito. The header call icon is a door between modes, not an upsell: same weight as the heart beside it.</p>
+      </div>
+      <div class="r-card">
+        <div class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg></div>
+        <h4>Friction budget for hard days</h4>
+        <p>A tired or mid-crisis user makes ~zero extra decisions: chips answer the blank-page problem; the send button appears only when needed (no dead-state scanning); recording morphs the existing pill instead of launching a new screen; the keyboard never jumps. Everything destructive is placed far from everything frequent.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 4. OPEN QUESTIONS ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">04</span><h2>Open questions & opportunities</h2></div>
+    <p class="sub">Flagged for the next design crit and the deferred accessibility pass.</p>
+    <div class="q-list">
+      <div class="q-item"><span class="qn">1</span><div><div class="qt">Emotion-reactive avatar motion</div><div class="qd">Carrying over the call-screen flag: should the header blob's tempo/warmth shift with conversation tone (slower & softer amber in distress, brighter when light)? Opportunity for deep companionship — risk of feeling surveilled. Proposal: subtle-only, and make it discoverable/opt-out in You tab. Needs user testing before build.</div></div></div>
+      <div class="q-item"><span class="qn">2</span><div><div class="qt">Proactive crisis support — without interruptive modals</div><div class="qd">MVP keeps the support sheet user-opened only. If risk language is detected, could Sol offer support <i>in-thread</i> as a warm message + a quiet inline card (same coral-tint language) rather than a blocking dialog? Defining that escalation choreography is a follow-up project with clinical input.</div></div></div>
+      <div class="q-item"><span class="qn">3</span><div><div class="qt">Reply pacing & thinking-time honesty</div><div class="qd">Should the thinking indicator's duration mirror message length (a longer reply "takes a moment")? Instant replies can feel canned; artificial delay can feel dishonest. A/B the 1.2–2.4s band with real users in slump states.</div></div></div>
+      <div class="q-item"><span class="qn">4</span><div><div class="qt">Mode hand-off continuity</div><div class="qd">When the user taps Call mid-conversation, does Sol carry context into the voice room ("you were telling me about work…")? High warmth potential; needs a privacy framing ("Sol remembers this conversation") so it never startles.</div></div></div>
+      <div class="q-item"><span class="qn">5</span><div><div class="qt">Mood sticker vocabulary</div><div class="qd">If stickers ship, keep them abstract-warm (weather, blobs, textures — "foggy," "heavy," "a bit of sun") rather than emoji faces with labels, to stay clear of emotion-labeling the user. Commission a 6–8 piece set matching the blob gradient family.</div></div></div>
+      <div class="q-item"><span class="qn">6</span><div><div class="qt">Journal summary control</div><div class="qd">The ended card auto-saves. Should users preview/edit what's saved before it lands in the Journal? Trust argues yes; friction argues it must stay one tap. Prototype: a tappable card that expands into an editable snippet.</div></div></div>
+      <div class="q-item"><span class="qn">7</span><div><div class="qt">Night-mode warm palette</div><div class="qd">Many sessions happen late (the mockups are set at 9:41 PM). Cream #FEFCE8 is bright in a dark room. A warm-dark variant (deep cocoa #2A2118 surfaces, dimmed amber) is a fast-follow — must preserve contrast ratios and the blob's glow.</div></div></div>
+      <div class="q-item"><span class="qn">8</span><div><div class="qt">Deferred accessibility pass</div><div class="qd">TalkBack traversal order for bubbles + sheets, focus rings on amber controls, reduced-motion fallbacks for breathe/pulse/wave, and a contrast re-check of ink-faint meta text. 48dp targets and AA body contrast are already baked in.</div></div></div>
+    </div>
+  </div>
+
+  <div class="footer-note"><span class="blob blob-sm"></span>Sol · text chat flow — MVP hi-fi · designed at 360×800dp · amber #FFB534 · coral #FF7F50 · cream #FEFCE8</div>
+</div>
+
+<script>
+/* ================= shared builders ================= */
+const KB_ROWS = [
+  "qwertyuiop".split(""),
+  "asdfghjkl".split(""),
+  "zxcvbnm".split("")
+];
+function buildKeyboard(el){
+  let html = "";
+  html += '<div class="kb-row">' + KB_ROWS[0].map(k=>`<div class="kb-key">${k}</div>`).join("") + '</div>';
+  html += '<div class="kb-row">' + KB_ROWS[1].map(k=>`<div class="kb-key">${k}</div>`).join("") + '</div>';
+  html += '<div class="kb-row"><div class="kb-key wide">⇧</div>' + KB_ROWS[2].map(k=>`<div class="kb-key">${k}</div>`).join("") + '<div class="kb-key wide">⌫</div></div>';
+  html += '<div class="kb-row"><div class="kb-key wide">123</div><div class="kb-key wide">😊</div><div class="kb-key space">space</div><div class="kb-key amber">↵</div></div>';
+  el.innerHTML = html;
+}
+document.querySelectorAll(".keyboard").forEach(buildKeyboard);
+
+/* static waveform bars with gentle variance */
+function fillWave(el, n, animated){
+  let html = "";
+  for(let i=0;i<n;i++){
+    const h = 25 + Math.round(Math.abs(Math.sin(i*1.7))*70);
+    const d = (i%5)*0.18;
+    html += `<i style="${animated?`animation-delay:${d}s`:`height:${h}%;animation:none`};"></i>`;
+  }
+  el.innerHTML = html;
+}
+fillWave(document.getElementById("staticWave"), 22, true);
+fillWave(document.getElementById("liveWave"), 22, true);
+
+/* ================= live prototype (frame 2) ================= */
+const liveChat = document.getElementById("liveChat");
+const liveInput = document.getElementById("liveInput");
+const micBtn = document.getElementById("micBtn");
+const sendBtn = document.getElementById("sendBtn");
+const liveChips = document.getElementById("liveChips");
+const liveKb = document.getElementById("liveKb");
+const liveRecordBar = document.getElementById("liveRecordBar");
+const liveInputBar = document.getElementById("liveInputBar");
+const recTimeEl = document.getElementById("recTime");
+const phone = document.getElementById("livePhone");
+
+const aiReplies = [
+  "That makes a lot of sense. It sounds like you've been carrying this for a while — what would feel even slightly lighter right now?",
+  "Thank you for saying that out loud. I'm just going to sit with it for a second… what part of it feels loudest today?",
+  "I hear you. You don't have to have it figured out to talk about it — where does your mind go when it's quiet?",
+  "That's a really human thing to feel. If a good friend told you this, what would you want to say back to them?"
+];
+let replyIdx = 0;
+let recTimer = null, recSecs = 0;
+
+function scrollChat(){ liveChat.scrollTop = liveChat.scrollHeight; }
+
+function addUserBubble(html, isHTML){
+  const row = document.createElement("div");
+  row.className = "msg-row user";
+  const b = document.createElement("div");
+  b.className = "bubble user";
+  if(isHTML){ b.innerHTML = html; } else { b.textContent = html; }
+  row.appendChild(b);
+  liveChat.insertBefore(row, liveChips);
+  scrollChat();
+}
+function addThinking(){
+  const row = document.createElement("div");
+  row.className = "msg-row ai stack-tight";
+  row.id = "thinkingRow";
+  row.innerHTML = `<div class="msg-avatar spacer"></div>
+    <div class="thinking-bubble"><div class="blob think-blob"></div>
+    <div><div class="think-shimmer"><i></i><i></i><i></i></div>
+    <div class="think-txt" style="margin-top:5px">Sol is taking this in…</div></div></div>`;
+  liveChat.insertBefore(row, liveChips);
+  scrollChat();
+}
+function addAiBubble(text){
+  const t = document.getElementById("thinkingRow");
+  if(t) t.remove();
+  const row = document.createElement("div");
+  row.className = "msg-row ai stack-tight";
+  row.innerHTML = `<div class="msg-avatar spacer"></div>`;
+  const b = document.createElement("div");
+  b.className = "bubble ai";
+  b.textContent = text;
+  row.appendChild(b);
+  liveChat.insertBefore(row, liveChips);
+  scrollChat();
+}
+function maybeNewTime(){
+  const now = new Date();
+  const hh = ((now.getHours()+11)%12)+1;
+  const mm = String(now.getMinutes()).padStart(2,"0");
+  const last = liveChat.querySelector(".cluster-time:last-of-type");
+  if(!last || Math.random() < 0.25){
+    const d = document.createElement("div");
+    d.className = "cluster-time";
+    d.textContent = `Today · ${hh}:${mm} PM`;
+    liveChat.insertBefore(d, liveChips);
+  }
+}
+function sendLive(){
+  const v = liveInput.value.trim();
+  if(!v) return;
+  maybeNewTime();
+  addUserBubble(v);
+  liveInput.value = "";
+  syncSendState();
+  setTimeout(addThinking, 500);
+  setTimeout(()=>{ addAiBubble(aiReplies[replyIdx % aiReplies.length]); replyIdx++; scrollChat(); }, 2100);
+}
+function chipSend(el){
+  liveInput.value = el.textContent.trim();
+  sendLive();
+  liveChips.style.display = "none";
+}
+function syncSendState(){
+  const has = liveInput.value.trim().length > 0;
+  sendBtn.classList.toggle("hidden-btn", !has);
+  micBtn.classList.toggle("hidden-btn", has);
+}
+liveInput.addEventListener("input", syncSendState);
+liveInput.addEventListener("keydown", e=>{ if(e.key==="Enter") sendLive(); });
+
+/* recording */
+function startRecording(){
+  if(liveInput.value.trim()) return;
+  liveInputBar.style.display = "none";
+  liveRecordBar.style.display = "flex";
+  recSecs = 0;
+  recTimeEl.textContent = "0:00";
+  recTimer = setInterval(()=>{
+    recSecs++;
+    recTimeEl.textContent = `0:${String(recSecs).padStart(2,"0")}`;
+  },1000);
+}
+function stopRecordingUI(){
+  clearInterval(recTimer);
+  liveRecordBar.style.display = "none";
+  liveInputBar.style.display = "flex";
+}
+function cancelRecording(){ stopRecordingUI(); liveToast("Recording discarded — no fuss"); }
+function sendVoiceNote(){
+  const dur = `0:${String(Math.max(recSecs,1)).padStart(2,"0")}`;
+  stopRecordingUI();
+  maybeNewTime();
+  let bars = "";
+  for(let i=0;i<12;i++){ const h = 30 + Math.round(Math.abs(Math.sin(i*2.1))*60); bars += `<i style="animation:none;height:${h}%"></i>`; }
+  addUserBubble(`<div class="voice-bubble" style="box-shadow:none;padding:0;background:transparent;min-width:170px">
+    <div class="voice-play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+    <div style="flex:1"><div class="wave" style="height:20px">${bars}</div><div class="voice-meta">${dur} · voice note</div></div></div>`, true);
+  setTimeout(addThinking, 500);
+  setTimeout(()=>{ addAiBubble("I heard you. Thank you for sharing that with your own voice — it means something. What's sitting underneath it?"); scrollChat(); }, 2100);
+}
+
+/* sheets */
+const scrim = document.getElementById("liveScrim");
+function openSheet(id){
+  closeSheets(false);
+  document.getElementById(id).classList.add("on");
+  scrim.classList.add("on");
+}
+function closeSheets(hideScrim){
+  phone.querySelectorAll(".sheet").forEach(s=>s.classList.remove("on"));
+  if(hideScrim !== false) scrim.classList.remove("on");
+  else scrim.classList.remove("on");
+}
+function attachPick(kind){
+  closeSheets();
+  maybeNewTime();
+  if(kind === "Photo" || kind === "Camera"){
+    addUserBubble(`<div class="photo-bubble" style="box-shadow:none">
+      <div class="photo-img"></div><div class="photo-cap">The sky on my walk home 🌇</div></div>`, true);
+  } else if(kind === "Mood sticker"){
+    addUserBubble(`<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+      <div class="blob" style="width:64px;height:64px;filter:saturate(.6) brightness(1.05)"></div>
+      <span style="font-size:11px;font-weight:800;color:#8A6A1C">feels a bit foggy today</span></div>`, true);
+  } else {
+    addUserBubble(`<div style="display:flex;align-items:center;gap:10px">
+      <div style="width:38px;height:38px;border-radius:12px;background:#F5EDD8;display:flex;align-items:center;justify-content:center;color:#7A6A4A">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5"/></svg></div>
+      <div><div style="font-size:13px;font-weight:800">notes-from-therapy.pdf</div><div style="font-size:11px;font-weight:700;color:#8A6A1C">shared with Sol</div></div></div>`, true);
+  }
+  setTimeout(addThinking, 600);
+  setTimeout(()=>{ addAiBubble("Thank you for showing me that. I'll hold it gently. What was it like to share?"); scrollChat(); }, 2200);
+}
+
+/* end session */
+function endSession(){
+  closeSheets();
+  const inner = phone.querySelector(".inner");
+  inner.querySelectorAll(".utility-row, .chat, .dock, .keyboard").forEach(e=>e.style.display="none");
+  const ended = document.createElement("div");
+  ended.className = "ended";
+  ended.innerHTML = `
+    <div class="check-wrap"><div class="blob blob-md"></div>
+      <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+    <h2>That's enough for today.</h2>
+    <p>You showed up for yourself, and that matters. Everything you shared has been tucked safely into your Journal.</p>
+    <div class="journal-card">
+      <div class="jc-head"><span class="jc-date">Monday evening</span>
+      <span class="jc-saved"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Saved</span></div>
+      <div class="jc-quote">"Rough one honestly… walking usually helps, even a little."</div>
+      <div class="jc-sub">A thread to pick up whenever you want — no rush, no deadline.</div>
+    </div>
+    <div class="ended-actions">
+      <button class="btn btn-coral-soft" onclick="liveToast('Back to Today')">Back to Today</button>
+      <button class="ended-link" onclick="liveToast('Opening your Journal')">Read it in my Journal →</button>
+    </div>`;
+  inner.insertBefore(ended, scrim);
+  const pres = phone.querySelector(".hdr-presence .state");
+  if(pres) pres.textContent = "resting · see you soon";
+  const heart = phone.querySelector(".hdr-heart");
+  const callB = heart ? heart.nextElementSibling : null;
+  if(heart) heart.style.display = "none";
+  if(callB) callB.style.display = "none";
+}
+
+/* toast */
+let toastT = null;
+function liveToast(msg){
+  const t = document.getElementById("liveToast");
+  document.getElementById("liveToastTxt").textContent = msg;
+  t.classList.add("on");
+  clearTimeout(toastT);
+  toastT = setTimeout(()=>t.classList.remove("on"), 1800);
+}
+</script>
+</body>
+</html>
