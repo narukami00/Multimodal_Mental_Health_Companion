@@ -1,4 +1,5 @@
 import '../../core/models/activity.dart';
+import '../recommendations/activity_safety_policy.dart';
 
 class ActivityReviewIssue {
   const ActivityReviewIssue({required this.activityId, required this.message});
@@ -47,7 +48,7 @@ class ActivityLibraryReview {
       if (activity.review.reviewerRole.trim().isEmpty) {
         issue('reviewer role is required');
       }
-      if (_containsBlockedContent(activity)) {
+      if (!ActivitySafetyPolicy.isAllowed(activity)) {
         issue('contains a blocked recommendation category');
       }
     }
@@ -55,41 +56,4 @@ class ActivityLibraryReview {
     return ActivityLibraryReview(issues: List.unmodifiable(issues));
   }
 
-  static bool _containsBlockedContent(Activity activity) {
-    final searchable = [
-      activity.title,
-      activity.description,
-      ...activity.contexts,
-      ...activity.targetStates,
-    ].join(' ').toLowerCase();
-
-    return _blockedTerms.any(searchable.contains);
-  }
-
-  static const _blockedTerms = [
-    // Self-harm and acute-risk adjacent content belongs to the safety layer.
-    'self-harm',
-    'self harm',
-    'suicide',
-    'kill yourself',
-    'overdose',
-    'cutting yourself',
-    // Substance use recommendations are not allowed in the first library.
-    'alcohol',
-    'cocaine',
-    'heroin',
-    'cannabis',
-    'drug',
-    // Medical claims or medication instructions require a separate review path.
-    'diagnose',
-    'cure',
-    'treat depression',
-    'stop taking medication',
-    'replace therapy',
-    // Unsafe exertion advice is excluded from the lifestyle starter set.
-    'push through pain',
-    'maximum effort',
-    'no rest',
-    'extreme workout',
-  ];
 }
