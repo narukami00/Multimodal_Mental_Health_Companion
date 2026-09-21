@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../data/contracts/onboarding_repository.dart';
 import '../app_shell/app_shell.dart';
+import '../sessions/session_controller.dart';
 import 'onboarding_flow.dart';
 
 class OnboardingGate extends StatefulWidget {
   const OnboardingGate({
     required this.repository,
+    required this.sessionController,
     super.key,
   });
 
   final OnboardingRepository repository;
+  final SessionController sessionController;
 
   @override
   State<OnboardingGate> createState() => _OnboardingGateState();
@@ -27,7 +30,9 @@ class _OnboardingGateState extends State<OnboardingGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isComplete) return const AppShell();
+    if (_isComplete) {
+      return AppShell(sessionController: widget.sessionController);
+    }
 
     return OnboardingFlow(
       repository: widget.repository,

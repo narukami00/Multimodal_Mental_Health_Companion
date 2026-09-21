@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../core/navigation/app_tab.dart';
 import '../../domain/home/home_card_priority.dart';
+import '../checkin/check_in_mode_page.dart';
 import '../placeholders/feature_placeholder_page.dart';
+import '../sessions/session_controller.dart';
 import 'today_page.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({
+    required this.sessionController,
+    super.key,
+  });
+
+  final SessionController sessionController;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -23,6 +30,7 @@ class _AppShellState extends State<AppShell> {
         children: [
           TodayPage(
             primaryCard: HomeCardPriority.select(const HomeState()),
+            onStartCheckIn: () => _openCheckIn(context),
           ),
           const FeaturePlaceholderPage(
             title: 'Your journal',
@@ -54,6 +62,16 @@ class _AppShellState extends State<AppShell> {
               label: tab.label,
             ),
         ],
+      ),
+    );
+  }
+
+  void _openCheckIn(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CheckInModePage(
+          sessionController: widget.sessionController,
+        ),
       ),
     );
   }

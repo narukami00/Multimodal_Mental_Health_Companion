@@ -6,10 +6,12 @@ import '../../domain/home/home_card_priority.dart';
 class TodayPage extends StatelessWidget {
   const TodayPage({
     this.primaryCard = HomeCardType.checkIn,
+    this.onStartCheckIn,
     super.key,
   });
 
   final HomeCardType primaryCard;
+  final VoidCallback? onStartCheckIn;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +48,7 @@ class TodayPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 26),
                   FilledButton.icon(
-                    onPressed: () {},
+                    onPressed: onStartCheckIn,
                     icon: Icon(card.icon),
                     label: Text(card.action),
                     style: FilledButton.styleFrom(
