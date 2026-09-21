@@ -1,14 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/app_shell/app_shell.dart';
+import 'data/contracts/onboarding_repository.dart';
+import 'data/repositories/shared_preferences_onboarding_repository.dart';
+import 'features/onboarding/onboarding_gate.dart';
 
-void main() {
-  runApp(const SolaceApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final preferences = await SharedPreferences.getInstance();
+  runApp(
+    SolaceApp(
+      onboardingRepository: SharedPreferencesOnboardingRepository(preferences),
+    ),
+  );
 }
 
 class SolaceApp extends StatelessWidget {
-  const SolaceApp({super.key});
+  const SolaceApp({
+    required this.onboardingRepository,
+    super.key,
+  });
+
+  final OnboardingRepository onboardingRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -16,10 +30,10 @@ class SolaceApp extends StatelessWidget {
       title: 'Solace',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      home: const AppShell(),
+      home: OnboardingGate(repository: onboardingRepository),
     );
   }
 }
 
-// Kept as an alias while the bootstrap test and early integrations migrate.
+// Kept as an alias while early integrations migrate to the product name.
 typedef MainApp = SolaceApp;
