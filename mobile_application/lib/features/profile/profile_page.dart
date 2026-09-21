@@ -6,6 +6,8 @@ import '../../core/theme/app_theme.dart';
 import '../library/activity_library_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
+import '../suggestions/suggestion_controller.dart';
+import '../suggestions/suggestion_page.dart';
 import 'baseline_quiz_page.dart';
 import 'profile_controller.dart';
 
@@ -13,11 +15,13 @@ class ProfilePage extends StatelessWidget {
   const ProfilePage({
     required this.profileController,
     required this.safetyController,
+    required this.suggestionController,
     super.key,
   });
 
   final ProfileController profileController;
   final SafetyController safetyController;
+  final SuggestionController suggestionController;
 
   @override
   Widget build(BuildContext context) {
@@ -175,6 +179,29 @@ class ProfilePage extends StatelessWidget {
                         ),
                       ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Card(
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: AppColors.amber,
+                  ),
+                  title: const Text('Try a gentle idea'),
+                  subtitle: const Text(
+                    'Optional suggestions with feedback and an easy skip',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => SuggestionPage(
+                        suggestionController: suggestionController,
+                        profileController: profileController,
+                        safetyController: safetyController,
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 14),

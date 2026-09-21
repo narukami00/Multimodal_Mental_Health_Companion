@@ -5,6 +5,7 @@ import '../app_shell/app_shell.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../sessions/session_controller.dart';
+import '../suggestions/suggestion_controller.dart';
 import 'onboarding_flow.dart';
 
 class OnboardingGate extends StatefulWidget {
@@ -13,6 +14,7 @@ class OnboardingGate extends StatefulWidget {
     required this.sessionController,
     required this.safetyController,
     required this.profileController,
+    required this.suggestionController,
     super.key,
   });
 
@@ -20,6 +22,7 @@ class OnboardingGate extends StatefulWidget {
   final SessionController sessionController;
   final SafetyController safetyController;
   final ProfileController profileController;
+  final SuggestionController suggestionController;
 
   @override
   State<OnboardingGate> createState() => _OnboardingGateState();
@@ -41,6 +44,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
         sessionController: widget.sessionController,
         safetyController: widget.safetyController,
         profileController: widget.profileController,
+        suggestionController: widget.suggestionController,
       );
     }
 

@@ -11,6 +11,7 @@ import '../placeholders/feature_placeholder_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
+import '../suggestions/suggestion_controller.dart';
 import 'today_page.dart';
 
 class AppShell extends StatefulWidget {
@@ -18,12 +19,14 @@ class AppShell extends StatefulWidget {
     required this.sessionController,
     required this.safetyController,
     required this.profileController,
+    required this.suggestionController,
     super.key,
   });
 
   final SessionController sessionController;
   final SafetyController safetyController;
   final ProfileController profileController;
+  final SuggestionController suggestionController;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -61,6 +64,7 @@ class _AppShellState extends State<AppShell> {
               ProfilePage(
                 profileController: widget.profileController,
                 safetyController: widget.safetyController,
+                suggestionController: widget.suggestionController,
               ),
             ],
           ),
