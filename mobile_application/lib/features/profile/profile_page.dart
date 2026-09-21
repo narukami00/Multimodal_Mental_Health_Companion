@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/theme/app_theme.dart';
+import '../library/activity_library_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'baseline_quiz_page.dart';
@@ -174,6 +175,25 @@ class ProfilePage extends StatelessWidget {
                         ),
                       ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Card(
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.local_library_outlined,
+                    color: AppColors.amber,
+                  ),
+                  title: const Text('Activity library'),
+                  subtitle: const Text(
+                    'Browse the reviewed lifestyle starter set',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ActivityLibraryPage(),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
