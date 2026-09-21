@@ -7,11 +7,13 @@ class TodayPage extends StatelessWidget {
   const TodayPage({
     this.primaryCard = HomeCardType.checkIn,
     this.onStartCheckIn,
+    this.onOpenSupport,
     super.key,
   });
 
   final HomeCardType primaryCard;
   final VoidCallback? onStartCheckIn;
+  final VoidCallback? onOpenSupport;
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +90,7 @@ class TodayPage extends StatelessWidget {
             ),
           ),
           TextButton.icon(
-            onPressed: () {},
+            onPressed: onOpenSupport,
             icon: const Icon(Icons.support_outlined, size: 18),
             label: const Text('Support resources'),
           ),

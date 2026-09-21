@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
+import '../../core/models/safety_assessment.dart';
 import '../../core/theme/app_theme.dart';
 import '../journal/session_detail_page.dart';
+import '../safety/safety_controller.dart';
+import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
 
 class TextCheckInPage extends StatefulWidget {
   const TextCheckInPage({
     required this.sessionController,
+    required this.safetyController,
     super.key,
   });
 
   final SessionController sessionController;
+  final SafetyController safetyController;
 
   @override
   State<TextCheckInPage> createState() => _TextCheckInPageState();
@@ -23,6 +28,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
   final _textController = TextEditingController();
   String? _selectedMood;
   bool _isSaving = false;
+  bool _safetyAcknowledged = false;
 
   @override
   void dispose() {
@@ -36,9 +42,39 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
     if (!_canSave || _isSaving) return;
     setState(() => _isSaving = true);
 
+    final text = _textController.text.trim().isEmpty
+        ? null
+        : _textController.text.trim();
+    if (text != null && !_safetyAcknowledged) {
+      final assessment = await widget.safetyController.assessText(
+        source: 'text_check_in',
+        text: text,
+      );
+      if (assessment.level != SafetyLevel.clear) {
+        if (mounted) {
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => SupportResourcesPage(
+                safetyController: widget.safetyController,
+                assessment: assessment,
+                regionCode: Localizations.localeOf(context).countryCode ?? 'GLOBAL',
+              ),
+            ),
+          );
+          if (mounted) {
+            setState(() {
+              _isSaving = false;
+              _safetyAcknowledged = true;
+            });
+          }
+        }
+        return;
+      }
+    }
+
     final session = await widget.sessionController.saveSession(
       mode: CaptureMode.text,
-      text: _textController.text.trim().isEmpty ? null : _textController.text.trim(),
+      text: text,
       mood: _selectedMood?.toLowerCase(),
     );
 
@@ -100,7 +136,11 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
             const SizedBox(height: 12),
             TextField(
               controller: _textController,
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {
+                  _safetyAcknowledged = false;
+                });
+              },
               minLines: 6,
               maxLines: 10,
               textCapitalization: TextCapitalization.sentences,
@@ -126,6 +166,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(22, 8, 22, 18),
         child: FilledButton.icon(
+          key: const ValueKey('text-check-in-save'),
           onPressed: _canSave && !_isSaving ? _save : null,
           icon: _isSaving
               ? const SizedBox.square(

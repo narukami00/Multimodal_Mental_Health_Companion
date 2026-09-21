@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
 import '../../core/theme/app_theme.dart';
+import '../safety/safety_controller.dart';
 import '../sessions/session_controller.dart';
 import 'text_check_in_page.dart';
 
 class CheckInModePage extends StatelessWidget {
   const CheckInModePage({
     required this.sessionController,
+    required this.safetyController,
     super.key,
   });
 
   final SessionController sessionController;
+  final SafetyController safetyController;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +78,10 @@ class CheckInModePage extends StatelessWidget {
   void _openText(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => TextCheckInPage(sessionController: sessionController),
+        builder: (_) => TextCheckInPage(
+          sessionController: sessionController,
+          safetyController: safetyController,
+        ),
       ),
     );
   }
