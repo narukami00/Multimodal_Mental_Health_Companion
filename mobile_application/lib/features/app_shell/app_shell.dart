@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/navigation/app_tab.dart';
+import '../../domain/home/home_card_priority.dart';
 import '../placeholders/feature_placeholder_page.dart';
 import 'today_page.dart';
 
@@ -19,19 +20,21 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       body: IndexedStack(
         index: _selectedTab.index,
-        children: const [
-          TodayPage(),
-          FeaturePlaceholderPage(
+        children: [
+          TodayPage(
+            primaryCard: HomeCardPriority.select(const HomeState()),
+          ),
+          const FeaturePlaceholderPage(
             title: 'Your journal',
             description: 'Past check-ins and reflections will live here.',
             icon: Icons.auto_stories_outlined,
           ),
-          FeaturePlaceholderPage(
+          const FeaturePlaceholderPage(
             title: 'Your insights',
             description: 'Gentle patterns will appear here as your history grows.',
             icon: Icons.insights_outlined,
           ),
-          FeaturePlaceholderPage(
+          const FeaturePlaceholderPage(
             title: 'You',
             description: 'Profile, privacy, sharing, and settings will live here.',
             icon: Icons.person_outline,
