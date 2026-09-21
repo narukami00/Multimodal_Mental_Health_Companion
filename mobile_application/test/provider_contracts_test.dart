@@ -12,7 +12,9 @@ void main() {
       text: 'A quiet check-in.',
     );
 
-    expect(await providers.emotionAnalyzer.analyze(input), isEmpty);
+    final emotionResults = await providers.emotionAnalyzer.analyze(input);
+    expect(emotionResults, hasLength(1));
+    expect(emotionResults.single.labels?.single.label, 'steady');
     expect(
       await providers.llmProvider.generateReply(prompt: 'Say hello'),
       isNotEmpty,

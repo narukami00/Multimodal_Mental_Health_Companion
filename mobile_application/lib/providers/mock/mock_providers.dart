@@ -9,7 +9,24 @@ class MockEmotionAnalyzer implements EmotionAnalyzer {
 
   @override
   Future<List<EmotionResult>> analyze(SessionInput input) async {
-    return const <EmotionResult>[];
+    final modality = switch (input.mode) {
+      CaptureMode.text => EmotionModality.text,
+      CaptureMode.voice => EmotionModality.voice,
+      CaptureMode.video => EmotionModality.face,
+    };
+
+    return [
+      EmotionResult(
+        sessionId: input.sessionId,
+        modality: modality,
+        timestamp: DateTime.now(),
+        valence: 0.25,
+        arousal: 0.32,
+        labels: const [EmotionLabel(label: 'steady', score: 0.68)],
+        confidence: 0.68,
+        modelVersion: 'mock-v1',
+      ),
+    ];
   }
 }
 
