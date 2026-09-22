@@ -30,11 +30,11 @@ void main() {
     await tester.tap(find.text('Journal').last);
     await tester.pumpAndSettle();
     expect(find.text('A note from today.'), findsOneWidget);
-    expect(find.text('JOURNAL NOTE'), findsOneWidget);
+    expect(find.text('TEXT CHECK-IN'), findsOneWidget);
 
     await tester.tap(find.text('A note from today.'));
     await tester.pumpAndSettle();
-    expect(find.text('HOW THIS SESSION FELT'), findsOneWidget);
+    expect(find.text('OVERALL FEEL'), findsOneWidget);
     expect(find.text('A note from today.'), findsOneWidget);
   });
 }

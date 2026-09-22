@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/models/emotion_result.dart';
 import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
 import '../../data/contracts/provider_contracts.dart';
@@ -51,6 +52,85 @@ class SessionController extends ChangeNotifier {
     ];
     notifyListeners();
     return session;
+  }
+
+  Future<void> seedInitialSessions() async {
+    if (_sessions.isNotEmpty) return;
+    final now = DateTime.now();
+    final seeds = <SessionRecord>[
+      _seedSession(
+        createdAt: now.subtract(const Duration(hours: 2)),
+        mode: CaptureMode.text,
+        mood: 'steady',
+        text:
+            'Quiet morning, feeling steady after a cup of tea. A bit of work tension before the team sync, but took three slow breaths and settled in.',
+        labels: const [
+          EmotionLabel(label: 'steady', score: 0.88),
+          EmotionLabel(label: 'calm', score: 0.75),
+          EmotionLabel(label: 'reflective', score: 0.64),
+        ],
+      ),
+      _seedSession(
+        createdAt: now.subtract(const Duration(days: 1, hours: 3)),
+        mode: CaptureMode.voice,
+        mood: 'tender',
+        text: 'Took a short walk outside by the trees. The wind felt cool and grounding.',
+        labels: const [
+          EmotionLabel(label: 'tender', score: 0.82),
+          EmotionLabel(label: 'calm', score: 0.78),
+        ],
+      ),
+      _seedSession(
+        createdAt: now.subtract(const Duration(days: 3, hours: 5)),
+        mode: CaptureMode.video,
+        mood: 'wobbly',
+        text:
+            'Felt a little overwhelmed with notifications today. Trying to remember to move at my own pace.',
+        labels: const [
+          EmotionLabel(label: 'tense', score: 0.72),
+          EmotionLabel(label: 'hesitant', score: 0.55),
+          EmotionLabel(label: 'steady', score: 0.42),
+        ],
+      ),
+    ];
+
+    for (final session in seeds) {
+      await _repository.save(session);
+    }
+    _sessions = seeds;
+    notifyListeners();
+  }
+
+  SessionRecord _seedSession({
+    required DateTime createdAt,
+    required CaptureMode mode,
+    required String text,
+    required String mood,
+    required List<EmotionLabel> labels,
+  }) {
+    final id = 'seed-${createdAt.microsecondsSinceEpoch}';
+    final modality = switch (mode) {
+      CaptureMode.text => EmotionModality.text,
+      CaptureMode.voice => EmotionModality.voice,
+      CaptureMode.video => EmotionModality.face,
+    };
+    return SessionRecord(
+      id: id,
+      createdAt: createdAt,
+      mode: mode,
+      text: text,
+      mood: mood,
+      emotionResults: [
+        EmotionResult(
+          sessionId: id,
+          modality: modality,
+          timestamp: createdAt,
+          labels: labels,
+          confidence: labels.first.score,
+          modelVersion: 'seed-v1',
+        ),
+      ],
+    );
   }
 
   SessionRecord? findById(String id) {

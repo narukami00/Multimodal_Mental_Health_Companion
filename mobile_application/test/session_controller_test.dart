@@ -38,4 +38,27 @@ void main() {
     expect(controller.findById(saved.id)?.text, 'A short reflection.');
     expect(saved.emotionResults.single.labels?.single.label, 'steady');
   });
+
+  test('seedInitialSessions fills three demo sessions only when empty', () async {
+    final repository = InMemorySessionRepository();
+    final controller = SessionController(
+      repository: repository,
+      emotionAnalyzer: _FakeEmotionAnalyzer(),
+    );
+    await controller.load();
+
+    await controller.seedInitialSessions();
+    expect(controller.sessions, hasLength(3));
+    expect(controller.sessions[0].mode, CaptureMode.text);
+    expect(controller.sessions[1].mode, CaptureMode.voice);
+    expect(controller.sessions[2].mode, CaptureMode.video);
+    expect(
+      controller.sessions[0].emotionResults.single.labels?.map((l) => l.label),
+      ['steady', 'calm', 'reflective'],
+    );
+    expect(await repository.listSessions(), hasLength(3));
+
+    await controller.seedInitialSessions();
+    expect(controller.sessions, hasLength(3));
+  });
 }

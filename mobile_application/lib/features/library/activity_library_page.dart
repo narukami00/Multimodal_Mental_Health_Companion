@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import '../../core/models/activity.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/asset_activity_library_repository.dart';
+import '../suggestions/suggestion_controller.dart';
 
 class ActivityLibraryPage extends StatefulWidget {
-  const ActivityLibraryPage({super.key});
+  const ActivityLibraryPage({this.suggestionController, super.key});
+
+  final SuggestionController? suggestionController;
 
   @override
   State<ActivityLibraryPage> createState() => _ActivityLibraryPageState();

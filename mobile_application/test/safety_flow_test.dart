@@ -31,7 +31,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Start a check-in'));
+    await tester.tap(find.text('Check in now'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Text'));
     await tester.pumpAndSettle();

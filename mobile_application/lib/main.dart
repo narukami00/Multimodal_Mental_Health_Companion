@@ -28,6 +28,9 @@ Future<void> main() async {
     emotionAnalyzer: const MockEmotionAnalyzer(),
   );
   await sessionController.load();
+  if (sessionController.sessions.isEmpty) {
+    await sessionController.seedInitialSessions();
+  }
   final safetyController = SafetyController(
     screener: const KeywordSafetyScreener(),
     repository: SharedPreferencesSafetyEventRepository(preferences),

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/data/repositories/in_memory_onboarding_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
+import 'package:solace_mobile/features/app_shell/today_page.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
 import 'package:solace_mobile/main.dart';
 import 'package:solace_mobile/providers/mock/mock_providers.dart';
@@ -33,7 +34,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.isComplete, isTrue);
-    expect(find.text('Good to see you'), findsOneWidget);
+    expect(find.text(TodayPage.greetingForHour(DateTime.now().hour)), findsOneWidget);
   });
 
   testWidgets('onboarding resumes from its saved page', (tester) async {

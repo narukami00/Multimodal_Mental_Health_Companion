@@ -22,7 +22,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Start a check-in'));
+    await tester.tap(find.text('Check in now'));
     await tester.pumpAndSettle();
     expect(find.text('How would you like to check in?'), findsOneWidget);
 
@@ -35,7 +35,7 @@ void main() {
     await tester.tap(find.text('Keep this moment'));
     await tester.pumpAndSettle();
 
-    expect(find.text('HOW THIS SESSION FELT'), findsOneWidget);
+    expect(find.text('OVERALL FEEL'), findsOneWidget);
     expect(find.text('A little more settled than yesterday.'), findsOneWidget);
     expect(sessionController.sessions, hasLength(1));
   });

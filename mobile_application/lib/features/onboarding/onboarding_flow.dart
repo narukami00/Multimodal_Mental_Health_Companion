@@ -59,35 +59,50 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            _TopBar(
-              currentPage: _currentPage,
-              onSkip: _currentPage == _pageCount - 1 ? null : _next,
-            ),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (page) {
-                  setState(() => _currentPage = page);
-                  unawaited(widget.repository.setCurrentPage(page));
-                },
-                children: const [
-                  _WelcomePage(),
-                  _WaysToCheckInPage(),
-                  _PermissionPage(),
-                  _SupportPage(),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFFFF9E8), Color(0xFFFEFCE8), Color(0xFFFFF3EC)],
+            stops: [0.0, 0.45, 1.0],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Column(
+                children: [
+                  _TopBar(
+                    currentPage: _currentPage,
+                    onSkip: _currentPage == _pageCount - 1 ? null : _next,
+                  ),
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      physics: const NeverScrollableScrollPhysics(),
+                      onPageChanged: (page) {
+                        setState(() => _currentPage = page);
+                        unawaited(widget.repository.setCurrentPage(page));
+                      },
+                      children: const [
+                        _WelcomePage(),
+                        _WaysToCheckInPage(),
+                        _PermissionPage(),
+                        _SupportPage(),
+                      ],
+                    ),
+                  ),
+                  _BottomControls(
+                    currentPage: _currentPage,
+                    onNext: _next,
+                    onChooseMedia: _chooseMedia,
+                  ),
                 ],
               ),
             ),
-            _BottomControls(
-              currentPage: _currentPage,
-              onNext: _next,
-              onChooseMedia: _chooseMedia,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -106,7 +121,7 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 8),
+      padding: const EdgeInsets.fromLTRB(22, 16, 22, 4),
       child: Row(
         children: [
           const _SolaceMark(size: 38),
@@ -116,15 +131,182 @@ class _TopBar extends StatelessWidget {
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   letterSpacing: 2.4,
                   fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
                 ),
           ),
           const Spacer(),
           if (onSkip != null)
             TextButton(
               onPressed: onSkip,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.mutedInk,
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
               child: const Text('Skip'),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _KickerPillBadge extends StatelessWidget {
+  const _KickerPillBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0x1FFF7F50),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFB534),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.4,
+              color: Color(0xFFFF7F50),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrimaryCtaButton extends StatelessWidget {
+  const _PrimaryCtaButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 52,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFC14F), Color(0xFFFFB534)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x55FFB534),
+            blurRadius: 16,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(26),
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF5A3E08),
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  icon,
+                  color: const Color(0xFF5A3E08),
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChoiceButton extends StatelessWidget {
+  const _ChoiceButton({
+    required this.label,
+    required this.gradient,
+    required this.foregroundColor,
+    required this.shadowColor,
+    required this.onPressed,
+  });
+
+  final String label;
+  final Gradient gradient;
+  final Color foregroundColor;
+  final Color shadowColor;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 52,
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(26),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: foregroundColor,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -144,8 +326,9 @@ class _BottomControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 22),
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -154,13 +337,13 @@ class _BottomControls extends StatelessWidget {
               (index) => AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: index == currentPage ? 26 : 8,
+                width: index == currentPage ? 24 : 8,
                 height: 8,
                 decoration: BoxDecoration(
                   color: index == currentPage
-                      ? AppColors.amber
-                      : AppColors.amber.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(99),
+                      ? const Color(0xFFFFB534)
+                      : const Color(0xFFEBDCC0),
+                  borderRadius: BorderRadius.circular(100),
                 ),
               ),
             ),
@@ -172,38 +355,41 @@ class _BottomControls extends StatelessWidget {
                 Expanded(
                   child: _ChoiceButton(
                     label: 'Allow access',
-                    color: AppColors.amber,
-                    foregroundColor: AppColors.deepAmber,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFFC14F), Color(0xFFFFB534)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    foregroundColor: const Color(0xFF5A3E08),
+                    shadowColor: const Color(0x55FFB534),
                     onPressed: () => onChooseMedia(true),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: _ChoiceButton(
                     label: "I'll use text",
-                    color: AppColors.coral,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF8E63), Color(0xFFFF7F50)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     foregroundColor: Colors.white,
+                    shadowColor: const Color(0x55FF7F50),
                     onPressed: () => onChooseMedia(false),
                   ),
                 ),
               ],
             )
           else
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: onNext,
-                icon: Icon(
-                  currentPage == 3 ? Icons.check_rounded : Icons.arrow_forward,
-                ),
-                label: Text(
-                                  currentPage == 0
-                                      ? 'Get started'
-                                      : currentPage == 3
-                                          ? 'Start checking in'
-                                          : 'Continue',
-                                ),
-              ),
+            _PrimaryCtaButton(
+              label: currentPage == 0
+                  ? 'Get started'
+                  : currentPage == 3
+                      ? 'Start checking in'
+                      : 'Continue',
+              icon: currentPage == 3 ? Icons.check_rounded : Icons.arrow_forward_rounded,
+              onPressed: onNext,
             ),
         ],
       ),
@@ -211,35 +397,123 @@ class _BottomControls extends StatelessWidget {
   }
 }
 
-class _ChoiceButton extends StatelessWidget {
-  const _ChoiceButton({
-    required this.label,
-    required this.color,
-    required this.foregroundColor,
-    required this.onPressed,
-  });
-
-  final String label;
-  final Color color;
-  final Color foregroundColor;
-  final VoidCallback onPressed;
+class _SunriseArtwork extends StatelessWidget {
+  const _SunriseArtwork();
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton(
-      onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: foregroundColor,
-        minimumSize: const Size.fromHeight(58),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+    return const SizedBox(
+      height: 180,
+      width: 240,
+      child: CustomPaint(
+        painter: _SunrisePainter(),
       ),
-      child: Text(label, textAlign: TextAlign.center),
     );
   }
+}
+
+class _SunrisePainter extends CustomPainter {
+  const _SunrisePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scaleX = size.width / 240.0;
+    final scaleY = size.height / 196.0;
+    canvas.save();
+    canvas.scale(scaleX, scaleY);
+
+    // Outer sun aura
+    final outerAuraPaint = Paint()
+      ..color = const Color(0xFFFFB534).withValues(alpha: 0.08)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(120, 92), 86, outerAuraPaint);
+
+    // Inner sun aura
+    final innerAuraPaint = Paint()
+      ..color = const Color(0xFFFFB534).withValues(alpha: 0.12)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(120, 92), 66, innerAuraPaint);
+
+    // Sun core
+    final sunCorePaint = Paint()
+      ..color = const Color(0xFFFFB534)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(120, 84), 34, sunCorePaint);
+
+    // Sun inner highlight
+    final highlightPaint = Paint()
+      ..color = const Color(0xFFFFD98A).withValues(alpha: 0.70)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(131, 74), 10, highlightPaint);
+
+    // Coral hill (Left): M20 158 c18-30 44-46 74-46 s56 16 74 46 H20 Z
+    final coralHillPath = Path()
+      ..moveTo(20, 158)
+      ..cubicTo(38, 128, 64, 112, 94, 112)
+      ..cubicTo(124, 112, 150, 128, 168, 158)
+      ..lineTo(20, 158)
+      ..close();
+    final coralHillPaint = Paint()
+      ..color = const Color(0xFFFF7F50).withValues(alpha: 0.90)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(coralHillPath, coralHillPaint);
+
+    // Amber hill (Right): M96 158 c14-22 34-34 58-34 c30 0 52 14 66 34 H96 Z
+    final amberHillPath = Path()
+      ..moveTo(96, 158)
+      ..cubicTo(110, 136, 130, 124, 154, 124)
+      ..cubicTo(184, 124, 206, 138, 220, 158)
+      ..lineTo(96, 158)
+      ..close();
+    final amberHillPaint = Paint()
+      ..color = const Color(0xFFFFB534).withValues(alpha: 0.55)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(amberHillPath, amberHillPaint);
+
+    // Ground line: rect x="10" y="156" width="220" height="8" rx="4" fill="#F4E7C8"
+    final groundPaint = Paint()
+      ..color = const Color(0xFFF4E7C8)
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(10, 156, 220, 8),
+        const Radius.circular(4),
+      ),
+      groundPaint,
+    );
+
+    // Floating Sparkles & Dots
+    final dot1 = Paint()
+      ..color = const Color(0xFFFF7F50).withValues(alpha: 0.50)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(38, 52), 5, dot1);
+
+    final dot2 = Paint()
+      ..color = const Color(0xFFFFB534).withValues(alpha: 0.55)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(203, 66), 6.5, dot2);
+
+    final dot3 = Paint()
+      ..color = const Color(0xFFFF7F50).withValues(alpha: 0.40)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(184, 34), 3.5, dot3);
+
+    // Sparkle arc: path d="M52 96c4-8 12-12 20-10"
+    final arcPath = Path()
+      ..moveTo(52, 96)
+      ..cubicTo(56, 88, 64, 84, 72, 86);
+    final arcPaint = Paint()
+      ..color = const Color(0xFFFF7F50).withValues(alpha: 0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(arcPath, arcPaint);
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _WelcomePage extends StatelessWidget {
@@ -248,11 +522,7 @@ class _WelcomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const _OnboardingPage(
-      illustration: _OnboardingIllustration(
-        icon: Icons.wb_sunny_rounded,
-        secondaryIcon: Icons.auto_awesome,
-        accent: AppColors.amber,
-      ),
+      illustration: _SunriseArtwork(),
       eyebrow: 'A little room for you',
       title: 'A calm space to\ncheck in with yourself.',
       body: 'No streaks, no pressure. Just a gentle moment that is always yours.',
@@ -358,44 +628,49 @@ class _OnboardingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
-      child: Column(
-        children: [
-          illustration,
-          const SizedBox(height: 8),
-          Text(
-            eyebrow.toUpperCase(),
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.coral,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 6, 24, 12),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - 18,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                illustration,
+                const SizedBox(height: 16),
+                _KickerPillBadge(label: eyebrow),
+                const SizedBox(height: 14),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                      ),
+                  textAlign: TextAlign.center,
                 ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  height: 1.12,
+                const SizedBox(height: 12),
+                Text(
+                  body,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppColors.mutedInk,
+                        height: 1.5,
+                        fontSize: 14.5,
+                      ),
+                  textAlign: TextAlign.center,
                 ),
-            textAlign: TextAlign.center,
+                if (extra != null) ...[
+                  const SizedBox(height: 20),
+                  extra!,
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            body,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.mutedInk,
-                  height: 1.5,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          if (extra != null) ...[
-            const SizedBox(height: 22),
-            extra!,
-          ],
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -414,7 +689,7 @@ class _OnboardingIllustration extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 188,
+      height: 180,
       width: double.infinity,
       child: Stack(
         alignment: Alignment.center,
@@ -436,22 +711,22 @@ class _OnboardingIllustration extends StatelessWidget {
                 colors: [accent.withValues(alpha: 0.28), accent.withValues(alpha: 0.04)],
               ),
             ),
-            child: Icon(icon, size: 68, color: accent),
+            child: Icon(icon, size: 62, color: accent),
           ),
           Positioned(
-            top: 25,
-            right: 58,
-            child: Icon(secondaryIcon, size: 28, color: AppColors.coral.withValues(alpha: 0.72)),
+            top: 22,
+            right: 68,
+            child: Icon(secondaryIcon, size: 26, color: AppColors.coral.withValues(alpha: 0.72)),
           ),
           Positioned(
-            bottom: 24,
-            left: 62,
-            child: _Dot(color: AppColors.amber.withValues(alpha: 0.72), size: 13),
+            bottom: 22,
+            left: 72,
+            child: _Dot(color: AppColors.amber.withValues(alpha: 0.72), size: 12),
           ),
           Positioned(
-            bottom: 42,
-            right: 65,
-            child: _Dot(color: AppColors.coral.withValues(alpha: 0.55), size: 9),
+            bottom: 38,
+            right: 76,
+            child: _Dot(color: AppColors.coral.withValues(alpha: 0.55), size: 8),
           ),
         ],
       ),

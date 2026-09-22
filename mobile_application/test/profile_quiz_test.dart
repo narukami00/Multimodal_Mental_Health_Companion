@@ -64,7 +64,9 @@ void main() {
 
     await tester.tap(find.text('You').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue baseline'));
+    final continueBaseline = find.text('Continue baseline');
+    await tester.scrollUntilVisible(continueBaseline, 300);
+    await tester.tap(continueBaseline);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Movement'));
