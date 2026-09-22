@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/navigation/app_tab.dart';
 import '../../domain/home/home_card_priority.dart';
+import '../call/call_page.dart';
+import '../chat/chat_page.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../insights/insights_page.dart';
 import '../journal/journal_page.dart';
@@ -76,6 +78,8 @@ class _AppShellState extends State<AppShell> {
                     ? () => _openSupport(context)
                     : () => _openCheckIn(context),
                 onOpenSupport: () => _openSupport(context),
+                onOpenChat: () => _openChat(context),
+                onOpenCall: () => _openCall(context),
               ),
               JournalPage(sessionController: widget.sessionController),
               InsightsPage(sessionController: widget.sessionController),
@@ -186,6 +190,22 @@ class _AppShellState extends State<AppShell> {
               const SafetyAssessment.clear(),
           regionCode: Localizations.localeOf(context).countryCode ?? 'GLOBAL',
         ),
+      ),
+    );
+  }
+
+  void _openChat(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ChatPage(safetyController: widget.safetyController),
+      ),
+    );
+  }
+
+  void _openCall(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CallPage(safetyController: widget.safetyController),
       ),
     );
   }

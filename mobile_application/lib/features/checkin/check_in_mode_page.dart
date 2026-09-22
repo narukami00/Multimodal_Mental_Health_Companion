@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
-import '../../core/theme/app_theme.dart';
+import '../call/call_page.dart';
 import '../safety/safety_controller.dart';
 import '../sessions/session_controller.dart';
 import 'text_check_in_page.dart';
@@ -143,15 +143,15 @@ class CheckInModePage extends StatelessWidget {
                     title: 'Voice',
                     description: 'Say it out loud',
                     icon: Icons.mic_none_rounded,
-                    onTap: () => _openPlaceholder(context, CaptureMode.voice),
+                    onTap: () => _openVoiceCall(context),
                   ),
                   const SizedBox(height: 16),
                   _ModeTile(
                     mode: CaptureMode.video,
                     title: 'Video',
-                    description: 'Camera + voice',
+                    description: 'See yourself as you speak',
                     icon: Icons.videocam_outlined,
-                    onTap: () => _openPlaceholder(context, CaptureMode.video),
+                    onTap: () => _openVoiceCall(context),
                   ),
                   const SizedBox(height: 26),
                   Center(
@@ -213,10 +213,10 @@ class CheckInModePage extends StatelessWidget {
     );
   }
 
-  void _openPlaceholder(BuildContext context, CaptureMode mode) {
+  void _openVoiceCall(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => CapturePlaceholderPage(mode: mode),
+        builder: (_) => CallPage(safetyController: safetyController),
       ),
     );
   }
@@ -347,62 +347,3 @@ class _ModeTile extends StatelessWidget {
   }
 }
 
-class CapturePlaceholderPage extends StatelessWidget {
-  const CapturePlaceholderPage({
-    required this.mode,
-    super.key,
-  });
-
-  final CaptureMode mode;
-
-  @override
-  Widget build(BuildContext context) {
-    final isVoice = mode == CaptureMode.voice;
-    final label = isVoice ? 'Voice capture is next' : 'Video capture is next';
-    final icon = isVoice ? Icons.mic_none_rounded : Icons.videocam_outlined;
-
-    return Scaffold(
-      appBar: AppBar(title: Text(isVoice ? 'Voice check-in' : 'Video check-in')),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AppColors.coral.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(22),
-                        child: Icon(icon, size: 42, color: AppColors.coral),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    Text(label, style: Theme.of(context).textTheme.headlineSmall),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'The capture interface is reserved here. When enabled, permission will be requested only when you choose this mode.',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 22),
-                    FilledButton.icon(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      label: const Text('Choose another way'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -15,12 +15,10 @@ class InsightsPage extends StatefulWidget {
   State<InsightsPage> createState() => _InsightsPageState();
 }
 
-const _inkColor = Color(0xFF3A3125);
-const _inkSoftColor = Color(0xFF6C5E50);
-const _mutedColor = Color(0xFFA69883);
-const _lineColor = Color(0x143B2F26);
-
 class _InsightsPageState extends State<InsightsPage> {
+  static const _bg = Color(0xFFFEFCE8);
+  static const _line = Color(0x143B2F26);
+
   bool _isMonth = false;
   final Set<int> _openNoticings = {};
 
@@ -29,7 +27,7 @@ class _InsightsPageState extends State<InsightsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFEFCE8),
+      backgroundColor: _bg,
       body: ClipRect(
         child: Stack(
           clipBehavior: Clip.hardEdge,
@@ -161,7 +159,7 @@ class _InsightsPageState extends State<InsightsPage> {
         decoration: BoxDecoration(
           color: const Color(0xB8FFFFFF),
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: _lineColor),
+          border: Border.all(color: _line),
           boxShadow: const [
             BoxShadow(
               color: Color(0x47B0782A),
@@ -187,7 +185,7 @@ class _InsightsPageState extends State<InsightsPage> {
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.all(Radius.circular(26)),
-        border: Border.fromBorderSide(BorderSide(color: _lineColor)),
+        border: Border.fromBorderSide(BorderSide(color: _line)),
         boxShadow: [
           BoxShadow(
             color: Color(0x4DB0782A),
@@ -251,10 +249,10 @@ class _InsightsPageState extends State<InsightsPage> {
                   ),
                   const SizedBox(height: 6),
                   _DriftChart(
-                    key: ValueKey(_isMonth),
                     days: range.days,
                     words: range.words,
                     values: range.values,
+                    key: ValueKey(_isMonth),
                   ),
                   const SizedBox(height: 8),
                   CustomPaint(
@@ -348,7 +346,7 @@ class _InsightsPageState extends State<InsightsPage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: _lineColor),
+          border: Border.all(color: _line),
           boxShadow: const [
             BoxShadow(
               color: Color(0x4DB0782A),
@@ -408,15 +406,13 @@ class _InsightsPageState extends State<InsightsPage> {
                 ),
                 const SizedBox(width: 8),
                 AnimatedRotation(
-                  turns: open ? 0.5 : 0.0,
+                  turns: open ? 0.5 : 0,
                   duration: const Duration(milliseconds: 400),
                   curve: Curves.easeOutBack,
                   child: Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 18,
-                    color: open
-                        ? const Color(0xFFF0A020)
-                        : const Color(0xFFCBBEA9),
+                    color: open ? const Color(0xFFF0A020) : const Color(0xFFCBBEA9),
                   ),
                 ),
               ],
@@ -680,6 +676,10 @@ class _InsightsPageState extends State<InsightsPage> {
   }
 }
 
+const _inkColor = Color(0xFF3A3125);
+const _inkSoftColor = Color(0xFF6C5E50);
+const _mutedColor = Color(0xFFA69883);
+
 class _RangeData {
   const _RangeData({
     required this.note,
@@ -756,7 +756,7 @@ const _noticings = [
     text: 'Stepping into morning light aligns with calmer check-ins later.',
     meta: 'MORNING CHECK-INS',
     tip:
-        'On several of the last seven days your first check-in landed before '
+        "On several of the last seven days your first check-in landed before "
         'nine — and those afternoons felt noticeably lighter. Nothing to chase '
         'here; it may just be that naming the day early gives it somewhere to '
         'go.',
@@ -843,6 +843,7 @@ class _SegmentedRange extends StatelessWidget {
                   BoxShadow(
                     color: Color(0x73B0782A),
                     blurRadius: 8,
+                    spreadRadius: -2,
                     offset: Offset(0, 3),
                   ),
                 ]
@@ -890,7 +891,10 @@ class _StatePill extends StatelessWidget {
               ),
               shape: BoxShape.circle,
               boxShadow: const [
-                BoxShadow(color: Color(0x38FFB534), spreadRadius: 3),
+                BoxShadow(
+                  color: Color(0x38FFB534),
+                  spreadRadius: 3,
+                ),
               ],
             ),
           ),
@@ -984,7 +988,9 @@ class _AmbientBlob extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
+        gradient: RadialGradient(
+          colors: [color, color.withValues(alpha: 0)],
+        ),
       ),
     );
   }
@@ -1009,17 +1015,19 @@ class _DriftChart extends StatefulWidget {
 class _DriftChartState extends State<_DriftChart>
     with SingleTickerProviderStateMixin {
   // ponytail: one-shot entrance pulse instead of the HTML's infinite halo —
-  // a repeating animation would hang every pumpAndSettle() test that builds
+  // repeating animations would hang every pumpAndSettle() test that builds
   // the shell's IndexedStack. Revert to repeat() if it matters visually.
   late final AnimationController _pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1100),
   );
-  int _selected = 1;
+  late int _selected;
 
   @override
   void initState() {
     super.initState();
+    _selected =
+        widget.days.contains('Today') ? widget.days.indexOf('Today') : 1;
     _pulse.forward(from: 0);
   }
 
@@ -1028,6 +1036,11 @@ class _DriftChartState extends State<_DriftChart>
     super.didUpdateWidget(oldWidget);
     if (!listEquals(oldWidget.values, widget.values)) {
       _pulse.forward(from: 0);
+      if (widget.days.contains('Today')) {
+        _selected = widget.days.indexOf('Today');
+      } else {
+        _selected = 1;
+      }
     }
   }
 
@@ -1059,7 +1072,7 @@ class _DriftChartState extends State<_DriftChart>
   @override
   Widget build(BuildContext context) {
     final n = widget.values.length;
-    final sel = _selected.clamp(0, n - 1).toInt();
+    final sel = _selected.clamp(0, n - 1);
     final label = widget.days[sel];
     final word = widget.words[sel];
     final dayTp = _layout(label, _dayStyle);
@@ -1073,31 +1086,23 @@ class _DriftChartState extends State<_DriftChart>
         final s = w / 348.0;
         final h = 196.0 * s;
         final px =
-            (_ChartPainter.l +
-                (_ChartPainter.r - _ChartPainter.l) *
-                    (n == 1 ? 0 : sel / (n - 1))) *
-            s;
+            (_ChartPainter.l + (_ChartPainter.r - _ChartPainter.l) * (n == 1 ? 0 : sel / (n - 1))) * s;
         final v = widget.values[sel];
-        final py =
-            (_ChartPainter.b -
+        final py = (_ChartPainter.b -
                 ((v - _ChartPainter.dMin) /
-                        (_ChartPainter.dMax - _ChartPainter.dMin)) *
+                    (_ChartPainter.dMax - _ChartPainter.dMin)) *
                     (_ChartPainter.b - _ChartPainter.t)) *
             s;
-        final tipLeft = (px - pillW / 2)
-            .clamp(2.0, math.max(2.0, w - pillW - 2))
-            .toDouble();
-        final tipTop = math.max(0.0, 44.0 + py - pillH - 14);
+        final tipLeft = (px - pillW / 2).clamp(2.0, math.max(2.0, w - pillW - 2));
+        final tipTop = math.max(0.0, 44 + py - pillH - 14);
 
         void selectAt(double dx) {
           final rel = dx / s;
           var best = 0;
           var bestDist = double.infinity;
           for (var i = 0; i < n; i++) {
-            final xi =
-                _ChartPainter.l +
-                (_ChartPainter.r - _ChartPainter.l) *
-                    (n == 1 ? 0 : i / (n - 1));
+            final xi = _ChartPainter.l +
+                (_ChartPainter.r - _ChartPainter.l) * (n == 1 ? 0 : i / (n - 1));
             final d = (xi - rel).abs();
             if (d < bestDist) {
               bestDist = d;
@@ -1141,7 +1146,7 @@ class _DriftChartState extends State<_DriftChart>
                 ),
               ),
               Positioned(
-                left: tipLeft,
+                left: tipLeft.toDouble(),
                 top: tipTop,
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(11, 6, 11, 6),
@@ -1231,17 +1236,15 @@ class _ChartPainter extends CustomPainter {
     return path;
   }
 
-  void _zoneLabel(Canvas canvas, String text, double x, double top) {
+  void _text(
+    Canvas canvas,
+    String text,
+    double x,
+    double top,
+    TextStyle style,
+  ) {
     final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: const TextStyle(
-          fontSize: 8.6,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.77,
-          color: Color(0xFFBCAF9C),
-        ),
-      ),
+      text: TextSpan(text: text, style: style),
       textDirection: TextDirection.ltr,
     )..layout();
     tp.paint(canvas, Offset(x, top));
@@ -1261,14 +1264,21 @@ class _ChartPainter extends CustomPainter {
       final y = zoneYs[i] * s;
       var x = l * s;
       while (x < r * s) {
-        canvas.drawLine(
-          Offset(x, y),
-          Offset(math.min(x + 2 * s, r * s), y),
-          gridPaint,
-        );
+        canvas.drawLine(Offset(x, y), Offset(math.min(x + 2 * s, r * s), y), gridPaint);
         x += 7 * s;
       }
-      _zoneLabel(canvas, zoneWords[i], 4 * s, (zoneYs[i] - 4.6) * s);
+      _text(
+        canvas,
+        zoneWords[i],
+        4 * s,
+        (zoneYs[i] - 4.6) * s,
+        const TextStyle(
+          fontSize: 8.6,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.77,
+          color: Color(0xFFBCAF9C),
+        ),
+      );
     }
 
     final line = _smooth(pts, 0.86);
@@ -1316,8 +1326,8 @@ class _ChartPainter extends CustomPainter {
     canvas.drawCircle(last, 7 * s, Paint()..color = const Color(0x59FF7F50));
     if (pulse < 1) {
       final e = Curves.easeOut.transform(pulse);
-      final fade = (pulse / 0.7).clamp(0.0, 1.0).toDouble();
-      final opacity = 0.5 * (1 - Curves.easeOut.transform(fade));
+      final opacity =
+          0.5 * (1 - Curves.easeOut.transform((pulse / 0.7).clamp(0.0, 1.0)));
       if (opacity > 0.01) {
         canvas.drawCircle(
           last,
@@ -1330,13 +1340,7 @@ class _ChartPainter extends CustomPainter {
     for (var i = 0; i < pts.length; i++) {
       final isLast = i == pts.length - 1;
       final isSel = i == selected;
-      final radius =
-          (isLast
-              ? 5.2
-              : isSel
-              ? 6.4
-              : 3.6) *
-          s;
+      final radius = (isLast ? 5.2 : isSel ? 6.4 : 3.6) * s;
       canvas.drawCircle(pts[i], radius, Paint()..color = Colors.white);
       canvas.drawCircle(
         pts[i],
@@ -1350,18 +1354,17 @@ class _ChartPainter extends CustomPainter {
 
     for (var i = 0; i < pts.length; i++) {
       final isLast = i == pts.length - 1;
-      final tp = TextPainter(
-        text: TextSpan(
-          text: days[i],
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-            color: isLast ? const Color(0xFFE08A32) : const Color(0xFFB0A291),
-          ),
+      _text(
+        canvas,
+        days[i],
+        pts[i].dx - 20 * s,
+        (_lblY - 9) * s,
+        TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: isLast ? const Color(0xFFE08A32) : const Color(0xFFB0A291),
         ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(pts[i].dx - tp.width / 2, (_lblY - 9) * s));
+      );
     }
   }
 

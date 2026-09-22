@@ -6,22 +6,16 @@ import 'package:solace_mobile/features/safety/safety_controller.dart';
 import 'package:solace_mobile/providers/safety/keyword_safety_screener.dart';
 
 void main() {
-  SafetyController safety() => SafetyController(
+  SafetyController createSafety() => SafetyController(
         screener: const KeywordSafetyScreener(),
         repository: InMemorySafetyEventRepository(),
       );
 
   Future<void> pumpCall(WidgetTester tester) async {
-    // Use a mobile-sized surface so dock controls are in-viewport.
-    tester.view.physicalSize = const Size(412, 915);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-
     await tester.pumpWidget(
-      MaterialApp(home: CallPage(safetyController: safety())),
+      MaterialApp(home: CallPage(safetyController: createSafety())),
     );
-    // Pump 2 s so the intro delay passes and conversation timer doesn't linger.
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 1));
   }
 
   testWidgets('renders session chrome and toggles mic state', (tester) async {
@@ -34,13 +28,11 @@ void main() {
     );
     expect(find.text('MIC ON'), findsOneWidget);
 
-    await tester.ensureVisible(find.byIcon(Icons.mic_none_rounded));
-    await tester.tap(find.byIcon(Icons.mic_none_rounded), warnIfMissed: false);
+    await tester.tap(find.byIcon(Icons.mic_none_rounded));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('MUTED'), findsOneWidget);
 
-    await tester.ensureVisible(find.byIcon(Icons.videocam_outlined).last);
-    await tester.tap(find.byIcon(Icons.videocam_outlined).last, warnIfMissed: false);
+    await tester.tap(find.byIcon(Icons.videocam_outlined).last);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('CAMERA ON · YOU ARE VISIBLE'), findsOneWidget);
   });
@@ -48,8 +40,7 @@ void main() {
   testWidgets('ending the session opens the care overlay', (tester) async {
     await pumpCall(tester);
 
-    await tester.ensureVisible(find.byIcon(Icons.call_end_rounded));
-    await tester.tap(find.byIcon(Icons.call_end_rounded), warnIfMissed: false);
+    await tester.tap(find.byIcon(Icons.call_end_rounded));
     await tester.pump(const Duration(milliseconds: 600));
 
     expect(find.text('Take good care'), findsOneWidget);

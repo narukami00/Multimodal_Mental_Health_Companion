@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/home/home_card_priority.dart';
+import '../chat/conversation_history.dart';
 
 class TodayPage extends StatelessWidget {
   const TodayPage({
@@ -8,6 +9,8 @@ class TodayPage extends StatelessWidget {
     this.currentTime,
     this.onStartCheckIn,
     this.onOpenSupport,
+    this.onOpenChat,
+    this.onOpenCall,
     super.key,
   });
 
@@ -15,6 +18,8 @@ class TodayPage extends StatelessWidget {
   final DateTime? currentTime;
   final VoidCallback? onStartCheckIn;
   final VoidCallback? onOpenSupport;
+  final VoidCallback? onOpenChat;
+  final VoidCallback? onOpenCall;
 
   static String greetingForHour(int hour) {
     if (hour < 5) return 'Still awake';
@@ -68,6 +73,8 @@ class TodayPage extends StatelessWidget {
             _buildPrimaryCard(card),
             const SizedBox(height: 14),
             _buildSecondaryCard(),
+            const SizedBox(height: 12),
+            _buildRecentConversationCard(context),
             const SizedBox(height: 24),
             _buildFooter(context),
           ],
@@ -255,7 +262,7 @@ class TodayPage extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(24),
-          onTap: () {},
+          onTap: onOpenChat,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
@@ -304,6 +311,218 @@ class TodayPage extends StatelessWidget {
                   Icons.chevron_right_rounded,
                   size: 22,
                   color: Color(0x807B6A55),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openHistorySheet(BuildContext context) {
+    ConversationHistorySheet.show(
+      context,
+      onSelectThread: (thread) {
+        onOpenChat?.call();
+      },
+      onNewConversation: () {
+        onOpenChat?.call();
+      },
+    );
+  }
+
+  Widget _buildRecentConversationCard(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFDF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0x387A5D3A),
+          width: 1.0,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1278501E),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: onOpenChat,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top row: Sol Avatar icon, Eyebrow, and History Sheet Button
+                Row(
+                  children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFFFE8B5), Color(0xFFFFB534)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.forum_outlined,
+                        color: Color(0xFF5A3B10),
+                        size: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'CONVERSATION WITH SOL',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: Color(0xFF8A6A4E),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () => _openHistorySheet(context),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3.5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0x18FFB534),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0x40FFB534)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.history_rounded,
+                              size: 13,
+                              color: Color(0xFF8A601E),
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'History (4)',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF8A601E),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Conversation excerpt
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7E6),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0x26FFB534)),
+                  ),
+                  child: const Text(
+                    '“Take your time here. You don\'t have to carry it all by yourself. What feels present right now?”',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.45,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF4A3728),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Footer row: Status dot, timestamp, and glowing Resume pill
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFF48BB78),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'Today · 2:15 PM · Active thread',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF8C7C69),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4.5,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFB534), Color(0xFFFF7F50)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x2ECA6A1A),
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Resume',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFFFFDF5),
+                            ),
+                          ),
+                          SizedBox(width: 3),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 12,
+                            color: Color(0xFFFFFDF5),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -23,7 +24,7 @@ class _CaptionLine {
   int shown = 0;
 }
 
-class _CallPageState extends State<CallPage> with SingleTickerProviderStateMixin {
+class _CallPageState extends State<CallPage> {
   static const _ink = Color(0xFF4A3B2A);
   static const _softInk = Color(0xFF6E5D49);
   static const _timerInk = Color(0xFF8E7E6A);
@@ -44,11 +45,6 @@ class _CallPageState extends State<CallPage> with SingleTickerProviderStateMixin
     (true, "Of course. However long you need — I'll keep the light on."),
   ];
 
-  late final AnimationController _breath = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 6400),
-  )..repeat();
-
   Timer? _ticker;
   Completer<void>? _delay;
   var _seconds = 0;
@@ -59,7 +55,10 @@ class _CallPageState extends State<CallPage> with SingleTickerProviderStateMixin
   var _speaker = true;
   var _paused = false;
   var _ended = false;
+  var _ariaSpeaking = false;
   final _lines = <_CaptionLine>[];
+
+  bool get _isSpeaking => !_ended && !_paused && _ariaSpeaking;
 
   @override
   void initState() {
@@ -77,7 +76,6 @@ class _CallPageState extends State<CallPage> with SingleTickerProviderStateMixin
     _generation++;
     _releaseDelay();
     _ticker?.cancel();
-    _breath.dispose();
     super.dispose();
   }
 
@@ -119,6 +117,7 @@ class _CallPageState extends State<CallPage> with SingleTickerProviderStateMixin
 
         final words = text.split(' ');
         setState(() {
+          _ariaSpeaking = aria;
           if (_lines.length >= 2) _lines.removeAt(0);
           _lines.add(_CaptionLine(aria: aria, words: words));
         });
@@ -139,6 +138,9 @@ class _CallPageState extends State<CallPage> with SingleTickerProviderStateMixin
 
         _lineIndex++;
         await _wait(aria ? 1500 : 1150, token);
+        if (mounted && token == _generation) {
+          setState(() => _ariaSpeaking = false);
+        }
         await _wait(500, token);
       }
     } on _Stale {
@@ -212,7 +214,7 @@ class _CallPageState extends State<CallPage> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2E241A),
+      backgroundColor: const Color(0xFFFEFCE8),
       body: ClipRect(
         child: Center(
           child: ConstrainedBox(
@@ -300,16 +302,54 @@ class _CallPageState extends State<CallPage> with SingleTickerProviderStateMixin
             child: const Icon(Icons.chevron_left_rounded, size: 22, color: _ink),
           ),
           const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'Voice reflection',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: _ink,
-                letterSpacing: 0.1,
-              ),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Solace Voice',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _isSpeaking
+                            ? _coral
+                            : (_muted ? _softInk : _amber),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (_isSpeaking ? _coral : _amber).withValues(alpha: 0.4),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      _isSpeaking
+                          ? 'Aria speaking'
+                          : (_muted ? 'Microphone muted' : 'Listening · take your time'),
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: _softInk,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           Container(
@@ -354,8 +394,13 @@ class _CallPageState extends State<CallPage> with SingleTickerProviderStateMixin
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _BreathingOrb(controller: _breath, muted: _muted),
-                const SizedBox(height: 26),
+                _BreathingOrb(
+                  muted: _muted,
+                  isSpeaking: _isSpeaking,
+                ),
+                const SizedBox(height: 16),
+                _AcousticWaveform(isSpeaking: _isSpeaking),
+                const SizedBox(height: 12),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 40),
                   child: Text(
@@ -589,109 +634,306 @@ class _GlassButton extends StatelessWidget {
   }
 }
 
-class _BreathingOrb extends StatelessWidget {
-  const _BreathingOrb({required this.controller, required this.muted});
+class _AcousticWaveform extends StatefulWidget {
+  const _AcousticWaveform({required this.isSpeaking});
 
-  final AnimationController controller;
-  final bool muted;
+  final bool isSpeaking;
+
+  @override
+  State<_AcousticWaveform> createState() => _AcousticWaveformState();
+}
+
+class _AcousticWaveformState extends State<_AcousticWaveform>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _waveCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1150),
+  )..repeat();
+
+  static const _delays = [0.0, 0.14, 0.28, 0.42, 0.56, 0.34, 0.20];
+
+  @override
+  void dispose() {
+    _waveCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    const size = 180.0;
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (_, __) {
-        final t = controller.value;
-        final breath = 1 + 0.055 * math.sin(math.pi * t);
-        return SizedBox(
-          width: size,
-          height: size,
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: -47,
-                right: -47,
-                top: -47,
-                bottom: -47,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        _CallPageState._amber.withValues(alpha: muted ? 0.22 : 0.42),
-                        _CallPageState._coral.withValues(alpha: muted ? 0.10 : 0.20),
-                        _CallPageState._coral.withValues(alpha: 0),
-                      ],
-                      stops: const [0, 0.38, 0.7],
-                    ),
-                  ),
-                ),
-              ),
-              for (var i = 0; i < 3; i++) _Ring(controller: controller, index: i),
-              Transform.scale(
-                scale: breath,
-                child: Container(
-                  width: size * 0.74,
-                  height: size * 0.74,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const RadialGradient(
-                      center: Alignment(-0.25, -0.3),
-                      colors: [
-                        Color(0xFFFFE3A6),
-                        Color(0xFFFFB534),
-                        Color(0xFFFF9A5C),
-                        Color(0xFFFF7F50),
-                      ],
-                      stops: [0, 0.4, 0.72, 1],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFE2963C).withValues(alpha: 0.34),
-                        blurRadius: 30,
-                        offset: const Offset(0, 16),
-                      ),
-                    ],
-                  ),
-                  child: DecoratedBox(
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeInOut,
+      opacity: widget.isSpeaking ? 1.0 : 0.0,
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        offset: widget.isSpeaking ? Offset.zero : const Offset(0, -0.25),
+        child: SizedBox(
+          height: 22,
+          child: AnimatedBuilder(
+            animation: _waveCtrl,
+            builder: (_, __) {
+              final t = _waveCtrl.value * 2 * math.pi;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(7, (i) {
+                  final delay = _delays[i] * 2 * math.pi;
+                  final h = 5.0 + 15.0 * (0.5 + 0.5 * math.sin(t + delay));
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                    width: 3.5,
+                    height: h,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        center: const Alignment(-0.2, -0.3),
+                      borderRadius: BorderRadius.circular(2),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                         colors: [
-                          Colors.white.withValues(alpha: 0.9),
-                          Colors.white.withValues(alpha: 0),
+                          _CallPageState._amber,
+                          _CallPageState._coral,
                         ],
-                        stops: const [0, 0.6],
                       ),
                     ),
-                  ),
-                ),
-              ),
-            ],
+                  );
+                }),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
-class _Ring extends StatelessWidget {
-  const _Ring({required this.controller, required this.index});
+class _FluidRipple {
+  _FluidRipple({
+    required this.angle,
+    required this.maxAmp,
+  });
 
-  final AnimationController controller;
-  final int index;
+  final double angle;
+  final double maxAmp;
+  double age = 0.0;
+}
+
+class _BreathingOrb extends StatefulWidget {
+  const _BreathingOrb({
+    required this.muted,
+    required this.isSpeaking,
+  });
+
+  final bool muted;
+  final bool isSpeaking;
+
+  @override
+  State<_BreathingOrb> createState() => _BreathingOrbState();
+}
+
+class _BreathingOrbState extends State<_BreathingOrb>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  Duration? _lastElapsed;
+
+  // Continuous monotonic time (seconds) — NEVER wraps, guarantees 0 discontinuities or snapping
+  double _time = 0.0;
+
+  // Smooth continuous factors (exponential smoothing prevents abrupt pops on speaking state change)
+  double _speechFactor = 0.0;
+  double _muteFactor = 0.0;
+
+  // Interactive touch & elastic gel physics
+  Offset _dragOffset = Offset.zero;
+  Offset _dragVelocity = Offset.zero;
+  bool _isDragging = false;
+  double _touchSquish = 1.0;
+  final List<_FluidRipple> _ripples = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker(_onTick)..start();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  void _onTick(Duration elapsed) {
+    if (!mounted) return;
+    if (_lastElapsed != null) {
+      final dt = ((elapsed - _lastElapsed!).inMicroseconds / 1000000.0).clamp(0.001, 0.05);
+      _updatePhysics(dt);
+    }
+    _lastElapsed = elapsed;
+    setState(() {});
+  }
+
+  void _updatePhysics(double dt) {
+    // 1. Advance continuous time: slightly faster harmonic flux when speaking
+    final timeSpeed = 1.0 + _speechFactor * 0.35 - _muteFactor * 0.4;
+    _time += dt * timeSpeed;
+
+    // 2. Smooth speech factor (exponential approach over ~260ms)
+    final targetSpeech = widget.isSpeaking ? 1.0 : 0.0;
+    _speechFactor += (targetSpeech - _speechFactor) * (1.0 - math.exp(-7.0 * dt));
+
+    // 3. Smooth mute factor
+    final targetMute = widget.muted ? 1.0 : 0.0;
+    _muteFactor += (targetMute - _muteFactor) * (1.0 - math.exp(-6.0 * dt));
+
+    // 4. Elastic spring rebound for drag offset
+    if (!_isDragging && _dragOffset != Offset.zero) {
+      const stiffness = 180.0;
+      const damping = 16.0;
+      final springForce = -_dragOffset * stiffness;
+      final dampingForce = -_dragVelocity * damping;
+      final accel = springForce + dampingForce;
+      _dragVelocity += accel * dt;
+      _dragOffset += _dragVelocity * dt;
+      if (_dragOffset.distance < 0.25 && _dragVelocity.distance < 0.25) {
+        _dragOffset = Offset.zero;
+        _dragVelocity = Offset.zero;
+      }
+    }
+
+    // 5. Elastic touch squish rebound
+    if (!_isDragging && _touchSquish < 1.0) {
+      _touchSquish += (1.0 - _touchSquish) * (1.0 - math.exp(-14.0 * dt));
+    }
+
+    // 6. Propagate and decay ripples
+    for (var i = _ripples.length - 1; i >= 0; i--) {
+      _ripples[i].age += dt;
+      if (_ripples[i].age > 1.2) {
+        _ripples.removeAt(i);
+      }
+    }
+  }
+
+  void _triggerRipple(Offset localPos, {required bool isTap}) {
+    const size = 220.0;
+    const center = Offset(size / 2, size / 2);
+    final delta = localPos - center;
+    final angle = math.atan2(delta.dy, delta.dx);
+    if (_ripples.length < 6) {
+      _ripples.add(
+        _FluidRipple(
+          angle: angle,
+          maxAmp: isTap ? 0.085 : 0.045,
+        ),
+      );
+    }
+    if (isTap) {
+      _touchSquish = 0.94;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    const base = 158.0;
-    final start = index / 3;
-    final curved = Interval(start, math.min(start + 0.55, 1.0), curve: Curves.easeOut)
-        .transform(controller.value);
-    final scale = 0.82 + 0.44 * curved;
-    final opacity = (math.sin(math.pi * curved) * 0.4).clamp(0.0, 1.0).toDouble();
+    const size = 220.0;
+    const center = Offset(size / 2, size / 2);
+
+    // Continuous breath modulation (never wraps abruptly)
+    final breathRate = 1.1 + _speechFactor * 0.5;
+    final breathAmp = 0.040 + _speechFactor * 0.035 - _muteFactor * 0.020;
+    final breathScale = (1.0 + breathAmp * math.sin(_time * breathRate)) * _touchSquish;
+
+    return GestureDetector(
+      onPanStart: (details) {
+        _isDragging = true;
+        _touchSquish = 0.96;
+        _triggerRipple(details.localPosition, isTap: false);
+      },
+      onPanUpdate: (details) {
+        final delta = details.localPosition - center;
+        const maxDist = 45.0;
+        final dist = delta.distance;
+        if (dist > maxDist) {
+          _dragOffset = delta / dist * maxDist;
+        } else {
+          _dragOffset = delta;
+        }
+        _dragVelocity = Offset.zero;
+      },
+      onPanEnd: (details) {
+        _isDragging = false;
+        // Inject spring impulse from fling velocity
+        _dragVelocity = details.velocity.pixelsPerSecond * 0.35;
+        _triggerRipple(center + _dragOffset, isTap: true);
+      },
+      onPanCancel: () {
+        _isDragging = false;
+      },
+      onTapDown: (details) {
+        _triggerRipple(details.localPosition, isTap: true);
+      },
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            // Smooth continuous radiating harmonic rings
+            for (var i = 0; i < 3; i++)
+              _ContinuousRing(
+                time: _time,
+                index: i,
+                speechFactor: _speechFactor,
+                muteFactor: _muteFactor,
+              ),
+            Transform.scale(
+              scale: breathScale,
+              child: CustomPaint(
+                size: const Size(size, size),
+                painter: _LivingFluidOrbPainter(
+                  time: _time,
+                  speechFactor: _speechFactor,
+                  muteFactor: _muteFactor,
+                  dragOffset: _dragOffset,
+                  ripples: List.unmodifiable(_ripples),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContinuousRing extends StatelessWidget {
+  const _ContinuousRing({
+    required this.time,
+    required this.index,
+    required this.speechFactor,
+    required this.muteFactor,
+  });
+
+  final double time;
+  final int index;
+  final double speechFactor;
+  final double muteFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    const base = 170.0;
+    // Ring phase cycles smoothly [0.0 -> 1.0] with offset per ring
+    final speed = 0.28 + speechFactor * 0.12;
+    final phase = (time * speed + index * (1.0 / 3.0)) % 1.0;
+
+    // Radius expands from 0.82 to 1.70
+    final scale = 0.82 + (0.88 + speechFactor * 0.25) * phase;
+
+    // Opacity fades in from 0, peaks at phase 0.35, and cleanly fades to 0 at phase 1.0
+    // Because sin(pi * phase) is 0 at phase=0 and phase=1, the loop is 100% SEAMLESS and invisible!
+    final window = math.sin(math.pi * phase);
+    final maxOpacity = (0.42 + speechFactor * 0.30) * (1.0 - muteFactor * 0.85);
+    final opacity = (window * maxOpacity).clamp(0.0, 1.0);
+
     return Transform.scale(
       scale: scale,
       child: Opacity(
@@ -703,10 +945,11 @@ class _Ring extends StatelessWidget {
             shape: BoxShape.circle,
             border: Border.all(
               color: Color.lerp(
-                const Color(0x52FFB534),
-                const Color(0x42FF7F50),
-                controller.value,
+                const Color(0x66FFB534),
+                const Color(0x44FF7F50),
+                phase,
               )!,
+              width: 1.4 + speechFactor * 0.8,
             ),
           ),
         ),
@@ -714,6 +957,286 @@ class _Ring extends StatelessWidget {
     );
   }
 }
+
+class _LivingFluidOrbPainter extends CustomPainter {
+  _LivingFluidOrbPainter({
+    required this.time,
+    required this.speechFactor,
+    required this.muteFactor,
+    required this.dragOffset,
+    required this.ripples,
+  });
+
+  final double time;
+  final double speechFactor;
+  final double muteFactor;
+  final Offset dragOffset;
+  final List<_FluidRipple> ripples;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final bounds = Offset.zero & size;
+    final baseRadius = size.width * 0.38;
+
+    // Closed midpoint quadratic B-spline guaranteeing C^1 smooth curvature with ZERO seam kink
+    Path buildClosedFluidSpline(List<Offset> points) {
+      final path = Path();
+      final count = points.length;
+      if (count < 3) return path;
+
+      final midPoints = List<Offset>.generate(count, (i) {
+        final p0 = points[i];
+        final p1 = points[(i + 1) % count];
+        return Offset((p0.dx + p1.dx) / 2, (p0.dy + p1.dy) / 2);
+      });
+
+      path.moveTo(midPoints[count - 1].dx, midPoints[count - 1].dy);
+      for (var i = 0; i < count; i++) {
+        path.quadraticBezierTo(
+          points[i].dx,
+          points[i].dy,
+          midPoints[i].dx,
+          midPoints[i].dy,
+        );
+      }
+      path.close();
+      return path;
+    }
+
+    Path generateFluidBlob({
+      required double radius,
+      required double phase1,
+      required double phase2,
+      required double phase3,
+      required double phase4,
+      required double amp1,
+      required double amp2,
+      required double amp3,
+      required double amp4,
+      double rotation = 0.0,
+      Offset stretchOffset = Offset.zero,
+    }) {
+      const numPoints = 64;
+      final points = <Offset>[];
+
+      final stretchDist = stretchOffset.distance;
+      final stretchAngle =
+          stretchDist > 0.01 ? math.atan2(stretchOffset.dy, stretchOffset.dx) : 0.0;
+      final stretchNorm = (stretchDist / 45.0).clamp(0.0, 1.0);
+
+      for (var i = 0; i < numPoints; i++) {
+        final theta = (i / numPoints) * 2 * math.pi;
+
+        // 1. Multi-harmonic organic fluid displacement (coprime harmonics 2θ, 3θ, 5θ, 7θ)
+        var harmR = 1.0 +
+            amp1 * math.sin(2 * theta + phase1) +
+            amp2 * math.cos(3 * theta + phase2) +
+            amp3 * math.sin(5 * theta + phase3) +
+            amp4 * math.cos(7 * theta + phase4);
+
+        // 2. Interactive touch ripples traveling along perimeter
+        for (final ripple in ripples) {
+          final diffAngle = theta - ripple.angle;
+          final decay = math.exp(-ripple.age * 3.8);
+          final wave = math.cos(5 * diffAngle - ripple.age * 18.0);
+          harmR += ripple.maxAmp * decay * wave;
+        }
+
+        // 3. Elastic directional stretch / teardrop bulge toward finger
+        if (stretchDist > 0.01) {
+          final cosDiff = math.cos(theta - stretchAngle);
+          final sinDiff = math.sin(theta - stretchAngle);
+          // Volume-preserving teardrop elongation: extends along drag, pinches perpendicularly
+          final stretchEffect = stretchNorm * 0.28 * (cosDiff - 0.45 * sinDiff * sinDiff);
+          harmR += stretchEffect;
+        }
+
+        final r = radius * harmR;
+        final rotTheta = theta + rotation;
+        // Center gently shifts toward drag
+        final x = center.dx + r * math.cos(rotTheta) + stretchOffset.dx * 0.32;
+        final y = center.dy + r * math.sin(rotTheta) + stretchOffset.dy * 0.32;
+        points.add(Offset(x, y));
+      }
+
+      return buildClosedFluidSpline(points);
+    }
+
+    // Continuous smoothly-lerped amplitudes
+    // No instant step function — everything is a smooth function of speechFactor & muteFactor
+    double lerp3(double calm, double speaking, double mutedVal) {
+      final active = calm + (speaking - calm) * speechFactor;
+      return active + (mutedVal - active) * muteFactor;
+    }
+
+    final amp1 = lerp3(0.068, 0.138, 0.028);
+    final amp2 = lerp3(0.044, 0.088, 0.018);
+    final amp3 = lerp3(0.024, 0.048, 0.010);
+    final amp4 = lerp3(0.012, 0.024, 0.005);
+
+    // 1. Outer radiant chromatic aura glow
+    final auraAlpha1 = lerp3(0.40, 0.58, 0.18);
+    final auraAlpha2 = lerp3(0.20, 0.34, 0.07);
+    final auraPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          _CallPageState._amber.withValues(alpha: auraAlpha1),
+          _CallPageState._coral.withValues(alpha: auraAlpha2),
+          _CallPageState._coral.withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 0.46, 1.0],
+      ).createShader(
+        Rect.fromCircle(
+          center: center + dragOffset * 0.2,
+          radius: baseRadius * 1.58,
+        ),
+      );
+    canvas.drawCircle(center + dragOffset * 0.2, baseRadius * 1.58, auraPaint);
+
+    // Save layer for optical compositing
+    canvas.saveLayer(bounds, Paint());
+
+    // 2. Layer 1: Golden Amber Primary Fluid Blob
+    final path1 = generateFluidBlob(
+      radius: baseRadius *
+          (1.0 + lerp3(0.04, 0.07, 0.02) * math.sin(time * 1.4)),
+      phase1: time * 0.95,
+      phase2: time * 1.54 + 0.8,
+      phase3: time * 2.31 + 1.6,
+      phase4: time * 3.08 + 2.4,
+      amp1: amp1,
+      amp2: amp2,
+      amp3: amp3,
+      amp4: amp4,
+      rotation: time * 0.14,
+      stretchOffset: dragOffset,
+    );
+
+    // Deep warm volumetric shadow
+    canvas.drawShadow(
+      path1,
+      const Color(0xFFD68A20).withValues(alpha: lerp3(0.60, 0.72, 0.30)),
+      28,
+      true,
+    );
+
+    final paint1 = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFFFFE8B5),
+          Color(0xFFFFB534),
+          Color(0xFFFF954E),
+          Color(0xFFFF7F50),
+        ],
+        stops: [0.0, 0.36, 0.70, 1.0],
+      ).createShader(
+        Rect.fromCircle(
+          center: center + dragOffset * 0.3,
+          radius: baseRadius,
+        ),
+      );
+    canvas.drawPath(path1, paint1);
+
+    // 3. Layer 2: Coral Harmonic Counter-Fluid Blob with BlendMode.multiply
+    final path2 = generateFluidBlob(
+      radius: baseRadius *
+          (0.95 + lerp3(0.025, 0.042, 0.015) * math.cos(time * 1.25)),
+      phase1: -time * 1.15 + 1.2,
+      phase2: time * 1.76 + 2.4,
+      phase3: -time * 2.48 + 0.5,
+      phase4: time * 3.25 + 1.8,
+      amp1: lerp3(0.058, 0.118, 0.024),
+      amp2: lerp3(0.038, 0.078, 0.016),
+      amp3: lerp3(0.020, 0.040, 0.008),
+      amp4: lerp3(0.010, 0.020, 0.004),
+      rotation: -time * 0.11,
+      stretchOffset: dragOffset * 0.85,
+    );
+
+    final paint2 = Paint()
+      ..blendMode = BlendMode.multiply
+      ..shader = RadialGradient(
+        center: const Alignment(0.25, 0.28),
+        radius: 0.95,
+        colors: [
+          const Color(0xFFFF8E6B).withValues(alpha: lerp3(0.80, 0.90, 0.45)),
+          const Color(0xFFFF7F50).withValues(alpha: lerp3(0.88, 0.96, 0.55)),
+          const Color(0xFFFFB534).withValues(alpha: 0.35),
+        ],
+        stops: const [0.0, 0.60, 1.0],
+      ).createShader(
+        Rect.fromCircle(
+          center: center + dragOffset * 0.25,
+          radius: baseRadius,
+        ),
+      );
+    canvas.drawPath(path2, paint2);
+
+    // 4. Layer 3: Organic Upper-Left Specular Sheen with BlendMode.screen
+    final sheenPath = generateFluidBlob(
+      radius: baseRadius * 0.54,
+      phase1: time * 0.82,
+      phase2: time * 1.08 + 1.0,
+      phase3: time * 0.58 + 2.0,
+      phase4: time * 1.36 + 0.5,
+      amp1: 0.042,
+      amp2: 0.032,
+      amp3: 0.022,
+      amp4: 0.014,
+      stretchOffset: dragOffset * 0.45,
+    );
+
+    final sheenCenter = Offset(
+      center.dx - baseRadius * 0.22 + dragOffset.dx * 0.15,
+      center.dy - baseRadius * 0.26 + dragOffset.dy * 0.15,
+    );
+    final sheenPaint = Paint()
+      ..blendMode = BlendMode.screen
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white.withValues(alpha: lerp3(0.90, 0.98, 0.55)),
+          Colors.white.withValues(alpha: 0.35),
+          Colors.white.withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 0.40, 1.0],
+      ).createShader(
+        Rect.fromCircle(center: sheenCenter, radius: baseRadius * 0.55),
+      );
+
+    canvas.save();
+    canvas.translate(-baseRadius * 0.10, -baseRadius * 0.12);
+    canvas.drawPath(sheenPath, sheenPaint);
+    canvas.restore();
+
+    // 5. Layer 4: Luminous Inner Pulsing Energy Core with BlendMode.plus
+    final corePulse = 1.0 +
+        lerp3(0.09, 0.18, 0.04) * math.sin(time * 1.7);
+    final coreRadius = baseRadius * 0.28 * corePulse;
+    final coreCenter = center + dragOffset * 0.25;
+    final corePaint = Paint()
+      ..blendMode = BlendMode.plus
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white.withValues(alpha: lerp3(0.95, 1.0, 0.65)),
+          const Color(0xFFFFF2D4).withValues(alpha: 0.65),
+          const Color(0xFFFFB534).withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 0.45, 1.0],
+      ).createShader(Rect.fromCircle(center: coreCenter, radius: coreRadius));
+    canvas.drawCircle(coreCenter, coreRadius, corePaint);
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _LivingFluidOrbPainter oldDelegate) {
+    return true; // Continuously animated at 60fps
+  }
+}
+
 
 class _CaptionText extends StatelessWidget {
   const _CaptionText({required this.line, required this.past});

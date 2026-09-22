@@ -49,7 +49,7 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
 
     expect(find.text('Last 30 days · 6 check-ins'), findsOneWidget);
-    expect(find.text('Steady · Two walks'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
   });
 
   testWidgets('noticing expands to reveal tip and link chip', (tester) async {

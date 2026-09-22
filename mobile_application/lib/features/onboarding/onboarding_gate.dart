@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../core/models/safety_assessment.dart';
 import '../../data/contracts/onboarding_repository.dart';
 import '../app_shell/app_shell.dart';
 import '../call/call_page.dart';
-import '../checkin/check_in_mode_page.dart';
 import '../chat/chat_page.dart';
+import '../chat/conversation_history.dart';
+import '../checkin/check_in_mode_page.dart';
 import '../checkin/text_check_in_page.dart';
 import '../journal/session_detail_page.dart';
+import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
+import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
 import 'onboarding_flow.dart';
@@ -57,8 +61,33 @@ class _OnboardingGateState extends State<OnboardingGate> {
       if (route == 'chat') {
         return ChatPage(safetyController: widget.safetyController);
       }
+      if (route == 'history') {
+        return Scaffold(
+          backgroundColor: const Color(0xFFFEFCE8),
+          body: ConversationHistorySheet(
+            onSelectThread: (_) {},
+            onNewConversation: () {},
+          ),
+        );
+      }
       if (route == 'call') {
         return CallPage(safetyController: widget.safetyController);
+      }
+      if (route == 'support' || route == 'emergency') {
+        return SupportResourcesPage(
+          safetyController: widget.safetyController,
+          assessment: const SafetyAssessment(
+            level: SafetyLevel.urgentSupport,
+            matchedSignals: ['manual_request'],
+          ),
+          regionCode: 'GLOBAL',
+        );
+      }
+      if (route == 'baseline') {
+        return BaselineQuizPage(
+          profileController: widget.profileController,
+          safetyController: widget.safetyController,
+        );
       }
       if (route == 'checkin') {
         return CheckInModePage(
