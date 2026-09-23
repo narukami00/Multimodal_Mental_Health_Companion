@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../domain/home/home_card_priority.dart';
 import '../chat/conversation_history.dart';
+import 'living_atmosphere_card.dart';
 
 class TodayPage extends StatelessWidget {
   const TodayPage({
@@ -73,8 +76,10 @@ class TodayPage extends StatelessWidget {
             _buildPrimaryCard(card),
             const SizedBox(height: 14),
             _buildSecondaryCard(),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             _buildRecentConversationCard(context),
+            const SizedBox(height: 20),
+            const LivingAtmosphereCard(),
             const SizedBox(height: 24),
             _buildFooter(context),
           ],
@@ -105,9 +110,7 @@ class TodayPage extends StatelessWidget {
         child: Stack(
           children: [
             const Positioned.fill(
-              child: CustomPaint(
-                painter: _CardPetalPainter(),
-              ),
+              child: _AnimatedSpinningSun(),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
@@ -238,79 +241,163 @@ class TodayPage extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [
-            Color(0xFFFFFEFA),
-            Color(0xFFFFFBEF),
+            Color(0xFFFFFDF8),
+            Color(0xFFFFF5E9),
           ],
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: const Color(0x3DFFB534),
-          width: 1.0,
+          color: const Color(0x52FFB534),
+          width: 1.2,
         ),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x1478501E),
-            blurRadius: 16,
-            offset: Offset(0, 4),
+            color: Color(0x14784614),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(28),
           onTap: onOpenChat,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0x26FF7F50),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    Icons.forum_rounded,
-                    color: Color(0xFFFF7F50),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Talk it through',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF4A3728),
-                          letterSpacing: -0.2,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFFF9E7A),
+                            Color(0xFFFF6F43),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x40E86034),
+                            blurRadius: 12,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.forum_rounded,
+                          color: Colors.white,
+                          size: 24,
                         ),
                       ),
-                      SizedBox(height: 2),
-                      Text(
-                        'A quiet space with Sol · voice or text',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF7B6A55),
-                          height: 1.3,
-                        ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFE86034),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'SOL AI COMPANION',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.2,
+                                  color: Color(0xFFD65D20),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          const Text(
+                            'Talk it through',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF3E2818),
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0xFFFF9E7A),
+                            Color(0xFFFF6F43),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x38E86034),
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Open chat',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 22,
-                  color: Color(0x807B6A55),
+                const SizedBox(height: 12),
+                const Text(
+                  'A quiet, private space to speak or write whatever is on your mind right now.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF7B6A55),
+                  ),
                 ),
               ],
             ),
@@ -596,8 +683,51 @@ class TodayPage extends StatelessWidget {
   }
 }
 
+class _AnimatedSpinningSun extends StatefulWidget {
+  const _AnimatedSpinningSun();
+
+  @override
+  State<_AnimatedSpinningSun> createState() => _AnimatedSpinningSunState();
+}
+
+class _AnimatedSpinningSunState extends State<_AnimatedSpinningSun>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 28),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return CustomPaint(
+          painter: _CardPetalPainter(
+            rotationAngle: _controller.value * 2 * math.pi,
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _CardPetalPainter extends CustomPainter {
-  const _CardPetalPainter();
+  const _CardPetalPainter({this.rotationAngle = 0.0});
+
+  final double rotationAngle;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -616,7 +746,7 @@ class _CardPetalPainter extends CustomPainter {
     canvas.drawCircle(center, 26, paintFill);
 
     for (var i = 0; i < 8; i++) {
-      final angle = (i * 45) * 3.141592653589793 / 180;
+      final angle = (i * 45) * 3.141592653589793 / 180 + rotationAngle;
       canvas.save();
       canvas.translate(center.dx, center.dy);
       canvas.rotate(angle);
@@ -631,7 +761,8 @@ class _CardPetalPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _CardPetalPainter oldDelegate) =>
+      oldDelegate.rotationAngle != rotationAngle;
 }
 
 class _PrimaryCardContent {
