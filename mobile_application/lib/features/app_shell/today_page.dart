@@ -90,9 +90,8 @@ class TodayPage extends StatelessWidget {
             const SizedBox(height: 18),
             _buildPrimaryCard(card),
             const SizedBox(height: 14),
-            _buildSecondaryCard(),
-            _buildRecentConversationCard(context),
-            const SizedBox(height: 20),
+            _buildSolCompanionHub(context),
+            const SizedBox(height: 18),
             const LivingAtmosphereCard(),
             const SizedBox(height: 24),
             _buildFooter(context),
@@ -260,97 +259,6 @@ class TodayPage extends StatelessWidget {
     }
   }
 
-  Widget _buildSecondaryCard() {
-    final now = currentTime ?? DateTime.now();
-    final timeStr =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xF5FFFDF8),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A784614),
-            blurRadius: 18,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(22),
-            onTap: _openChatFromPrompt,
-            child: Stack(
-              children: [
-                const Positioned(
-                  left: -40,
-                  top: -50,
-                  width: 180,
-                  height: 180,
-                  child: _BreathingGlow(),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 13),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          const _Eyebrow('SOL · AI COMPANION'),
-                          const Spacer(),
-                          const _LivingAudioWaveform(),
-                          const SizedBox(width: 8),
-                          Text(
-                            timeStr,
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFA5937C),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 7),
-                      const Text(
-                        'Talk it through',
-                        style: TextStyle(
-                          fontSize: 17,
-                          height: 1.15,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
-                          color: Color(0xFF3E2818),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'A quiet, private space to speak or write whatever is on your mind right now.',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          height: 1.35,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF7B6A55),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      _TextCta('Open chat', onTap: _openChatFromPrompt),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   void _openHistorySheet(BuildContext context) {
     ConversationHistorySheet.show(
       context,
@@ -370,168 +278,239 @@ class TodayPage extends StatelessWidget {
     );
   }
 
-  Widget _buildRecentConversationCard(BuildContext context) {
-    if (chatController == null) return const SizedBox.shrink();
-    return AnimatedBuilder(
-      animation: chatController!,
-      builder: (context, _) {
-        final convs = chatController!.conversations;
-        if (convs.isEmpty) {
-          return const SizedBox.shrink();
-        }
+  Widget _buildSolCompanionHub(BuildContext context) {
+    if (chatController != null) {
+      return AnimatedBuilder(
+        animation: chatController!,
+        builder: (context, _) => _buildCompanionCard(context),
+      );
+    }
+    return _buildCompanionCard(context);
+  }
 
-        final count = convs.length;
-        final activeConv = chatController!.activeConversation != null &&
-                chatController!.activeConversation!.hasUserMessage
-            ? chatController!.activeConversation!
-            : convs.first;
-        final excerpt = activeConv.preview;
-        final meta = '${activeConv.dateStr} · Recent';
+  Widget _buildCompanionCard(BuildContext context) {
+    final now = currentTime ?? DateTime.now();
+    final timeStr =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final convs = chatController?.conversations ?? const [];
+    final hasHistory = convs.isNotEmpty;
+    final activeConv = chatController?.activeConversation != null &&
+            chatController!.activeConversation!.hasUserMessage
+        ? chatController!.activeConversation!
+        : (hasHistory ? convs.first : null);
+    final excerpt = activeConv?.preview;
+    final meta = activeConv != null ? '${activeConv.dateStr} · Recent' : null;
 
-        return Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xF5FFFDF8),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x0A784614),
-                  blurRadius: 16,
-                  offset: Offset(0, 4),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xF5FFFDF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0x38FFB534),
+          width: 1.0,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C784614),
+            blurRadius: 18,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: () {
+              if (activeConv != null) {
+                chatController?.switchConversation(activeConv.id);
+                onOpenChat?.call();
+              } else {
+                _openChatFromPrompt();
+              }
+            },
+            child: Stack(
+              children: [
+                const Positioned(
+                  left: -30,
+                  top: -40,
+                  width: 140,
+                  height: 140,
+                  child: _BreathingGlow(),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header Row: Eyebrow + dynamic trailing info
+                      Row(
+                        children: [
+                          const _Eyebrow('SOL · COMPANION'),
+                          const Spacer(),
+                          if (hasHistory)
+                            InkWell(
+                              onTap: () => _openHistorySheet(context),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.history_rounded,
+                                      size: 13,
+                                      color: Color(0xFFB08A5E),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${convs.length} ${convs.length == 1 ? 'reflection' : 'reflections'}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.2,
+                                        color: Color(0xFFB08A5E),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const _LivingAudioWaveform(),
+                                const SizedBox(width: 6),
+                                Text(
+                                  timeStr,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFA5937C),
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      // Core Interactive Row: Living Orb + Content + Primary Action
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const _LivingCompanionOrb(),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: hasHistory && excerpt != null
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        'Talk it through',
+                                        style: TextStyle(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.2,
+                                          color: Color(0xFF3E2818),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '“$excerpt”',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          fontStyle: FontStyle.italic,
+                                          color: Color(0xFF6B533E),
+                                        ),
+                                      ),
+                                      if (meta != null) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          meta,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFFA5937C),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  )
+                                : const Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Talk it through',
+                                        style: TextStyle(
+                                          fontSize: 15.5,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.2,
+                                          color: Color(0xFF3E2818),
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'A quiet, private space to speak or write whatever is on your mind right now.',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          height: 1.3,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF7B6A55),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Tactical Action Button
+                          if (hasHistory)
+                            _SolPillButton(
+                              label: 'Resume',
+                              icon: Icons.arrow_forward_rounded,
+                              isPrimary: true,
+                              onTap: () {
+                                if (activeConv != null) {
+                                  chatController
+                                      ?.switchConversation(activeConv.id);
+                                }
+                                onOpenChat?.call();
+                              },
+                            )
+                          else
+                            _SolPillButton(
+                              label: 'Open chat',
+                              icon: Icons.arrow_forward_rounded,
+                              isPrimary: true,
+                              onTap: _openChatFromPrompt,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: () {
-                    chatController?.switchConversation(activeConv.id);
-                    onOpenChat?.call();
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            const Expanded(
-                              child: _Eyebrow('CONVERSATION WITH SOL'),
-                            ),
-                            const SizedBox(width: 8),
-                            InkWell(
-                              onTap: () => _openHistorySheet(context),
-                              borderRadius: BorderRadius.circular(6),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 2,
-                                ),
-                                child: Text(
-                                  count > 0 ? 'History · $count' : 'History',
-                                  style: const TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.3,
-                                    color: Color(0xFFB08A5E),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(
-                              width: 2,
-                              height: 32,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.all(Radius.circular(1)),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Color(0x80E86034),
-                                      Color(0x18E86034),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                '“$excerpt”',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 13.5,
-                                  height: 1.4,
-                                  fontWeight: FontWeight.w600,
-                                  fontStyle: FontStyle.italic,
-                                  color: Color(0xFF4A3728),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Container(
-                              width: 4.5,
-                              height: 4.5,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE86034).withValues(alpha: 0.75),
-                                shape: BoxShape.circle,
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Color(0x60E86034),
-                                    blurRadius: 4,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                meta,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.2,
-                                  color: Color(0xFFA5937C),
-                                ),
-                              ),
-                            ),
-                            _TextCta(
-                              'Resume',
-                              onTap: () {
-                                chatController?.switchConversation(activeConv.id);
-                                onOpenChat?.call();
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -1008,5 +987,178 @@ class _PrimaryCardContent {
           icon: Icons.arrow_forward_rounded,
         ),
     };
+  }
+}
+
+class _LivingCompanionOrb extends StatefulWidget {
+  const _LivingCompanionOrb();
+
+  @override
+  State<_LivingCompanionOrb> createState() => _LivingCompanionOrbState();
+}
+
+class _LivingCompanionOrbState extends State<_LivingCompanionOrb>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3800),
+  );
+  late final Animation<double> _pulse = CurvedAnimation(
+    parent: _ctrl,
+    curve: Curves.easeInOut,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_isTestEnvironment) {
+      _ctrl.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (_, __) {
+        final t = _pulse.value;
+        return Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            // Ambient warm breathing glow
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFFB534)
+                        .withValues(alpha: 0.25 + 0.20 * t),
+                    blurRadius: 10 + 6 * t,
+                    spreadRadius: 1 + 1.5 * t,
+                  ),
+                ],
+              ),
+            ),
+            // Luminous golden sun-drop orb with gentle breathing scale
+            Transform.scale(
+              scale: 1.0 + 0.05 * t,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const RadialGradient(
+                    center: Alignment(-0.35, -0.4),
+                    radius: 0.95,
+                    colors: [
+                      Color(0xFFFFE8B5),
+                      Color(0xFFFFB534),
+                      Color(0xFFFF7F50),
+                    ],
+                    stops: [0.0, 0.52, 1.0],
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.75),
+                    width: 1.2,
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.bubble_chart_rounded,
+                    size: 16,
+                    color: Colors.white.withValues(alpha: 0.92),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SolPillButton extends StatefulWidget {
+  const _SolPillButton({
+    required this.label,
+    required this.icon,
+    this.isPrimary = true,
+    this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool isPrimary;
+  final VoidCallback? onTap;
+
+  @override
+  State<_SolPillButton> createState() => _SolPillButtonState();
+}
+
+class _SolPillButtonState extends State<_SolPillButton> {
+  var _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _hovered = true),
+      onTapUp: (_) => setState(() => _hovered = false),
+      onTapCancel: () => setState(() => _hovered = false),
+      child: AnimatedScale(
+        scale: _hovered ? 0.95 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7.5),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFFFB534),
+                Color(0xFFFF954E),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x38FF8A3D),
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.label,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: 0.1,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                widget.icon,
+                size: 13,
+                color: Colors.white,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
