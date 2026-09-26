@@ -35,6 +35,7 @@ class TtsPlaybackService {
 
   StreamSubscription<Map<String, dynamic>>? _ttsStartSub;
   StreamSubscription<Map<String, dynamic>>? _ttsEndSub;
+  StreamSubscription<Map<String, dynamic>>? _ttsSegmentSub;
   StreamSubscription<Uint8List>? _binaryAudioSub;
   StreamSubscription<void>? _playerCompleteSub;
 
@@ -43,7 +44,10 @@ class TtsPlaybackService {
   int _activeSampleRate = 24000;
   String? _activeVoiceId;
 
-  final BytesBuilder _pcmBuffer = BytesBuilder(copy: false);
+  final BytesBuilder _currentSegmentPcm = BytesBuilder(copy: false);
+  final BytesBuilder _fullUtterancePcm = BytesBuilder(copy: false);
+  final List<Uint8List> _playbackQueue = [];
+
   String? _lastGeneratedAudioPath;
   String? _activePlayingPath;
 
@@ -71,15 +75,11 @@ class TtsPlaybackService {
   void _initSubscriptions() {
     _ttsStartSub = _wsService.ttsStartStream.listen(_onTtsStart);
     _ttsEndSub = _wsService.ttsEndStream.listen(_onTtsEnd);
+    _ttsSegmentSub = _wsService.ttsSegmentStream.listen(_onTtsSegment);
     _binaryAudioSub = _wsService.binaryAudioStream.listen(_onBinaryFrame);
 
     _playerCompleteSub = _audioPlayer?.onPlayerComplete.listen((_) {
-      _activePlayingPath = null;
-      _setPlaying(false);
-      _currentAmplitude = 0.0;
-      if (!_amplitudeController.isClosed) {
-        _amplitudeController.add(0.0);
-      }
+      _onSegmentPlaybackComplete();
     });
   }
 
@@ -98,7 +98,9 @@ class TtsPlaybackService {
     _activeSampleRate = data['sample_rate'] as int? ?? 24000;
     _activeVoiceId = data['voice_id'] as String? ?? 'af_heart';
 
-    _pcmBuffer.clear();
+    _currentSegmentPcm.clear();
+    _fullUtterancePcm.clear();
+    _playbackQueue.clear();
     _isReceivingStream = true;
     debugPrint(
       '[TtsPlayback] Started stream $_activeStreamId (utterance: $_activeUtteranceId, sr: $_activeSampleRate, voice: $_activeVoiceId)',
@@ -118,7 +120,8 @@ class TtsPlaybackService {
     }
 
     final pcmPayload = frame.sublist(8);
-    _pcmBuffer.add(pcmPayload);
+    _currentSegmentPcm.add(pcmPayload);
+    _fullUtterancePcm.add(pcmPayload);
 
     // Compute RMS amplitude for fluid orb or animated equalizer
     final amp = _computePcmRms(pcmPayload);
@@ -129,9 +132,74 @@ class TtsPlaybackService {
 
     if (seq % 10 == 0) {
       debugPrint(
-        '[TtsPlayback] Frame #$seq for stream $streamId (payload ${pcmPayload.length} B, total ${_pcmBuffer.length} B, amp: ${amp.toStringAsFixed(2)})',
+        '[TtsPlayback] Frame #$seq for stream $streamId (seg ${_currentSegmentPcm.length} B, total ${_fullUtterancePcm.length} B, amp: ${amp.toStringAsFixed(2)})',
       );
     }
+  }
+
+  void _onTtsSegment(Map<String, dynamic> data) {
+    final streamId = data['audio_stream_id'] as int?;
+    final state = data['state'] as String?;
+    if (_activeStreamId != null && streamId != null && streamId != _activeStreamId) {
+      return;
+    }
+
+    if (state == 'ended') {
+      final segPcm = _currentSegmentPcm.toBytes();
+      _currentSegmentPcm.clear();
+      if (segPcm.isNotEmpty) {
+        final wavData = PcmAudioRecorderService.createWav(
+          segPcm,
+          sampleRate: _activeSampleRate,
+          channels: 1,
+          bitsPerSample: 16,
+        );
+        _enqueueSegment(wavData);
+      }
+    }
+  }
+
+  void _enqueueSegment(Uint8List wavBytes) {
+    _playbackQueue.add(wavBytes);
+    if (!_isPlaying) {
+      _playNextSegment();
+    }
+  }
+
+  Future<void> _playNextSegment() async {
+    if (_playbackQueue.isEmpty) {
+      if (!_isReceivingStream) {
+        _setPlaying(false);
+        _currentAmplitude = 0.0;
+        if (!_amplitudeController.isClosed) {
+          _amplitudeController.add(0.0);
+        }
+      }
+      return;
+    }
+
+    final nextWav = _playbackQueue.removeAt(0);
+    _setPlaying(true);
+
+    if (_audioPlayer != null) {
+      try {
+        await _audioPlayer.stop();
+        await _audioPlayer.setVolume(1.0);
+        await _audioPlayer.play(BytesSource(nextWav));
+      } catch (e) {
+        debugPrint('[TtsPlayback] Segment playback error: $e');
+        _playNextSegment();
+      }
+    } else {
+      // In mock / test environment, immediately proceed
+      if (_playbackQueue.isEmpty && !_isReceivingStream) {
+        _setPlaying(false);
+      }
+    }
+  }
+
+  void _onSegmentPlaybackComplete() {
+    _playNextSegment();
   }
 
   Future<void> _onTtsEnd(Map<String, dynamic> data) async {
@@ -145,29 +213,36 @@ class TtsPlaybackService {
 
     if (cancelled) {
       debugPrint('[TtsPlayback] TTS stream $streamId cancelled by server/client.');
-      _pcmBuffer.clear();
+      _playbackQueue.clear();
+      _currentSegmentPcm.clear();
+      _fullUtterancePcm.clear();
       await stopVoice(fadeMs: 25);
       return;
     }
 
-    final rawPcm = _pcmBuffer.toBytes();
-    _pcmBuffer.clear();
-
-    if (rawPcm.isEmpty) {
-      debugPrint('[TtsPlayback] Stream $streamId completed with 0 bytes.');
-      return;
-    }
-
-    try {
+    // Flush any leftover pcm in current segment buffer
+    final leftover = _currentSegmentPcm.toBytes();
+    _currentSegmentPcm.clear();
+    if (leftover.isNotEmpty) {
       final wavData = PcmAudioRecorderService.createWav(
-        rawPcm,
+        leftover,
         sampleRate: _activeSampleRate,
         channels: 1,
         bitsPerSample: 16,
       );
+      _enqueueSegment(wavData);
+    }
 
-      // Save local file for replay capability
+    final fullPcm = _fullUtterancePcm.toBytes();
+    if (fullPcm.isNotEmpty) {
       try {
+        final wavData = PcmAudioRecorderService.createWav(
+          fullPcm,
+          sampleRate: _activeSampleRate,
+          channels: 1,
+          bitsPerSample: 16,
+        );
+
         final tempDir = await getTemporaryDirectory();
         final path =
             '${tempDir.path}/tts_${_activeUtteranceId ?? DateTime.now().millisecondsSinceEpoch}.wav';
@@ -183,22 +258,10 @@ class TtsPlaybackService {
       } catch (err) {
         debugPrint('[TtsPlayback] Notice: could not cache WAV to disk: $err');
       }
+    }
 
-      // Play audio
-      if (_audioPlayer != null) {
-        await _audioPlayer.stop();
-        await _audioPlayer.setVolume(1.0);
-        _activePlayingPath = _lastGeneratedAudioPath;
-        await _audioPlayer.play(BytesSource(wavData));
-      } else {
-        _activePlayingPath = _lastGeneratedAudioPath;
-      }
-      _setPlaying(true);
-      debugPrint(
-        '[TtsPlayback] Playing synthesized speech (${wavData.length} B WAV at $_activeSampleRate Hz)',
-      );
-    } catch (e) {
-      debugPrint('[TtsPlayback] Playback error: $e');
+    if (_playbackQueue.isEmpty && _audioPlayer == null) {
+      _setPlaying(false);
     }
   }
 
@@ -210,7 +273,9 @@ class TtsPlaybackService {
     _activeUtteranceId = null;
     _activePlayingPath = null;
     _isReceivingStream = false;
-    _pcmBuffer.clear();
+    _playbackQueue.clear();
+    _currentSegmentPcm.clear();
+    _fullUtterancePcm.clear();
 
     await stopVoice(fadeMs: 25);
 
@@ -226,6 +291,7 @@ class TtsPlaybackService {
   /// Stops current audio playback with optional smooth fade-out.
   Future<void> stopVoice({int fadeMs = 25}) async {
     _activePlayingPath = null;
+    _playbackQueue.clear();
     if (_isPlaying) {
       try {
         if (_audioPlayer != null) {
@@ -282,6 +348,7 @@ class TtsPlaybackService {
   void dispose() {
     _ttsStartSub?.cancel();
     _ttsEndSub?.cancel();
+    _ttsSegmentSub?.cancel();
     _binaryAudioSub?.cancel();
     _playerCompleteSub?.cancel();
     _audioPlayer?.dispose();

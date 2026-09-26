@@ -89,7 +89,13 @@ class _CallPageState extends State<CallPage> {
   StreamSubscription<Map<String, dynamic>>? _transcriptFinalSub;
 
   double _currentTtsAmplitude = 0.0;
+  double _currentMicAmplitude = 0.0;
   bool _isLiveCall = false;
+  bool _isUserTurnActive = false;
+  String? _currentUserTurnId;
+  DateTime? _userTurnStartTime;
+  int _consecutiveSpeechFrames = 0;
+  int _consecutiveSilenceFrames = 0;
   int _bargeInConsecutiveFrames = 0;
 
   bool get _isSpeaking => !_ended && !_paused && _ariaSpeaking;
@@ -115,7 +121,7 @@ class _CallPageState extends State<CallPage> {
     }
   }
 
-  void _startLiveDuplexCall() {
+  Future<void> _startLiveDuplexCall() async {
     _isLiveCall = true;
 
     _wsService?.sendSessionConfigure(
@@ -133,23 +139,77 @@ class _CallPageState extends State<CallPage> {
       _ownsAudioRecorder = true;
     }
 
-    _audioRecorder!.startRecording(sampleRate: 16000, frameMs: 100);
+    final started = await _audioRecorder!.startRecording(sampleRate: 16000, frameMs: 100);
+    if (!started && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Microphone permission required for call mode.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
 
     _micAudioSub = _audioRecorder!.audioStream.listen((chunk) {
-      if (!_muted && !_ended && !_paused && _isLiveCall) {
+      if (!_muted && !_ended && !_paused && _isLiveCall && _isUserTurnActive) {
         _wsService?.sendAudioChunk(chunk);
       }
     });
 
     _micAmpSub = _audioRecorder!.amplitudeStream.listen((amp) {
-      if (!mounted || _muted || _ended || _paused) return;
-      if (_ariaSpeaking && amp > 0.16) {
+      if (!mounted || _muted || _ended || _paused || !_isLiveCall) return;
+
+      _currentMicAmplitude = amp;
+
+      // 1. Barge-in detection: if Solace is speaking and user speaks
+      if (_ariaSpeaking && amp > 0.10) {
         _bargeInConsecutiveFrames++;
         if (_bargeInConsecutiveFrames >= 2) {
           _triggerBargeIn();
         }
       } else {
         _bargeInConsecutiveFrames = 0;
+      }
+
+      // 2. Client-side Duplex Turn Detection
+      final isSpeech = amp > 0.045;
+      if (isSpeech) {
+        _consecutiveSilenceFrames = 0;
+        _consecutiveSpeechFrames++;
+
+        // Speech onset: user spoke for >= 2 frames (200ms) and companion is not speaking
+        if (!_isUserTurnActive && _consecutiveSpeechFrames >= 2 && !_ariaSpeaking) {
+          _isUserTurnActive = true;
+          _currentUserTurnId = 'call_${DateTime.now().millisecondsSinceEpoch}';
+          _userTurnStartTime = DateTime.now();
+          debugPrint('[CallPage] Speech onset detected! Starting turn: $_currentUserTurnId');
+          _wsService?.sendAudioStart(
+            turnId: _currentUserTurnId!,
+            sampleRate: 16000,
+            frameMs: 100,
+          );
+          if (mounted) setState(() {});
+        }
+      } else {
+        _consecutiveSpeechFrames = 0;
+        if (_isUserTurnActive) {
+          _consecutiveSilenceFrames++;
+          // Speech pause: user has been silent for >= 8 frames (800ms)
+          if (_consecutiveSilenceFrames >= 8) {
+            debugPrint('[CallPage] Speech pause detected! Ending turn: $_currentUserTurnId');
+            _isUserTurnActive = false;
+            final finishedTurn = _currentUserTurnId;
+            final durationMs = _userTurnStartTime != null
+                ? DateTime.now().difference(_userTurnStartTime!).inMilliseconds
+                : 0;
+            _currentUserTurnId = null;
+            _userTurnStartTime = null;
+            _consecutiveSilenceFrames = 0;
+            if (finishedTurn != null) {
+              _wsService?.sendAudioEnd(turnId: finishedTurn, durationMs: durationMs);
+            }
+            if (mounted) setState(() {});
+          }
+        }
       }
     });
 
@@ -228,6 +288,18 @@ class _CallPageState extends State<CallPage> {
       _ariaSpeaking = false;
       _currentTtsAmplitude = 0.0;
     });
+
+    if (!_isUserTurnActive) {
+      _isUserTurnActive = true;
+      _currentUserTurnId = 'call_${DateTime.now().millisecondsSinceEpoch}';
+      _consecutiveSilenceFrames = 0;
+      _wsService?.sendAudioStart(
+        turnId: _currentUserTurnId!,
+        sampleRate: 16000,
+        frameMs: 100,
+      );
+      if (mounted) setState(() {});
+    }
   }
 
   @override
@@ -247,6 +319,9 @@ class _CallPageState extends State<CallPage> {
     _transcriptFinalSub?.cancel();
 
     if (_isLiveCall) {
+      if (_isUserTurnActive && _currentUserTurnId != null) {
+        _wsService?.sendAudioCancel(turnId: _currentUserTurnId!);
+      }
       _audioRecorder?.stopRecording();
       _ttsPlayback?.stopVoice();
       _wsService?.sendCallEnd(reason: 'page_disposed');
@@ -521,12 +596,17 @@ class _CallPageState extends State<CallPage> {
                       height: 6,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _isSpeaking
-                            ? _coral
-                            : (_muted ? _softInk : _amber),
+                        color: _isUserTurnActive
+                            ? const Color(0xFF10B981)
+                            : (_isSpeaking
+                                ? _coral
+                                : (_muted ? _softInk : _amber)),
                         boxShadow: [
                           BoxShadow(
-                            color: (_isSpeaking ? _coral : _amber).withValues(alpha: 0.4),
+                            color: (_isUserTurnActive
+                                    ? const Color(0xFF10B981)
+                                    : (_isSpeaking ? _coral : _amber))
+                                .withValues(alpha: 0.4),
                             blurRadius: 4,
                           ),
                         ],
@@ -535,9 +615,11 @@ class _CallPageState extends State<CallPage> {
                     const SizedBox(width: 5),
                     Flexible(
                       child: Text(
-                        _isSpeaking
-                            ? 'Aria speaking'
-                            : (_muted ? 'Microphone muted' : 'Listening · take your time'),
+                        _isUserTurnActive
+                            ? 'Listening to you...'
+                            : (_isSpeaking
+                                ? 'Solace speaking'
+                                : (_muted ? 'Microphone muted' : 'Listening · take your time')),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                         style: const TextStyle(
@@ -596,11 +678,13 @@ class _CallPageState extends State<CallPage> {
               children: [
                 _BreathingOrb(
                   muted: _muted,
-                  isSpeaking: _isSpeaking,
-                  amplitude: _currentTtsAmplitude,
+                  isSpeaking: _isSpeaking || _isUserTurnActive,
+                  amplitude: _isSpeaking
+                      ? _currentTtsAmplitude
+                      : (_isUserTurnActive ? _currentMicAmplitude : 0.0),
                 ),
                 const SizedBox(height: 16),
-                _AcousticWaveform(isSpeaking: _isSpeaking),
+                _AcousticWaveform(isSpeaking: _isSpeaking || _isUserTurnActive),
                 const SizedBox(height: 12),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 40),

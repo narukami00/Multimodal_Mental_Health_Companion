@@ -118,6 +118,11 @@ class CompanionWebSocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get ttsEndStream => _ttsEndController.stream;
 
+  final _ttsSegmentController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get ttsSegmentStream =>
+      _ttsSegmentController.stream;
+
   final _callStateController =
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get callStateStream => _callStateController.stream;
@@ -317,7 +322,7 @@ class CompanionWebSocketService {
   /// Sends audio_end envelope after finishing recording (Phase 2).
   Future<void> sendAudioEnd({
     required String turnId,
-    required int durationMs,
+    int durationMs = 0,
     bool clientVadEndpoint = true,
   }) async {
     final payload = {
@@ -514,6 +519,12 @@ class CompanionWebSocketService {
         case 'tts.end':
           if (!_ttsEndController.isClosed) {
             _ttsEndController.add(data);
+          }
+          break;
+
+        case 'tts.segment':
+          if (!_ttsSegmentController.isClosed) {
+            _ttsSegmentController.add(data);
           }
           break;
 

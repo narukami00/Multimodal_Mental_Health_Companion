@@ -35,6 +35,8 @@ firebase_options.dart
 screenshots/
 debug_recordings/
 *.wav
+models/
+companion_server/models/
 
 # Feature specifications
 docs/specifications/

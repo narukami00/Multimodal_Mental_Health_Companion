@@ -171,6 +171,110 @@ class MockTtsEngine(BaseTtsEngine):
         )
 
 
+class EdgeTtsEngine(BaseTtsEngine):
+    """High-fidelity neural TTS engine powered by edge-tts with PyAV decoding.
+
+    Produces natural, studio-quality human speech with warm, soothing empathy.
+    Supports multiple voice personas (Ava, Jenny, Emma, Andrew, Guy, Ana).
+    """
+
+    def __init__(self, sample_rate: int = DEFAULT_SAMPLE_RATE) -> None:
+        self._sample_rate = sample_rate
+        self._voices = [
+            {"id": "af_heart", "name": "Heart (Warm Female)", "gender": "female", "engine": "neural", "voice": "en-US-AvaNeural"},
+            {"id": "af_bella", "name": "Bella (Gentle Female)", "gender": "female", "engine": "neural", "voice": "en-US-JennyNeural"},
+            {"id": "af_sarah", "name": "Sarah (Calm Female)", "gender": "female", "engine": "neural", "voice": "en-US-EmmaNeural"},
+            {"id": "am_michael", "name": "Michael (Calm Male)", "gender": "male", "engine": "neural", "voice": "en-US-AndrewNeural"},
+            {"id": "am_adam", "name": "Adam (Gentle Male)", "gender": "male", "engine": "neural", "voice": "en-US-GuyNeural"},
+            {"id": "en_US-amy", "name": "Amy (Soft Female)", "gender": "female", "engine": "neural", "voice": "en-US-AnaNeural"},
+        ]
+        self._voice_map = {v["id"]: v["voice"] for v in self._voices}
+        self._fallback_mock = MockTtsEngine(sample_rate=sample_rate)
+
+    @property
+    def name(self) -> str:
+        return "neural"
+
+    @property
+    def is_ready(self) -> bool:
+        return True
+
+    @property
+    def default_sample_rate(self) -> int:
+        return self._sample_rate
+
+    def warmup(self) -> None:
+        try:
+            self.synthesize("Warmup.")
+        except Exception as e:
+            logger.debug(f"EdgeTts warmup notice: {e}")
+
+    def get_available_voices(self) -> List[Dict[str, Any]]:
+        return list(self._voices)
+
+    def synthesize(
+        self,
+        text: str,
+        voice_id: Optional[str] = None,
+        speed: float = 0.96,
+    ) -> TtsAudioResult:
+        clean_text = text.strip()
+        if not clean_text:
+            return TtsAudioResult(
+                pcm_bytes=b"",
+                sample_rate=self._sample_rate,
+                duration_sec=0.0,
+                samples=np.zeros(0, dtype=np.float32),
+            )
+
+        neural_voice = self._voice_map.get(voice_id or "af_heart", "en-US-AvaNeural")
+        rate_str = f"{int((speed - 1.0) * 100):+d}%"
+
+        try:
+            import asyncio
+            import io
+            import av
+            import edge_tts
+
+            async def _run():
+                comm = edge_tts.Communicate(clean_text, neural_voice, rate=rate_str)
+                mp3_buf = bytearray()
+                async for chunk in comm.stream():
+                    if chunk["type"] == "audio":
+                        mp3_buf.extend(chunk["data"])
+                return bytes(mp3_buf)
+
+            mp3_data = asyncio.run(_run())
+
+            if not mp3_data:
+                return self._fallback_mock.synthesize(clean_text, voice_id=voice_id, speed=speed)
+
+            # Decode MP3 to 24000Hz 16-bit mono PCM via PyAV
+            container = av.open(io.BytesIO(mp3_data))
+            stream = container.streams.audio[0]
+            resampler = av.AudioResampler(format="s16", layout="mono", rate=self._sample_rate)
+
+            pcm_chunks = []
+            for frame in container.decode(stream):
+                for rf in resampler.resample(frame):
+                    pcm_chunks.append(rf.to_ndarray().tobytes())
+
+            pcm_bytes = b"".join(pcm_chunks)
+            samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            duration_sec = len(samples) / self._sample_rate
+
+            return TtsAudioResult(
+                pcm_bytes=pcm_bytes,
+                sample_rate=self._sample_rate,
+                duration_sec=duration_sec,
+                samples=samples,
+            )
+
+        except Exception as e:
+            logger.warning(f"EdgeTts synthesis error ({e}), falling back to mock: {e}")
+            return self._fallback_mock.synthesize(clean_text, voice_id=voice_id, speed=speed)
+
+
 class SherpaOnnxTtsEngine(BaseTtsEngine):
     """High-performance on-device TTS using sherpa-onnx (Kokoro-82M or Piper VITS)."""
 
@@ -242,10 +346,13 @@ class SherpaOnnxTtsEngine(BaseTtsEngine):
                         provider="cpu",
                     )
                 else:
+                    if not self.data_dir or not self.data_dir.exists():
+                        logger.warning("Piper TTS requires valid espeak-ng-data directory.")
+                        return False
                     vits_config = sherpa_onnx.OfflineTtsVitsModelConfig(
                         model=str(self.model_path),
                         tokens=str(self.tokens_path),
-                        data_dir=str(self.data_dir) if self.data_dir else "",
+                        data_dir=str(self.data_dir),
                     )
                     model_config = sherpa_onnx.OfflineTtsModelConfig(
                         vits=vits_config,
@@ -340,8 +447,11 @@ def get_tts_engine(
 ) -> BaseTtsEngine:
     """Factory to acquire the best available TTS engine.
 
-    Falls back cleanly to MockTtsEngine if model weights are not present,
-    ensuring 100% testability and zero-crash initialization.
+    Priority:
+    1. Explicit 'mock' -> MockTtsEngine
+    2. EdgeTtsEngine -> studio-quality neural voices
+    3. SherpaOnnxTtsEngine -> local Kokoro / Piper ONNX
+    4. Fallback -> MockTtsEngine
     """
     if engine_type == "mock":
         return MockTtsEngine()
@@ -370,15 +480,24 @@ def get_tts_engine(
     piper_tokens = base_dir / "tokens.txt"
     piper_data = base_dir / "espeak-ng-data"
 
-    if piper_model.exists() and piper_tokens.exists():
+    if piper_model.exists() and piper_tokens.exists() and piper_data.exists():
         engine = SherpaOnnxTtsEngine(
             model_path=piper_model,
             tokens_path=piper_tokens,
-            data_dir=piper_data if piper_data.exists() else None,
+            data_dir=piper_data,
             is_kokoro=False,
         )
         if engine.initialize():
             return engine
+
+    # High-fidelity Neural Edge-TTS
+    if engine_type in ("auto", "neural"):
+        try:
+            import edge_tts
+            import av
+            return EdgeTtsEngine()
+        except ImportError:
+            pass
 
     # If no local model weights found, use MockTtsEngine
     logger.info(

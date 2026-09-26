@@ -244,6 +244,7 @@ async def stream_llm_response(
             # 100 ms frame size: sample_rate * 2 bytes/sample * 0.1 sec
             frame_bytes = int(sample_rate * 2 * 0.1)
 
+            seg_idx = 0
             try:
                 while True:
                     chunk_text = await sentence_queue.get()
@@ -270,6 +271,21 @@ async def stream_llm_response(
                     if not pcm:
                         continue
 
+                    # Send segment start notification
+                    await websocket.send_text(json.dumps({
+                        "v": 1,
+                        "type": "tts.segment",
+                        "turn_id": assistant_turn_id,
+                        "utterance_id": utterance_id,
+                        "audio_stream_id": audio_stream_id,
+                        "segment_index": seg_idx,
+                        "text": chunk_text,
+                        "state": "started",
+                        "sample_rate": sample_rate,
+                        "duration_ms": int((len(pcm) / (sample_rate * 2)) * 1000),
+                        "ts": int(time.time() * 1000)
+                    }))
+
                     total_samples += len(pcm) // 2
 
                     # Send 100ms binary frames with 8-byte LE header:
@@ -282,6 +298,20 @@ async def stream_llm_response(
                         seq += 1
                         await websocket.send_bytes(header + slice_payload)
                         await asyncio.sleep(0.001)
+
+                    # Send segment ended notification
+                    if not tts_cancel_event.is_set():
+                        await websocket.send_text(json.dumps({
+                            "v": 1,
+                            "type": "tts.segment",
+                            "turn_id": assistant_turn_id,
+                            "utterance_id": utterance_id,
+                            "audio_stream_id": audio_stream_id,
+                            "segment_index": seg_idx,
+                            "state": "ended",
+                            "ts": int(time.time() * 1000)
+                        }))
+                        seg_idx += 1
 
                     # Inter-clause gentle pause (80ms silence)
                     if not tts_cancel_event.is_set():
