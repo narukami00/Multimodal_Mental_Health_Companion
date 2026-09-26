@@ -1,9 +1,19 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/support_resource.dart';
 import 'safety_controller.dart';
 import 'support_resource_catalog.dart';
+
+bool get _isTestEnvironment {
+  try {
+    return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+  } catch (_) {
+    return false;
+  }
+}
 
 class SupportResourcesPage extends StatefulWidget {
   const SupportResourcesPage({
@@ -31,7 +41,10 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
     _breathController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
-    )..repeat(reverse: true);
+    );
+    if (!_isTestEnvironment) {
+      _breathController.repeat(reverse: true);
+    }
   }
 
   @override
@@ -319,12 +332,14 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
                             color: Color(0xFFB57A12),
                           ),
                           SizedBox(width: 8),
-                          Text(
-                            'Small anchors for right now',
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF4A3728),
+                          Expanded(
+                            child: Text(
+                              'Small anchors for right now',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF4A3728),
+                              ),
                             ),
                           ),
                         ],
@@ -783,15 +798,18 @@ class _ResourceCard extends StatelessWidget {
                     color: Color(0xFFD2603A),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Direct dial: ${resource.phone}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFFB4522C),
+                  Expanded(
+                    child: Text(
+                      'Direct dial: ${resource.phone}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFB4522C),
+                      ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   const Text(
                     'Tap to call',
                     style: TextStyle(

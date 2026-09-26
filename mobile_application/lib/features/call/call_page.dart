@@ -337,14 +337,18 @@ class _CallPageState extends State<CallPage> {
                       ),
                     ),
                     const SizedBox(width: 5),
-                    Text(
-                      _isSpeaking
-                          ? 'Aria speaking'
-                          : (_muted ? 'Microphone muted' : 'Listening · take your time'),
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: _softInk,
+                    Flexible(
+                      child: Text(
+                        _isSpeaking
+                            ? 'Aria speaking'
+                            : (_muted ? 'Microphone muted' : 'Listening · take your time'),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: _softInk,
+                        ),
                       ),
                     ),
                   ],

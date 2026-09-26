@@ -4,6 +4,7 @@ import '../../core/models/safety_assessment.dart';
 import '../../core/navigation/app_tab.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../call/call_page.dart';
+import '../chat/chat_controller.dart';
 import '../chat/chat_page.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../insights/insights_page.dart';
@@ -22,6 +23,7 @@ class AppShell extends StatefulWidget {
     required this.safetyController,
     required this.profileController,
     required this.suggestionController,
+    this.chatController,
     this.initialTab,
     super.key,
   });
@@ -30,6 +32,7 @@ class AppShell extends StatefulWidget {
   final SafetyController safetyController;
   final ProfileController profileController;
   final SuggestionController suggestionController;
+  final ChatController? chatController;
   final AppTab? initialTab;
 
   @override
@@ -38,11 +41,29 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   late AppTab _selectedTab;
+  late final ChatController _chatController;
+  late final bool _ownsChatController;
 
   @override
   void initState() {
     super.initState();
     _selectedTab = widget.initialTab ?? _tabFromUri();
+    if (widget.chatController != null) {
+      _chatController = widget.chatController!;
+      _ownsChatController = false;
+    } else {
+      _chatController = ChatController();
+      _ownsChatController = true;
+      _chatController.load();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_ownsChatController) {
+      _chatController.dispose();
+    }
+    super.dispose();
   }
 
   static AppTab _tabFromUri() {
@@ -71,6 +92,7 @@ class _AppShellState extends State<AppShell> {
             index: _selectedTab.index,
             children: [
               TodayPage(
+                chatController: _chatController,
                 primaryCard: HomeCardPriority.select(
                   HomeState(safetyFlagActive: safetyActive),
                 ),
@@ -79,6 +101,7 @@ class _AppShellState extends State<AppShell> {
                     : () => _openCheckIn(context),
                 onOpenSupport: () => _openSupport(context),
                 onOpenChat: () => _openChat(context),
+                onStartNewChat: () => _openChat(context, startNew: true),
                 onOpenCall: () => _openCall(context),
               ),
               JournalPage(sessionController: widget.sessionController),
@@ -194,12 +217,20 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  void _openChat(BuildContext context) {
+  void _openChat(BuildContext context, {bool startNew = false}) {
+    if (startNew) {
+      _chatController.startNewConversation();
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ChatPage(safetyController: widget.safetyController),
+        builder: (_) => ChatPage(
+          safetyController: widget.safetyController,
+          chatController: _chatController,
+        ),
       ),
-    );
+    ).then((_) {
+      _chatController.pruneEmptyConversations();
+    });
   }
 
   void _openCall(BuildContext context) {

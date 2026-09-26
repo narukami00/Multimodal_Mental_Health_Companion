@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/models/safety_assessment.dart';
 import 'package:solace_mobile/core/models/user_profile.dart';
@@ -40,6 +41,13 @@ void main() {
   testWidgets('nonzero PHQ-9 item 9 opens support before completion', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     final profileController = ProfileController(
       repository: InMemoryProfileRepository(),
     );
@@ -66,6 +74,8 @@ void main() {
     await tester.pumpAndSettle();
     final continueBaseline = find.text('Continue baseline');
     await tester.scrollUntilVisible(continueBaseline, 300);
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -120));
+    await tester.pumpAndSettle();
     await tester.tap(continueBaseline);
     await tester.pumpAndSettle();
 

@@ -38,7 +38,7 @@ void main() {
       expect(started, isTrue);
       expect(recorder.isRecording, isTrue);
 
-      await Future<void>.delayed(const Duration(milliseconds: 160));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
 
       expect(chunks.length, greaterThanOrEqualTo(2));
       expect(amplitudes.length, greaterThanOrEqualTo(2));

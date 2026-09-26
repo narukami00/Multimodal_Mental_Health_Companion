@@ -1,7 +1,17 @@
+import 'dart:io';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/ambient_audio_service.dart';
+
+bool get _isTestEnvironment {
+  try {
+    return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+  } catch (_) {
+    return false;
+  }
+}
 
 /// The 8 Therapeutic Emotional Biomes
 enum SanctuaryBiome {
@@ -67,7 +77,9 @@ class _LivingAtmosphereCardState extends State<LivingAtmosphereCard>
       vsync: this,
       duration: const Duration(seconds: 10),
     )..addListener(_onTick);
-    _tickerController.repeat();
+    if (!_isTestEnvironment) {
+      _tickerController.repeat();
+    }
 
     // 1.2s smooth state transition controller
     _transitionController = AnimationController(

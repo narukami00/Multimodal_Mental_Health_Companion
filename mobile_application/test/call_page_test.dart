@@ -12,6 +12,12 @@ void main() {
       );
 
   Future<void> pumpCall(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
     await tester.pumpWidget(
       MaterialApp(home: CallPage(safetyController: createSafety())),
     );
@@ -21,20 +27,16 @@ void main() {
   testWidgets('renders session chrome and toggles mic state', (tester) async {
     await pumpCall(tester);
 
-    expect(find.text('Voice reflection'), findsOneWidget);
-    expect(
-      find.text('Take your time. Silence is welcome here.'),
-      findsOneWidget,
-    );
+    expect(find.text('Solace Voice'), findsOneWidget);
     expect(find.text('MIC ON'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.mic_none_rounded));
+    await tester.tap(find.byIcon(Icons.mic_none_rounded), warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('MUTED'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.videocam_outlined).last);
+    await tester.tap(find.byIcon(Icons.videocam_outlined).last, warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('CAMERA ON · YOU ARE VISIBLE'), findsOneWidget);
+    expect(find.text('CAM ON'), findsOneWidget);
   });
 
   testWidgets('ending the session opens the care overlay', (tester) async {

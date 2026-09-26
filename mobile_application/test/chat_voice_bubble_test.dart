@@ -1,6 +1,6 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/models/chat_message_record.dart';
 import 'package:solace_mobile/data/repositories/in_memory_safety_event_repository.dart';
 import 'package:solace_mobile/features/chat/chat_page.dart';
 import 'package:solace_mobile/features/safety/safety_controller.dart';
@@ -19,6 +19,21 @@ void main() {
         home: ChatPage(
           safetyController: safety(),
           audioRecorderService: PcmAudioRecorderService(isMock: true),
+          initialMessages: [
+            ChatMessageRecord(
+              id: 'test_voice',
+              isUser: true,
+              text: 'Audio reflection',
+              timestamp: DateTime.now(),
+              isVoice: true,
+              voiceDuration: '0:14',
+              waveform: const [
+                0.15, 0.28, 0.58, 0.84, 0.66, 0.38, 0.20, 0.44,
+                0.80, 0.96, 0.72, 0.36, 0.18, 0.28, 0.62, 0.88,
+                0.70, 0.48, 0.22, 0.38, 0.65, 0.50, 0.28, 0.15,
+              ],
+            ),
+          ],
         ),
       ),
     );

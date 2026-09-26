@@ -32,6 +32,13 @@ void main() {
     var supportTapped = false;
     final fixedTime = DateTime(2026, 9, 22, 9, 30); // 9:30 AM -> Good morning
 
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -51,8 +58,11 @@ void main() {
     expect(find.text('Check in now'), findsOneWidget);
 
     expect(find.text('Talk it through'), findsOneWidget);
-    expect(find.text('A quiet space with Sol · voice or text'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
+    expect(
+      find.text('A quiet, private space to speak or write whatever is on your mind right now.'),
+      findsOneWidget,
+    );
+    expect(find.text('Open chat'), findsOneWidget);
 
     expect(find.textContaining('4 days present'), findsOneWidget);
     expect(find.text('Your pace is enough for today.'), findsOneWidget);

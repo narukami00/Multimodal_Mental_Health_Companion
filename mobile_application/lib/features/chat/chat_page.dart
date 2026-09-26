@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -8,17 +9,21 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/models/chat_message_record.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../services/companion_websocket_service.dart';
 import '../../services/pcm_audio_recorder_service.dart';
 import '../call/call_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
+import 'chat_controller.dart';
 import 'conversation_history.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
     required this.safetyController,
+    this.chatController,
+    this.initialMessages,
     this.webSocketService,
     this.audioRecorderService,
     this.autoConnect = false,
@@ -26,6 +31,8 @@ class ChatPage extends StatefulWidget {
   });
 
   final SafetyController safetyController;
+  final ChatController? chatController;
+  final List<ChatMessageRecord>? initialMessages;
   final CompanionWebSocketService? webSocketService;
   final PcmAudioRecorderService? audioRecorderService;
   final bool autoConnect;
@@ -45,6 +52,7 @@ class _Msg {
     this.isUser,
     this.text,
     this.time, {
+    this.id,
     this.isVoice = false,
     this.voiceDuration = '0:00',
     this.isStreaming = false,
@@ -54,6 +62,7 @@ class _Msg {
     this.transcription,
   });
 
+  final String? id;
   final bool isUser;
   final String text;
   final String time;
@@ -64,6 +73,41 @@ class _Msg {
   final List<double>? waveform;
   final String? turnId;
   final String? transcription;
+
+  static _Msg fromRecord(ChatMessageRecord r) {
+    var h = r.timestamp.hour % 12;
+    if (h == 0) h = 12;
+    final m = r.timestamp.minute.toString().padLeft(2, '0');
+    final timeStr = '$h:$m ${r.timestamp.hour >= 12 ? 'PM' : 'AM'}';
+    return _Msg(
+      r.isUser,
+      r.text,
+      timeStr,
+      id: r.id,
+      isVoice: r.isVoice,
+      voiceDuration: r.voiceDuration,
+      isStreaming: false,
+      localAudioPath: r.localAudioPath,
+      waveform: r.waveform,
+      turnId: r.turnId,
+      transcription: r.transcription,
+    );
+  }
+
+  ChatMessageRecord toRecord() {
+    return ChatMessageRecord(
+      id: id ?? 'msg_${DateTime.now().microsecondsSinceEpoch}',
+      isUser: isUser,
+      text: text,
+      timestamp: DateTime.now(),
+      isVoice: isVoice,
+      voiceDuration: voiceDuration,
+      localAudioPath: localAudioPath,
+      waveform: waveform,
+      turnId: turnId,
+      transcription: transcription,
+    );
+  }
 }
 
 
@@ -111,6 +155,9 @@ class _ChatPageState extends State<ChatPage>
   var _dragOffset = 0.0;
   var _cancelTriggered = false;
 
+  late final ChatController _chatController;
+  late final bool _ownsChatController;
+
   late final CompanionWebSocketService _wsService;
   StreamSubscription<CompanionConnectionStatus>? _wsStatusSub;
   StreamSubscription<int>? _wsLatencySub;
@@ -143,6 +190,30 @@ class _ChatPageState extends State<ChatPage>
     _wsStatus = _wsService.status;
     _lastLatencyMs = _wsService.lastLatencyMs;
 
+    if (widget.initialMessages != null) {
+      _messages = widget.initialMessages!.map(_Msg.fromRecord).toList();
+    } else {
+      _messages = [_Msg(false, _greeting, _now())];
+    }
+
+    if (widget.chatController != null) {
+      _chatController = widget.chatController!;
+      _ownsChatController = false;
+      if (_chatController.isLoaded) {
+        _initChatHistory();
+      } else {
+        _chatController.load().then((_) {
+          if (mounted) _initChatHistory();
+        });
+      }
+    } else {
+      _chatController = ChatController();
+      _ownsChatController = true;
+      _chatController.load().then((_) {
+        if (mounted) _initChatHistory();
+      });
+    }
+
     _amplitudeSub = _audioRecorder.amplitudeStream.listen((amp) {
       if (!mounted || !_isRecording) return;
       setState(() => _currentAmplitude = amp);
@@ -160,15 +231,17 @@ class _ChatPageState extends State<ChatPage>
       final text = data['text'] as String? ?? '';
       final turnId = data['turn_id'] as String? ?? '';
       if (text.isNotEmpty) {
+        ChatMessageRecord? recordToUpdate;
         setState(() {
           for (var i = _messages.length - 1; i >= 0; i--) {
             if (_messages[i].isVoice &&
                 (_messages[i].turnId == turnId || turnId.isEmpty)) {
               final old = _messages[i];
-              _messages[i] = _Msg(
+              final updated = _Msg(
                 old.isUser,
                 text,
                 old.time,
+                id: old.id,
                 isVoice: true,
                 voiceDuration: old.voiceDuration,
                 localAudioPath: old.localAudioPath,
@@ -176,10 +249,15 @@ class _ChatPageState extends State<ChatPage>
                 turnId: old.turnId,
                 transcription: text,
               );
+              _messages[i] = updated;
+              recordToUpdate = updated.toRecord();
               break;
             }
           }
         });
+        if (recordToUpdate != null && recordToUpdate!.id.isNotEmpty) {
+          _chatController.updateMessage(recordToUpdate!.id, recordToUpdate!);
+        }
         _scrollDown();
       }
     });
@@ -191,15 +269,17 @@ class _ChatPageState extends State<ChatPage>
       final label = reason == 'silence'
           ? '(No speech detected)'
           : '(Unintelligible audio)';
+      ChatMessageRecord? recordToUpdate;
       setState(() {
         for (var i = _messages.length - 1; i >= 0; i--) {
           if (_messages[i].isVoice &&
               (_messages[i].turnId == turnId || turnId.isEmpty)) {
             final old = _messages[i];
-            _messages[i] = _Msg(
+            final updated = _Msg(
               old.isUser,
               old.text,
               old.time,
+              id: old.id,
               isVoice: true,
               voiceDuration: old.voiceDuration,
               localAudioPath: old.localAudioPath,
@@ -207,10 +287,15 @@ class _ChatPageState extends State<ChatPage>
               turnId: old.turnId,
               transcription: label,
             );
+            _messages[i] = updated;
+            recordToUpdate = updated.toRecord();
             break;
           }
         }
       });
+      if (recordToUpdate != null && recordToUpdate!.id.isNotEmpty) {
+        _chatController.updateMessage(recordToUpdate!.id, recordToUpdate!);
+      }
     });
 
     _wsStatusSub = _wsService.statusStream.listen((status) {
@@ -227,9 +312,10 @@ class _ChatPageState extends State<ChatPage>
 
     _wsStartSub = _wsService.llmStartStream.listen((data) {
       if (!mounted) return;
+      final msgId = 'msg_${DateTime.now().microsecondsSinceEpoch}';
       setState(() {
         if (_messages.isEmpty || !_messages.last.isStreaming) {
-          _messages.add(_Msg(false, '', _now(), isStreaming: true));
+          _messages.add(_Msg(false, '', _now(), id: msgId, isStreaming: true));
         }
       });
       _scrollDown();
@@ -247,10 +333,12 @@ class _ChatPageState extends State<ChatPage>
             false,
             old.text + delta,
             old.time,
+            id: old.id,
             isStreaming: true,
           );
         } else {
-          _messages.add(_Msg(false, delta, _now(), isStreaming: true));
+          final msgId = 'msg_${DateTime.now().microsecondsSinceEpoch}';
+          _messages.add(_Msg(false, delta, _now(), id: msgId, isStreaming: true));
         }
       });
       _scrollDown();
@@ -259,46 +347,92 @@ class _ChatPageState extends State<ChatPage>
     _wsDoneSub = _wsService.llmDoneStream.listen((data) {
       if (!mounted) return;
       final finalText = data['text'] as String? ?? '';
+      ChatMessageRecord? completedRecord;
       setState(() {
         if (_messages.isNotEmpty &&
             !_messages.last.isUser &&
             _messages.last.isStreaming) {
-          _messages[_messages.length - 1] = _Msg(
+          final old = _messages.last;
+          final completed = _Msg(
             false,
-            finalText.isNotEmpty ? finalText : _messages.last.text,
+            finalText.isNotEmpty ? finalText : old.text,
             _now(),
+            id: old.id,
             isStreaming: false,
           );
+          _messages[_messages.length - 1] = completed;
+          completedRecord = completed.toRecord();
         } else {
-          _messages.add(_Msg(false, finalText, _now(), isStreaming: false));
+          final completed = _Msg(
+            false,
+            finalText,
+            _now(),
+            id: 'msg_${DateTime.now().microsecondsSinceEpoch}',
+            isStreaming: false,
+          );
+          _messages.add(completed);
+          completedRecord = completed.toRecord();
         }
       });
+      if (completedRecord != null) {
+        _chatController.addMessage(completedRecord!);
+      }
       _scrollDown();
     });
 
-    _messages = [
-      _Msg(false, _greeting, _now()),
-      const _Msg(
-        true,
-        'Audio reflection',
-        '8:12 PM',
-        isVoice: true,
-        voiceDuration: '0:14',
-        waveform: _mockSpeechWaveform,
-      ),
-      const _Msg(
-        false,
-        "Thank you for sharing that with me. Take a gentle breath — what feels easiest to focus on right now?",
-        '8:13 PM',
-      ),
-    ];
     _input.addListener(() => setState(() {}));
 
     _loadSavedServerConfig();
 
     if (widget.autoConnect &&
         _wsStatus == CompanionConnectionStatus.disconnected) {
-      _wsService.connect();
+      _wsService.connect(sessionId: _chatController.activeConversation?.id);
+    }
+  }
+
+  void _initChatHistory() {
+    if (widget.initialMessages != null) return;
+    final activeConv = _chatController.activeConversation;
+    if (activeConv != null && activeConv.messages.isNotEmpty) {
+      _messages = activeConv.messages.map(_Msg.fromRecord).toList();
+      if (mounted) {
+        setState(() {});
+      }
+      _scrollDown();
+    }
+  }
+
+  void _startNewConversation() {
+    final newConv = _chatController.startNewConversation();
+    setState(() {
+      _messages = newConv.messages.map(_Msg.fromRecord).toList();
+    });
+    if (_wsStatus == CompanionConnectionStatus.connected) {
+      _wsService.connect(sessionId: newConv.id);
+    }
+  }
+
+  void _switchConversation(String id) {
+    _chatController.switchConversation(id);
+    final conv = _chatController.activeConversation;
+    if (conv != null) {
+      setState(() {
+        _messages = conv.messages.map(_Msg.fromRecord).toList();
+      });
+      if (_wsStatus == CompanionConnectionStatus.connected) {
+        _wsService.connect(sessionId: conv.id);
+      }
+      _scrollDown();
+    }
+  }
+
+  void _deleteConversation(String id) {
+    _chatController.deleteConversation(id);
+    final conv = _chatController.activeConversation;
+    if (conv != null) {
+      setState(() {
+        _messages = conv.messages.map(_Msg.fromRecord).toList();
+      });
     }
   }
 
@@ -320,6 +454,9 @@ class _ChatPageState extends State<ChatPage>
 
   @override
   void dispose() {
+    if (_ownsChatController) {
+      _chatController.dispose();
+    }
     _recordingTimer?.cancel();
     _audioFrameSub?.cancel();
     _amplitudeSub?.cancel();
@@ -402,27 +539,6 @@ class _ChatPageState extends State<ChatPage>
     });
   }
 
-  void _handleDragUpdate(DragUpdateDetails details) {
-    if (!_isRecording || _isLocked) return;
-    setState(() {
-      _dragOffset += details.primaryDelta ?? 0.0;
-      _cancelTriggered = _dragOffset < -60;
-      if (_dragOffset > 70) {
-        _isLocked = true;
-        _dragOffset = 0.0;
-      }
-    });
-  }
-
-  void _handleDragEnd() {
-    if (!_isRecording || _isLocked) return;
-    if (_cancelTriggered || _dragOffset < -50) {
-      _cancelRecording();
-    } else {
-      _sendRecording();
-    }
-  }
-
   Future<void> _cancelRecording() async {
     final turnId = _activeAudioTurnId;
     _activeAudioTurnId = null;
@@ -491,6 +607,18 @@ class _ChatPageState extends State<ChatPage>
     final durMs = sec * 1000;
     final durStr = '0:${sec.toString().padLeft(2, '0')}';
 
+    final voiceRecord = ChatMessageRecord(
+      id: 'msg_${DateTime.now().microsecondsSinceEpoch}',
+      isUser: true,
+      text: 'Audio reflection',
+      timestamp: DateTime.now(),
+      isVoice: true,
+      voiceDuration: durStr,
+      localAudioPath: localAudioPath,
+      waveform: waveform,
+      turnId: turnId,
+    );
+
     if (turnId != null && _wsStatus == CompanionConnectionStatus.connected) {
       _wsService.sendAudioEnd(
         turnId: turnId,
@@ -500,39 +628,28 @@ class _ChatPageState extends State<ChatPage>
 
     if (!mounted) return;
     setState(() {
-      _messages.add(
-        _Msg(
-          true,
-          'Audio reflection',
-          _now(),
-          isVoice: true,
-          voiceDuration: durStr,
-          localAudioPath: localAudioPath,
-          waveform: waveform,
-          turnId: turnId,
-        ),
-      );
+      _messages.add(_Msg.fromRecord(voiceRecord));
       _isRecording = false;
       _isLocked = false;
       _dragOffset = 0.0;
       _cancelTriggered = false;
       _currentAmplitude = 0.0;
     });
+    _chatController.addMessage(voiceRecord);
     _scrollDown();
 
     if (_wsStatus != CompanionConnectionStatus.connected) {
       Future.delayed(const Duration(milliseconds: 1400), () {
         if (!mounted) return;
-        setState(() {
-          _messages.add(
-            _Msg(
-              false,
-              _replies[_replyIndex % _replies.length],
-              _now(),
-            ),
-          );
-          _replyIndex++;
-        });
+        final replyRecord = ChatMessageRecord(
+          id: 'msg_${DateTime.now().microsecondsSinceEpoch}',
+          isUser: false,
+          text: _replies[_replyIndex % _replies.length],
+          timestamp: DateTime.now(),
+        );
+        _replyIndex++;
+        setState(() => _messages.add(_Msg.fromRecord(replyRecord)));
+        _chatController.addMessage(replyRecord);
         _scrollDown();
       });
     }
@@ -561,7 +678,14 @@ class _ChatPageState extends State<ChatPage>
     final text = raw.trim();
     if (text.isEmpty) return;
     _input.clear();
-    setState(() => _messages.add(_Msg(true, text, _now())));
+    final userRecord = ChatMessageRecord(
+      id: 'msg_${DateTime.now().microsecondsSinceEpoch}',
+      isUser: true,
+      text: text,
+      timestamp: DateTime.now(),
+    );
+    setState(() => _messages.add(_Msg.fromRecord(userRecord)));
+    _chatController.addMessage(userRecord);
     _scrollDown();
 
     // Safety first — never bypass the screener.
@@ -591,12 +715,15 @@ class _ChatPageState extends State<ChatPage>
       return;
     }
 
-    setState(() {
-      _messages.add(
-        _Msg(false, _replies[_replyIndex % _replies.length], _now()),
-      );
-      _replyIndex++;
-    });
+    final replyRecord = ChatMessageRecord(
+      id: 'msg_${DateTime.now().microsecondsSinceEpoch}',
+      isUser: false,
+      text: _replies[_replyIndex % _replies.length],
+      timestamp: DateTime.now(),
+    );
+    _replyIndex++;
+    setState(() => _messages.add(_Msg.fromRecord(replyRecord)));
+    _chatController.addMessage(replyRecord);
     _scrollDown();
   }
 
@@ -736,16 +863,11 @@ class _ChatPageState extends State<ChatPage>
             onPressed: () {
               ConversationHistorySheet.show(
                 context,
-                onSelectThread: (thread) {
-                  // Switch or reload thread
-                },
-                onNewConversation: () {
-                  setState(() {
-                    _messages = [
-                      _Msg(false, _greeting, _now()),
-                    ];
-                  });
-                },
+                chatController: _chatController,
+                activeThreadId: _chatController.activeConversation?.id,
+                onSelectThread: (thread) => _switchConversation(thread.id),
+                onNewConversation: _startNewConversation,
+                onDeleteThread: _deleteConversation,
               );
             },
             tooltip: 'Past conversations',
@@ -1319,6 +1441,9 @@ class _ChatPageState extends State<ChatPage>
   }
 
   Widget _buildChips() {
+    if (_messages.length > 1) {
+      return const SizedBox.shrink();
+    }
     return SizedBox(
       height: 44,
       child: ListView.separated(
@@ -2108,7 +2233,9 @@ class _VoiceBubbleContentState extends State<_VoiceBubbleContent> {
         ),
         const SizedBox(width: 10),
         Text(
-          widget.duration,
+          _isPlaying && _currentPosition > Duration.zero
+              ? '${_currentPosition.inMinutes}:${(_currentPosition.inSeconds % 60).toString().padLeft(2, '0')}'
+              : widget.duration,
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
