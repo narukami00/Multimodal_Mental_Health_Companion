@@ -2,7 +2,15 @@
 
 import asyncio
 import time
+import pytest
 from llm_service import LlmService
+
+
+@pytest.fixture(scope="module")
+def service():
+    s = LlmService()
+    s.initialize()
+    return s
 
 
 def test_sync_streaming(service: LlmService):
@@ -25,6 +33,7 @@ def test_sync_streaming(service: LlmService):
     print("Sync streaming test PASSED!")
 
 
+@pytest.mark.asyncio
 async def test_async_streaming(service: LlmService):
     print("\n--- Testing Async LLM Streaming ---")
     assert service.is_ready, "Service should already be initialized"

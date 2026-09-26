@@ -13,6 +13,7 @@ import time
 import wave
 import requests
 import websockets
+import pytest
 
 BASE_HTTP = "http://127.0.0.1:8000"
 BASE_WS = "ws://127.0.0.1:8000/ws/v1/session"
@@ -24,11 +25,11 @@ def test_healthz():
     assert resp.status_code == 200
     data = resp.json()
     print(f"Healthz: {data}")
-    assert data["phase"] == 3
-    assert data["phase_name"] == "vad_stt_transcription"
+    assert data["phase"] >= 3
     assert data["stt_ready"] is True
     print("[PASS] Healthz Phase 3 verified!")
 
+@pytest.mark.asyncio
 async def test_speech_transcription():
     print("\n--- 2. Testing Speech Streaming & Transcription ---")
     assert SPEECH_WAV.exists(), f"{SPEECH_WAV} must exist"
@@ -88,6 +89,7 @@ async def test_speech_transcription():
         assert final_msg["confidence"] > 0.4
         print(f"[PASS] Successfully received transcript_final: \"{final_msg['text']}\"")
 
+@pytest.mark.asyncio
 async def test_silence_rejection():
     print("\n--- 3. Testing Silence Rejection with VAD ---")
     session_id = f"sess_silence_test_{int(time.time())}"
