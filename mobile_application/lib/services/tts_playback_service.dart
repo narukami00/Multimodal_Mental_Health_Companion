@@ -23,11 +23,37 @@ class TtsPlaybackService {
             (isMock || Platform.environment.containsKey('FLUTTER_TEST')
                 ? null
                 : AudioPlayer()) {
+    if (!_isTestEnv) _configureAudioContext();
     _initSubscriptions();
   }
 
   static bool get _isTestEnv =>
       Platform.environment.containsKey('FLUTTER_TEST');
+
+  /// The call holds the mic open in `MODE_IN_COMMUNICATION`, where Android
+  /// routes media-usage playback to the earpiece. Voice-communication usage +
+  /// speakerphone keeps TTS on the loudspeaker (see MainActivity).
+  void _configureAudioContext() {
+    final context = AudioContext(
+      android: const AudioContextAndroid(
+        isSpeakerphoneOn: true,
+        stayAwake: true,
+        contentType: AndroidContentType.speech,
+        usageType: AndroidUsageType.voiceCommunication,
+        audioFocus: AndroidAudioFocus.gainTransient,
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.playAndRecord,
+        options: const {
+          AVAudioSessionOptions.defaultToSpeaker,
+          AVAudioSessionOptions.allowBluetooth,
+        },
+      ),
+    );
+    unawaited(AudioPlayer.global.setAudioContext(context));
+    final player = _audioPlayer;
+    if (player != null) unawaited(player.setAudioContext(context));
+  }
 
   final bool isMock;
   final CompanionWebSocketService _wsService;
@@ -188,6 +214,8 @@ class TtsPlaybackService {
       try {
         await _audioPlayer.stop();
         await _audioPlayer.setVolume(1.0);
+        debugPrint('[TtsPlayback] Playing segment: ${nextWav.length} bytes '
+            '(queue remaining: ${_playbackQueue.length})');
         await _audioPlayer.play(BytesSource(nextWav));
       } catch (e) {
         debugPrint('[TtsPlayback] Segment playback error: $e');

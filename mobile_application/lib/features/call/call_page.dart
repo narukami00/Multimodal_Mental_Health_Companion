@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/audio_processor.dart';
 import '../../services/companion_websocket_service.dart';
@@ -76,11 +78,16 @@ class _CallPageState extends State<CallPage> {
   CompanionWebSocketService? _wsService;
   PcmAudioRecorderService? _audioRecorder;
   TtsPlaybackService? _ttsPlayback;
+  bool _ownsWsService = false;
   bool _ownsAudioRecorder = false;
   bool _ownsTtsPlayback = false;
 
   /// Every live-call subscription in one list: one owner, one cancel site.
   final _subs = <StreamSubscription<dynamic>>[];
+
+  /// The connection handshake lives outside [_subs]: it must survive the
+  /// duplex restart, which clears and rebuilds that list.
+  StreamSubscription<CompanionConnectionStatus>? _wsStatusSub;
 
   /// Single owner of conversational and orb state (spec 7.5). Nothing else in
   /// this file is allowed to decide what phase the call is in.
@@ -115,20 +122,63 @@ class _CallPageState extends State<CallPage> {
       setState(() => _seconds++);
     });
 
-    _wsService = widget.webSocketService;
+    _wsService = widget.webSocketService ?? CompanionWebSocketService();
+    _ownsWsService = widget.webSocketService == null;
     _audioRecorder = widget.audioRecorderService;
     _ttsPlayback = widget.ttsPlaybackService;
 
-    if (_wsService != null &&
-        _wsService!.status == CompanionConnectionStatus.connected) {
+    if (_wsService!.status == CompanionConnectionStatus.connected) {
       _startLiveDuplexCall();
     } else {
-      final token = ++_generation;
-      _runConversation(token);
+      _wsStatusSub = _wsService!.statusStream.listen(_onWsStatus);
+      if (_isTestEnv) {
+        // ponytail: widget tests never open a socket, the scripted loop is
+        // their live-call stand-in.
+        _runConversation(++_generation);
+      } else {
+        unawaited(_connectSavedServer());
+      }
+    }
+  }
+
+  static bool get _isTestEnv =>
+      Platform.environment.containsKey('FLUTTER_TEST');
+
+  /// The same saved address the chat settings screen writes; otherwise the
+  /// service defaults.
+  Future<void> _connectSavedServer() async {
+    final ws = _wsService!;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final host = prefs.getString('companion_server_host');
+      final port = prefs.getInt('companion_server_port');
+      if (host != null && host.isNotEmpty) ws.host = host;
+      if (port != null && port > 0) ws.port = port;
+    } catch (_) {
+      // ponytail: no readable config, connect with the service defaults
+    }
+    if (ws.status == CompanionConnectionStatus.connecting ||
+        ws.status == CompanionConnectionStatus.connected) {
+      return;
+    }
+    await ws.connect();
+  }
+
+  /// One owner for every connection outcome: connected starts the duplex call,
+  /// a dead connection falls back to the scripted loop.
+  void _onWsStatus(CompanionConnectionStatus status) {
+    if (!mounted || _ended || _isLiveCall) return;
+    if (status == CompanionConnectionStatus.connected) {
+      _startLiveDuplexCall();
+    } else if (status == CompanionConnectionStatus.error) {
+      debugPrint('[CallPage] WebSocket connect failed, running scripted demo');
+      _runConversation(++_generation);
     }
   }
 
   Future<void> _startLiveDuplexCall() async {
+    _generation++; // supersede a scripted fallback still running
+    _releaseDelay();
     _isLiveCall = true;
 
     // Restartable: a previous attempt's listeners must not double-send.
@@ -560,6 +610,8 @@ class _CallPageState extends State<CallPage> {
       sub.cancel();
     }
     _subs.clear();
+    _wsStatusSub?.cancel();
+    _wsStatusSub = null;
     _turn.dispose();
 
     if (_isLiveCall) {
@@ -578,6 +630,9 @@ class _CallPageState extends State<CallPage> {
     }
     if (_ownsTtsPlayback) {
       _ttsPlayback?.dispose();
+    }
+    if (_ownsWsService) {
+      _wsService?.dispose();
     }
 
     super.dispose();

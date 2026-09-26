@@ -98,11 +98,27 @@ void main() {
       c.dispose();
     });
 
-    test('an illegal pair is loud in debug builds (a race, not a state)', () {
+    test('an illegal pair is absorbed, not fatal (a race, not a state)',
+        () async {
       final c = controller();
+      final seen = <CallPhaseTransition>[];
+      c.transitions.listen(seen.add);
       // endpointed from idle has no row in the §7.4 table.
-      expect(() => c.onEndpointed('nope'), throwsA(isA<AssertionError>()));
+      c.onEndpointed('nope');
+      await Future<void>.delayed(Duration.zero);
       expect(c.currentPhase, CallPhase.idle);
+      expect(seen, isEmpty);
+      c.dispose();
+    });
+
+    test('assistantSpeaking -> turnStarted takes the floor (server race)', () {
+      final c = controller();
+      c.onTurnStarted('t');
+      c.onEndpointed('t');
+      c.onProcessing('t', TurnStage.ttsFirstFrame);
+      expect(c.currentPhase, CallPhase.assistantSpeaking);
+      c.onTurnStarted('t2');
+      expect(c.currentPhase, CallPhase.userSpeaking);
       c.dispose();
     });
 

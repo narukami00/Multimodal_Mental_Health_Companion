@@ -149,9 +149,9 @@ const Map<(CallPhase, CallPhase), double> _transitionTau = {
   (CallPhase.muted, CallPhase.assistantSpeaking): 0.45,
 };
 
-/// Client-side mirror of the §7.4 table. A `null` result is an illegal pair and
-/// must be loud in debug builds: it means a race between the local provisional
-/// gate and a server event.
+/// Client-side mirror of the §7.4 table. A `null` result is an illegal pair —
+/// a race between the local provisional gate and a server event. It is logged
+/// and absorbed: a live call must not die on a server race.
 const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   // IDLE -> USER_SPEAKING
   (CallPhase.idle, TurnEvent.turnStarted): CallPhase.userSpeaking,
@@ -195,6 +195,15 @@ const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   (CallPhase.assistantSpeaking, TurnEvent.interrupted): CallPhase.userSpeaking,
   (CallPhase.assistantSpeaking, TurnEvent.speechDetected): CallPhase.userSpeaking,
   (CallPhase.assistantSpeaking, TurnEvent.localOnset): CallPhase.userSpeaking,
+  // A new turn can start while the previous audio is still draining: the
+  // server raced our playback, the floor goes to the user.
+  (CallPhase.assistantSpeaking, TurnEvent.turnStarted): CallPhase.userSpeaking,
+  (CallPhase.assistantSpeaking, TurnEvent.firstAudioFrame):
+      CallPhase.assistantSpeaking,
+  (CallPhase.assistantSpeaking, TurnEvent.firstToken):
+      CallPhase.assistantSpeaking,
+  (CallPhase.assistantSpeaking, TurnEvent.processing):
+      CallPhase.assistantSpeaking,
   (CallPhase.assistantSpeaking, TurnEvent.endpointed): CallPhase.thinking,
   (CallPhase.assistantSpeaking, TurnEvent.ttsComplete): CallPhase.idle,
   (CallPhase.assistantSpeaking, TurnEvent.discarded): CallPhase.idle,
@@ -453,8 +462,11 @@ class CallTurnController extends ChangeNotifier {
     final to = _transitionTable[(from, event)];
     if (to == null) {
       // Illegal pair: a race between the local provisional gate and a server
-      // event. Loud in debug, absorbed in release.
-      assert(false, 'Illegal call transition: ${from.name} --${event.name}--> ?');
+      // event. Log and absorb — a fatal assert here killed the event stream
+      // mid-call.
+      debugPrint(
+        '[CallTurnController] Unhandled transition: ${from.name} --${event.name}--> ignoring',
+      );
       return;
     }
     if (to != CallPhase.muted && to != CallPhase.ended) {

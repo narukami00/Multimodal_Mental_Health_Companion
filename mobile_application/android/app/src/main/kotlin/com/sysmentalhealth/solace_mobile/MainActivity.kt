@@ -161,6 +161,17 @@ class MainActivity : FlutterActivity() {
             // Put the audio policy manager on the voice-communication path so
             // capture and playback are routed for a conversation, not for media.
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            // MODE_IN_COMMUNICATION defaults to the earpiece, which makes TTS
+            // inaudible during a hands-free duplex call: force the loudspeaker.
+            audioManager.isSpeakerphoneOn = true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val speakerDevice = audioManager.availableCommunicationDevices.firstOrNull {
+                    it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                }
+                if (speakerDevice != null) {
+                    audioManager.setCommunicationDevice(speakerDevice)
+                }
+            }
 
             audioRecord = AudioRecord(
                 // The only source whose contract promises echo cancellation. AOSP
@@ -337,6 +348,10 @@ class MainActivity : FlutterActivity() {
 
     private fun restoreAudioMode() {
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.clearCommunicationDevice()
+            }
+            audioManager.isSpeakerphoneOn = false
             audioManager.mode = AudioManager.MODE_NORMAL
         } catch (e: Exception) {
             Log.w(TAG, "could not restore audio mode: $e")
