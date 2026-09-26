@@ -114,6 +114,7 @@ class _ChatPageState extends State<ChatPage>
   late final CompanionWebSocketService _wsService;
   StreamSubscription<CompanionConnectionStatus>? _wsStatusSub;
   StreamSubscription<int>? _wsLatencySub;
+  StreamSubscription<Map<String, dynamic>>? _wsStartSub;
   StreamSubscription<Map<String, dynamic>>? _wsChunkSub;
   StreamSubscription<Map<String, dynamic>>? _wsDoneSub;
 
@@ -224,6 +225,16 @@ class _ChatPageState extends State<ChatPage>
       _modalSetState?.call(() {});
     });
 
+    _wsStartSub = _wsService.llmStartStream.listen((data) {
+      if (!mounted) return;
+      setState(() {
+        if (_messages.isEmpty || !_messages.last.isStreaming) {
+          _messages.add(_Msg(false, '', _now(), isStreaming: true));
+        }
+      });
+      _scrollDown();
+    });
+
     _wsChunkSub = _wsService.llmChunkStream.listen((data) {
       if (!mounted) return;
       final delta = data['delta'] as String? ?? '';
@@ -320,6 +331,7 @@ class _ChatPageState extends State<ChatPage>
     }
     _wsStatusSub?.cancel();
     _wsLatencySub?.cancel();
+    _wsStartSub?.cancel();
     _wsChunkSub?.cancel();
     _wsDoneSub?.cancel();
     if (widget.webSocketService == null) {

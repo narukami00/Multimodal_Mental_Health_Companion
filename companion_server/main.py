@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from stt_service import SttService
+from llm_service import LlmService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,8 +23,9 @@ logger = logging.getLogger("solace_companion")
 RECORDINGS_DIR = Path(__file__).resolve().parent / "debug_recordings"
 RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Initialize STT and VAD service
+# Initialize STT and LLM services
 stt = SttService(model_size="base.en")
+llm = LlmService(model_id="Qwen/Qwen2.5-0.5B-Instruct")
 
 app = FastAPI(
     title="Solace Companion Backend",
@@ -33,8 +35,9 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def on_startup():
-    logger.info("Server startup: warming up STT & VAD in background...")
+    logger.info("Server startup: warming up STT & LLM services in background...")
     asyncio.create_task(asyncio.to_thread(stt.initialize))
+    asyncio.create_task(asyncio.to_thread(llm.initialize))
 
 # Enable CORS for local Flutter development (web, emulator, LAN)
 app.add_middleware(
@@ -73,12 +76,14 @@ async def healthz():
 
     return {
         "status": "ok",
-        "phase": 3,
-        "phase_name": "vad_stt_transcription",
+        "phase": 4,
+        "phase_name": "local_llm_streaming",
         "gpu_vram_used_mb": gpu_vram_used,
         "stt_ready": stt.is_ready,
         "stt_device": stt.device,
-        "llm_ready": False,
+        "llm_ready": llm.is_ready,
+        "llm_model": llm.model_id,
+        "llm_device": llm.device,
         "recordings_dir": str(RECORDINGS_DIR),
     }
 
@@ -94,10 +99,9 @@ async def get_models():
             "ready": stt.is_ready
         },
         "llm": {
-            "model": "qwen3-4b-instruct-q4_k_m",
-            "context": 4096,
-            "quantization": "Q4_K_M",
-            "ready": False
+            "model": llm.model_id,
+            "device": llm.device,
+            "ready": llm.is_ready
         }
     }
 
@@ -121,6 +125,85 @@ async def create_session(req: CreateSessionRequest):
         token=token
     )
 
+async def stream_llm_response(
+    websocket: WebSocket,
+    session_id: str,
+    user_text: str,
+    user_turn_id: str,
+    session_history: list,
+):
+    """Streams real-time token-by-token LLM generation over WebSocket."""
+    assistant_turn_id = f"asst_{uuid4().hex[:8]}"
+    start_time = time.time()
+
+    # Build prompt messages including session conversational history
+    messages = llm.build_messages(user_text, history=session_history)
+
+    await websocket.send_text(json.dumps({
+        "v": 1,
+        "type": "llm_start",
+        "turn_id": assistant_turn_id,
+        "reply_to": user_turn_id,
+        "session_id": session_id,
+        "model": llm.model_id,
+        "prompt_tokens": len(user_text.split()),
+        "ts": int(time.time() * 1000)
+    }))
+
+    full_tokens: list[str] = []
+    first_token = True
+    ttft_ms = 0
+
+    try:
+        async for chunk in llm.generate_stream_async(messages, max_new_tokens=120):
+            if first_token:
+                ttft_ms = int((time.time() - start_time) * 1000)
+                first_token = False
+
+            full_tokens.append(chunk)
+            await websocket.send_text(json.dumps({
+                "v": 1,
+                "type": "llm_chunk",
+                "turn_id": assistant_turn_id,
+                "reply_to": user_turn_id,
+                "session_id": session_id,
+                "delta": chunk,
+                "ts": int(time.time() * 1000)
+            }))
+    except asyncio.CancelledError:
+        logger.info(f"LLM streaming cancelled for turn {assistant_turn_id}")
+        return
+    except Exception as e:
+        logger.error(f"Error during LLM streaming for {assistant_turn_id}: {e}", exc_info=True)
+
+    accumulated = "".join(full_tokens).strip()
+    total_duration_ms = int((time.time() - start_time) * 1000)
+
+    # Save to session history for conversational context retention
+    session_history.append({"role": "user", "content": user_text})
+    session_history.append({"role": "assistant", "content": accumulated})
+
+    await websocket.send_text(json.dumps({
+        "v": 1,
+        "type": "llm_done",
+        "turn_id": assistant_turn_id,
+        "reply_to": user_turn_id,
+        "session_id": session_id,
+        "text": accumulated,
+        "tokens": len(full_tokens),
+        "ttft_ms": ttft_ms,
+        "duration_ms": total_duration_ms,
+        "latency_ms": {
+            "ttft": ttft_ms,
+            "total": total_duration_ms
+        },
+        "ts": int(time.time() * 1000)
+    }))
+    logger.info(
+        f"Completed LLM response for {assistant_turn_id} "
+        f"({len(full_tokens)} tokens, {total_duration_ms}ms, ttft={ttft_ms}ms)"
+    )
+
 @app.websocket("/ws/v1/session")
 async def websocket_session(
     websocket: WebSocket,
@@ -141,6 +224,8 @@ async def websocket_session(
 
     active_audio_turns: Dict[str, Dict[str, Any]] = {}
     current_audio_turn_id: Optional[str] = None
+    session_history: list = []
+    active_llm_task: Optional[asyncio.Task] = None
 
     try:
         while True:
@@ -217,7 +302,7 @@ async def websocket_session(
                     }
                     await websocket.send_text(json.dumps(pong_payload))
 
-                # Text Message -> Echo and Mock Stream Response
+                # Text Message -> Echo and Real LLM Stream Response
                 elif msg_type == "text_message":
                     turn_id = data.get("turn_id", f"turn_{uuid4().hex[:6]}")
                     user_text = data.get("text", "")
@@ -234,65 +319,25 @@ async def websocket_session(
                     }
                     await websocket.send_text(json.dumps(echo_payload))
 
-                    if data.get("simulate_stream", True):
-                        req_id = f"req_{uuid4().hex[:6]}"
-                        start_time = time.time()
+                    if user_text.strip():
+                        # Cancel any ongoing LLM generation
+                        if active_llm_task and not active_llm_task.done():
+                            active_llm_task.cancel()
 
-                        await websocket.send_text(json.dumps({
-                            "v": 1,
-                            "type": "llm_start",
-                            "turn_id": turn_id,
-                            "request_id": req_id,
-                            "session_id": current_session_id,
-                            "model": "phase1-echo-simulator",
-                            "prompt_tokens": len(user_text.split()),
-                            "ts": int(time.time() * 1000)
-                        }))
-
-                        companion_reply = (
-                            f"I hear you. You mentioned: \"{user_text}\". "
-                            "Take a gentle breath. We can take this one step at a time."
+                        active_llm_task = asyncio.create_task(
+                            stream_llm_response(
+                                websocket=websocket,
+                                session_id=current_session_id,
+                                user_text=user_text.strip(),
+                                user_turn_id=turn_id,
+                                session_history=session_history,
+                            )
                         )
-                        words = companion_reply.split(" ")
-                        ttft_ms = int((time.time() - start_time) * 1000)
 
-                        for idx, word in enumerate(words):
-                            delta = word if idx == 0 else " " + word
-                            await asyncio.sleep(0.035)
-                            await websocket.send_text(json.dumps({
-                                "v": 1,
-                                "type": "llm_chunk",
-                                "turn_id": turn_id,
-                                "request_id": req_id,
-                                "session_id": current_session_id,
-                                "index": idx,
-                                "delta": delta,
-                                "finish_reason": None,
-                                "ts": int(time.time() * 1000)
-                            }))
-
-                        total_ms = int((time.time() - start_time) * 1000)
-                        await websocket.send_text(json.dumps({
-                            "v": 1,
-                            "type": "llm_done",
-                            "turn_id": turn_id,
-                            "request_id": req_id,
-                            "session_id": current_session_id,
-                            "finish_reason": "stop",
-                            "text": companion_reply,
-                            "usage": {
-                                "prompt_tokens": len(user_text.split()),
-                                "completion_tokens": len(words)
-                            },
-                            "latency_ms": {
-                                "ttft": ttft_ms,
-                                "total": total_ms
-                            },
-                            "ts": int(time.time() * 1000)
-                        }))
-
-                # Audio Start (Phase 2)
+                # Audio Start (Phase 2 & 4: cancel any running LLM stream on barge-in)
                 elif msg_type == "audio_start":
+                    if active_llm_task and not active_llm_task.done():
+                        active_llm_task.cancel()
                     turn_id = data.get("turn_id", f"turn_{uuid4().hex[:6]}")
                     sample_rate = int(data.get("sample_rate", 16000))
                     channels = int(data.get("channels", 1))
@@ -403,6 +448,20 @@ async def websocket_session(
                                     "audio_ms": int(duration_sec * 1000),
                                     "ts": int(time.time() * 1000)
                                 }))
+
+                                # Phase 4: Stream LLM companion response to this transcribed voice note
+                                if active_llm_task and not active_llm_task.done():
+                                    active_llm_task.cancel()
+
+                                active_llm_task = asyncio.create_task(
+                                    stream_llm_response(
+                                        websocket=websocket,
+                                        session_id=current_session_id,
+                                        user_text=text,
+                                        user_turn_id=turn_id,
+                                        session_history=session_history,
+                                    )
+                                )
                             else:
                                 logger.warning(f"Speech detected but transcription empty for turn {turn_id}")
                                 await websocket.send_text(json.dumps({
@@ -433,8 +492,11 @@ async def websocket_session(
                     if current_audio_turn_id == turn_id:
                         current_audio_turn_id = None
 
-                # Audio Cancel (Phase 2 - Discard and confirm)
+                # Audio Cancel (Phase 2 & 4 - Discard, cancel active LLM, and confirm)
                 elif msg_type == "audio_cancel":
+                    if active_llm_task and not active_llm_task.done():
+                        active_llm_task.cancel()
+
                     turn_id = data.get("turn_id", current_audio_turn_id or "turn_unknown")
                     reason = data.get("reason", "user_cancelled")
                     logger.info(f"Audio cancel received for turn {turn_id}, reason: {reason}")
@@ -468,6 +530,9 @@ async def websocket_session(
         logger.info(f"WebSocket client disconnected cleanly: session {current_session_id}")
     except Exception as e:
         logger.error(f"WebSocket connection error: {e}", exc_info=True)
+    finally:
+        if active_llm_task and not active_llm_task.done():
+            active_llm_task.cancel()
 
 if __name__ == "__main__":
     import uvicorn
