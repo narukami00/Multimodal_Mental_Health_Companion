@@ -1,16 +1,30 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../services/companion_websocket_service.dart';
+import '../../services/pcm_audio_recorder_service.dart';
+import '../../services/tts_playback_service.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 
 class CallPage extends StatefulWidget {
-  const CallPage({required this.safetyController, super.key});
+  const CallPage({
+    required this.safetyController,
+    this.webSocketService,
+    this.audioRecorderService,
+    this.ttsPlaybackService,
+    super.key,
+  });
 
   final SafetyController safetyController;
+  final CompanionWebSocketService? webSocketService;
+  final PcmAudioRecorderService? audioRecorderService;
+  final TtsPlaybackService? ttsPlaybackService;
 
   @override
   State<CallPage> createState() => _CallPageState();
@@ -58,6 +72,26 @@ class _CallPageState extends State<CallPage> {
   var _ariaSpeaking = false;
   final _lines = <_CaptionLine>[];
 
+  CompanionWebSocketService? _wsService;
+  PcmAudioRecorderService? _audioRecorder;
+  TtsPlaybackService? _ttsPlayback;
+  bool _ownsAudioRecorder = false;
+  bool _ownsTtsPlayback = false;
+
+  StreamSubscription<Uint8List>? _micAudioSub;
+  StreamSubscription<double>? _micAmpSub;
+  StreamSubscription<double>? _ttsAmpSub;
+  StreamSubscription<bool>? _ttsPlayingSub;
+  StreamSubscription<Map<String, dynamic>>? _ttsStartSub;
+  StreamSubscription<Map<String, dynamic>>? _ttsEndSub;
+  StreamSubscription<Map<String, dynamic>>? _llmStartSub;
+  StreamSubscription<Map<String, dynamic>>? _llmChunkSub;
+  StreamSubscription<Map<String, dynamic>>? _transcriptFinalSub;
+
+  double _currentTtsAmplitude = 0.0;
+  bool _isLiveCall = false;
+  int _bargeInConsecutiveFrames = 0;
+
   bool get _isSpeaking => !_ended && !_paused && _ariaSpeaking;
 
   @override
@@ -67,8 +101,133 @@ class _CallPageState extends State<CallPage> {
       if (_ended || _paused || !mounted) return;
       setState(() => _seconds++);
     });
-    final token = ++_generation;
-    _runConversation(token);
+
+    _wsService = widget.webSocketService;
+    _audioRecorder = widget.audioRecorderService;
+    _ttsPlayback = widget.ttsPlaybackService;
+
+    if (_wsService != null &&
+        _wsService!.status == CompanionConnectionStatus.connected) {
+      _startLiveDuplexCall();
+    } else {
+      final token = ++_generation;
+      _runConversation(token);
+    }
+  }
+
+  void _startLiveDuplexCall() {
+    _isLiveCall = true;
+
+    _wsService?.sendSessionConfigure(
+      mode: 'duplex_call',
+      ttsEnabled: true,
+    );
+
+    if (_ttsPlayback == null && _wsService != null) {
+      _ttsPlayback = TtsPlaybackService(webSocketService: _wsService!);
+      _ownsTtsPlayback = true;
+    }
+
+    if (_audioRecorder == null) {
+      _audioRecorder = PcmAudioRecorderService();
+      _ownsAudioRecorder = true;
+    }
+
+    _audioRecorder!.startRecording(sampleRate: 16000, frameMs: 100);
+
+    _micAudioSub = _audioRecorder!.audioStream.listen((chunk) {
+      if (!_muted && !_ended && !_paused && _isLiveCall) {
+        _wsService?.sendAudioChunk(chunk);
+      }
+    });
+
+    _micAmpSub = _audioRecorder!.amplitudeStream.listen((amp) {
+      if (!mounted || _muted || _ended || _paused) return;
+      if (_ariaSpeaking && amp > 0.16) {
+        _bargeInConsecutiveFrames++;
+        if (_bargeInConsecutiveFrames >= 2) {
+          _triggerBargeIn();
+        }
+      } else {
+        _bargeInConsecutiveFrames = 0;
+      }
+    });
+
+    _ttsAmpSub = _ttsPlayback?.amplitudeStream.listen((amp) {
+      if (!mounted) return;
+      setState(() => _currentTtsAmplitude = amp);
+    });
+
+    _ttsPlayingSub = _ttsPlayback?.playingStream.listen((playing) {
+      if (!mounted) return;
+      setState(() {
+        _ariaSpeaking = playing || (_ttsPlayback?.isReceivingStream ?? false);
+      });
+    });
+
+    _ttsStartSub = _wsService?.ttsStartStream.listen((data) {
+      if (!mounted) return;
+      setState(() => _ariaSpeaking = true);
+    });
+
+    _ttsEndSub = _wsService?.ttsEndStream.listen((data) {
+      if (!mounted) return;
+      final cancelled = data['cancelled'] as bool? ?? false;
+      if (cancelled) {
+        setState(() {
+          _ariaSpeaking = false;
+          _currentTtsAmplitude = 0.0;
+        });
+      }
+    });
+
+    _llmStartSub = _wsService?.llmStartStream.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        if (_lines.length >= 2) _lines.removeAt(0);
+        _lines.add(_CaptionLine(aria: true, words: []));
+      });
+    });
+
+    _llmChunkSub = _wsService?.llmChunkStream.listen((data) {
+      if (!mounted) return;
+      final delta = data['delta'] as String? ?? '';
+      if (delta.trim().isNotEmpty && _lines.isNotEmpty && _lines.last.aria) {
+        final newWords = delta.trim().split(' ');
+        setState(() {
+          _lines.last.words.addAll(newWords);
+          _lines.last.shown = _lines.last.words.length;
+        });
+      }
+    });
+
+    _transcriptFinalSub = _wsService?.transcriptFinalStream.listen((data) {
+      if (!mounted) return;
+      final text = data['text'] as String? ?? '';
+      if (text.isNotEmpty) {
+        setState(() {
+          if (_lines.length >= 2) _lines.removeAt(0);
+          final words = text.split(' ');
+          final line = _CaptionLine(aria: false, words: words);
+          line.shown = words.length;
+          _lines.add(line);
+        });
+      }
+    });
+  }
+
+  void _triggerBargeIn() {
+    _bargeInConsecutiveFrames = 0;
+    if (!_ariaSpeaking) return;
+
+    debugPrint('[CallPage] Barge-in triggered by user speech!');
+    _ttsPlayback?.cancelVoice(reason: 'call_barge_in');
+    _wsService?.sendCallBargeIn(reason: 'vad_speech_detected');
+
+    setState(() {
+      _ariaSpeaking = false;
+      _currentTtsAmplitude = 0.0;
+    });
   }
 
   @override
@@ -76,6 +235,31 @@ class _CallPageState extends State<CallPage> {
     _generation++;
     _releaseDelay();
     _ticker?.cancel();
+
+    _micAudioSub?.cancel();
+    _micAmpSub?.cancel();
+    _ttsAmpSub?.cancel();
+    _ttsPlayingSub?.cancel();
+    _ttsStartSub?.cancel();
+    _ttsEndSub?.cancel();
+    _llmStartSub?.cancel();
+    _llmChunkSub?.cancel();
+    _transcriptFinalSub?.cancel();
+
+    if (_isLiveCall) {
+      _audioRecorder?.stopRecording();
+      _ttsPlayback?.stopVoice();
+      _wsService?.sendCallEnd(reason: 'page_disposed');
+      _wsService?.sendSessionConfigure(mode: 'chat_voice_playback');
+    }
+
+    if (_ownsAudioRecorder) {
+      _audioRecorder?.dispose();
+    }
+    if (_ownsTtsPlayback) {
+      _ttsPlayback?.dispose();
+    }
+
     super.dispose();
   }
 
@@ -168,8 +352,16 @@ class _CallPageState extends State<CallPage> {
       _ended = true;
       _paused = false;
       _generation++;
+      _ariaSpeaking = false;
     });
     _releaseDelay();
+
+    if (_isLiveCall) {
+      _audioRecorder?.stopRecording();
+      _ttsPlayback?.stopVoice();
+      _wsService?.sendCallEnd(reason: 'user_ended_call');
+      _wsService?.sendSessionConfigure(mode: 'chat_voice_playback');
+    }
   }
 
   void _restart() {
@@ -181,7 +373,11 @@ class _CallPageState extends State<CallPage> {
       _generation++;
     });
     _releaseDelay();
-    _runConversation(_generation);
+    if (_isLiveCall) {
+      _startLiveDuplexCall();
+    } else {
+      _runConversation(_generation);
+    }
   }
 
   Future<void> _confirmLeave() async {
@@ -401,6 +597,7 @@ class _CallPageState extends State<CallPage> {
                 _BreathingOrb(
                   muted: _muted,
                   isSpeaking: _isSpeaking,
+                  amplitude: _currentTtsAmplitude,
                 ),
                 const SizedBox(height: 16),
                 _AcousticWaveform(isSpeaking: _isSpeaking),
@@ -649,16 +846,27 @@ class _AcousticWaveform extends StatefulWidget {
 
 class _AcousticWaveformState extends State<_AcousticWaveform>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _waveCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1150),
-  )..repeat();
+  AnimationController? _waveCtrl;
+
+  static bool get _isTestEnv =>
+      Platform.environment.containsKey('FLUTTER_TEST');
 
   static const _delays = [0.0, 0.14, 0.28, 0.42, 0.56, 0.34, 0.20];
 
   @override
+  void initState() {
+    super.initState();
+    if (!_isTestEnv) {
+      _waveCtrl = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 1150),
+      )..repeat();
+    }
+  }
+
+  @override
   void dispose() {
-    _waveCtrl.dispose();
+    _waveCtrl?.dispose();
     super.dispose();
   }
 
@@ -674,36 +882,61 @@ class _AcousticWaveformState extends State<_AcousticWaveform>
         offset: widget.isSpeaking ? Offset.zero : const Offset(0, -0.25),
         child: SizedBox(
           height: 22,
-          child: AnimatedBuilder(
-            animation: _waveCtrl,
-            builder: (_, __) {
-              final t = _waveCtrl.value * 2 * math.pi;
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(7, (i) {
-                  final delay = _delays[i] * 2 * math.pi;
-                  final h = 5.0 + 15.0 * (0.5 + 0.5 * math.sin(t + delay));
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                    width: 3.5,
-                    height: h,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(2),
-                      gradient: const LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          _CallPageState._amber,
-                          _CallPageState._coral,
-                        ],
+          child: _isTestEnv || _waveCtrl == null
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(7, (i) {
+                    final h = 5.0 + 15.0 * (0.5 + 0.5 * math.sin(i.toDouble()));
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                      width: 3.5,
+                      height: h,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            _CallPageState._amber,
+                            _CallPageState._coral,
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                }),
-              );
-            },
-          ),
+                    );
+                  }),
+                )
+              : AnimatedBuilder(
+                  animation: _waveCtrl!,
+                  builder: (_, __) {
+                    final t = _waveCtrl!.value * 2 * math.pi;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(7, (i) {
+                        final delay = _delays[i] * 2 * math.pi;
+                        final h =
+                            5.0 + 15.0 * (0.5 + 0.5 * math.sin(t + delay));
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                          width: 3.5,
+                          height: h,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(2),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                _CallPageState._amber,
+                                _CallPageState._coral,
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    );
+                  },
+                ),
         ),
       ),
     );
@@ -725,10 +958,12 @@ class _BreathingOrb extends StatefulWidget {
   const _BreathingOrb({
     required this.muted,
     required this.isSpeaking,
+    this.amplitude = 0.0,
   });
 
   final bool muted;
   final bool isSpeaking;
+  final double amplitude;
 
   @override
   State<_BreathingOrb> createState() => _BreathingOrbState();
@@ -780,8 +1015,10 @@ class _BreathingOrbState extends State<_BreathingOrb>
     final timeSpeed = 1.0 + _speechFactor * 0.35 - _muteFactor * 0.4;
     _time += dt * timeSpeed;
 
-    // 2. Smooth speech factor (exponential approach over ~260ms)
-    final targetSpeech = widget.isSpeaking ? 1.0 : 0.0;
+    // 2. Smooth speech factor (exponential approach over ~260ms), modulated by voice amplitude
+    final targetSpeech = widget.isSpeaking
+        ? (0.6 + 0.4 * widget.amplitude.clamp(0.0, 1.0))
+        : 0.0;
     _speechFactor += (targetSpeech - _speechFactor) * (1.0 - math.exp(-7.0 * dt));
 
     // 3. Smooth mute factor
@@ -842,7 +1079,9 @@ class _BreathingOrbState extends State<_BreathingOrb>
 
     // Continuous breath modulation (never wraps abruptly)
     final breathRate = 1.1 + _speechFactor * 0.5;
-    final breathAmp = 0.040 + _speechFactor * 0.035 - _muteFactor * 0.020;
+    final breathAmp = 0.040 +
+        (_speechFactor * 0.035 + widget.amplitude.clamp(0.0, 1.0) * 0.045) -
+        _muteFactor * 0.020;
     final breathScale = (1.0 + breathAmp * math.sin(_time * breathRate)) * _touchSquish;
 
     return GestureDetector(

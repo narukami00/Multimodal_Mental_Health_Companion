@@ -1015,7 +1015,12 @@ class _ChatPageState extends State<ChatPage>
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => CallPage(safetyController: widget.safetyController),
+                  builder: (_) => CallPage(
+                    safetyController: widget.safetyController,
+                    webSocketService: _wsService,
+                    audioRecorderService: _audioRecorder,
+                    ttsPlaybackService: _ttsPlayback,
+                  ),
                 ),
               );
             },
