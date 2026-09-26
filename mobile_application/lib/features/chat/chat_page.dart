@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/models/safety_assessment.dart';
 import '../../services/companion_websocket_service.dart';
@@ -173,10 +174,28 @@ class _ChatPageState extends State<ChatPage>
     ];
     _input.addListener(() => setState(() {}));
 
+    _loadSavedServerConfig();
+
     if (widget.autoConnect &&
         _wsStatus == CompanionConnectionStatus.disconnected) {
       _wsService.connect();
     }
+  }
+
+  void _loadSavedServerConfig() {
+    SharedPreferences.getInstance().then((prefs) {
+      final savedHost = prefs.getString('companion_server_host');
+      final savedPort = prefs.getInt('companion_server_port');
+      if (savedHost != null && savedHost.isNotEmpty) {
+        _wsService.host = savedHost;
+      } else {
+        _wsService.host = '192.168.0.38';
+      }
+      if (savedPort != null && savedPort > 0) {
+        _wsService.port = savedPort;
+      }
+      if (mounted) setState(() {});
+    }).catchError((_) {});
   }
 
   @override
@@ -505,6 +524,44 @@ class _ChatPageState extends State<ChatPage>
             ),
           ),
           IconButton(
+            onPressed: _showConnectionSettingsDialog,
+            tooltip: _wsStatus == CompanionConnectionStatus.connected
+                ? 'Companion Server Live · ${_lastLatencyMs ?? 0}ms'
+                : 'Configure Companion Backend',
+            icon: Stack(
+              alignment: Alignment.topRight,
+              children: [
+                Icon(
+                  _wsStatus == CompanionConnectionStatus.connected
+                      ? Icons.sensors_rounded
+                      : Icons.dns_outlined,
+                  size: 21,
+                  color: _wsStatus == CompanionConnectionStatus.connected
+                      ? const Color(0xFF059669)
+                      : _wsStatus == CompanionConnectionStatus.connecting
+                          ? const Color(0xFFD97706)
+                          : _softInk,
+                ),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _wsStatus == CompanionConnectionStatus.connected
+                        ? const Color(0xFF10B981)
+                        : _wsStatus == CompanionConnectionStatus.connecting
+                            ? const Color(0xFFF59E0B)
+                            : const Color(0xFFCBD5E0),
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                ),
+              ],
+            ),
+            style: IconButton.styleFrom(
+              minimumSize: const Size(38, 44),
+            ),
+          ),
+          IconButton(
             onPressed: _openSupport,
             tooltip: 'Support resources',
             icon: const Icon(Icons.health_and_safety_outlined, size: 22),
@@ -523,69 +580,124 @@ class _ChatPageState extends State<ChatPage>
     final isConnecting = _wsStatus == CompanionConnectionStatus.connecting;
 
     Color bgColor;
+    Color borderColor;
     Color textColor;
-    Color dotColor;
-    String label;
+    IconData icon;
+    String title;
+    String subtitle;
+    Widget trailingAction;
 
     if (isConnected) {
-      bgColor = const Color(0x1A48BB78);
-      textColor = const Color(0xFF22543D);
-      dotColor = const Color(0xFF38A169);
-      final rttText = _lastLatencyMs != null ? ' · ${_lastLatencyMs}ms RTT' : '';
-      label = 'Companion Server Online$rttText';
+      bgColor = const Color(0xFFEBFDF2);
+      borderColor = const Color(0xFF6EE7B7);
+      textColor = const Color(0xFF065F46);
+      icon = Icons.sensors_rounded;
+      final rtt = _lastLatencyMs != null ? '${_lastLatencyMs}ms RTT' : 'Ready';
+      title = 'Companion Server Online';
+      subtitle = '${_wsService.host}:${_wsService.port} · $rtt';
+      trailingAction = const Icon(
+        Icons.tune_rounded,
+        size: 16,
+        color: Color(0xFF059669),
+      );
     } else if (isConnecting) {
-      bgColor = const Color(0x24FFB534);
-      textColor = const Color(0xFF7B5209);
-      dotColor = const Color(0xFFD69E2E);
-      label = 'Connecting to Companion Backend...';
+      bgColor = const Color(0xFFFFFBEB);
+      borderColor = const Color(0xFFFCD34D);
+      textColor = const Color(0xFF92400E);
+      icon = Icons.sync_rounded;
+      title = 'Connecting to Server...';
+      subtitle = 'Attempting ${_wsService.host}:${_wsService.port}';
+      trailingAction = const SizedBox(
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation(Color(0xFFD97706)),
+        ),
+      );
     } else {
-      bgColor = const Color(0x146E6252);
-      textColor = _softInk;
-      dotColor = const Color(0xFFCBD5E0);
-      label = 'Offline Mode (Local Mock) · Tap to connect';
-    }
-
-    return InkWell(
-      onTap: _showConnectionSettingsDialog,
-      child: Container(
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+      bgColor = const Color(0xFFFFF7ED);
+      borderColor = const Color(0xFFFFD5A5);
+      textColor = const Color(0xFF9A3412);
+      icon = Icons.wifi_find_rounded;
+      title = 'Companion Server (PC): Offline';
+      subtitle = 'Tap to connect to ${_wsService.host}:${_wsService.port}';
+      trailingAction = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: bgColor,
-          border: const Border(
-            bottom: BorderSide(color: Color(0x14000000)),
+          color: _coral,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Connect',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
           ),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: dotColor,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: textColor,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _showConnectionSettingsDialog,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor, width: 1.2),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0A000000),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(width: 6),
-            Icon(
-              Icons.tune_rounded,
-              size: 13,
-              color: textColor.withValues(alpha: 0.8),
+            child: Row(
+              children: [
+                Icon(icon, size: 20, color: textColor),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: textColor,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: textColor.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                trailingAction,
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -652,7 +764,7 @@ class _ChatPageState extends State<ChatPage>
                     style:
                         TextStyle(fontSize: 12, color: _softInk, height: 1.4),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
@@ -661,7 +773,7 @@ class _ChatPageState extends State<ChatPage>
                           controller: hostCtrl,
                           decoration: InputDecoration(
                             labelText: 'Host / IP',
-                            hintText: '127.0.0.1 or LAN IP',
+                            hintText: '192.168.0.38',
                             filled: true,
                             fillColor: const Color(0xFFF9F5EC),
                             border: OutlineInputBorder(
@@ -699,6 +811,70 @@ class _ChatPageState extends State<ChatPage>
                       ),
                     ],
                   ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Quick Presets:',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: _softInk,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      ActionChip(
+                        avatar: const Icon(Icons.wifi_rounded, size: 14, color: _coral),
+                        label: const Text('Wi-Fi PC: 192.168.0.38'),
+                        backgroundColor: const Color(0xFFFFF2E6),
+                        side: const BorderSide(color: Color(0xFFFFCC99)),
+                        labelStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: _ink,
+                        ),
+                        onPressed: () {
+                          hostCtrl.text = '192.168.0.38';
+                          portCtrl.text = '8000';
+                          setModalState(() {});
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.devices_rounded, size: 14, color: _softInk),
+                        label: const Text('Emulator: 10.0.2.2'),
+                        backgroundColor: const Color(0xFFF7F2E7),
+                        side: const BorderSide(color: Color(0xFFDDD2BE)),
+                        labelStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _ink,
+                        ),
+                        onPressed: () {
+                          hostCtrl.text = '10.0.2.2';
+                          portCtrl.text = '8000';
+                          setModalState(() {});
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.computer_rounded, size: 14, color: _softInk),
+                        label: const Text('Localhost: 127.0.0.1'),
+                        backgroundColor: const Color(0xFFF7F2E7),
+                        side: const BorderSide(color: Color(0xFFDDD2BE)),
+                        labelStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _ink,
+                        ),
+                        onPressed: () {
+                          hostCtrl.text = '127.0.0.1';
+                          portCtrl.text = '8000';
+                          setModalState(() {});
+                        },
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -726,7 +902,7 @@ class _ChatPageState extends State<ChatPage>
                           isConnected
                               ? 'Connected · Latency: ${_lastLatencyMs ?? 0}ms'
                               : isConnecting
-                                  ? 'Connecting...'
+                                  ? 'Connecting to ${hostCtrl.text}...'
                                   : 'Disconnected',
                           style: const TextStyle(
                             fontSize: 12.5,
@@ -783,8 +959,20 @@ class _ChatPageState extends State<ChatPage>
                               final host = hostCtrl.text.trim();
                               final port =
                                   int.tryParse(portCtrl.text.trim()) ?? 8000;
+                              final effectiveHost =
+                                  host.isNotEmpty ? host : '192.168.0.38';
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              await prefs.setString(
+                                'companion_server_host',
+                                effectiveHost,
+                              );
+                              await prefs.setInt(
+                                'companion_server_port',
+                                port,
+                              );
                               await _wsService.connect(
-                                customHost: host.isNotEmpty ? host : '127.0.0.1',
+                                customHost: effectiveHost,
                                 customPort: port,
                               );
                               setModalState(() {});
