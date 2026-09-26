@@ -33,3 +33,6 @@ firebase_options.dart
 # Test and tool output
 *.log
 screenshots/
+
+# Feature specifications
+docs/specifications/CHAT_FEATURES.md

@@ -4,15 +4,23 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../core/models/safety_assessment.dart';
+import '../../services/companion_websocket_service.dart';
 import '../call/call_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'conversation_history.dart';
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({required this.safetyController, super.key});
+  const ChatPage({
+    required this.safetyController,
+    this.webSocketService,
+    this.autoConnect = false,
+    super.key,
+  });
 
   final SafetyController safetyController;
+  final CompanionWebSocketService? webSocketService;
+  final bool autoConnect;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -25,6 +33,7 @@ class _Msg {
     this.time, {
     this.isVoice = false,
     this.voiceDuration = '0:00',
+    this.isStreaming = false,
   });
 
   final bool isUser;
@@ -32,6 +41,7 @@ class _Msg {
   final String time;
   final bool isVoice;
   final String voiceDuration;
+  final bool isStreaming;
 }
 
 
@@ -79,9 +89,73 @@ class _ChatPageState extends State<ChatPage>
   var _dragOffset = 0.0;
   var _cancelTriggered = false;
 
+  late final CompanionWebSocketService _wsService;
+  StreamSubscription<CompanionConnectionStatus>? _wsStatusSub;
+  StreamSubscription<int>? _wsLatencySub;
+  StreamSubscription<Map<String, dynamic>>? _wsChunkSub;
+  StreamSubscription<Map<String, dynamic>>? _wsDoneSub;
+
+  CompanionConnectionStatus _wsStatus = CompanionConnectionStatus.disconnected;
+  int? _lastLatencyMs;
+
   @override
   void initState() {
     super.initState();
+    _wsService = widget.webSocketService ?? CompanionWebSocketService();
+    _wsStatus = _wsService.status;
+    _lastLatencyMs = _wsService.lastLatencyMs;
+
+    _wsStatusSub = _wsService.statusStream.listen((status) {
+      if (!mounted) return;
+      setState(() => _wsStatus = status);
+    });
+
+    _wsLatencySub = _wsService.latencyStream.listen((latency) {
+      if (!mounted) return;
+      setState(() => _lastLatencyMs = latency);
+    });
+
+    _wsChunkSub = _wsService.llmChunkStream.listen((data) {
+      if (!mounted) return;
+      final delta = data['delta'] as String? ?? '';
+      setState(() {
+        if (_messages.isNotEmpty &&
+            !_messages.last.isUser &&
+            _messages.last.isStreaming) {
+          final old = _messages.last;
+          _messages[_messages.length - 1] = _Msg(
+            false,
+            old.text + delta,
+            old.time,
+            isStreaming: true,
+          );
+        } else {
+          _messages.add(_Msg(false, delta, _now(), isStreaming: true));
+        }
+      });
+      _scrollDown();
+    });
+
+    _wsDoneSub = _wsService.llmDoneStream.listen((data) {
+      if (!mounted) return;
+      final finalText = data['text'] as String? ?? '';
+      setState(() {
+        if (_messages.isNotEmpty &&
+            !_messages.last.isUser &&
+            _messages.last.isStreaming) {
+          _messages[_messages.length - 1] = _Msg(
+            false,
+            finalText.isNotEmpty ? finalText : _messages.last.text,
+            _now(),
+            isStreaming: false,
+          );
+        } else {
+          _messages.add(_Msg(false, finalText, _now(), isStreaming: false));
+        }
+      });
+      _scrollDown();
+    });
+
     _messages = [
       _Msg(false, _greeting, _now()),
       const _Msg(
@@ -98,11 +172,23 @@ class _ChatPageState extends State<ChatPage>
       ),
     ];
     _input.addListener(() => setState(() {}));
+
+    if (widget.autoConnect &&
+        _wsStatus == CompanionConnectionStatus.disconnected) {
+      _wsService.connect();
+    }
   }
 
   @override
   void dispose() {
     _recordingTimer?.cancel();
+    _wsStatusSub?.cancel();
+    _wsLatencySub?.cancel();
+    _wsChunkSub?.cancel();
+    _wsDoneSub?.cancel();
+    if (widget.webSocketService == null) {
+      _wsService.dispose();
+    }
     _breath.dispose();
     _input.dispose();
     _scroll.dispose();
@@ -233,6 +319,12 @@ class _ChatPageState extends State<ChatPage>
     }
 
     if (!mounted) return;
+
+    if (_wsStatus == CompanionConnectionStatus.connected) {
+      await _wsService.sendTextMessage(text, simulateStream: true);
+      return;
+    }
+
     setState(() {
       _messages.add(
         _Msg(false, _replies[_replyIndex % _replies.length], _now()),
@@ -294,6 +386,7 @@ class _ChatPageState extends State<ChatPage>
                     child: Column(
                       children: [
                         _buildHeader(),
+                        _buildConnectionBanner(),
                         Expanded(
                           child: ListView.builder(
                             controller: _scroll,
@@ -422,6 +515,301 @@ class _ChatPageState extends State<ChatPage>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildConnectionBanner() {
+    final isConnected = _wsStatus == CompanionConnectionStatus.connected;
+    final isConnecting = _wsStatus == CompanionConnectionStatus.connecting;
+
+    Color bgColor;
+    Color textColor;
+    Color dotColor;
+    String label;
+
+    if (isConnected) {
+      bgColor = const Color(0x1A48BB78);
+      textColor = const Color(0xFF22543D);
+      dotColor = const Color(0xFF38A169);
+      final rttText = _lastLatencyMs != null ? ' · ${_lastLatencyMs}ms RTT' : '';
+      label = 'Companion Server Online$rttText';
+    } else if (isConnecting) {
+      bgColor = const Color(0x24FFB534);
+      textColor = const Color(0xFF7B5209);
+      dotColor = const Color(0xFFD69E2E);
+      label = 'Connecting to Companion Backend...';
+    } else {
+      bgColor = const Color(0x146E6252);
+      textColor = _softInk;
+      dotColor = const Color(0xFFCBD5E0);
+      label = 'Offline Mode (Local Mock) · Tap to connect';
+    }
+
+    return InkWell(
+      onTap: _showConnectionSettingsDialog,
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: bgColor,
+          border: const Border(
+            bottom: BorderSide(color: Color(0x14000000)),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: dotColor,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: textColor,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.tune_rounded,
+              size: 13,
+              color: textColor.withValues(alpha: 0.8),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showConnectionSettingsDialog() {
+    final hostCtrl = TextEditingController(text: _wsService.host);
+    final portCtrl = TextEditingController(text: _wsService.port.toString());
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFFFFFDF8),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final isConnected =
+                _wsStatus == CompanionConnectionStatus.connected;
+            final isConnecting =
+                _wsStatus == CompanionConnectionStatus.connecting;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDDD2BE),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Row(
+                    children: [
+                      Icon(Icons.hub_outlined, color: _coral, size: 22),
+                      SizedBox(width: 8),
+                      Text(
+                        'Companion Backend Settings',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: _ink,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Connect to the Python Solace companion engine for live WebSocket communication & STT/LLM streaming.',
+                    style:
+                        TextStyle(fontSize: 12, color: _softInk, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: TextField(
+                          controller: hostCtrl,
+                          decoration: InputDecoration(
+                            labelText: 'Host / IP',
+                            hintText: '127.0.0.1 or LAN IP',
+                            filled: true,
+                            fillColor: const Color(0xFFF9F5EC),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: portCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: 'Port',
+                            hintText: '8000',
+                            filled: true,
+                            fillColor: const Color(0xFFF9F5EC),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F2E7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isConnected
+                              ? Icons.check_circle_rounded
+                              : isConnecting
+                                  ? Icons.hourglass_top_rounded
+                                  : Icons.radio_button_unchecked_rounded,
+                          size: 18,
+                          color: isConnected
+                              ? const Color(0xFF38A169)
+                              : isConnecting
+                                  ? const Color(0xFFD69E2E)
+                                  : _faint,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          isConnected
+                              ? 'Connected · Latency: ${_lastLatencyMs ?? 0}ms'
+                              : isConnecting
+                                  ? 'Connecting...'
+                                  : 'Disconnected',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: _ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      if (isConnected) ...[
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              _wsService.sendPing();
+                              setModalState(() {});
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _ink,
+                              side: const BorderSide(color: Color(0xFFDDD2BE)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Test Ping'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              await _wsService.disconnect();
+                              setModalState(() {});
+                              setState(() {});
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE2E8F0),
+                              foregroundColor: _ink,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Disconnect'),
+                          ),
+                        ),
+                      ] else ...[
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final host = hostCtrl.text.trim();
+                              final port =
+                                  int.tryParse(portCtrl.text.trim()) ?? 8000;
+                              await _wsService.connect(
+                                customHost: host.isNotEmpty ? host : '127.0.0.1',
+                                customPort: port,
+                              );
+                              setModalState(() {});
+                              setState(() {});
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _coral,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Connect Now'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1098,8 +1486,20 @@ class _Bubble extends StatelessWidget {
                     duration: msg.voiceDuration,
                     isUser: isUser,
                   )
-                : Text(
-                    msg.text,
+                : Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: msg.text),
+                        if (msg.isStreaming)
+                          const WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: EdgeInsets.only(left: 4),
+                              child: _BlinkingCursor(),
+                            ),
+                          ),
+                      ],
+                    ),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1119,6 +1519,42 @@ class _Bubble extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BlinkingCursor extends StatefulWidget {
+  const _BlinkingCursor();
+
+  @override
+  State<_BlinkingCursor> createState() => _BlinkingCursorState();
+}
+
+class _BlinkingCursorState extends State<_BlinkingCursor>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 500),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _ctrl,
+      child: Container(
+        width: 2.5,
+        height: 14,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF7F50),
+          borderRadius: BorderRadius.circular(1.5),
+        ),
       ),
     );
   }
