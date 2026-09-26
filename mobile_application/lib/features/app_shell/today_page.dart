@@ -267,73 +267,78 @@ class TodayPage extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xE6FFFDF8),
-        borderRadius: BorderRadius.circular(28),
+        color: const Color(0xF5FFFDF8),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0F784614),
-            blurRadius: 24,
-            offset: Offset(0, 8),
+            color: Color(0x0A784614),
+            blurRadius: 18,
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(22),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(22),
             onTap: _openChatFromPrompt,
             child: Stack(
               children: [
                 const Positioned(
-                  left: -60,
-                  top: -70,
-                  width: 240,
-                  height: 240,
+                  left: -40,
+                  top: -50,
+                  width: 180,
+                  height: 180,
                   child: _BreathingGlow(),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 13),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(
                         children: [
                           const _Eyebrow('SOL · AI COMPANION'),
                           const Spacer(),
+                          const _LivingAudioWaveform(),
+                          const SizedBox(width: 8),
                           Text(
                             timeStr,
                             style: const TextStyle(
-                              fontSize: 12.5,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFFA5937C),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 7),
                       const Text(
                         'Talk it through',
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 17,
                           height: 1.15,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
+                          letterSpacing: -0.3,
                           color: Color(0xFF3E2818),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 4),
                       const Text(
                         'A quiet, private space to speak or write whatever is on your mind right now.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 15,
-                          height: 1.5,
+                          fontSize: 12.5,
+                          height: 1.35,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF7B6A55),
                         ),
                       ),
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 10),
                       _TextCta('Open chat', onTap: _openChatFromPrompt),
                     ],
                   ),
@@ -384,33 +389,34 @@ class TodayPage extends StatelessWidget {
         final meta = '${activeConv.dateStr} · Recent';
 
         return Padding(
-          padding: const EdgeInsets.only(top: 16),
+          padding: const EdgeInsets.only(top: 10),
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xE6FFFDF8),
-              borderRadius: BorderRadius.circular(24),
+              color: const Color(0xF5FFFDF8),
+              borderRadius: BorderRadius.circular(20),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x0F784614),
-                  blurRadius: 24,
-                  offset: Offset(0, 8),
+                  color: Color(0x0A784614),
+                  blurRadius: 16,
+                  offset: Offset(0, 4),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(20),
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(20),
                   onTap: () {
                     chatController?.switchConversation(activeConv.id);
                     onOpenChat?.call();
                   },
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
                           children: [
@@ -423,15 +429,15 @@ class TodayPage extends StatelessWidget {
                               borderRadius: BorderRadius.circular(6),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 2,
+                                  horizontal: 4,
                                   vertical: 2,
                                 ),
                                 child: Text(
                                   count > 0 ? 'History · $count' : 'History',
                                   style: const TextStyle(
-                                    fontSize: 12.5,
+                                    fontSize: 11.5,
                                     fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.4,
+                                    letterSpacing: 0.3,
                                     color: Color(0xFFB08A5E),
                                   ),
                                 ),
@@ -439,35 +445,36 @@ class TodayPage extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 8),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(
                               width: 2,
-                              height: 46,
+                              height: 32,
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.all(Radius.circular(1)),
                                   gradient: LinearGradient(
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
                                     colors: [
-                                      Color(0x73E86034),
-                                      Color(0x1AE86034),
+                                      Color(0x80E86034),
+                                      Color(0x18E86034),
                                     ],
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 14),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 '“$excerpt”',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 16,
-                                  height: 1.55,
+                                  fontSize: 13.5,
+                                  height: 1.4,
                                   fontWeight: FontWeight.w600,
                                   fontStyle: FontStyle.italic,
                                   color: Color(0xFF4A3728),
@@ -476,16 +483,31 @@ class TodayPage extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
+                            Container(
+                              width: 4.5,
+                              height: 4.5,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE86034).withValues(alpha: 0.75),
+                                shape: BoxShape.circle,
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x60E86034),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 meta,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 12.5,
+                                  fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 0.2,
                                   color: Color(0xFFA5937C),
@@ -732,6 +754,104 @@ class _BreathingGlowState extends State<_BreathingGlow>
           ),
         ),
       );
+}
+
+class _LivingAudioWaveform extends StatefulWidget {
+  const _LivingAudioWaveform();
+
+  @override
+  State<_LivingAudioWaveform> createState() => _LivingAudioWaveformState();
+}
+
+class _LivingAudioWaveformState extends State<_LivingAudioWaveform>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+    if (!_isTestEnvironment) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isTestEnvironment && MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_controller.isAnimating) {
+      return _buildStaticWave();
+    }
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value * 2 * math.pi;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _bar(5.0 + 4.0 * math.sin(t)),
+            const SizedBox(width: 2.5),
+            _bar(7.0 + 7.0 * math.sin(t + 1.2)),
+            const SizedBox(width: 2.5),
+            _bar(6.0 + 6.0 * math.sin(t + 2.4)),
+            const SizedBox(width: 2.5),
+            _bar(4.0 + 4.0 * math.sin(t + 3.6)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStaticWave() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _bar(7.0),
+        const SizedBox(width: 2.5),
+        _bar(13.0),
+        const SizedBox(width: 2.5),
+        _bar(10.0),
+        const SizedBox(width: 2.5),
+        _bar(6.0),
+      ],
+    );
+  }
+
+  Widget _bar(double height) {
+    return Container(
+      width: 2.5,
+      height: height.clamp(3.5, 16.0),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(2),
+        gradient: const LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [
+            Color(0xFFE86034),
+            Color(0xFFFFB534),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _Eyebrow extends StatelessWidget {
