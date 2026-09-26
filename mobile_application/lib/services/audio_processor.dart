@@ -87,7 +87,7 @@ class AdaptiveNoiseFloor {
   /// negThreshold rule already prevents a monologue from inflating the
   /// estimate; add a windowed minimum if floor_drift_db is ever non-zero.
   void update({required double rms, required double speechProb, int nowMs = 0}) {
-    if (speechProb < negThreshold) {
+    if (speechProb < negThreshold || rms < _floor) {
       final alpha = rms > _floor ? alphaUp : alphaDown;
       _floor += alpha * (rms - _floor);
       _floor = _floor.clamp(floorMinRms, floorMaxRms);
@@ -318,7 +318,9 @@ class SnrGate {
       GateState.speech =>
         silenceMs >= hangoverMs ? GateState.hangover : GateState.speech,
       GateState.hangover =>
-        value >= offDb ? GateState.speech : GateState.hangover,
+        value >= offDb
+            ? GateState.speech
+            : (silenceMs >= effectiveEndpointMs ? GateState.idle : GateState.hangover),
     };
     if (_state == GateState.speech && !speechConfirmed) _state = GateState.onsetRun;
     return _state;
@@ -447,12 +449,15 @@ class AudioProcessor {
     final now = nowMs;
     final rms = computeRms(frame, floorRms: noiseFloor.floorRms);
 
-    // Order-independent: classify against the current floor, then let the
-    // floor learn from that classification, then re-measure.
+    // Classify against current floor. Ambient room noise when the gate is idle
+    // (RMS < 1200 / 32768) updates the noise floor so turn-taking never locks.
     final provisional = noiseFloor.snrDb(rms);
+    final isSpeechProb = gate.state == GateState.speech ||
+        gate.state == GateState.onsetRun ||
+        (provisional >= gate.onDbSilent && rms >= (1200 / _fullScale));
     noiseFloor.update(
       rms: rms,
-      speechProb: provisional >= gate.offDb ? 1.0 : 0.0,
+      speechProb: isSpeechProb ? 1.0 : 0.0,
       nowMs: now,
     );
     final snrDb = noiseFloor.snrDb(rms);
@@ -493,6 +498,7 @@ class AudioProcessor {
   List<Uint8List> drainPreRoll(int backMs) => preRoll.drain(backMs);
 
   void reset() {
+    noiseFloor.reset();
     gate.reset();
     preRoll.clear();
   }

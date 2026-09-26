@@ -502,6 +502,8 @@ class _CallPageState extends State<CallPage> {
       _gateOpen = false;
       _silenceSinceMs = now;
       _resolvePendingOnset(m, now, stillSpeaking: false);
+    } else if (!_gateOpen && !m.isSpeech && _silenceSinceMs < 0 && _turnOpen) {
+      _silenceSinceMs = now;
     }
 
     _resolvePendingOnset(m, now, stillSpeaking: true);
@@ -602,6 +604,7 @@ class _CallPageState extends State<CallPage> {
       // Adaptive endpoint deadline learns from the gaps this client emitted.
       p.gate.noteAcceptedGap(p.nowMs - p.gate.lastSpeechMs);
     }
+    p?.gate.reset();
     debugPrint('[CallPage] turn end: $turnId ($reason)');
     unawaited(_wsService?.sendInputEnd(
       turnId: turnId,
@@ -614,14 +617,18 @@ class _CallPageState extends State<CallPage> {
   /// (spec 5.1.5).
   void _maybeEndpoint(AudioProcessor p, int now) {
     if (!_turnOpen) return;
+    final overCap = now - _turnOpenedAtMs >= p.gate.maxTurnMs;
+    if (overCap) {
+      _endUserTurn(reason: 'max_duration');
+      return;
+    }
     if (_gateOpen) {
       _silenceSinceMs = -1;
       return;
     }
     if (_silenceSinceMs < 0) return;
-    final overCap = now - _turnOpenedAtMs >= p.gate.maxTurnMs;
-    if (overCap || now - _silenceSinceMs >= p.gate.effectiveEndpointMs) {
-      _endUserTurn(reason: overCap ? 'max_duration' : 'client_endpoint');
+    if (now - _silenceSinceMs >= p.gate.effectiveEndpointMs) {
+      _endUserTurn(reason: 'client_endpoint');
     }
   }
 
