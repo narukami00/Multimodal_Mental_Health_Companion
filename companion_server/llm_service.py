@@ -183,9 +183,17 @@ class LlmService:
                     temperature=temperature,
                     top_p=top_p,
                 ):
+                    if loop.is_closed():
+                        break
                     loop.call_soon_threadsafe(queue.put_nowait, token)
+            except Exception as e:
+                logger.debug(f"LLM producer terminated: {e}")
             finally:
-                loop.call_soon_threadsafe(queue.put_nowait, None)
+                if not loop.is_closed():
+                    try:
+                        loop.call_soon_threadsafe(queue.put_nowait, None)
+                    except RuntimeError:
+                        pass
 
         threading.Thread(target=_producer, daemon=True).start()
 
