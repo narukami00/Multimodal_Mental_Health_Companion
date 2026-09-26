@@ -1,12 +1,19 @@
 package com.sysmentalhealth.solace_mobile
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioEffect
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -20,14 +27,31 @@ class MainActivity : FlutterActivity() {
     private val STREAM_CHANNEL = "com.sysmentalhealth.solace_mobile/audio_stream"
     private val PERMISSION_REQUEST_CODE = 1002
 
+    private companion object {
+        const val TAG = "SolaceAudio"
+
+        // 20 ms is the resolution every VAD threshold is expressed in.
+        const val DEFAULT_FRAME_MS = 20
+    }
+
     private var eventSink: EventChannel.EventSink? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val audioManager by lazy {
+        getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
 
     @Volatile
     private var isRecording = false
     private var audioRecord: AudioRecord? = null
     private var recordingThread: Thread? = null
+    private var aec: AcousticEchoCanceler? = null
+    private var ns: NoiseSuppressor? = null
+    private var aecActive = false
+
+    private var lastSampleRate = 16000
+    private var lastFrameMs = DEFAULT_FRAME_MS
+    private var resumeAfterPause = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -59,7 +83,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "startRecording" -> {
                     val sampleRate = call.argument<Int>("sampleRate") ?: 16000
-                    val frameMs = call.argument<Int>("frameMs") ?: 100
+                    val frameMs = call.argument<Int>("frameMs") ?: DEFAULT_FRAME_MS
                     val started = startPcmRecording(sampleRate, frameMs)
                     result.success(started)
                 }
@@ -67,6 +91,7 @@ class MainActivity : FlutterActivity() {
                     stopPcmRecording()
                     result.success(true)
                 }
+                "captureInfo" -> result.success(captureInfo())
                 else -> result.notImplemented()
             }
         }
@@ -78,6 +103,9 @@ class MainActivity : FlutterActivity() {
                 }
 
                 override fun onCancel(arguments: Any?) {
+                    // Keep the sink: Dart restarts capture on resume and would
+                    // otherwise have to re-listen, which used to kill capture
+                    // permanently (spec §3.3).
                     eventSink = null
                     stopPcmRecording()
                 }
@@ -98,6 +126,20 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        resumeAfterPause = isRecording
+        if (isRecording) stopPcmRecording()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (resumeAfterPause) {
+            resumeAfterPause = false
+            startPcmRecording(lastSampleRate, lastFrameMs)
+        }
+    }
+
     private fun startPcmRecording(sampleRate: Int, frameMs: Int): Boolean {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             return false
@@ -105,64 +147,105 @@ class MainActivity : FlutterActivity() {
         if (isRecording) {
             stopPcmRecording()
         }
+        lastSampleRate = sampleRate
+        lastFrameMs = frameMs
 
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-        // 16-bit mono = 2 bytes per sample. For 100ms at 16000Hz = 1600 samples = 3200 bytes
+        // 16-bit mono = 2 bytes per sample. 20 ms at 16 kHz = 320 samples = 640 bytes.
         val frameBytes = (sampleRate * 2 * frameMs) / 1000
         val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-        val bufferSize = maxOf(minBufferSize, frameBytes * 2)
+        val bufferSize = maxOf(minBufferSize, frameBytes * 4)
 
         try {
+            // Put the audio policy manager on the voice-communication path so
+            // capture and playback are routed for a conversation, not for media.
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+
             audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                // The only source whose contract promises echo cancellation. AOSP
+                // configures no preprocessing at all for VOICE_RECOGNITION.
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                 sampleRate,
                 channelConfig,
                 audioFormat,
                 bufferSize
             )
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                audioRecord?.release()
+            val record = audioRecord
+            if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
+                record?.release()
                 audioRecord = null
+                restoreAudioMode()
                 return false
             }
 
             isRecording = true
-            audioRecord?.startRecording()
+            attachEffects(record.audioSessionId)
+            logCaptureConfiguration(record)
+            record.startRecording()
 
             recordingThread = thread(start = true, name = "PCM-AudioRecorder") {
-                val buffer = ByteArray(frameBytes)
+                val readBuffer = ByteArray(frameBytes)
+                val accumulator = ByteArray(frameBytes * 4)
+                val samplesPerFrame = frameBytes / 2
+                var filled = 0
+                var seq = 0
                 while (isRecording) {
-                    var totalRead = 0
-                    while (totalRead < frameBytes && isRecording) {
-                        val read = audioRecord?.read(buffer, totalRead, frameBytes - totalRead) ?: -1
-                        if (read > 0) {
-                            totalRead += read
-                        } else {
-                            break
-                        }
+                    val read = try {
+                        record.read(readBuffer, 0, readBuffer.size)
+                    } catch (e: IllegalStateException) {
+                        Log.w(TAG, "read failed: $e")
+                        -1
                     }
+                    if (read < 0) break
+                    if (read == 0) continue
 
-                    if (totalRead > 0 && isRecording) {
-                        val chunk = buffer.copyOf(totalRead)
-                        mainHandler.post {
-                            eventSink?.success(chunk)
+                    // Emit only complete frames: a short frame would make every
+                    // millisecond count in Dart device-dependent.
+                    var consumed = 0
+                    while (consumed < read) {
+                        val take = minOf(frameBytes - filled, read - consumed)
+                        System.arraycopy(readBuffer, consumed, accumulator, filled, take)
+                        filled += take
+                        consumed += take
+                        if (filled == frameBytes) {
+                            val chunk = accumulator.copyOf(frameBytes)
+                            val frameSeq = seq
+                            val sampleOffset = frameSeq * samplesPerFrame
+                            mainHandler.post {
+                                eventSink?.success(
+                                    mapOf(
+                                        "seq" to frameSeq,
+                                        "samples" to sampleOffset,
+                                        "pcm" to chunk
+                                    )
+                                )
+                            }
+                            seq++
+                            filled = 0
                         }
                     }
                 }
 
                 try {
-                    audioRecord?.stop()
-                    audioRecord?.release()
+                    record.stop()
+                } catch (_: Exception) {}
+                releaseEffects()
+                try {
+                    record.release()
                 } catch (_: Exception) {}
                 audioRecord = null
+                restoreAudioMode()
             }
 
             return true
         } catch (e: Exception) {
+            Log.e(TAG, "startRecording failed", e)
             isRecording = false
             audioRecord?.release()
             audioRecord = null
+            releaseEffects()
+            restoreAudioMode()
             return false
         }
     }
@@ -173,8 +256,96 @@ class MainActivity : FlutterActivity() {
         recordingThread = null
     }
 
+    /**
+     * Query, do not blindly enable: the platform may already have inserted an
+     * AEC for VOICE_COMMUNICATION, and a second one double-processes the signal
+     * (pumping, hollow near-end).
+     */
+    private fun attachEffects(sessionId: Int) {
+        aecActive = false
+        if (AcousticEchoCanceler.isAvailable()) {
+            try {
+                val effect = AcousticEchoCanceler.create(sessionId)
+                if (effect != null) {
+                    aec = effect
+                    if (!effect.enabled) effect.enabled = true
+                    aecActive = effect.enabled
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "AcousticEchoCanceler unavailable: $e")
+            }
+        }
+        if (NoiseSuppressor.isAvailable()) {
+            try {
+                val effect = NoiseSuppressor.create(sessionId)
+                if (effect != null) {
+                    ns = effect
+                    if (!effect.enabled) effect.enabled = true
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "NoiseSuppressor unavailable: $e")
+            }
+        }
+        // ponytail: the effect handles are held until stop, not released right
+        // after create(). Releasing an effect we created tears it down on most
+        // devices, which silently disables the very thing we just enabled.
+    }
+
+    private fun releaseEffects() {
+        try {
+            aec?.release()
+        } catch (_: Exception) {}
+        aec = null
+        try {
+            ns?.release()
+        } catch (_: Exception) {}
+        ns = null
+        aecActive = false
+    }
+
+    /**
+     * Ground truth for "is AEC actually engaged on this device?". getEffects()
+     * includes platform-inserted effects; getClientFormat() may differ from the
+     * device format because the platform resamples. Shipped in release builds:
+     * without this line nobody can tell which echo regime the app is in.
+     */
+    private fun logCaptureConfiguration(record: AudioRecord) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        try {
+            val config = audioManager.activeRecordingConfigurations
+                .firstOrNull { it.audioRecord == record }
+                ?: audioManager.activeRecordingConfigurations.firstOrNull()
+            val hasAec = config?.effects?.any { it.type == AudioEffect.EFFECT_TYPE_AEC } ?: false
+            val hasNs = config?.effects?.any { it.type == AudioEffect.EFFECT_TYPE_NOISE_SUPPRESSION } ?: false
+            Log.i(
+                TAG,
+                "capture session=${record.audioSessionId} aec=$aecActive effectsAec=$hasAec " +
+                    "effectsNs=$hasNs clientRate=${config?.clientFormat?.sampleRate} " +
+                    "deviceRate=${config?.format?.sampleRate}"
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "capture configuration probe failed: $e")
+        }
+    }
+
+    private fun captureInfo(): Map<String, Any?> = mapOf(
+        "aec_active" to aecActive,
+        "aec_source" to if (aecActive) "platform" else "software-fallback",
+        "sample_rate" to lastSampleRate,
+        "frame_ms" to lastFrameMs
+    )
+
+    private fun restoreAudioMode() {
+        try {
+            audioManager.mode = AudioManager.MODE_NORMAL
+        } catch (e: Exception) {
+            Log.w(TAG, "could not restore audio mode: $e")
+        }
+    }
+
     override fun onDestroy() {
         stopPcmRecording()
+        releaseEffects()
         super.onDestroy()
     }
 }

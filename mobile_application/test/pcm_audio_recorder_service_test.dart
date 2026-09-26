@@ -1,54 +1,92 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/services/audio_processor.dart';
 import 'package:solace_mobile/services/pcm_audio_recorder_service.dart';
+
+Uint8List sine({double amplitude = 15000, int sampleCount = 1600, int freq = 440}) {
+  final buffer = Uint8List(sampleCount * 2);
+  final byteData = ByteData.sublistView(buffer);
+  for (var i = 0; i < sampleCount; i++) {
+    final sample = (amplitude * math.sin(2 * math.pi * freq * i / 16000)).toInt();
+    byteData.setInt16(i * 2, sample, Endian.little);
+  }
+  return buffer;
+}
 
 void main() {
   group('PcmAudioRecorderService Unit Tests', () {
-    test('computeRmsAmplitude handles silence and signals accurately', () {
+    test('computeRmsAmplitude is raw, normalised, and gain-calibrated', () {
       // 1. Pure silence
-      final silence = Uint8List(3200);
-      expect(PcmAudioRecorderService.computeRmsAmplitude(silence), 0.0);
+      expect(PcmAudioRecorderService.computeRmsAmplitude(Uint8List(3200)), 0.0);
 
-      // 2. High amplitude sine wave
-      final sampleRate = 16000;
-      final numSamples = 1600; // 100ms
-      final buffer = Uint8List(numSamples * 2);
-      final byteData = ByteData.sublistView(buffer);
-      for (var i = 0; i < numSamples; i++) {
-        final sample = (15000.0 * math.sin(2 * math.pi * 440 * i / sampleRate)).toInt();
-        byteData.setInt16(i * 2, sample, Endian.little);
-      }
-      final amp = PcmAudioRecorderService.computeRmsAmplitude(buffer);
-      expect(amp, greaterThan(0.5));
+      // 2. A 0.4578-amplitude sine is 0.3237 normalised RMS (amplitude/sqrt(2)).
+      //    No magic divisor: the value is a measurement, not a display curve.
+      final amp = PcmAudioRecorderService.computeRmsAmplitude(sine());
+      expect(amp, closeTo(15000 / 32768 / math.sqrt(2), 0.005));
       expect(amp, lessThanOrEqualTo(1.0));
+
+      // 3. A DC-biased buffer measures the same as the clean one.
+      final biased = sine();
+      final biasedData = ByteData.sublistView(biased);
+      for (var i = 0; i < biased.length ~/ 2; i++) {
+        biasedData.setInt16(i * 2, biasedData.getInt16(i * 2, Endian.little) + 8000, Endian.little);
+      }
+      expect(
+        PcmAudioRecorderService.computeRmsAmplitude(biased),
+        closeTo(amp, 0.01),
+      );
     });
 
-    test('mock audio recorder streams frames and amplitude', () async {
+    test('mock audio recorder streams frames and metrics with sequence numbers', () async {
       final recorder = PcmAudioRecorderService(isMock: true);
       expect(recorder.isRecording, isFalse);
 
       final chunks = <Uint8List>[];
-      final amplitudes = <double>[];
+      final metrics = <FrameMetrics>[];
 
       final chunkSub = recorder.audioStream.listen(chunks.add);
-      final ampSub = recorder.amplitudeStream.listen(amplitudes.add);
+      final metricsSub = recorder.frameMetricsStream.listen(metrics.add);
 
       final started = await recorder.startRecording(sampleRate: 16000, frameMs: 50);
       expect(started, isTrue);
       expect(recorder.isRecording, isTrue);
 
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
 
       expect(chunks.length, greaterThanOrEqualTo(2));
-      expect(amplitudes.length, greaterThanOrEqualTo(2));
+      expect(metrics.length, greaterThanOrEqualTo(2));
       expect(chunks.first.length, (16000 * 2 * 50) ~/ 1000); // 1600 bytes for 50ms
+      expect(metrics.first.seq, 0);
+      expect(metrics.last.seq, metrics.length - 1);
+      expect(metrics.last.sampleOffset, metrics.last.seq * 800);
+      expect(metrics.last.frameMs, 50);
+
+      // The mock emits a speech/silence cadence, so the gate can actually run.
+      expect(metrics.any((m) => m.isSpeech), isTrue);
+      expect(recorder.preRollBytes, greaterThan(0));
 
       await recorder.stopRecording();
       expect(recorder.isRecording, isFalse);
 
       await chunkSub.cancel();
-      await ampSub.cancel();
+      await metricsSub.cancel();
+      recorder.dispose();
+    });
+
+    test('pre-roll drains the onset audio once a turn opens', () async {
+      final recorder = PcmAudioRecorderService(isMock: true);
+      final metricsSub = recorder.frameMetricsStream.listen((_) {});
+      await recorder.startRecording(sampleRate: 16000, frameMs: 20);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      final drained = recorder.drainPreRoll(200);
+      expect(drained.length, inInclusiveRange(8, 10)); // 10 x 20 ms of history
+      expect(drained.every((f) => f.length == 640), isTrue);
+      expect(recorder.drainPreRoll(200).length, 0); // drained, not copied
+
+      await metricsSub.cancel();
+      await recorder.stopRecording();
       recorder.dispose();
     });
 

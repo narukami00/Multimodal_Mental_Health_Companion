@@ -50,6 +50,15 @@ class CompanionWebSocketService {
   int _reconnectAttempts = 0;
   static const int _maxReconnectDelaySec = 15;
 
+  /// Heartbeat cadence for a duplex call. Chat mode keeps the 15 s interval.
+  Duration _heartbeatInterval = const Duration(seconds: 15);
+  static const Duration callHeartbeatInterval = Duration(seconds: 4);
+  Duration get heartbeatInterval => _heartbeatInterval;
+
+  /// Stream id used in the 8-byte binary header of duplex capture frames.
+  final int _inputStreamId = 1001;
+  int _inputSeq = 0;
+
   CompanionConnectionStatus _status = CompanionConnectionStatus.disconnected;
   CompanionConnectionStatus get status => _status;
 
@@ -126,6 +135,46 @@ class CompanionWebSocketService {
   final _callStateController =
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get callStateStream => _callStateController.stream;
+
+  // --- duplex turn lifecycle (spec §7.2) -------------------------------------
+  final _turnStartedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get turnStartedStream =>
+      _turnStartedController.stream;
+
+  final _speechDetectedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get speechDetectedStream =>
+      _speechDetectedController.stream;
+
+  final _turnEndpointedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get turnEndpointedStream =>
+      _turnEndpointedController.stream;
+
+  final _turnProcessingController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get turnProcessingStream =>
+      _turnProcessingController.stream;
+
+  final _turnInterruptedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get turnInterruptedStream =>
+      _turnInterruptedController.stream;
+
+  final _turnDiscardedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get turnDiscardedStream =>
+      _turnDiscardedController.stream;
+
+  final _ttsResumeController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get ttsResumeStream => _ttsResumeController.stream;
+
+  final _turnDiagnosticController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get turnDiagnosticStream =>
+      _turnDiagnosticController.stream;
 
   void _updateStatus(CompanionConnectionStatus newStatus) {
     if (_status != newStatus) {
@@ -242,8 +291,10 @@ class CompanionWebSocketService {
 
   void _startHeartbeat() {
     _heartbeatTimer?.cancel();
-    // 15 seconds interval per section 10
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    // 4 s for a call session: at 15 s a half-open socket produced a
+    // 15-second window of "connected" that was not connected, during which
+    // audio was silently dropped (spec §3.7).
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
       sendPing();
     });
   }
@@ -308,15 +359,116 @@ class CompanionWebSocketService {
     _sendJson(payload);
   }
 
-  /// Sends raw 16-bit PCM binary chunk over the active WebSocket (Phase 2).
-  void sendAudioChunk(Uint8List chunk) {
-    if (_channel != null && _status == CompanionConnectionStatus.connected) {
-      try {
-        _channel!.sink.add(chunk);
-      } catch (e) {
-        debugPrint('[CompanionWS] Failed to send binary audio chunk: $e');
-      }
+  /// Sends the duplex call's `input.start`, symmetric with the server's binary
+  /// framing. The server answers `turn.started`; until then, frames are only
+  /// buffered locally in the pre-roll ring.
+  Future<void> sendInputStart({
+    required String turnId,
+    int preRollMs = 600,
+    bool framed = true,
+    int sampleRate = 16000,
+    int channels = 1,
+    int frameMs = 20,
+    String mode = 'duplex_call',
+  }) async {
+    _heartbeatInterval = callHeartbeatInterval;
+    _inputSeq = 0;
+    final payload = {
+      'v': 1,
+      'type': 'input.start',
+      'session_id': _sessionId,
+      'turn_id': turnId,
+      'stream_id': _inputStreamId,
+      'modality': mode,
+      'encoding': 'pcm16',
+      'framed': framed,
+      'sample_rate': sampleRate,
+      'channels': channels,
+      'frame_ms': frameMs,
+      'pre_roll_ms': preRollMs,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
+  /// Sends one framed capture frame: `uint32 LE stream_id`, `uint32 LE seq`,
+  /// then exactly `frame_bytes` of pcm16. The header is what makes loss,
+  /// duplication and reordering *detectable* server-side (spec §7.3).
+  void sendAudioChunk(Uint8List chunk, {bool framed = false}) {
+    if (_channel == null || _status != CompanionConnectionStatus.connected) {
+      return;
     }
+    try {
+      if (!framed) {
+        _channel!.sink.add(chunk);
+        return;
+      }
+      final header = ByteData(8)
+        ..setUint32(0, _inputStreamId, Endian.little)
+        ..setUint32(4, _inputSeq++, Endian.little);
+      _channel!.sink.add(Uint8List.fromList([...header.buffer.asUint8List(), ...chunk]));
+    } catch (e) {
+      debugPrint('[CompanionWS] Failed to send binary audio chunk: $e');
+    }
+  }
+
+  /// `input.end`. [reason] is the client's endpointing decision; the server
+  /// corroborates it against its own VAD.
+  Future<void> sendInputEnd({
+    required String turnId,
+    int durationMs = 0,
+    String reason = 'client_endpoint',
+  }) async {
+    final payload = {
+      'v': 1,
+      'type': 'input.end',
+      'session_id': _sessionId,
+      'turn_id': turnId,
+      'duration_ms': durationMs,
+      'reason': reason,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
+  /// The client abandoned the turn (page disposed, mute, call end). Sent
+  /// *before* the socket goes away so the server never keeps an orphaned
+  /// buffer.
+  Future<void> sendTurnCancel({
+    required String turnId,
+    String reason = 'page_disposed',
+  }) async {
+    final payload = {
+      'v': 1,
+      'type': 'turn.cancel',
+      'session_id': _sessionId,
+      'turn_id': turnId,
+      'reason': reason,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
+  /// The user genuinely took the floor. [playedMs] is what the ear actually
+  /// heard: the server truncates its history to exactly that point. This is the
+  /// message the previous code never sent, and without it the server's history
+  /// became a record of words the user never heard.
+  Future<void> sendTurnInterrupted({
+    required String turnId,
+    required int playedMs,
+    String? interruptedTurnId,
+  }) async {
+    final payload = {
+      'v': 1,
+      'type': 'turn.interrupted',
+      'session_id': _sessionId,
+      'turn_id': turnId,
+      if (interruptedTurnId != null) 'interrupted_turn_id': interruptedTurnId,
+      'played_ms': playedMs,
+      'reason': 'user_speech',
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
   }
 
   /// Sends audio_end envelope after finishing recording (Phase 2).
@@ -353,7 +505,11 @@ class CompanionWebSocketService {
     _sendJson(payload);
   }
 
-  /// Configures session mode, voice settings, and audio parameters (Phase 6).
+  /// Configures session mode, voice settings, and audio parameters.
+  ///
+  /// [vad] carries the §5.11 calibration block. Server config wins: the client
+  /// must not be able to set a threshold the server disagrees with, or the two
+  /// halves of the gate disagree and the failure is undebuggable.
   Future<void> sendSessionConfigure({
     required String mode,
     bool ttsEnabled = true,
@@ -362,7 +518,11 @@ class CompanionWebSocketService {
     int micSampleRate = 16000,
     int playbackSampleRate = 24000,
     String codec = 'pcm_s16le',
+    Map<String, dynamic>? vad,
   }) async {
+    if (mode != 'duplex_call') {
+      _heartbeatInterval = const Duration(seconds: 15);
+    }
     final payload = {
       'v': 1,
       'type': 'session.configure',
@@ -378,6 +538,7 @@ class CompanionWebSocketService {
         'playback_sample_rate': playbackSampleRate,
         'codec': codec,
       },
+      if (vad != null) 'vad': vad,
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
     _sendJson(payload);
@@ -564,6 +725,55 @@ class CompanionWebSocketService {
           }
           break;
 
+        // --- duplex turn lifecycle (spec §7.2) ---
+        case 'turn.started':
+          if (!_turnStartedController.isClosed) {
+            _turnStartedController.add(data);
+          }
+          break;
+
+        case 'turn.speech_detected':
+          if (!_speechDetectedController.isClosed) {
+            _speechDetectedController.add(data);
+          }
+          break;
+
+        case 'turn.endpointed':
+          if (!_turnEndpointedController.isClosed) {
+            _turnEndpointedController.add(data);
+          }
+          break;
+
+        case 'turn.processing':
+          if (!_turnProcessingController.isClosed) {
+            _turnProcessingController.add(data);
+          }
+          break;
+
+        case 'turn.interrupted':
+          if (!_turnInterruptedController.isClosed) {
+            _turnInterruptedController.add(data);
+          }
+          break;
+
+        case 'turn.discarded':
+          if (!_turnDiscardedController.isClosed) {
+            _turnDiscardedController.add(data);
+          }
+          break;
+
+        case 'tts.resume':
+          if (!_ttsResumeController.isClosed) {
+            _ttsResumeController.add(data);
+          }
+          break;
+
+        case 'turn.diagnostic':
+          if (!_turnDiagnosticController.isClosed) {
+            _turnDiagnosticController.add(data);
+          }
+          break;
+
         case 'error':
           debugPrint('[CompanionWS] Server error: ${data['message']}');
           break;
@@ -658,6 +868,15 @@ class CompanionWebSocketService {
     _binaryAudioController.close();
     _ttsStartController.close();
     _ttsEndController.close();
+    _ttsSegmentController.close();
     _callStateController.close();
+    _turnStartedController.close();
+    _speechDetectedController.close();
+    _turnEndpointedController.close();
+    _turnProcessingController.close();
+    _turnInterruptedController.close();
+    _turnDiscardedController.close();
+    _ttsResumeController.close();
+    _turnDiagnosticController.close();
   }
 }

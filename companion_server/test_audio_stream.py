@@ -99,6 +99,7 @@ async def test_audio_streaming_flow():
             await asyncio.sleep(0.01)  # small interval
 
         # Step D: Audio End
+        recordings_before = set(RECORDINGS_DIR.glob("*.wav")) if RECORDINGS_DIR.exists() else set()
         audio_end_msg = {
             "v": 1,
             "type": "audio_end",
@@ -119,7 +120,6 @@ async def test_audio_streaming_flow():
         assert audio_received.get("bytes") == 64000
         assert audio_received.get("duration_ms") == 2000
         wav_file = audio_received.get("wav_file")
-        assert wav_file is not None
 
         # Expect transcript_final
         raw_transcript = await ws.recv()
@@ -128,30 +128,37 @@ async def test_audio_streaming_flow():
         assert transcript.get("type") in ("transcript_final", "transcript_failed")
         assert transcript.get("turn_id") == turn_id
 
-        # Step E: Verify saved WAV file on disk
-        wav_path = RECORDINGS_DIR / wav_file
-        print(f"\n--- 3. Verifying WAV File on Disk: {wav_path} ---")
-        assert wav_path.exists(), f"WAV file {wav_path} was not found on disk"
-        
-        with wave.open(str(wav_path), "rb") as wf:
-            channels = wf.getnchannels()
-            sampwidth = wf.getsampwidth()
-            framerate = wf.getframerate()
-            nframes = wf.getnframes()
-            duration_s = nframes / framerate
+        # Step E: per-turn WAV dumps are off by default (they used to run on the
+        # event loop for every turn and grow without bound). When the dump is
+        # enabled the file must be a valid 2.0 s mono 16 kHz WAV.
+        recordings_after = set(RECORDINGS_DIR.glob("*.wav")) if RECORDINGS_DIR.exists() else set()
+        if wav_file is None:
+            assert recordings_after == recordings_before, "no WAV may be written by default"
+            print("[PASS] No debug WAV written (debug recordings disabled by default)")
+        else:
+            wav_path = RECORDINGS_DIR / wav_file
+            print(f"\n--- 3. Verifying WAV File on Disk: {wav_path} ---")
+            assert wav_path.exists(), f"WAV file {wav_path} was not found on disk"
 
-            print(f"  Channels: {channels} (expected 1)")
-            print(f"  Sample Width: {sampwidth} bytes (expected 2 for 16-bit PCM)")
-            print(f"  Sample Rate: {framerate} Hz (expected 16000)")
-            print(f"  Total Frames: {nframes} (expected 32000 for 2.0s)")
-            print(f"  Calculated Duration: {duration_s:.2f} s")
+            with wave.open(str(wav_path), "rb") as wf:
+                channels = wf.getnchannels()
+                sampwidth = wf.getsampwidth()
+                framerate = wf.getframerate()
+                nframes = wf.getnframes()
+                duration_s = nframes / framerate
 
-            assert channels == 1
-            assert sampwidth == 2
-            assert framerate == 16000
-            assert nframes == 32000
-            assert abs(duration_s - 2.0) < 0.05
-        print("[PASS] WAV audio file is 100% valid and verified!")
+                print(f"  Channels: {channels} (expected 1)")
+                print(f"  Sample Width: {sampwidth} bytes (expected 2 for 16-bit PCM)")
+                print(f"  Sample Rate: {framerate} Hz (expected 16000)")
+                print(f"  Total Frames: {nframes} (expected 32000 for 2.0s)")
+                print(f"  Calculated Duration: {duration_s:.2f} s")
+
+                assert channels == 1
+                assert sampwidth == 2
+                assert framerate == 16000
+                assert nframes == 32000
+                assert abs(duration_s - 2.0) < 0.05
+            print("[PASS] WAV audio file is 100% valid and verified!")
 
         # Step F: Test Audio Cancel
         print("\n--- 4. Testing Audio Cancellation ---")

@@ -3,8 +3,15 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Service responsible for recording raw 16 kHz PCM 16-bit mono audio
-/// and streaming chunks (default 100ms / 3200 bytes) over an EventChannel.
+import 'audio_processor.dart';
+
+/// Records raw 16 kHz PCM 16-bit mono audio over an EventChannel and measures
+/// every frame exactly once.
+///
+/// This service owns the single [AudioProcessor] for a capture session: one
+/// adaptive noise floor, one echo filter, one SNR gate, one pre-roll ring
+/// buffer. `call_page.dart` reads [frameMetricsStream] and drains the pre-roll;
+/// it never re-measures a frame itself.
 class PcmAudioRecorderService {
   static const MethodChannel _controlChannel =
       MethodChannel('com.sysmentalhealth.solace_mobile/audio_control');
@@ -12,16 +19,51 @@ class PcmAudioRecorderService {
       EventChannel('com.sysmentalhealth.solace_mobile/audio_stream');
 
   final bool isMock;
-  PcmAudioRecorderService({this.isMock = false});
+
+  /// Mock capture cadence. Defaults match a conversational 700 ms utterance
+  /// with a 500 ms pause; tests shorten the pause so the endpoint deadline is
+  /// reachable without pumping half a minute of fake time.
+  final int mockSpeechMs;
+  final int mockSilenceMs;
+
+  PcmAudioRecorderService({
+    this.isMock = false,
+    this.mockSpeechMs = 700,
+    this.mockSilenceMs = 500,
+    AudioProcessor? processor,
+  }) : processor = processor ?? AudioProcessor();
+
+  /// The capture-side signal chain (spec §5.2). Exposed for diagnostics.
+  final AudioProcessor processor;
 
   bool _isRecording = false;
   bool get isRecording => _isRecording;
+
+  /// Frame size the session was started with. Every duration is derived from
+  /// it, never from a hardcoded frame count.
+  int get frameMs => _frameMs;
+  int _frameMs = 20;
+
+  int _frameSeq = 0;
+  int _samplesPerFrame = 320;
+  bool _assistantSpeaking = false;
+
+  /// Current noise floor (normalised RMS) — spec §10 telemetry.
+  double get floorRms => processor.floorRms;
+  double get floorDriftDb => processor.floorDriftDb;
+  int get echoSuppressionCount => processor.echoSuppressions;
+  int get preRollBytes => processor.preRoll.totalBytes;
 
   StreamSubscription<dynamic>? _nativeStreamSub;
 
   final _audioController = StreamController<Uint8List>.broadcast();
   Stream<Uint8List> get audioStream => _audioController.stream;
 
+  final _frameMetricsController = StreamController<FrameMetrics>.broadcast();
+  Stream<FrameMetrics> get frameMetricsStream => _frameMetricsController.stream;
+
+  /// Display-only level curve for waveform visuals. **Never a gate input** — the
+  /// gate reads [FrameMetrics.snrDb] only.
   final _amplitudeController = StreamController<double>.broadcast();
   Stream<double> get amplitudeStream => _amplitudeController.stream;
 
@@ -53,10 +95,11 @@ class PcmAudioRecorderService {
     }
   }
 
-  /// Start recording raw PCM audio at the specified sample rate (default 16000 Hz, 100ms frames).
+  /// Start recording raw PCM audio (default 16000 Hz, 20 ms frames — 640 bytes).
+  /// 20 ms is the resolution every VAD threshold in the spec is expressed in.
   Future<bool> startRecording({
     int sampleRate = 16000,
-    int frameMs = 100,
+    int frameMs = 20,
   }) async {
     if (_isRecording) return true;
 
@@ -67,6 +110,10 @@ class PcmAudioRecorderService {
     }
 
     _isRecording = true;
+    _frameMs = frameMs;
+    _samplesPerFrame = sampleRate * frameMs ~/ 1000;
+    _frameSeq = 0;
+    processor.reset();
 
     if (isMock) {
       _startMockStreaming(sampleRate, frameMs);
@@ -91,11 +138,8 @@ class PcmAudioRecorderService {
       _nativeStreamSub = _streamChannel.receiveBroadcastStream().listen(
         (dynamic chunk) {
           if (!_isRecording) return;
-          if (chunk is Uint8List) {
-            _onAudioChunk(chunk);
-          } else if (chunk is List<int>) {
-            _onAudioChunk(Uint8List.fromList(chunk));
-          }
+          final frame = _decodeFrame(chunk);
+          if (frame != null) _onAudioChunk(frame);
         },
         onError: (dynamic err) {
           debugPrint('[PcmAudioRecorder] Native audio stream error: $err');
@@ -111,25 +155,96 @@ class PcmAudioRecorderService {
     }
   }
 
+  /// The capture path sends `{seq, samples, pcm}` so every frame carries a
+  /// monotonic position on the audio timeline. A bare list is still accepted so
+  /// an older native build degrades to a locally-sequenced stream.
+  static Uint8List? _decodeFrame(dynamic chunk) {
+    if (chunk is Uint8List) return chunk;
+    if (chunk is List<int>) return Uint8List.fromList(chunk);
+    if (chunk is Map) {
+      final pcm = chunk['pcm'];
+      if (pcm is Uint8List) return pcm;
+      if (pcm is List<int>) return Uint8List.fromList(pcm);
+    }
+    return null;
+  }
+
+  /// The single place a frame is measured, floored, echo-filtered, gated and
+  /// written to the pre-roll ring.
   void _onAudioChunk(Uint8List chunk) {
     if (!_audioController.isClosed) {
       _audioController.add(chunk);
     }
-    final amp = computeRmsAmplitude(chunk);
+    final metrics = processor.step(
+      frame: chunk,
+      seq: _frameSeq,
+      sampleOffset: _frameSeq * _samplesPerFrame,
+      frameMs: _frameMs,
+      assistantSpeaking: _assistantSpeaking,
+    );
+    _frameSeq++;
+    if (!_frameMetricsController.isClosed) {
+      _frameMetricsController.add(metrics);
+    }
     if (!_amplitudeController.isClosed) {
-      _amplitudeController.add(amp);
+      // Perceptual curve for visuals only; the gate never sees this.
+      _amplitudeController.add(math.sqrt(metrics.rms));
+    }
+  }
+
+  /// Tell the signal chain whether the assistant's audio is actually coming out
+  /// of the speaker. [active] must come from real playback state, never from
+  /// network arrival.
+  void onPlaybackChanged({required bool active, required int levelRms}) {
+    _assistantSpeaking = active;
+    processor.onPlaybackChanged(active: active, levelRms: levelRms);
+  }
+
+  /// Oldest-first frames covering the last [backMs] of capture, capped at the
+  /// ring's capacity. Drained once when a turn opens so the onset is preserved.
+  List<Uint8List> drainPreRoll(int backMs) => processor.drainPreRoll(backMs);
+
+  /// Whether platform echo cancellation is engaged on the capture session.
+  /// `null` until the capture path has been started. Reported in
+  /// `turn.diagnostic` so the app knows which echo regime it is in.
+  Future<Map<String, dynamic>?> captureInfo() async {
+    if (isMock) {
+      return const {'aec_active': false, 'aec_source': 'mock'};
+    }
+    try {
+      final info =
+          await _controlChannel.invokeMapMethod<String, dynamic>('captureInfo');
+      return info;
+    } catch (e) {
+      debugPrint('[PcmAudioRecorder] captureInfo failed: $e');
+      return null;
     }
   }
 
   void _startMockStreaming(int sampleRate, int frameMs) {
     _mockTimer?.cancel();
     final frameBytes = (sampleRate * 2 * frameMs) ~/ 1000;
+    // A synthesised speech/silence cadence, not zeros: a mock that emits silence
+    // can never exercise turn logic (the original defect).
+    final period = math.max(
+        1, ((mockSpeechMs + mockSilenceMs) / frameMs).round());
+    final speechFrames = math.max(1, (mockSpeechMs / frameMs).round());
     _mockTimer = Timer.periodic(Duration(milliseconds: frameMs), (t) {
       if (!_isRecording) {
         t.cancel();
         return;
       }
+      // t.tick counts firings, i.e. frames - the cadence is in frames.
+      final tick = t.tick;
+      final inSpeech = (tick % period) < speechFrames;
       final chunk = Uint8List(frameBytes);
+      if (inSpeech) {
+        final data = ByteData.sublistView(chunk);
+        for (var i = 0; i < frameBytes ~/ 2; i++) {
+          final value = 6000.0 * math.sin(2 * math.pi * 220 * i / 16000);
+          data.setInt16(i * 2, value.round(), Endian.little);
+        }
+      }
       _onAudioChunk(chunk);
     });
   }
@@ -157,20 +272,11 @@ class PcmAudioRecorderService {
     await stopRecording();
   }
 
-  /// Compute normalized RMS (Root Mean Square) amplitude (0.0 .. 1.0) from 16-bit PCM.
-  static double computeRmsAmplitude(Uint8List bytes) {
-    if (bytes.length < 2) return 0.0;
-    var sumSquares = 0.0;
-    final sampleCount = bytes.length ~/ 2;
-    for (var i = 0; i < bytes.length - 1; i += 2) {
-      var sample = bytes[i] | (bytes[i + 1] << 8);
-      if (sample >= 32768) sample -= 65536;
-      sumSquares += sample * sample;
-    }
-    final rms = math.sqrt(sumSquares / sampleCount);
-    // Typical voice RMS is between 300 and 8000; normalize to 0.0 - 1.0
-    return (rms / 6000.0).clamp(0.0, 1.0);
-  }
+  /// Raw frame RMS, normalised to full scale (1.0 == 32767), with the frame's
+  /// DC offset removed. Thresholds live in [AudioProcessor] and are expressed in
+  /// dB above the tracked floor — never derived from this number.
+  static double computeRmsAmplitude(Uint8List bytes) =>
+      AudioProcessor.computeRmsAmplitude(bytes);
 
   /// Generate a standard 44-byte RIFF WAV file from raw 16-bit PCM audio bytes.
   static Uint8List createWav(

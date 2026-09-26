@@ -1,16 +1,17 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../services/audio_processor.dart';
 import '../../services/companion_websocket_service.dart';
 import '../../services/pcm_audio_recorder_service.dart';
 import '../../services/tts_playback_service.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
+import 'call_turn_controller.dart';
 
 class CallPage extends StatefulWidget {
   const CallPage({
@@ -78,26 +79,33 @@ class _CallPageState extends State<CallPage> {
   bool _ownsAudioRecorder = false;
   bool _ownsTtsPlayback = false;
 
-  StreamSubscription<Uint8List>? _micAudioSub;
-  StreamSubscription<double>? _micAmpSub;
-  StreamSubscription<double>? _ttsAmpSub;
-  StreamSubscription<bool>? _ttsPlayingSub;
-  StreamSubscription<Map<String, dynamic>>? _ttsStartSub;
-  StreamSubscription<Map<String, dynamic>>? _ttsEndSub;
-  StreamSubscription<Map<String, dynamic>>? _llmStartSub;
-  StreamSubscription<Map<String, dynamic>>? _llmChunkSub;
-  StreamSubscription<Map<String, dynamic>>? _transcriptFinalSub;
+  /// Every live-call subscription in one list: one owner, one cancel site.
+  final _subs = <StreamSubscription<dynamic>>[];
 
-  double _currentTtsAmplitude = 0.0;
-  double _currentMicAmplitude = 0.0;
+  /// Single owner of conversational and orb state (spec 7.5). Nothing else in
+  /// this file is allowed to decide what phase the call is in.
+  final _turn = CallTurnController();
+
+  // SNR-gate edge tracking. The gate itself (hysteresis, echo filter, hangover,
+  // adaptive endpoint deadline) lives in [AudioProcessor]; this is only the
+  // edge detection that used to be two naive frame counters.
+  bool _gateOpen = false;
+
+  /// `input.start` has been sent and framed audio is streaming.
+  bool _turnOpen = false;
+
+  /// A barge-in decision is deferred until speech outlives a backchannel.
+  bool _pendingOnset = false;
+
+  String? _turnId;
+  int _turnOpenedAtMs = 0;
+  int _silenceSinceMs = -1;
+  int _onsetAtMs = -1;
+  int _assistantSinceMs = -1;
+  int _ttsStartedAtMs = -1;
+  double _ttsLevelRms = 0.0;
+
   bool _isLiveCall = false;
-  bool _isUserTurnActive = false;
-  String? _currentUserTurnId;
-  DateTime? _userTurnStartTime;
-  int _consecutiveSpeechFrames = 0;
-  int _consecutiveSilenceFrames = 0;
-
-  bool get _isSpeaking => !_ended && !_paused && _ariaSpeaking;
 
   @override
   void initState() {
@@ -123,6 +131,18 @@ class _CallPageState extends State<CallPage> {
   Future<void> _startLiveDuplexCall() async {
     _isLiveCall = true;
 
+    // Restartable: a previous attempt's listeners must not double-send.
+    for (final sub in _subs) {
+      sub.cancel();
+    }
+    _subs.clear();
+    _turn.reset();
+    _turnId = null;
+    _turnOpen = false;
+    _gateOpen = false;
+    _pendingOnset = false;
+    _silenceSinceMs = -1;
+
     _wsService?.sendSessionConfigure(
       mode: 'duplex_call',
       ttsEnabled: true,
@@ -138,7 +158,8 @@ class _CallPageState extends State<CallPage> {
       _ownsAudioRecorder = true;
     }
 
-    final started = await _audioRecorder!.startRecording(sampleRate: 16000, frameMs: 100);
+    final started =
+        await _audioRecorder!.startRecording(sampleRate: 16000, frameMs: 20);
     if (!started && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -148,104 +169,145 @@ class _CallPageState extends State<CallPage> {
       );
     }
 
-    _micAudioSub = _audioRecorder!.audioStream.listen((chunk) {
-      if (!_muted && !_ended && !_paused && _isLiveCall && _isUserTurnActive) {
-        _wsService?.sendAudioChunk(chunk);
+    // Mic frames. They only leave the device while a turn is open: the
+    // pre-roll ring already carries the onset, so nothing captured before
+    // `input.start` is lost (spec 9.2).
+    _on(_audioRecorder!.audioStream, (Uint8List chunk) {
+      if (_turnOpen && !_muted && !_ended && !_paused) {
+        _wsService?.sendAudioChunk(chunk, framed: true);
       }
     });
 
-    _micAmpSub = _audioRecorder!.amplitudeStream.listen((amp) {
-      if (!mounted || _muted || _ended || _paused || !_isLiveCall) return;
+    // The signal chain's verdict on every frame: noise floor, SNR gate edge,
+    // echo filter, adaptive endpoint deadline. This replaces the frame-counter
+    // pair and the two magic amplitude thresholds (spec 9.4).
+    _on(_audioRecorder!.frameMetricsStream, _onFrameMetrics);
 
-      _currentMicAmplitude = amp;
-
-      // 1. Dynamic speech onset threshold:
-      // While Solace is speaking, phone loudspeaker creates acoustic feedback into the mic (~0.08 - 0.12).
-      // We set speech threshold to 0.22 while speaking so Solace's own voice never interrupts itself.
-      // When Solace is listening, threshold is natural conversational sensitivity (0.05).
-      final onsetThreshold = _ariaSpeaking ? 0.22 : 0.05;
-      final isSpeech = amp > onsetThreshold;
-
-      if (isSpeech) {
-        _consecutiveSilenceFrames = 0;
-        _consecutiveSpeechFrames++;
-
-        final requiredFrames = _ariaSpeaking ? 3 : 2;
-        // Start user turn if not already active
-        if (!_isUserTurnActive && _consecutiveSpeechFrames >= requiredFrames) {
-          _isUserTurnActive = true;
-          _currentUserTurnId = 'call_${DateTime.now().millisecondsSinceEpoch}';
-          _userTurnStartTime = DateTime.now();
-          debugPrint('[CallPage] Speech onset detected! Starting turn: $_currentUserTurnId');
-          _wsService?.sendAudioStart(
-            turnId: _currentUserTurnId!,
-            sampleRate: 16000,
-            frameMs: 100,
-          );
-          if (mounted) setState(() {});
-        }
-      } else {
-        _consecutiveSpeechFrames = 0;
-        if (_isUserTurnActive) {
-          _consecutiveSilenceFrames++;
-          // Speech pause: user has been silent for >= 8 frames (800ms)
-          if (_consecutiveSilenceFrames >= 8) {
-            debugPrint('[CallPage] Speech pause detected! Ending turn: $_currentUserTurnId');
-            _isUserTurnActive = false;
-            final finishedTurn = _currentUserTurnId;
-            final durationMs = _userTurnStartTime != null
-                ? DateTime.now().difference(_userTurnStartTime!).inMilliseconds
-                : 0;
-            _currentUserTurnId = null;
-            _userTurnStartTime = null;
-            _consecutiveSilenceFrames = 0;
-            if (finishedTurn != null) {
-              _wsService?.sendAudioEnd(turnId: finishedTurn, durationMs: durationMs);
-            }
-            if (mounted) setState(() {});
-          }
-        }
+    // Playback level feeds the orb envelope while Aria speaks, and the echo
+    // filter's idea of what our own voice sounds like in the mic.
+    _on(_ttsPlayback?.amplitudeStream, (double amp) {
+      _ttsLevelRms = amp;
+      if (_turn.currentPhase == CallPhase.assistantSpeaking) {
+        _turn.rawAmplitude = amp;
       }
+      _syncEchoFilter();
     });
 
-    _ttsAmpSub = _ttsPlayback?.amplitudeStream.listen((amp) {
-      if (!mounted) return;
-      setState(() => _currentTtsAmplitude = amp);
-    });
-
-    _ttsPlayingSub = _ttsPlayback?.playingStream.listen((playing) {
-      if (!mounted) return;
+    // Real speaker output is what the echo filter must know about, and what
+    // "the assistant is speaking" has to mean (spec 5.4: never network arrival).
+    _on(_ttsPlayback?.playingStream, (bool playing) {
+      final wasSpeaking = _ariaSpeaking;
       setState(() {
         _ariaSpeaking = playing || (_ttsPlayback?.isReceivingStream ?? false);
       });
-    });
-
-    _ttsStartSub = _wsService?.ttsStartStream.listen((data) {
-      if (!mounted) return;
-      setState(() => _ariaSpeaking = true);
-    });
-
-    _ttsEndSub = _wsService?.ttsEndStream.listen((data) {
-      if (!mounted) return;
-      final cancelled = data['cancelled'] as bool? ?? false;
-      if (cancelled) {
-        setState(() {
-          _ariaSpeaking = false;
-          _currentTtsAmplitude = 0.0;
-        });
+      _syncEchoFilter();
+      if (playing) {
+        _assistantSinceMs = _nowMs;
+      } else if (wasSpeaking && !_ariaSpeaking) {
+        // Playback drained: ASSISTANT_SPEAKING -> IDLE.
+        if (_turn.currentPhase == CallPhase.assistantSpeaking &&
+            !_pendingOnset) {
+          _turn.onTtsComplete();
+        }
       }
     });
 
-    _llmStartSub = _wsService?.llmStartStream.listen((_) {
-      if (!mounted) return;
+    _on(_wsService?.ttsStartStream, (Map<String, dynamic> data) {
+      _ttsStartedAtMs = _nowMs;
+      if (_assistantSinceMs < 0) _assistantSinceMs = _nowMs;
+      setState(() => _ariaSpeaking = true);
+      _syncEchoFilter();
+      // First response audio: ASSISTANT_SPEAKING begins (spec 5.9).
+      if (!_ended && !_muted &&
+          _turn.currentPhase != CallPhase.assistantSpeaking) {
+        _turn.onProcessing(_turnId, TurnStage.ttsFirstFrame);
+      }
+    });
+
+    _on(_wsService?.ttsEndStream, (Map<String, dynamic> data) {
+      final cancelled = data['cancelled'] as bool? ?? false;
+      if (cancelled) {
+        // Our own interruption tore down a response; only the visuals reset,
+        // the phase is already USER_SPEAKING.
+        _ttsStartedAtMs = -1;
+        setState(() {
+          _ariaSpeaking = false;
+          _ttsLevelRms = 0.0;
+        });
+        _syncEchoFilter();
+        return;
+      }
+      // Generation finished: this turn will send nothing else, so stop
+      // matching events against it.
+      _ttsStartedAtMs = -1;
+      _turnId = null;
+    });
+
+    _on(_wsService?.turnStartedStream, (Map<String, dynamic> data) {
+      if (!_forCurrentTurn(data)) return;
+      _turn.onTurnStarted(_turnId);
+    });
+
+    // Server confirmation of the provisional barge-in (spec 7.5).
+    _on(_wsService?.speechDetectedStream, (Map<String, dynamic> data) {
+      if (!_forCurrentTurn(data)) return;
+      _turn.onSpeechDetected(
+        _turnId,
+        offsetMs: data['offset_ms'] as int? ?? 0,
+        confidence: (data['confidence'] as num? ?? 0).toDouble(),
+      );
+    });
+
+    _on(_wsService?.turnEndpointedStream, (Map<String, dynamic> data) {
+      if (!_forCurrentTurn(data)) return;
+      _turnOpen = false;
+      _silenceSinceMs = -1;
+      _turn.onEndpointed(_turnId, speechMs: data['speech_ms'] as int? ?? 0);
+    });
+
+    _on(_wsService?.turnProcessingStream, (Map<String, dynamic> data) {
+      if (!_forCurrentTurn(data)) return;
+      final stage = _stageOf(data['stage'] as String?);
+      if (stage != null && !_ended && !_muted) {
+        _turn.onProcessing(_turnId, stage);
+      }
+    });
+
+    _on(_wsService?.turnDiscardedStream, (Map<String, dynamic> data) {
+      if (!_forCurrentTurn(data)) return;
+      _turnOpen = false;
+      _turn.onDiscarded(_turnId, _reasonOf(data['reason'] as String?));
+      _turnId = null;
+    });
+
+    _on(_wsService?.transcriptFailedStream, (Map<String, dynamic> data) {
+      if (!_forCurrentTurn(data)) return;
+      _turnOpen = false;
+      _turn.onDiscarded(_turnId, _reasonOf(data['reason'] as String?));
+      _turnId = null;
+    });
+
+    // A false interruption timed out and the assistant resumes from where it
+    // stopped: the provisional barge-in reverts (spec 5.8).
+    _on(_wsService?.ttsResumeStream, (Map<String, dynamic> data) {
+      _turn.onTtsResume(
+        data['utterance_id'] as String?,
+        data['from_ms'] as int? ?? 0,
+      );
+    });
+
+    _on(_wsService?.llmStartStream, (_) {
       setState(() {
         if (_lines.length >= 2) _lines.removeAt(0);
         _lines.add(_CaptionLine(aria: true, words: []));
       });
+      if (!_ended && !_muted &&
+          _turn.currentPhase != CallPhase.assistantSpeaking) {
+        _turn.onProcessing(_turnId, TurnStage.llmFirstToken);
+      }
     });
 
-    _llmChunkSub = _wsService?.llmChunkStream.listen((data) {
-      if (!mounted) return;
+    _on(_wsService?.llmChunkStream, (Map<String, dynamic> data) {
       final delta = data['delta'] as String? ?? '';
       if (delta.trim().isNotEmpty && _lines.isNotEmpty && _lines.last.aria) {
         final newWords = delta.trim().split(' ');
@@ -256,32 +318,237 @@ class _CallPageState extends State<CallPage> {
       }
     });
 
-    _transcriptFinalSub = _wsService?.transcriptFinalStream.listen((data) {
-      if (!mounted) return;
+    _on(_wsService?.transcriptFinalStream, (Map<String, dynamic> data) {
       final text = data['text'] as String? ?? '';
-      if (text.trim().isNotEmpty) {
-        // Confirmed real user speech transcribed!
-        // Only now do we interrupt Solace's previous audio playback.
-        if (_ariaSpeaking) {
-          debugPrint('[CallPage] Confirmed user speech: "$text" - interrupting previous audio.');
-          _ttsPlayback?.stopVoice(fadeMs: 25);
-          _wsService?.sendCallBargeIn(reason: 'user_speech_transcribed');
-          setState(() {
-            _ariaSpeaking = false;
-            _currentTtsAmplitude = 0.0;
-          });
-        }
+      if (text.trim().isEmpty) return;
 
-        setState(() {
-          if (_lines.length >= 2) _lines.removeAt(0);
-          final words = text.split(' ');
-          final line = _CaptionLine(aria: false, words: words);
-          line.shown = words.length;
-          _lines.add(line);
-        });
+      // The transcript is the committed confirmation of a barge-in. If the
+      // local gate somehow got here first, flush now (spec 7.5).
+      if (_turn.currentPhase == CallPhase.assistantSpeaking && !_pendingOnset) {
+        _flushInterruption();
       }
+
+      setState(() {
+        if (_lines.length >= 2) _lines.removeAt(0);
+        final words = text.split(' ');
+        final line = _CaptionLine(aria: false, words: words);
+        line.shown = words.length;
+        _lines.add(line);
+      });
     });
   }
+
+  // --- turn lifecycle --------------------------------------------------------
+
+  int get _nowMs => _audioRecorder?.processor.nowMs ?? 0;
+
+  void _on<T>(Stream<T>? stream, void Function(T) handler) {
+    if (stream == null) return;
+    _subs.add(stream.listen((event) {
+      if (mounted) handler(event);
+    }));
+  }
+
+  /// Every server envelope carries a turn id; events for a turn this page did
+  /// not open (or that the user already cancelled) are dropped here, which is
+  /// what keeps the state machine free of cross-turn races.
+  bool _forCurrentTurn(Map<String, dynamic> data) {
+    if (_ended || _muted || _turnId == null) return false;
+    final id = data['turn_id'];
+    return id is String && id == _turnId;
+  }
+
+  /// Tell the echo filter whether the loudspeaker is actually making noise.
+  void _syncEchoFilter() {
+    _audioRecorder?.onPlaybackChanged(
+      active: _ariaSpeaking,
+      levelRms: (_ttsLevelRms.clamp(0.0, 1.0) * 32767).round(),
+    );
+  }
+
+  /// One frame from the signal chain. The gate already applied the noise
+  /// floor, the echo filter and hysteresis; all that is left here is edge
+  /// detection, the deferred barge-in decision and the endpoint deadline.
+  void _onFrameMetrics(FrameMetrics m) {
+    if (!_isLiveCall || _ended || _paused) return;
+    final p = _audioRecorder?.processor;
+    if (p == null) return;
+
+    _turn.noiseFloorRms = p.floorRms;
+    if (_turn.currentPhase != CallPhase.assistantSpeaking) {
+      _turn.rawAmplitude = m.rms;
+    }
+    if (_muted) return;
+
+    final now = p.nowMs;
+    if (!_gateOpen && m.isSpeech) {
+      _gateOpen = true;
+      _onsetDetected(m, now);
+    } else if (_gateOpen && !m.isSpeech) {
+      _gateOpen = false;
+      _silenceSinceMs = now;
+      _resolvePendingOnset(m, now, stillSpeaking: false);
+    }
+
+    _resolvePendingOnset(m, now, stillSpeaking: true);
+    _maybeEndpoint(p, now);
+  }
+
+  /// The gate confirmed speech. If the assistant is talking, the decision is
+  /// deferred: a backchannel must not interrupt (spec 5.8), and the pre-roll
+  /// ring keeps the onset meanwhile, so nothing is lost by waiting.
+  void _onsetDetected(FrameMetrics m, int now) {
+    _onsetAtMs = now;
+    _silenceSinceMs = -1;
+    if (_turnOpen) {
+      // Our turn is already open: no new decision to make. The exception is
+      // playback that resumed underneath the turn — take the floor back.
+      if (_ariaSpeaking) _flushInterruption();
+      return;
+    }
+    if (_ariaSpeaking) {
+      _pendingOnset = true;
+      return;
+    }
+    _startUserTurn(m, speechMs: 0, assistantWasSpeaking: false);
+  }
+
+  void _resolvePendingOnset(
+    FrameMetrics m,
+    int now, {
+    required bool stillSpeaking,
+  }) {
+    if (!_pendingOnset) return;
+    final speechMs = now - _onsetAtMs;
+    if (stillSpeaking && speechMs < SpeechProbe.backchannelMaxMs) return;
+    _pendingOnset = false;
+    _startUserTurn(m, speechMs: speechMs, assistantWasSpeaking: true);
+  }
+
+  void _startUserTurn(
+    FrameMetrics m, {
+    required int speechMs,
+    required bool assistantWasSpeaking,
+  }) {
+    final verdict = _turn.onLocalOnset(
+      SpeechProbe(
+        snrDb: m.snrDb,
+        onsetRunMs: speechMs,
+        speechMs: speechMs,
+        assistantSpeaking: assistantWasSpeaking,
+        sinceAssistantStartMs: assistantWasSpeaking && _assistantSinceMs >= 0
+            ? (_nowMs - _assistantSinceMs).clamp(0, 60000)
+            : 0,
+      ),
+    );
+    final turnId = 'call_$_nowMs';
+
+    if (verdict == BargeInClass.interrupt && assistantWasSpeaking) {
+      _flushInterruption(turnId: turnId);
+    }
+    if (verdict != BargeInClass.interrupt) {
+      // Backchannel or noise: the assistant keeps talking and no turn opens.
+      return;
+    }
+    _openUserTurn(turnId);
+  }
+
+  /// `input.start`, then the pre-roll ring drained into the same stream so the
+  /// first phonemes of the onset survive (spec 9.4).
+  void _openUserTurn(String turnId) {
+    if (_turnOpen) return;
+    _turnOpen = true;
+    _turnId = turnId;
+    _turnOpenedAtMs = _nowMs;
+    _silenceSinceMs = -1;
+
+    unawaited(_wsService?.sendInputStart(
+      turnId: turnId,
+      preRollMs: 600,
+      sampleRate: 16000,
+      frameMs: 20,
+    ));
+    // Synchronous: no frame listener can interleave between input.start and
+    // the ring contents, because both leave on this microtask in order.
+    for (final chunk in _audioRecorder?.drainPreRoll(600) ?? const <Uint8List>[]) {
+      _wsService?.sendAudioChunk(chunk, framed: true);
+    }
+    debugPrint('[CallPage] turn open: $turnId');
+    if (mounted) setState(() {});
+  }
+
+  void _endUserTurn({String reason = 'client_endpoint'}) {
+    if (!_turnOpen || _turnId == null) return;
+    final p = _audioRecorder?.processor;
+    final turnId = _turnId!;
+    final durationMs = p == null ? 0 : (p.nowMs - _turnOpenedAtMs);
+    _turnOpen = false;
+    _silenceSinceMs = -1;
+    if (p != null && p.gate.speechConfirmed && p.gate.lastSpeechMs >= 0) {
+      // Adaptive endpoint deadline learns from the gaps this client emitted.
+      p.gate.noteAcceptedGap(p.nowMs - p.gate.lastSpeechMs);
+    }
+    debugPrint('[CallPage] turn end: $turnId ($reason)');
+    unawaited(_wsService?.sendInputEnd(
+      turnId: turnId,
+      durationMs: durationMs,
+      reason: reason,
+    ));
+  }
+
+  /// The silence deadline, and the hard cap no detector may exceed
+  /// (spec 5.1.5).
+  void _maybeEndpoint(AudioProcessor p, int now) {
+    if (!_turnOpen) return;
+    if (_gateOpen) {
+      _silenceSinceMs = -1;
+      return;
+    }
+    if (_silenceSinceMs < 0) return;
+    final overCap = now - _turnOpenedAtMs >= p.gate.maxTurnMs;
+    if (overCap || now - _silenceSinceMs >= p.gate.effectiveEndpointMs) {
+      _endUserTurn(reason: overCap ? 'max_duration' : 'client_endpoint');
+    }
+  }
+
+  /// Stop local playback and tell the server the exact point the ear reached,
+  /// so its history matches what was actually heard (spec 6.2).
+  void _flushInterruption({String? turnId}) {
+    final playedMs = _ttsStartedAtMs >= 0
+        ? (_nowMs - _ttsStartedAtMs).clamp(0, 60000)
+        : 0;
+    if (_turn.currentPhase == CallPhase.assistantSpeaking) {
+      // null: keep whatever turn id the machine already holds, this flush is
+      // about the assistant's audio, not about naming a new turn.
+      _turn.onInterrupted(turnId: null, playedMs: playedMs);
+    }
+    _ttsPlayback?.stopVoice(fadeMs: 25);
+    _wsService?.sendTurnInterrupted(
+      turnId: turnId ?? 'call_$_nowMs',
+      playedMs: playedMs,
+    );
+    if (mounted) setState(() => _ariaSpeaking = false);
+  }
+
+  static TurnStage? _stageOf(String? stage) => switch (stage) {
+        'vad' => TurnStage.vad,
+        'stt' => TurnStage.stt,
+        'llm_first_token' => TurnStage.llmFirstToken,
+        'tts_first_frame' => TurnStage.ttsFirstFrame,
+        'llm_timeout' => TurnStage.llmTimeout,
+        'tool' => TurnStage.tool,
+        'complete' => TurnStage.complete,
+        _ => null,
+      };
+
+  static DiscardReason _reasonOf(String? reason) => switch (reason) {
+        'silence' => DiscardReason.silence,
+        'unintelligible' => DiscardReason.unintelligible,
+        'too_short' => DiscardReason.tooShort,
+        'no_speech' => DiscardReason.noSpeechProb,
+        'echo' => DiscardReason.echo,
+        _ => DiscardReason.cancelled,
+      };
 
   @override
   void dispose() {
@@ -289,20 +556,17 @@ class _CallPageState extends State<CallPage> {
     _releaseDelay();
     _ticker?.cancel();
 
-    _micAudioSub?.cancel();
-    _micAmpSub?.cancel();
-    _ttsAmpSub?.cancel();
-    _ttsPlayingSub?.cancel();
-    _ttsStartSub?.cancel();
-    _ttsEndSub?.cancel();
-    _llmStartSub?.cancel();
-    _llmChunkSub?.cancel();
-    _transcriptFinalSub?.cancel();
+    for (final sub in _subs) {
+      sub.cancel();
+    }
+    _subs.clear();
+    _turn.dispose();
 
     if (_isLiveCall) {
-      if (_isUserTurnActive && _currentUserTurnId != null) {
-        _wsService?.sendAudioCancel(turnId: _currentUserTurnId!);
+      if (_turnOpen && _turnId != null) {
+        _wsService?.sendTurnCancel(turnId: _turnId!, reason: 'page_disposed');
       }
+      _turnOpen = false;
       _audioRecorder?.stopRecording();
       _ttsPlayback?.stopVoice();
       _wsService?.sendCallEnd(reason: 'page_disposed');
@@ -323,6 +587,17 @@ class _CallPageState extends State<CallPage> {
     final delay = _delay;
     if (delay != null && !delay.isCompleted) delay.complete();
   }
+
+  /// Header copy and dot colour, one per phase: the operator's five states,
+  /// readable at a glance.
+  (Color, String) _statusFor(CallPhase phase) => switch (phase) {
+        CallPhase.userSpeaking => (const Color(0xFF10B981), 'Listening to you...'),
+        CallPhase.thinking => (_amber, 'Thinking...'),
+        CallPhase.assistantSpeaking => (_coral, 'Solace speaking'),
+        CallPhase.muted => (_softInk, 'Microphone muted'),
+        CallPhase.ended => (_softInk, 'Call ended'),
+        _ => (_amber, 'Listening · take your time'),
+      };
 
   static String _fmt(int total) {
     final m = (total ~/ 60).toString().padLeft(2, '0');
@@ -361,6 +636,7 @@ class _CallPageState extends State<CallPage> {
           if (_lines.length >= 2) _lines.removeAt(0);
           _lines.add(_CaptionLine(aria: aria, words: words));
         });
+        _syncScriptPhase(aria);
 
         for (var i = 0; i < words.length; i++) {
           while (_paused && token == _generation && !_ended) {
@@ -380,6 +656,7 @@ class _CallPageState extends State<CallPage> {
         await _wait(aria ? 1500 : 1150, token);
         if (mounted && token == _generation) {
           setState(() => _ariaSpeaking = false);
+          _syncScriptPhase(false, allowOnset: false);
         }
         await _wait(500, token);
       }
@@ -388,9 +665,48 @@ class _CallPageState extends State<CallPage> {
     }
   }
 
+  /// The scripted demo has no server, so its two beats are pushed through the
+  /// same machine: the orb shows the same states a live call would.
+  void _syncScriptPhase(bool ariaSpeaking, {bool allowOnset = true}) {
+    if (_muted || _ended) return;
+    if (ariaSpeaking) {
+      if (_turn.currentPhase != CallPhase.assistantSpeaking) {
+        _turn.onProcessing(null, TurnStage.ttsFirstFrame);
+      }
+      return;
+    }
+    if (_turn.currentPhase == CallPhase.assistantSpeaking) {
+      _turn.onTtsComplete();
+    }
+    if (allowOnset && _turn.currentPhase == CallPhase.idle) {
+      _turn.onLocalOnset(
+        const SpeechProbe(
+          snrDb: 30,
+          onsetRunMs: 0,
+          speechMs: 0,
+          assistantSpeaking: false,
+          sinceAssistantStartMs: 0,
+        ),
+      );
+    }
+  }
+
   void _toggleMic() {
     if (_ended) return;
     setState(() => _muted = !_muted);
+    _turn.onMicMutedChanged(_muted);
+    if (_muted) {
+      // Muting abandons whatever was in flight; the server keeps no orphan.
+      if (_turnOpen && _turnId != null) {
+        _wsService?.sendTurnCancel(turnId: _turnId!, reason: 'muted');
+      }
+      _turnOpen = false;
+      _turnId = null;
+      _pendingOnset = false;
+      _gateOpen = false;
+      _silenceSinceMs = -1;
+      _syncEchoFilter();
+    }
   }
 
   void _toggleCamera() {
@@ -413,11 +729,16 @@ class _CallPageState extends State<CallPage> {
     _releaseDelay();
 
     if (_isLiveCall) {
+      if (_turnOpen && _turnId != null) {
+        _wsService?.sendTurnCancel(turnId: _turnId!, reason: 'user_ended_call');
+      }
+      _turnOpen = false;
       _audioRecorder?.stopRecording();
       _ttsPlayback?.stopVoice();
       _wsService?.sendCallEnd(reason: 'user_ended_call');
       _wsService?.sendSessionConfigure(mode: 'chat_voice_playback');
     }
+    _turn.onCallEnded();
   }
 
   void _restart() {
@@ -429,6 +750,12 @@ class _CallPageState extends State<CallPage> {
       _generation++;
     });
     _releaseDelay();
+    _turn.reset();
+    _turnId = null;
+    _turnOpen = false;
+    _gateOpen = false;
+    _pendingOnset = false;
+    _silenceSinceMs = -1;
     if (_isLiveCall) {
       _startLiveDuplexCall();
     } else {
@@ -569,48 +896,43 @@ class _CallPageState extends State<CallPage> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _isUserTurnActive
-                            ? const Color(0xFF10B981)
-                            : (_isSpeaking
-                                ? _coral
-                                : (_muted ? _softInk : _amber)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: (_isUserTurnActive
-                                    ? const Color(0xFF10B981)
-                                    : (_isSpeaking ? _coral : _amber))
-                                .withValues(alpha: 0.4),
-                            blurRadius: 4,
+                ValueListenableBuilder<CallPhase>(
+                  valueListenable: _turn.phase,
+                  builder: (context, phase, _) {
+                    final (color, label) = _statusFor(phase);
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: color,
+                            boxShadow: [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.4),
+                                blurRadius: 4,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        _isUserTurnActive
-                            ? 'Listening to you...'
-                            : (_isSpeaking
-                                ? 'Solace speaking'
-                                : (_muted ? 'Microphone muted' : 'Listening · take your time')),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: _softInk,
                         ),
-                      ),
-                    ),
-                  ],
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            label,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: _softInk,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -657,15 +979,17 @@ class _CallPageState extends State<CallPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _BreathingOrb(
-                  muted: _muted,
-                  isSpeaking: _isSpeaking || _isUserTurnActive,
-                  amplitude: _isSpeaking
-                      ? _currentTtsAmplitude
-                      : (_isUserTurnActive ? _currentMicAmplitude : 0.0),
-                ),
+                _BreathingOrb(controller: _turn),
                 const SizedBox(height: 16),
-                _AcousticWaveform(isSpeaking: _isSpeaking || _isUserTurnActive),
+                ListenableBuilder(
+                  listenable: _turn,
+                  builder: (context, _) => _AcousticWaveform(
+                    // Real gated level, not a free-running sine (spec 8.6).
+                    level: _turn.modulation,
+                    active: _turn.currentPhase == CallPhase.userSpeaking ||
+                        _turn.currentPhase == CallPhase.assistantSpeaking,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 40),
@@ -900,108 +1224,54 @@ class _GlassButton extends StatelessWidget {
   }
 }
 
-class _AcousticWaveform extends StatefulWidget {
-  const _AcousticWaveform({required this.isSpeaking});
+/// Bars driven by the real gated level, not a free-running sine. `level` is
+/// [CallTurnController.modulation], already echo-gated, enveloped and
+/// dB-mapped, so the shape follows whoever is actually talking (spec 8.6).
+class _AcousticWaveform extends StatelessWidget {
+  const _AcousticWaveform({required this.active, this.level = 0.0});
 
-  final bool isSpeaking;
-
-  @override
-  State<_AcousticWaveform> createState() => _AcousticWaveformState();
-}
-
-class _AcousticWaveformState extends State<_AcousticWaveform>
-    with SingleTickerProviderStateMixin {
-  AnimationController? _waveCtrl;
-
-  static bool get _isTestEnv =>
-      Platform.environment.containsKey('FLUTTER_TEST');
-
-  static const _delays = [0.0, 0.14, 0.28, 0.42, 0.56, 0.34, 0.20];
-
-  @override
-  void initState() {
-    super.initState();
-    if (!_isTestEnv) {
-      _waveCtrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 1150),
-      )..repeat();
-    }
-  }
-
-  @override
-  void dispose() {
-    _waveCtrl?.dispose();
-    super.dispose();
-  }
+  final bool active;
+  final double level;
 
   @override
   Widget build(BuildContext context) {
+    final l = level.clamp(0.0, 1.0);
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeInOut,
-      opacity: widget.isSpeaking ? 1.0 : 0.0,
+      opacity: active ? 1.0 : 0.0,
       child: AnimatedSlide(
         duration: const Duration(milliseconds: 320),
         curve: Curves.easeOutCubic,
-        offset: widget.isSpeaking ? Offset.zero : const Offset(0, -0.25),
+        offset: active ? Offset.zero : const Offset(0, -0.25),
         child: SizedBox(
           height: 22,
-          child: _isTestEnv || _waveCtrl == null
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(7, (i) {
-                    final h = 5.0 + 15.0 * (0.5 + 0.5 * math.sin(i.toDouble()));
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                      width: 3.5,
-                      height: h,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(2),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            _CallPageState._amber,
-                            _CallPageState._coral,
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                )
-              : AnimatedBuilder(
-                  animation: _waveCtrl!,
-                  builder: (_, __) {
-                    final t = _waveCtrl!.value * 2 * math.pi;
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(7, (i) {
-                        final delay = _delays[i] * 2 * math.pi;
-                        final h =
-                            5.0 + 15.0 * (0.5 + 0.5 * math.sin(t + delay));
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                          width: 3.5,
-                          height: h,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(2),
-                            gradient: const LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                _CallPageState._amber,
-                                _CallPageState._coral,
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    );
-                  },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(7, (i) {
+              // Each bar keeps its own weight so the profile has a shape, but
+              // every height is a function of the measured level.
+              final weight = 0.55 + 0.45 * math.sin((i + 1) * 1.1);
+              final h = 5.0 + 15.0 * (0.15 + 0.85 * l) * weight;
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                width: 3.5,
+                height: h,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      _CallPageState._amber,
+                      _CallPageState._coral,
+                    ],
+                  ),
                 ),
+              );
+            }),
+          ),
         ),
       ),
     );
@@ -1020,15 +1290,12 @@ class _FluidRipple {
 }
 
 class _BreathingOrb extends StatefulWidget {
-  const _BreathingOrb({
-    required this.muted,
-    required this.isSpeaking,
-    this.amplitude = 0.0,
-  });
+  const _BreathingOrb({required this.controller});
 
-  final bool muted;
-  final bool isSpeaking;
-  final double amplitude;
+  /// The orb is a pure function of this machine (spec 7.5): it reads the
+  /// lerped parameter row for the current phase plus the gated envelope, and
+  /// it ticks the controller, so this widget is the only animation driver.
+  final CallTurnController controller;
 
   @override
   State<_BreathingOrb> createState() => _BreathingOrbState();
@@ -1042,15 +1309,16 @@ class _BreathingOrbState extends State<_BreathingOrb>
   // Continuous monotonic time (seconds) — NEVER wraps, guarantees 0 discontinuities or snapping
   double _time = 0.0;
 
-  // Smooth continuous factors (exponential smoothing prevents abrupt pops on speaking state change)
+  // Accumulated rotation (radians). Driven by the state row's rotRate, which
+  // is the visual that separates THINKING from every other state.
+  double _rotation = 0.0;
+
+  // Smooth continuous factors (exponential smoothing prevents abrupt pops on state change)
   double _speechFactor = 0.0;
   double _muteFactor = 0.0;
 
-  // Envelope-follower filtered amplitude (eliminates 100ms discrete mic/TTS amplitude jitter)
+  // Envelope-follower filtered level (eliminates 100ms discrete mic/TTS jitter)
   double _smoothedAmplitude = 0.0;
-
-  // Smooth conversational state scale transition (slow, graceful morphing between rest, speaking, muted)
-  double _stateScale = 1.0;
 
   // Interactive touch & elastic gel physics
   Offset _dragOffset = Offset.zero;
@@ -1074,7 +1342,9 @@ class _BreathingOrbState extends State<_BreathingOrb>
   void _onTick(Duration elapsed) {
     if (!mounted) return;
     if (_lastElapsed != null) {
-      final dt = ((elapsed - _lastElapsed!).inMicroseconds / 1000000.0).clamp(0.001, 0.05);
+      final dt =
+          ((elapsed - _lastElapsed!).inMicroseconds / 1000000.0).clamp(0.001, 0.05);
+      widget.controller.tick(dt);
       _updatePhysics(dt);
     }
     _lastElapsed = elapsed;
@@ -1082,42 +1352,39 @@ class _BreathingOrbState extends State<_BreathingOrb>
   }
 
   void _updatePhysics(double dt) {
-    // 1. Advance continuous time: slightly faster harmonic flux when speaking
-    final timeSpeed = 1.0 + _speechFactor * 0.35 - _muteFactor * 0.4;
-    _time += dt * timeSpeed;
+    final p = widget.controller.parameters;
+    final phase = widget.controller.phase.value;
 
-    // 2. Continuous envelope-follower for voice amplitude:
-    // Fast attack (8.0) reacts crisply to speech onset (~100ms),
-    // Gentle release (2.6) bridges inter-syllable silences and stops frame jitter.
-    final rawAmp = widget.amplitude.clamp(0.0, 1.0);
-    final ampAttack = rawAmp > _smoothedAmplitude;
-    final ampRate = ampAttack ? 8.0 : 2.6;
-    _smoothedAmplitude += (rawAmp - _smoothedAmplitude) * (1.0 - math.exp(-ampRate * dt));
+    // 1. Morph rate comes from the state row: THINKING churns on a 7 s period,
+    //    MUTED barely moves on 30 s. One number, one meaning, no magic timing.
+    _time += dt * (11.0 / p.morphPeriodS);
+    _rotation += dt * p.rotRate;
 
-    // 3. Smooth speech factor with calm, cinematic transition rate (~320ms)
-    // Slower, graceful approach avoids rapid jumping/flickering between speaking and idle states
-    final targetSpeech = widget.isSpeaking
-        ? (0.55 + 0.45 * _smoothedAmplitude)
-        : 0.0;
-    _speechFactor += (targetSpeech - _speechFactor) * (1.0 - math.exp(-3.2 * dt));
+    // 2. Envelope follower on the gated level: fast attack, slow release, so
+    //    inter-syllable silences bridge instead of flickering.
+    final rawAmp = widget.controller.modulation.clamp(0.0, 1.0);
+    final ampRate = rawAmp > _smoothedAmplitude ? 8.0 : 2.6;
+    _smoothedAmplitude +=
+        (rawAmp - _smoothedAmplitude) * (1.0 - math.exp(-ampRate * dt));
 
-    // 4. Smooth mute factor
-    final targetMute = widget.muted ? 1.0 : 0.0;
-    _muteFactor += (targetMute - _muteFactor) * (1.0 - math.exp(-4.5 * dt));
+    // 3. Energy per state (spec 8.2): IDLE rests low with zero twitching, the
+    //    two audio-coupled states ride the envelope, THINKING holds steady.
+    final targetSpeech = switch (phase) {
+      CallPhase.userSpeaking => 0.35 + 0.65 * _smoothedAmplitude,
+      CallPhase.assistantSpeaking => 0.40 + 0.60 * _smoothedAmplitude,
+      CallPhase.thinking => 0.45,
+      CallPhase.muted || CallPhase.ended => 0.04,
+      CallPhase.idle => 0.10,
+    };
+    _speechFactor +=
+        (targetSpeech - _speechFactor) * (1.0 - math.exp(-3.2 * dt));
 
-    // 5. Smooth conversational state scale transition
-    // Resting state: 1.0, Resonating speech: 1.05 - 1.10 (proportional to voice), Muted: 0.94
-    double targetScale = 1.0;
-    if (widget.muted) {
-      targetScale = 0.94;
-    } else if (widget.isSpeaking) {
-      targetScale = 1.05 + 0.06 * _smoothedAmplitude;
-    } else {
-      targetScale = 1.0;
-    }
-    _stateScale += (targetScale - _stateScale) * (1.0 - math.exp(-3.0 * dt));
+    // 4. Mute contracts the orb; the desaturation is the same parameter row,
+    //    applied as a colour matrix in build.
+    final muted = phase == CallPhase.muted || phase == CallPhase.ended;
+    _muteFactor += ((muted ? 1.0 : 0.0) - _muteFactor) * (1.0 - math.exp(-4.5 * dt));
 
-    // 6. Elastic spring rebound for drag offset
+    // 5. Elastic spring rebound for drag offset
     if (!_isDragging && _dragOffset != Offset.zero) {
       const stiffness = 180.0;
       const damping = 16.0;
@@ -1168,14 +1435,14 @@ class _BreathingOrbState extends State<_BreathingOrb>
   Widget build(BuildContext context) {
     const size = 220.0;
     const center = Offset(size / 2, size / 2);
+    final p = widget.controller.parameters;
 
-    // Continuous breath modulation (never wraps abruptly)
-    final breathRate = 1.05 + _speechFactor * 0.45;
-    final breathAmp = 0.038 +
-        (_speechFactor * 0.028 + _smoothedAmplitude * 0.035) -
-        _muteFactor * 0.018;
-    final breathScale =
-        (1.0 + breathAmp * math.sin(_time * breathRate)) * _touchSquish * _stateScale;
+    // Breath straight from the state row: 6.4 s resting, 3.1 s radiant.
+    final breathRate = 2 * math.pi / math.max(p.breathPeriodS, 0.5);
+    final breathAmp = p.breathAmp * (1.0 + 1.2 * _smoothedAmplitude);
+    final breathScale = (1.0 + breathAmp * math.sin(_time * breathRate)) *
+        _touchSquish *
+        p.baseScale;
 
     return GestureDetector(
       onPanStart: (details) {
@@ -1209,65 +1476,102 @@ class _BreathingOrbState extends State<_BreathingOrb>
       child: SizedBox(
         width: size,
         height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            // Smooth continuous radiating harmonic rings
-            for (var i = 0; i < 3; i++)
-              _ContinuousRing(
-                time: _time,
-                index: i,
-                speechFactor: _speechFactor,
-                muteFactor: _muteFactor,
-              ),
-            Transform.scale(
-              scale: breathScale,
-              child: CustomPaint(
-                size: const Size(size, size),
-                painter: _LivingFluidOrbPainter(
+        // Desaturation is a property of the state row (MUTED sits at 0.55),
+        // applied once here so every layer of the orb honours it (spec 8.2).
+        child: ColorFiltered(
+          colorFilter: ColorFilter.matrix(_saturationMatrix(p.saturation)),
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              // Smooth continuous radiating harmonic rings
+              for (var i = 0; i < 3; i++)
+                _ContinuousRing(
                   time: _time,
-                  speechFactor: _speechFactor,
-                  muteFactor: _muteFactor,
-                  dragOffset: _dragOffset,
-                  ripples: List.unmodifiable(_ripples),
+                  index: i,
+                  energy: _speechFactor,
+                  ringPeriodS: p.ringPeriodS,
+                  maxOpacity: p.ringMaxOpacity,
+                ),
+              Transform.scale(
+                scale: breathScale,
+                child: CustomPaint(
+                  size: const Size(size, size),
+                  painter: _LivingFluidOrbPainter(
+                    time: _time,
+                    rotation: _rotation,
+                    speechFactor: _speechFactor,
+                    muteFactor: _muteFactor,
+                    dragOffset: _dragOffset,
+                    ripples: List.unmodifiable(_ripples),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  /// Standard saturation matrix: 1.0 leaves the colours alone, 0 is grey.
+  static List<double> _saturationMatrix(double s) => <double>[
+        0.213 + 0.787 * s,
+        0.715 - 0.715 * s,
+        0.072 - 0.072 * s,
+        0,
+        0,
+        0.213 - 0.213 * s,
+        0.715 + 0.285 * s,
+        0.072 - 0.072 * s,
+        0,
+        0,
+        0.213 - 0.213 * s,
+        0.715 - 0.715 * s,
+        0.072 + 0.928 * s,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+      ];
 }
 
 class _ContinuousRing extends StatelessWidget {
   const _ContinuousRing({
     required this.time,
     required this.index,
-    required this.speechFactor,
-    required this.muteFactor,
+    required this.energy,
+    required this.ringPeriodS,
+    required this.maxOpacity,
   });
 
   final double time;
   final int index;
-  final double speechFactor;
-  final double muteFactor;
+
+  /// Phase energy, 0..1: widens the ring and its stroke.
+  final double energy;
+
+  /// Seconds per ring expansion, straight from the state row. THINKING turns
+  /// the rings off entirely by setting [maxOpacity] to zero.
+  final double ringPeriodS;
+  final double maxOpacity;
 
   @override
   Widget build(BuildContext context) {
     const base = 170.0;
     // Ring phase cycles smoothly [0.0 -> 1.0] with offset per ring
-    final speed = 0.28 + speechFactor * 0.12;
+    final speed = 1.45 / math.max(ringPeriodS, 0.5);
     final phase = (time * speed + index * (1.0 / 3.0)) % 1.0;
 
     // Radius expands from 0.82 to 1.70
-    final scale = 0.82 + (0.88 + speechFactor * 0.25) * phase;
+    final scale = 0.82 + (0.88 + energy * 0.25) * phase;
 
     // Opacity fades in from 0, peaks at phase 0.35, and cleanly fades to 0 at phase 1.0
     // Because sin(pi * phase) is 0 at phase=0 and phase=1, the loop is 100% SEAMLESS and invisible!
     final window = math.sin(math.pi * phase);
-    final maxOpacity = (0.42 + speechFactor * 0.30) * (1.0 - muteFactor * 0.85);
     final opacity = (window * maxOpacity).clamp(0.0, 1.0);
 
     return Transform.scale(
@@ -1285,7 +1589,7 @@ class _ContinuousRing extends StatelessWidget {
                 const Color(0x44FF7F50),
                 phase,
               )!,
-              width: 1.4 + speechFactor * 0.8,
+              width: 1.4 + energy * 0.8,
             ),
           ),
         ),
@@ -1297,6 +1601,7 @@ class _ContinuousRing extends StatelessWidget {
 class _LivingFluidOrbPainter extends CustomPainter {
   _LivingFluidOrbPainter({
     required this.time,
+    required this.rotation,
     required this.speechFactor,
     required this.muteFactor,
     required this.dragOffset,
@@ -1304,6 +1609,11 @@ class _LivingFluidOrbPainter extends CustomPainter {
   });
 
   final double time;
+
+  /// Accumulated rotation in radians from the state row's rotRate. Separate
+  /// from [time] so THINKING can gyrate while its morph period slows.
+  final double rotation;
+
   final double speechFactor;
   final double muteFactor;
   final Offset dragOffset;
@@ -1445,7 +1755,7 @@ class _LivingFluidOrbPainter extends CustomPainter {
       amp2: amp2,
       amp3: amp3,
       amp4: amp4,
-      rotation: time * 0.14,
+      rotation: rotation,
       stretchOffset: dragOffset,
     );
 
@@ -1488,7 +1798,7 @@ class _LivingFluidOrbPainter extends CustomPainter {
       amp2: lerp3(0.038, 0.078, 0.016),
       amp3: lerp3(0.020, 0.040, 0.008),
       amp4: lerp3(0.010, 0.020, 0.004),
-      rotation: -time * 0.11,
+      rotation: -rotation * 0.79,
       stretchOffset: dragOffset * 0.85,
     );
 

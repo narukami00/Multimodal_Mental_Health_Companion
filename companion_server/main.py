@@ -1,10 +1,12 @@
 import asyncio
 import json
 import logging
+import os
+from enum import Enum
 from pathlib import Path
 import struct
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 import wave
 
@@ -25,6 +27,45 @@ logger = logging.getLogger("solace_companion")
 
 RECORDINGS_DIR = Path(__file__).resolve().parent / "debug_recordings"
 RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Per-turn WAV dumps. Off by default: the write used to run on the event loop for
+# every turn, which blocked the heartbeat and grew without bound.
+DEBUG_RECORDINGS = os.environ.get("SOLACE_DEBUG_RECORDINGS", "0") == "1"
+
+# Client -> server tunable defaults (§5.11). A session.configure `vad` block
+# overrides these; the server always wins over the client.
+DEFAULT_VAD_CONFIG: Dict[str, Any] = {
+    "provider": "silero",
+    "threshold": 0.5,
+    "neg_threshold": 0.35,
+    "min_speech_ms": 120,
+    "min_silence_ms": 700,
+    "speech_pad_ms": 30,
+    "max_speech_ms": 30000,
+    "endpoint_min_ms": 500,
+    "endpoint_max_ms": 1500,
+    "endpoint_ema_alpha": 0.9,
+    "pre_roll_ms": 600,
+    "on_db_silent": 9.0,
+    "on_db_speaking": 14.0,
+    "off_db": 5.0,
+    "barge_in_confirm_ms": 300,
+    "barge_in_grace_ms": 700,
+    "playback_cooldown_ms": 1500,
+    "false_interruption_timeout_ms": 2000,
+}
+
+
+class CallPhase(str, Enum):
+    """Server-authoritative call state (§7.4)."""
+
+    IDLE = "idle"
+    USER_SPEAKING = "user_speaking"
+    THINKING = "thinking"
+    ASSISTANT_SPEAKING = "assistant_speaking"
+    MUTED = "muted"
+    ENDED = "ended"
+
 
 # Initialize STT, LLM and TTS services
 stt = SttService(model_size="base.en")
@@ -188,6 +229,11 @@ async def stream_llm_response(
         active_generation["utterance_id"] = utterance_id
         active_generation["audio_stream_id"] = audio_stream_id
         active_generation["cancel_reason"] = None
+        # (text, start_ms, end_ms) per synthesised clause, so an interruption can
+        # truncate history to exactly what the user heard.
+        active_generation["segments"] = []
+        active_generation["played_ms"] = 0
+        active_generation["truncate_to_ms"] = None
 
     voice_id = cfg.get("voice_id", "af_heart")
     speed = float(cfg.get("speed", 0.96))
@@ -207,6 +253,9 @@ async def stream_llm_response(
         "session_id": session_id,
         "model": llm.model_id,
         "prompt_tokens": len(user_text.split()),
+        # Diagnostic: lets a client (or a test) verify that an interrupted turn
+        # was recorded truncated rather than in full.
+        "history_messages": len(session_history),
         "ts": int(time.time() * 1000)
     }))
 
@@ -237,12 +286,30 @@ async def stream_llm_response(
 
     tts_task: Optional[asyncio.Task] = None
 
+    def supersede_queued_audio() -> None:
+        """Drop queued clauses the user is no longer waiting for."""
+        dropped = 0
+        while True:
+            try:
+                sentence_queue.get_nowait()
+                dropped += 1
+            except asyncio.QueueEmpty:
+                break
+        if dropped:
+            logger.info(f"Superseded {dropped} queued TTS clause(s)")
+
     if should_synthesize_tts and audio_stream_id is not None:
         async def tts_worker():
             seq = 0
             total_samples = 0
             # 100 ms frame size: sample_rate * 2 bytes/sample * 0.1 sec
             frame_bytes = int(sample_rate * 2 * 0.1)
+            # Real-time pacing. Without it a three-second clause is pushed in
+            # roughly 30 ms, so the client believes it is "speaking" one to two
+            # seconds before the speaker makes a sound and a genuine barge-in
+            # during that window is not heard at all (§6.5).
+            min_frame_interval = frame_bytes / (sample_rate * 2)
+            last_frame_at = 0.0
 
             seg_idx = 0
             try:
@@ -287,6 +354,13 @@ async def stream_llm_response(
                     }))
 
                     total_samples += len(pcm) // 2
+                    if active_generation is not None:
+                        segments = active_generation.setdefault("segments", [])
+                        segments.append([
+                            chunk_text,
+                            int((total_samples - len(pcm) // 2) / sample_rate * 1000),
+                            int(total_samples / sample_rate * 1000),
+                        ])
 
                     # Send 100ms binary frames with 8-byte LE header:
                     # uint32 LE stream_id, uint32 LE sequence
@@ -297,7 +371,15 @@ async def stream_llm_response(
                         header = struct.pack("<II", audio_stream_id, seq)
                         seq += 1
                         await websocket.send_bytes(header + slice_payload)
-                        await asyncio.sleep(0.001)
+                        if active_generation is not None:
+                            active_generation["played_ms"] = int(
+                                (seq * frame_bytes) / (sample_rate * 2) * 1000
+                            )
+                        now = time.perf_counter()
+                        due = last_frame_at + min_frame_interval
+                        if now < due:
+                            await asyncio.sleep(due - now)
+                        last_frame_at = time.perf_counter()
 
                     # Send segment ended notification
                     if not tts_cancel_event.is_set():
@@ -338,24 +420,10 @@ async def stream_llm_response(
                 logger.info(f"TTS worker cancelled for {utterance_id}")
             except Exception as e:
                 logger.error(f"Error in TTS worker {utterance_id}: {e}", exc_info=True)
-            finally:
-                if tts_cancel_event.is_set():
-                    cancel_reason = "user_cancelled"
-                    if active_generation and active_generation.get("cancel_reason"):
-                        cancel_reason = active_generation["cancel_reason"]
-                    try:
-                        await websocket.send_text(json.dumps({
-                            "v": 1,
-                            "type": "tts.end",
-                            "turn_id": assistant_turn_id,
-                            "utterance_id": utterance_id,
-                            "audio_stream_id": audio_stream_id,
-                            "cancelled": True,
-                            "reason": cancel_reason,
-                            "ts": int(time.time() * 1000)
-                        }))
-                    except Exception:
-                        pass
+            # No tts.end here: the cancellation notice is sent by the canceller,
+            # outside this task. An `await` inside a cancelled task's own finally
+            # can raise again and be swallowed, so the client never learns the
+            # stream died.
 
         tts_task = asyncio.create_task(tts_worker())
         if active_generation is not None:
@@ -367,6 +435,27 @@ async def stream_llm_response(
     full_tokens: list[str] = []
     first_token = True
     ttft_ms = 0
+
+    def commit_history(generated: str) -> str:
+        """Append this exchange to the history, truncated to what was heard.
+
+        On an interruption the assistant's message is cut at `played_ms`: the
+        next prompt must not contain words the user never heard, or the history
+        becomes a record of a conversation that did not happen.
+        """
+        truncate_to_ms = active_generation.get("truncate_to_ms") if active_generation else None
+        text = generated
+        if truncate_to_ms is not None:
+            segments = (active_generation.get("segments") or []) if active_generation else []
+            heard = [seg[0] for seg in segments if seg[2] <= truncate_to_ms]
+            text = " ".join(heard).strip()
+            logger.info(
+                f"Truncated {assistant_turn_id} to played_ms={truncate_to_ms} "
+                f"({len(heard)}/{len(segments)} clauses heard)"
+            )
+        session_history.append({"role": "user", "content": user_text})
+        session_history.append({"role": "assistant", "content": text})
+        return text
 
     try:
         async for chunk in llm.generate_stream_async(messages, max_new_tokens=120):
@@ -393,10 +482,23 @@ async def stream_llm_response(
             if should_synthesize_tts and not tts_cancel_event.is_set():
                 new_chunks = chunker.add_token(chunk)
                 for nc in new_chunks:
-                    await sentence_queue.put(nc)
+                    if tts_cancel_event.is_set():
+                        break
+                    # Never block the LLM loop on a full TTS queue: a coroutine
+                    # blocked in put() never reaches its cancellation check, so
+                    # interruption is delayed by a full clause synthesis. Dropping
+                    # a clause the user interrupted is always correct.
+                    try:
+                        sentence_queue.put_nowait(nc)
+                    except asyncio.QueueFull:
+                        logger.info("TTS behind; dropping clause and superseding queued audio")
+                        supersede_queued_audio()
 
     except asyncio.CancelledError:
         logger.info(f"LLM streaming task cancelled for {assistant_turn_id}")
+        if active_generation is not None and active_generation.get("truncate_to_ms") is not None:
+            # An interrupted turn still happened: record it, truncated.
+            commit_history("".join(full_tokens).strip())
         return
     except Exception as e:
         logger.error(f"Error during LLM streaming for {assistant_turn_id}: {e}", exc_info=True)
@@ -405,8 +507,7 @@ async def stream_llm_response(
     total_duration_ms = int((time.time() - start_time) * 1000)
 
     if not llm_cancel_event.is_set():
-        session_history.append({"role": "user", "content": user_text})
-        session_history.append({"role": "assistant", "content": accumulated})
+        accumulated = commit_history(accumulated)
 
         await websocket.send_text(json.dumps({
             "v": 1,
@@ -434,8 +535,12 @@ async def stream_llm_response(
     if should_synthesize_tts and not tts_cancel_event.is_set():
         rem = chunker.flush()
         if rem:
-            await sentence_queue.put(rem)
-        await sentence_queue.put(None)  # EOF
+            try:
+                sentence_queue.put_nowait(rem)
+            except asyncio.QueueFull:
+                supersede_queued_audio()
+                sentence_queue.put_nowait(rem)
+        sentence_queue.put_nowait(None)  # EOF
         if tts_task and not tts_task.done():
             try:
                 await tts_task
@@ -465,6 +570,7 @@ async def websocket_session(
     active_audio_turns: Dict[str, Dict[str, Any]] = {}
     current_audio_turn_id: Optional[str] = None
     session_history: list = []
+    vad_config: Dict[str, Any] = dict(DEFAULT_VAD_CONFIG)
 
     session_config = {
         "mode": "chat_voice_playback",
@@ -486,7 +592,31 @@ async def websocket_session(
         "utterance_id": None,
         "audio_stream_id": None,
         "cancel_reason": None,
+        "segments": [],
+        "played_ms": 0,
+        "truncate_to_ms": None,
     }
+    call_phase = CallPhase.IDLE
+
+    async def send(payload: Dict[str, Any]) -> None:
+        payload.setdefault("session_id", current_session_id)
+        payload.setdefault("ts", int(time.time() * 1000))
+        await websocket.send_text(json.dumps(payload))
+
+    async def set_phase(new_phase: CallPhase, reason: str) -> None:
+        """Emit call.state on *every* transition, sourced from the §7.4 machine."""
+        nonlocal call_phase
+        if call_phase == new_phase:
+            return
+        logger.info(f"call.state {call_phase.value} -> {new_phase.value} ({reason})")
+        call_phase = new_phase
+        await send({
+            "v": 1,
+            "type": "call.state",
+            "state": new_phase.value,
+            "phase": new_phase.value,
+            "reason": reason,
+        })
 
     def cancel_active(cancel_tts: bool = True, cancel_llm: bool = True, reason: str = "cancelled"):
         active_generation["cancel_reason"] = reason
@@ -503,6 +633,30 @@ async def websocket_session(
             if llm_t and not llm_t.done():
                 llm_t.cancel()
 
+    async def notify_tts_cancelled(reason: str) -> None:
+        """Tell the client the audio stream is dead, from outside the dead task."""
+        if active_generation.get("audio_stream_id") is None:
+            return
+        await send({
+            "v": 1,
+            "type": "tts.end",
+            "turn_id": active_generation.get("turn_id"),
+            "utterance_id": active_generation.get("utterance_id"),
+            "audio_stream_id": active_generation.get("audio_stream_id"),
+            "cancelled": True,
+            "reason": reason,
+        })
+        active_generation["tts_task"] = None
+        active_generation["audio_stream_id"] = None
+
+    def close_turn(turn_id: str) -> None:
+        """Free a turn's buffers. Called on end, cancel and interrupt so a barge-in
+        race can never orphan a chunk list for the life of the connection."""
+        nonlocal current_audio_turn_id
+        active_audio_turns.pop(turn_id, None)
+        if current_audio_turn_id == turn_id:
+            current_audio_turn_id = next(iter(active_audio_turns), None)
+
     try:
         while True:
             message = await websocket.receive()
@@ -512,24 +666,78 @@ async def websocket_session(
             # 1. Handle Binary Audio Frames (16 kHz PCM16 chunks from client)
             if "bytes" in message and message["bytes"] is not None:
                 audio_bytes = message["bytes"]
-                if current_audio_turn_id and current_audio_turn_id in active_audio_turns:
-                    turn = active_audio_turns[current_audio_turn_id]
-                    payload = audio_bytes
-                    if turn.get("is_framed", False) and len(audio_bytes) > 8:
-                        # Strip 8-byte LE header: uint32 stream_id, uint32 sequence
-                        payload = audio_bytes[8:]
-                    turn["chunks"].append(payload)
-                    turn["total_bytes"] += len(payload)
-                    turn["frame_count"] += 1
-                    if turn["frame_count"] % 10 == 0:
-                        logger.info(
-                            f"Audio [{current_audio_turn_id}]: received frame #{turn['frame_count']} "
-                            f"({len(payload)} B, total {turn['total_bytes']} B)"
-                        )
-                else:
+                if not current_audio_turn_id or current_audio_turn_id not in active_audio_turns:
                     logger.warning(
-                        f"Received binary frame ({len(audio_bytes)} bytes) without an active audio turn"
+                        f"Rejected binary frame ({len(audio_bytes)} B): no open turn"
                     )
+                    await send({
+                        "v": 1,
+                        "type": "turn.diagnostic",
+                        "reason": "frame_no_turn",
+                        "bytes": len(audio_bytes),
+                    })
+                    continue
+
+                turn = active_audio_turns[current_audio_turn_id]
+                payload = audio_bytes
+                if turn.get("is_framed", False):
+                    if len(audio_bytes) <= 8:
+                        await send({
+                            "v": 1,
+                            "type": "turn.diagnostic",
+                            "turn_id": turn["turn_id"],
+                            "reason": "frame_too_short",
+                            "bytes": len(audio_bytes),
+                        })
+                        continue
+                    # Strip 8-byte LE header: uint32 stream_id, uint32 sequence
+                    stream_id, seq = struct.unpack("<II", audio_bytes[:8])
+                    payload = audio_bytes[8:]
+                    expected = turn.get("expected_seq")
+                    if expected is not None and seq != expected:
+                        missing = seq - expected if seq > expected else 1
+                        turn["frame_gaps"] += max(1, missing)
+                        logger.warning(
+                            f"Frame gap on {turn['turn_id']}: expected {expected}, got {seq}"
+                        )
+                        await send({
+                            "v": 1,
+                            "type": "turn.diagnostic",
+                            "turn_id": turn["turn_id"],
+                            "reason": "frame_gap",
+                            "expected": expected,
+                            "received": seq,
+                            "missing": max(1, missing),
+                        })
+                    turn["expected_seq"] = seq + 1
+                    turn["stream_id"] = stream_id
+
+                turn["chunks"].append(payload)
+                turn["total_bytes"] += len(payload)
+                turn["frame_count"] += 1
+                if turn["frame_count"] % 25 == 0:
+                    logger.info(
+                        f"Audio [{turn['turn_id']}]: frame #{turn['frame_count']} "
+                        f"({len(payload)} B, total {turn['total_bytes']} B)"
+                    )
+
+                # Streaming VAD: the low-latency barge-in signal. This does not
+                # wait for a transcript, which is what barge-in used to require.
+                vad = turn.get("vad")
+                if vad is not None:
+                    prob = await asyncio.to_thread(vad.push, payload)
+                    if vad.ever_spoke and not turn.get("speech_reported"):
+                        turn["speech_reported"] = True
+                        await send({
+                            "v": 1,
+                            "type": "turn.speech_detected",
+                            "turn_id": turn["turn_id"],
+                            "offset_ms": int(turn["total_bytes"] / (turn["sample_rate"] * 2) * 1000),
+                            "speech_start_sample": vad.speech_start_sample,
+                            "confidence": round(prob, 3),
+                            "source": "server_vad",
+                        })
+                        await set_phase(CallPhase.USER_SPEAKING, "server_vad")
                 continue
 
             # 2. Handle Text / Control JSON Messages
@@ -597,6 +805,18 @@ async def websocket_session(
                         if "codec" in audio_opts:
                             session_config["codec"] = str(audio_opts["codec"])
 
+                    vad_opts = data.get("vad", {})
+                    if isinstance(vad_opts, dict):
+                        # Server config wins: a client must not be able to set a
+                        # threshold the two halves of the gate disagree on.
+                        for key in DEFAULT_VAD_CONFIG:
+                            if key in vad_opts:
+                                vad_config[key] = vad_opts[key]
+                        stt.vad_threshold = float(vad_config["threshold"])
+                        stt.vad_neg_threshold = float(vad_config["neg_threshold"])
+                        stt.vad_min_speech_ms = int(vad_config["min_speech_ms"])
+                        logger.info(f"Session VAD config: {vad_config}")
+
                     ready_payload = {
                         "v": 1,
                         "type": "session.ready",
@@ -608,11 +828,12 @@ async def websocket_session(
                             "voice_id": session_config["voice_id"],
                             "sample_rate": tts.default_sample_rate,
                         },
+                        "vad": vad_config,
                         "ts": int(time.time() * 1000)
                     }
                     await websocket.send_text(json.dumps(ready_payload))
 
-                # Speech Cancel (Phase 6: chat mute / stop voice)
+                # Speech Cancel (chat mute / stop voice)
                 elif msg_type == "speech.cancel":
                     cancel_tts = bool(data.get("cancel_tts", True))
                     cancel_llm = bool(data.get("cancel_llm", False))
@@ -621,8 +842,11 @@ async def websocket_session(
                         f"Speech cancel received: cancel_tts={cancel_tts}, cancel_llm={cancel_llm}, reason={reason}"
                     )
                     cancel_active(cancel_tts=cancel_tts, cancel_llm=cancel_llm, reason=reason)
+                    if cancel_tts:
+                        await notify_tts_cancelled(reason)
 
-                # Call Barge-in (Phase 6: interrupt Sol voice during call)
+                # Call Barge-in: stop everything now. The truncation-aware
+                # sibling is `turn.interrupted`.
                 elif msg_type == "call.barge_in":
                     turn_id = data.get("turn_id")
                     utterance_id = data.get("utterance_id")
@@ -636,17 +860,48 @@ async def websocket_session(
                         "reason": reason,
                         "ts": int(time.time() * 1000)
                     }))
+                    await notify_tts_cancelled(reason)
+
+                # Genuine interruption: the client read played_ms BEFORE flushing
+                # local playback, so this is exactly what the user heard.
+                elif msg_type == "turn.interrupted":
+                    turn_id = data.get("turn_id")
+                    played_ms = int(data.get("played_ms", 0))
+                    interrupted_turn_id = data.get("interrupted_turn_id") or active_generation.get("turn_id")
+                    logger.info(
+                        f"turn.interrupted [{turn_id}] played_ms={played_ms} "
+                        f"assistant={interrupted_turn_id}"
+                    )
+                    active_generation["truncate_to_ms"] = played_ms
+                    cancel_active(cancel_tts=True, cancel_llm=True, reason="user_speech")
+                    await notify_tts_cancelled("user_speech")
+                    await set_phase(CallPhase.USER_SPEAKING, "client_interrupted")
+
+                # The client abandoned the turn (mute, page disposed, call end).
+                elif msg_type == "turn.cancel":
+                    turn_id = data.get("turn_id") or current_audio_turn_id
+                    reason = data.get("reason", "client_cancelled")
+                    logger.info(f"turn.cancel [{turn_id}] reason={reason}")
+                    if turn_id:
+                        close_turn(turn_id)
+                        await send({
+                            "v": 1,
+                            "type": "turn.discarded",
+                            "turn_id": turn_id,
+                            "reason": "cancelled",
+                        })
+                    # The prior state is preserved: cancelling a turn while the
+                    # assistant speaks must not claim the floor is free.
+                    if call_phase in (CallPhase.IDLE, CallPhase.THINKING):
+                        await set_phase(CallPhase.IDLE, reason)
 
                 # Call End
                 elif msg_type == "call.end":
                     cancel_active(cancel_tts=True, cancel_llm=True, reason="call_ended")
+                    for open_turn_id in list(active_audio_turns):
+                        close_turn(open_turn_id)
                     session_config["mode"] = "chat_voice_playback"
-                    await websocket.send_text(json.dumps({
-                        "v": 1,
-                        "type": "call.state",
-                        "state": "idle",
-                        "ts": int(time.time() * 1000)
-                    }))
+                    await set_phase(CallPhase.ENDED, "call_ended")
 
                 # Ping / Pong Heartbeat
                 elif msg_type == "ping":
@@ -680,6 +935,7 @@ async def websocket_session(
                     if user_text.strip():
                         # Cancel any ongoing generation
                         cancel_active(cancel_tts=True, cancel_llm=True, reason="new_text_message")
+                        await notify_tts_cancelled("new_text_message")
 
                         active_generation["llm_task"] = asyncio.create_task(
                             stream_llm_response(
@@ -696,16 +952,22 @@ async def websocket_session(
                             )
                         )
 
-                # Audio Start / input.start (Phase 2 & 6: cancel any running response on barge-in)
+                # Audio Start / input.start
+                #
+                # No unconditional cancel here. The old code killed the in-flight
+                # response on the mere *assertion* that a turn began: one frame of
+                # noise destroyed the answer, and the client then waited out its
+                # silence gate to find out nothing had been said. Cancellation now
+                # happens on `turn.interrupted`, which the client sends after its
+                # own echo-filtered decision.
                 elif msg_type in ("audio_start", "input.start"):
-                    cancel_active(cancel_tts=True, cancel_llm=True, reason="user_speaking")
-
+                    is_duplex = msg_type == "input.start"
                     turn_id = data.get("turn_id") or data.get("input_id") or f"turn_{uuid4().hex[:6]}"
                     sample_rate = int(data.get("sample_rate", 16000))
                     channels = int(data.get("channels", 1))
-                    frame_ms = int(data.get("frame_ms", 100 if msg_type == "audio_start" else 20))
+                    frame_ms = int(data.get("frame_ms", 20 if is_duplex else 100))
                     encoding = data.get("encoding") or data.get("codec") or "pcm16"
-                    is_framed = (msg_type == "input.start") or bool(data.get("framed", False))
+                    is_framed = is_duplex or bool(data.get("framed", False))
 
                     active_audio_turns[turn_id] = {
                         "turn_id": turn_id,
@@ -719,166 +981,222 @@ async def websocket_session(
                         "total_bytes": 0,
                         "frame_count": 0,
                         "start_time": time.time(),
+                        "expected_seq": None,
+                        "stream_id": None,
+                        "frame_gaps": 0,
+                        "speech_reported": False,
+                        "vad": await asyncio.to_thread(stt.new_streaming_vad, sample_rate)
+                        if is_duplex else None,
                     }
-                    current_audio_turn_id = turn_id
+                    # Never orphan an existing open turn: the newest one does not
+                    # silently steal the buffer pointer from a turn in flight.
+                    if current_audio_turn_id is None:
+                        current_audio_turn_id = turn_id
                     logger.info(
-                        f"Audio turn started: {turn_id} "
-                        f"(sample_rate={sample_rate}, channels={channels}, frame_ms={frame_ms}, framed={is_framed})"
+                        f"Turn started: {turn_id} "
+                        f"(sr={sample_rate}, ch={channels}, frame_ms={frame_ms}, framed={is_framed}, "
+                        f"open_turns={len(active_audio_turns)})"
                     )
 
-                    await websocket.send_text(json.dumps({
+                    if is_duplex:
+                        await send({
+                            "v": 1,
+                            "type": "turn.started",
+                            "turn_id": turn_id,
+                            "sample_rate": sample_rate,
+                            "frame_ms": frame_ms,
+                            "pre_roll_ms": int(data.get("pre_roll_ms", vad_config["pre_roll_ms"])),
+                            "threshold": vad_config["threshold"],
+                            "neg_threshold": vad_config["neg_threshold"],
+                        })
+                        await set_phase(CallPhase.USER_SPEAKING, "input_start")
+                    await send({
                         "v": 1,
                         "type": "audio_ack",
                         "turn_id": turn_id,
-                        "session_id": current_session_id,
                         "status": "ready_for_frames",
-                        "ts": int(time.time() * 1000)
-                    }))
+                    })
 
-                # Audio End / input.end (Phase 2 & 6 - Save WAV, STT, and respond with TTS)
+                # Audio End / input.end — endpoint the turn, transcribe once, answer.
                 elif msg_type in ("audio_end", "input.end"):
                     turn_id = data.get("turn_id") or data.get("input_id") or current_audio_turn_id or "turn_unknown"
-                    logger.info(f"Audio end received for turn {turn_id}")
+                    is_duplex = msg_type == "input.end"
+                    logger.info(f"Turn end received for {turn_id}")
 
                     turn = active_audio_turns.get(turn_id)
-                    if turn and turn["chunks"]:
-                        raw_pcm = b"".join(turn["chunks"])
-                        total_bytes = len(raw_pcm)
-                        frame_count = turn["frame_count"]
-                        sr = turn["sample_rate"]
-                        ch = turn["channels"]
-                        duration_sec = total_bytes / (sr * ch * 2) if (sr * ch * 2) > 0 else 0.0
-
-                        # Save WAV file to debug_recordings directory
-                        wav_filename = f"{turn_id}_{int(time.time())}.wav"
-                        wav_path = RECORDINGS_DIR / wav_filename
-                        try:
-                            with wave.open(str(wav_path), "wb") as wf:
-                                wf.setnchannels(ch)
-                                wf.setsampwidth(2)  # 16-bit PCM = 2 bytes
-                                wf.setframerate(sr)
-                                wf.writeframes(raw_pcm)
-                            logger.info(
-                                f"Successfully saved WAV: {wav_path} "
-                                f"({total_bytes} bytes, {duration_sec:.2f}s, {frame_count} frames)"
-                            )
-                        except Exception as err:
-                            logger.error(f"Failed to write WAV file {wav_path}: {err}")
-                            wav_filename = None
-
-                        # Emit audio_received confirmation
-                        await websocket.send_text(json.dumps({
+                    if not turn or not turn["chunks"]:
+                        logger.warning(f"Turn end for {turn_id} with no buffered frames")
+                        await send({
                             "v": 1,
                             "type": "audio_received",
                             "turn_id": turn_id,
-                            "session_id": current_session_id,
-                            "frames": frame_count,
-                            "bytes": total_bytes,
-                            "duration_ms": int(duration_sec * 1000),
-                            "wav_file": wav_filename,
-                            "ts": int(time.time() * 1000)
-                        }))
-
-                        # VAD check followed by Whisper transcription
-                        has_speech = await asyncio.to_thread(stt.has_speech, raw_pcm, sr)
-                        if not has_speech:
-                            logger.info(f"VAD: Silence / no speech detected for turn {turn_id}")
-                            await websocket.send_text(json.dumps({
-                                "v": 1,
-                                "type": "transcript_failed",
-                                "turn_id": turn_id,
-                                "session_id": current_session_id,
-                                "reason": "silence",
-                                "confidence": 0.0,
-                                "ts": int(time.time() * 1000)
-                            }))
-                        else:
-                            text, confidence, language = await asyncio.to_thread(
-                                stt.transcribe, raw_pcm, sr
-                            )
-                            if text:
-                                logger.info(
-                                    f"Transcribed turn {turn_id}: \"{text}\" (conf={confidence:.2f}, lang={language})"
-                                )
-                                await websocket.send_text(json.dumps({
-                                    "v": 1,
-                                    "type": "transcript_final",
-                                    "turn_id": turn_id,
-                                    "session_id": current_session_id,
-                                    "text": text,
-                                    "stable": True,
-                                    "language": language,
-                                    "confidence": round(confidence, 2),
-                                    "audio_ms": int(duration_sec * 1000),
-                                    "ts": int(time.time() * 1000)
-                                }))
-
-                                # Stream LLM companion response with TTS voice playback!
-                                cancel_active(cancel_tts=True, cancel_llm=True, reason="new_audio_turn")
-                                active_generation["llm_task"] = asyncio.create_task(
-                                    stream_llm_response(
-                                        websocket=websocket,
-                                        session_id=current_session_id,
-                                        user_text=text,
-                                        user_turn_id=turn_id,
-                                        session_history=session_history,
-                                        session_config=session_config,
-                                        tts_engine=tts,
-                                        stream_id_counter=stream_id_counter,
-                                        active_generation=active_generation,
-                                        is_voice_turn=True,
-                                    )
-                                )
-                            else:
-                                logger.warning(f"Speech detected but transcription empty for turn {turn_id}")
-                                await websocket.send_text(json.dumps({
-                                    "v": 1,
-                                    "type": "transcript_failed",
-                                    "turn_id": turn_id,
-                                    "session_id": current_session_id,
-                                    "reason": "unintelligible",
-                                    "confidence": round(confidence, 2),
-                                    "ts": int(time.time() * 1000)
-                                }))
-
-                        active_audio_turns.pop(turn_id, None)
-                    else:
-                        logger.warning(f"Audio end received for {turn_id} but no audio frames buffered")
-                        await websocket.send_text(json.dumps({
-                            "v": 1,
-                            "type": "audio_received",
-                            "turn_id": turn_id,
-                            "session_id": current_session_id,
                             "frames": 0,
                             "bytes": 0,
                             "duration_ms": 0,
                             "wav_file": None,
-                            "ts": int(time.time() * 1000)
-                        }))
+                        })
+                        if turn_id in active_audio_turns:
+                            close_turn(turn_id)
+                            await send({
+                                "v": 1,
+                                "type": "turn.discarded",
+                                "turn_id": turn_id,
+                                "reason": "silence",
+                            })
+                            await set_phase(CallPhase.IDLE, "no_audio")
+                        continue
 
-                    if current_audio_turn_id == turn_id:
-                        current_audio_turn_id = None
+                    raw_pcm = b"".join(turn["chunks"])
+                    total_bytes = len(raw_pcm)
+                    frame_count = turn["frame_count"]
+                    sr = turn["sample_rate"]
+                    ch = turn["channels"]
+                    duration_sec = total_bytes / (sr * ch * 2) if (sr * ch * 2) > 0 else 0.0
+                    vad = turn.get("vad")
+                    probabilities = vad.probabilities if vad is not None else None
+                    speech_ms = vad.speech_ms if vad is not None else 0
+                    silence_ms = (
+                        int(vad.silence_samples / sr * 1000) if vad is not None else 0
+                    )
+                    close_turn(turn_id)
+
+                    # Optional per-turn dump, off by default and never on the
+                    # event loop: the old unconditional write blocked the whole
+                    # connection, including the heartbeat, for the write duration.
+                    wav_filename = None
+                    if DEBUG_RECORDINGS:
+                        wav_filename = f"{turn_id}_{int(time.time())}.wav"
+                        wav_path = RECORDINGS_DIR / wav_filename
+
+                        def _write_wav(path: Path = wav_path, pcm: bytes = raw_pcm) -> bool:
+                            try:
+                                with wave.open(str(path), "wb") as wf:
+                                    wf.setnchannels(ch)
+                                    wf.setsampwidth(2)
+                                    wf.setframerate(sr)
+                                    wf.writeframes(pcm)
+                                return True
+                            except Exception as err:
+                                logger.error(f"Failed to write WAV {path}: {err}")
+                                return False
+
+                        if not await asyncio.to_thread(_write_wav):
+                            wav_filename = None
+
+                    await send({
+                        "v": 1,
+                        "type": "audio_received",
+                        "turn_id": turn_id,
+                        "frames": frame_count,
+                        "bytes": total_bytes,
+                        "duration_ms": int(duration_sec * 1000),
+                        "wav_file": wav_filename,
+                        "frame_gaps": turn["frame_gaps"],
+                    })
+
+                    if is_duplex:
+                        await send({
+                            "v": 1,
+                            "type": "turn.endpointed",
+                            "turn_id": turn_id,
+                            "reason": data.get("reason", "silence"),
+                            "speech_end_sample": vad.last_speech_sample if vad else -1,
+                            "speech_ms": speech_ms,
+                            "silence_ms": silence_ms,
+                            "total_ms": int(duration_sec * 1000),
+                            "deadline_ms": int(vad_config["min_silence_ms"]),
+                            "frame_gaps": turn["frame_gaps"],
+                        })
+                        await set_phase(CallPhase.THINKING, "endpointed")
+                        await send({
+                            "v": 1,
+                            "type": "turn.processing",
+                            "turn_id": turn_id,
+                            "stage": "stt",
+                            "elapsed_ms": 0,
+                        })
+
+                    # One pass: the streaming probability vector is reused, so the
+                    # VAD model does not run a second time over the same audio.
+                    text, confidence, language, eot_probability, vad_speech_ms = await asyncio.to_thread(
+                        stt.analyze, raw_pcm, sr, probabilities
+                    )
+
+                    if not text:
+                        reason = "silence" if not (probabilities or vad_speech_ms) else "unintelligible"
+                        logger.info(f"Discarding turn {turn_id}: {reason}")
+                        await send({
+                            "v": 1,
+                            "type": "transcript_failed",
+                            "turn_id": turn_id,
+                            "reason": reason,
+                            "confidence": round(confidence, 2),
+                        })
+                        if is_duplex:
+                            await send({
+                                "v": 1,
+                                "type": "turn.discarded",
+                                "turn_id": turn_id,
+                                "reason": reason,
+                                "speech_ms": vad_speech_ms,
+                                "confidence": round(confidence, 2),
+                            })
+                            await set_phase(CallPhase.IDLE, reason)
+                        continue
+
+                    logger.info(
+                        f"Transcribed turn {turn_id}: \"{text}\" (conf={confidence:.2f}, lang={language})"
+                    )
+                    await send({
+                        "v": 1,
+                        "type": "transcript_final",
+                        "turn_id": turn_id,
+                        "text": text,
+                        "stable": True,
+                        "language": language,
+                        "confidence": round(confidence, 2),
+                        "audio_ms": int(duration_sec * 1000),
+                    })
+
+                    # The LLM task is registered before anything is awaited, so a
+                    # barge-in arriving during transcription cancels this turn
+                    # instead of the previous response.
+                    cancel_active(cancel_tts=True, cancel_llm=True, reason="new_audio_turn")
+                    await notify_tts_cancelled("superseded_by_new_turn")
+                    task = asyncio.create_task(
+                        stream_llm_response(
+                            websocket=websocket,
+                            session_id=current_session_id,
+                            user_text=text,
+                            user_turn_id=turn_id,
+                            session_history=session_history,
+                            session_config=session_config,
+                            tts_engine=tts,
+                            stream_id_counter=stream_id_counter,
+                            active_generation=active_generation,
+                            is_voice_turn=True,
+                        )
+                    )
+                    active_generation["llm_task"] = task
+                    if is_duplex:
+                        await set_phase(CallPhase.THINKING, "transcript_final")
 
                 # Audio Cancel
                 elif msg_type == "audio_cancel":
-                    cancel_active(cancel_tts=True, cancel_llm=True, reason="user_cancelled")
-
-                    turn_id = data.get("turn_id", current_audio_turn_id or "turn_unknown")
+                    turn_id = data.get("turn_id") or current_audio_turn_id or "turn_unknown"
                     reason = data.get("reason", "user_cancelled")
                     logger.info(f"Audio cancel received for turn {turn_id}, reason: {reason}")
+                    cancel_active(cancel_tts=True, cancel_llm=True, reason=reason)
+                    await notify_tts_cancelled(reason)
 
-                    active_audio_turns.pop(turn_id, None)
-                    if current_audio_turn_id == turn_id:
-                        current_audio_turn_id = None
-
-                    await websocket.send_text(json.dumps({
+                    if turn_id in active_audio_turns:
+                        close_turn(turn_id)
+                    await send({
                         "v": 1,
                         "type": "turn_cancelled",
                         "turn_id": turn_id,
-                        "session_id": current_session_id,
                         "reason": reason,
-                        "ts": int(time.time() * 1000)
-                    }))
+                    })
 
                 else:
                     logger.warning(f"Unknown message type: {msg_type}")
@@ -902,4 +1220,6 @@ async def websocket_session(
 if __name__ == "__main__":
     import uvicorn
     logger.info("Starting Solace Companion Server on http://0.0.0.0:8000")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # No reload: it re-executes this module and duplicates the STT, LLM and TTS
+    # model loads in the same process.
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
