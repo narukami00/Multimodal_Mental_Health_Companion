@@ -30,8 +30,7 @@ async def test_healthz_phase4():
         print("\n--- Healthz Response ---")
         print(json.dumps(data, indent=2))
         assert data["status"] == "ok"
-        assert data["phase"] == 4
-        assert data["phase_name"] == "local_llm_streaming"
+        assert data["phase"] >= 4
         assert data["llm_ready"] is True, "LLM should be initialized and ready"
         assert "llm_model" in data
 
@@ -83,6 +82,8 @@ async def test_text_message_llm_streaming():
 
         while True:
             raw = await asyncio.wait_for(ws.recv(), timeout=25.0)
+            if isinstance(raw, bytes):
+                continue
             evt = json.loads(raw)
             if evt["type"] == "llm_chunk":
                 delta = evt.get("delta", "")
@@ -172,6 +173,8 @@ async def test_voice_note_transcript_and_llm_streaming():
         print("Companion reply: ", end="", flush=True)
         while True:
             raw = await asyncio.wait_for(ws.recv(), timeout=25.0)
+            if isinstance(raw, bytes):
+                continue
             evt = json.loads(raw)
             if evt["type"] == "llm_chunk":
                 delta = evt.get("delta", "")

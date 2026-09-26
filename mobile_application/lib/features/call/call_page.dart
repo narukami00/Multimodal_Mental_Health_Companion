@@ -96,7 +96,6 @@ class _CallPageState extends State<CallPage> {
   DateTime? _userTurnStartTime;
   int _consecutiveSpeechFrames = 0;
   int _consecutiveSilenceFrames = 0;
-  int _bargeInConsecutiveFrames = 0;
 
   bool get _isSpeaking => !_ended && !_paused && _ariaSpeaking;
 
@@ -160,24 +159,20 @@ class _CallPageState extends State<CallPage> {
 
       _currentMicAmplitude = amp;
 
-      // 1. Barge-in detection: if Solace is speaking and user speaks
-      if (_ariaSpeaking && amp > 0.10) {
-        _bargeInConsecutiveFrames++;
-        if (_bargeInConsecutiveFrames >= 2) {
-          _triggerBargeIn();
-        }
-      } else {
-        _bargeInConsecutiveFrames = 0;
-      }
+      // 1. Dynamic speech onset threshold:
+      // While Solace is speaking, phone loudspeaker creates acoustic feedback into the mic (~0.08 - 0.12).
+      // We set speech threshold to 0.22 while speaking so Solace's own voice never interrupts itself.
+      // When Solace is listening, threshold is natural conversational sensitivity (0.05).
+      final onsetThreshold = _ariaSpeaking ? 0.22 : 0.05;
+      final isSpeech = amp > onsetThreshold;
 
-      // 2. Client-side Duplex Turn Detection
-      final isSpeech = amp > 0.045;
       if (isSpeech) {
         _consecutiveSilenceFrames = 0;
         _consecutiveSpeechFrames++;
 
-        // Speech onset: user spoke for >= 2 frames (200ms) and companion is not speaking
-        if (!_isUserTurnActive && _consecutiveSpeechFrames >= 2 && !_ariaSpeaking) {
+        final requiredFrames = _ariaSpeaking ? 3 : 2;
+        // Start user turn if not already active
+        if (!_isUserTurnActive && _consecutiveSpeechFrames >= requiredFrames) {
           _isUserTurnActive = true;
           _currentUserTurnId = 'call_${DateTime.now().millisecondsSinceEpoch}';
           _userTurnStartTime = DateTime.now();
@@ -264,7 +259,19 @@ class _CallPageState extends State<CallPage> {
     _transcriptFinalSub = _wsService?.transcriptFinalStream.listen((data) {
       if (!mounted) return;
       final text = data['text'] as String? ?? '';
-      if (text.isNotEmpty) {
+      if (text.trim().isNotEmpty) {
+        // Confirmed real user speech transcribed!
+        // Only now do we interrupt Solace's previous audio playback.
+        if (_ariaSpeaking) {
+          debugPrint('[CallPage] Confirmed user speech: "$text" - interrupting previous audio.');
+          _ttsPlayback?.stopVoice(fadeMs: 25);
+          _wsService?.sendCallBargeIn(reason: 'user_speech_transcribed');
+          setState(() {
+            _ariaSpeaking = false;
+            _currentTtsAmplitude = 0.0;
+          });
+        }
+
         setState(() {
           if (_lines.length >= 2) _lines.removeAt(0);
           final words = text.split(' ');
@@ -274,32 +281,6 @@ class _CallPageState extends State<CallPage> {
         });
       }
     });
-  }
-
-  void _triggerBargeIn() {
-    _bargeInConsecutiveFrames = 0;
-    if (!_ariaSpeaking) return;
-
-    debugPrint('[CallPage] Barge-in triggered by user speech!');
-    _ttsPlayback?.cancelVoice(reason: 'call_barge_in');
-    _wsService?.sendCallBargeIn(reason: 'vad_speech_detected');
-
-    setState(() {
-      _ariaSpeaking = false;
-      _currentTtsAmplitude = 0.0;
-    });
-
-    if (!_isUserTurnActive) {
-      _isUserTurnActive = true;
-      _currentUserTurnId = 'call_${DateTime.now().millisecondsSinceEpoch}';
-      _consecutiveSilenceFrames = 0;
-      _wsService?.sendAudioStart(
-        turnId: _currentUserTurnId!,
-        sampleRate: 16000,
-        frameMs: 100,
-      );
-      if (mounted) setState(() {});
-    }
   }
 
   @override
@@ -1065,6 +1046,12 @@ class _BreathingOrbState extends State<_BreathingOrb>
   double _speechFactor = 0.0;
   double _muteFactor = 0.0;
 
+  // Envelope-follower filtered amplitude (eliminates 100ms discrete mic/TTS amplitude jitter)
+  double _smoothedAmplitude = 0.0;
+
+  // Smooth conversational state scale transition (slow, graceful morphing between rest, speaking, muted)
+  double _stateScale = 1.0;
+
   // Interactive touch & elastic gel physics
   Offset _dragOffset = Offset.zero;
   Offset _dragVelocity = Offset.zero;
@@ -1099,17 +1086,38 @@ class _BreathingOrbState extends State<_BreathingOrb>
     final timeSpeed = 1.0 + _speechFactor * 0.35 - _muteFactor * 0.4;
     _time += dt * timeSpeed;
 
-    // 2. Smooth speech factor (exponential approach over ~260ms), modulated by voice amplitude
+    // 2. Continuous envelope-follower for voice amplitude:
+    // Fast attack (8.0) reacts crisply to speech onset (~100ms),
+    // Gentle release (2.6) bridges inter-syllable silences and stops frame jitter.
+    final rawAmp = widget.amplitude.clamp(0.0, 1.0);
+    final ampAttack = rawAmp > _smoothedAmplitude;
+    final ampRate = ampAttack ? 8.0 : 2.6;
+    _smoothedAmplitude += (rawAmp - _smoothedAmplitude) * (1.0 - math.exp(-ampRate * dt));
+
+    // 3. Smooth speech factor with calm, cinematic transition rate (~320ms)
+    // Slower, graceful approach avoids rapid jumping/flickering between speaking and idle states
     final targetSpeech = widget.isSpeaking
-        ? (0.6 + 0.4 * widget.amplitude.clamp(0.0, 1.0))
+        ? (0.55 + 0.45 * _smoothedAmplitude)
         : 0.0;
-    _speechFactor += (targetSpeech - _speechFactor) * (1.0 - math.exp(-7.0 * dt));
+    _speechFactor += (targetSpeech - _speechFactor) * (1.0 - math.exp(-3.2 * dt));
 
-    // 3. Smooth mute factor
+    // 4. Smooth mute factor
     final targetMute = widget.muted ? 1.0 : 0.0;
-    _muteFactor += (targetMute - _muteFactor) * (1.0 - math.exp(-6.0 * dt));
+    _muteFactor += (targetMute - _muteFactor) * (1.0 - math.exp(-4.5 * dt));
 
-    // 4. Elastic spring rebound for drag offset
+    // 5. Smooth conversational state scale transition
+    // Resting state: 1.0, Resonating speech: 1.05 - 1.10 (proportional to voice), Muted: 0.94
+    double targetScale = 1.0;
+    if (widget.muted) {
+      targetScale = 0.94;
+    } else if (widget.isSpeaking) {
+      targetScale = 1.05 + 0.06 * _smoothedAmplitude;
+    } else {
+      targetScale = 1.0;
+    }
+    _stateScale += (targetScale - _stateScale) * (1.0 - math.exp(-3.0 * dt));
+
+    // 6. Elastic spring rebound for drag offset
     if (!_isDragging && _dragOffset != Offset.zero) {
       const stiffness = 180.0;
       const damping = 16.0;
@@ -1124,12 +1132,12 @@ class _BreathingOrbState extends State<_BreathingOrb>
       }
     }
 
-    // 5. Elastic touch squish rebound
+    // 7. Elastic touch squish rebound
     if (!_isDragging && _touchSquish < 1.0) {
-      _touchSquish += (1.0 - _touchSquish) * (1.0 - math.exp(-14.0 * dt));
+      _touchSquish += (1.0 - _touchSquish) * (1.0 - math.exp(-12.0 * dt));
     }
 
-    // 6. Propagate and decay ripples
+    // 8. Propagate and decay ripples
     for (var i = _ripples.length - 1; i >= 0; i--) {
       _ripples[i].age += dt;
       if (_ripples[i].age > 1.2) {
@@ -1162,11 +1170,12 @@ class _BreathingOrbState extends State<_BreathingOrb>
     const center = Offset(size / 2, size / 2);
 
     // Continuous breath modulation (never wraps abruptly)
-    final breathRate = 1.1 + _speechFactor * 0.5;
-    final breathAmp = 0.040 +
-        (_speechFactor * 0.035 + widget.amplitude.clamp(0.0, 1.0) * 0.045) -
-        _muteFactor * 0.020;
-    final breathScale = (1.0 + breathAmp * math.sin(_time * breathRate)) * _touchSquish;
+    final breathRate = 1.05 + _speechFactor * 0.45;
+    final breathAmp = 0.038 +
+        (_speechFactor * 0.028 + _smoothedAmplitude * 0.035) -
+        _muteFactor * 0.018;
+    final breathScale =
+        (1.0 + breathAmp * math.sin(_time * breathRate)) * _touchSquish * _stateScale;
 
     return GestureDetector(
       onPanStart: (details) {

@@ -52,6 +52,7 @@ class TtsPlaybackService {
   String? _activePlayingPath;
 
   bool _isPlaying = false;
+  bool _isPlayerActive = false;
   bool _isReceivingStream = false;
   double _currentAmplitude = 0.0;
 
@@ -161,13 +162,14 @@ class TtsPlaybackService {
 
   void _enqueueSegment(Uint8List wavBytes) {
     _playbackQueue.add(wavBytes);
-    if (!_isPlaying) {
+    if (!_isPlayerActive) {
       _playNextSegment();
     }
   }
 
   Future<void> _playNextSegment() async {
     if (_playbackQueue.isEmpty) {
+      _isPlayerActive = false;
       if (!_isReceivingStream) {
         _setPlaying(false);
         _currentAmplitude = 0.0;
@@ -179,6 +181,7 @@ class TtsPlaybackService {
     }
 
     final nextWav = _playbackQueue.removeAt(0);
+    _isPlayerActive = true;
     _setPlaying(true);
 
     if (_audioPlayer != null) {
@@ -188,10 +191,12 @@ class TtsPlaybackService {
         await _audioPlayer.play(BytesSource(nextWav));
       } catch (e) {
         debugPrint('[TtsPlayback] Segment playback error: $e');
+        _isPlayerActive = false;
         _playNextSegment();
       }
     } else {
       // In mock / test environment, immediately proceed
+      _isPlayerActive = false;
       if (_playbackQueue.isEmpty && !_isReceivingStream) {
         _setPlaying(false);
       }
@@ -199,6 +204,7 @@ class TtsPlaybackService {
   }
 
   void _onSegmentPlaybackComplete() {
+    _isPlayerActive = false;
     _playNextSegment();
   }
 
@@ -260,8 +266,12 @@ class TtsPlaybackService {
       }
     }
 
-    if (_playbackQueue.isEmpty && _audioPlayer == null) {
+    if (_playbackQueue.isEmpty && !_isPlayerActive) {
       _setPlaying(false);
+      _currentAmplitude = 0.0;
+      if (!_amplitudeController.isClosed) {
+        _amplitudeController.add(0.0);
+      }
     }
   }
 
@@ -273,6 +283,7 @@ class TtsPlaybackService {
     _activeUtteranceId = null;
     _activePlayingPath = null;
     _isReceivingStream = false;
+    _isPlayerActive = false;
     _playbackQueue.clear();
     _currentSegmentPcm.clear();
     _fullUtterancePcm.clear();
@@ -292,6 +303,7 @@ class TtsPlaybackService {
   Future<void> stopVoice({int fadeMs = 25}) async {
     _activePlayingPath = null;
     _playbackQueue.clear();
+    _isPlayerActive = false;
     if (_isPlaying) {
       try {
         if (_audioPlayer != null) {
@@ -325,8 +337,10 @@ class TtsPlaybackService {
       if (_audioPlayer != null) {
         await _audioPlayer.play(DeviceFileSource(path));
       }
+      _isPlayerActive = true;
       _setPlaying(true);
     } catch (e) {
+      _isPlayerActive = false;
       debugPrint('[TtsPlayback] Error replaying audio file: $e');
     }
   }

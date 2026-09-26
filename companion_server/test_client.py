@@ -15,11 +15,12 @@ import sys
 import time
 import requests
 import websockets
+import pytest
 
 BASE_HTTP = "http://127.0.0.1:8000"
 BASE_WS = "ws://127.0.0.1:8000/ws/v1/session"
 
-def test_http_endpoints():
+def verify_http_endpoints():
     print("\n--- 1. Testing HTTP Endpoints ---")
     
     # 1. GET /healthz
@@ -51,7 +52,10 @@ def test_http_endpoints():
     assert "token" in data
     return data["session_id"], data["token"]
 
-async def test_websocket_flow(session_id: str, token: str):
+def test_http_endpoints():
+    verify_http_endpoints()
+
+async def run_websocket_flow(session_id: str, token: str):
     ws_uri = f"{BASE_WS}?session_id={session_id}&token={token}"
     print(f"\n--- 2. Testing WebSocket Handshake & Echo at {ws_uri} ---")
 
@@ -131,6 +135,8 @@ async def test_websocket_flow(session_id: str, token: str):
         accumulated_chunks = []
         while True:
             raw_frame = await ws.recv()
+            if isinstance(raw_frame, bytes):
+                continue
             frame = json.loads(raw_frame)
             if frame.get("type") == "llm_chunk":
                 accumulated_chunks.append(frame.get("delta", ""))
@@ -161,10 +167,15 @@ async def test_websocket_flow(session_id: str, token: str):
 
     print("\n=== ALL PHASE 1 PROTOCOL TESTS PASSED SUCCESSFULLY! ===")
 
+@pytest.mark.asyncio
+async def test_websocket_session_lifecycle():
+    session_id, token = verify_http_endpoints()
+    await run_websocket_flow(session_id, token)
+
 def main():
     try:
-        session_id, token = test_http_endpoints()
-        asyncio.run(test_websocket_flow(session_id, token))
+        session_id, token = verify_http_endpoints()
+        asyncio.run(run_websocket_flow(session_id, token))
     except Exception as e:
         print(f"\n[FAIL] Test encountered error: {e}", file=sys.stderr)
         raise
