@@ -509,6 +509,12 @@ async def stream_llm_response(
     if not llm_cancel_event.is_set():
         accumulated = commit_history(accumulated)
 
+        suggestions: list[str] = []
+        try:
+            suggestions = await llm.generate_suggestions_async(accumulated, user_text=user_text)
+        except Exception as e:
+            logger.debug(f"Failed to generate suggested replies: {e}")
+
         await websocket.send_text(json.dumps({
             "v": 1,
             "type": "llm_done",
@@ -518,6 +524,7 @@ async def stream_llm_response(
             "session_id": session_id,
             "text": accumulated,
             "tokens": len(full_tokens),
+            "suggestions": suggestions,
             "ttft_ms": ttft_ms,
             "duration_ms": total_duration_ms,
             "latency_ms": {
@@ -528,7 +535,7 @@ async def stream_llm_response(
         }))
         logger.info(
             f"Completed LLM response for {assistant_turn_id} "
-            f"({len(full_tokens)} tokens, {total_duration_ms}ms, ttft={ttft_ms}ms)"
+            f"({len(full_tokens)} tokens, {total_duration_ms}ms, ttft={ttft_ms}ms, suggestions={suggestions})"
         )
 
     # 5. Flush any remaining text to TTS worker and wait for completion

@@ -202,3 +202,86 @@ class LlmService:
             if token is None:
                 break
             yield token
+
+    async def generate_suggestions_async(
+        self,
+        assistant_text: str,
+        user_text: str = "",
+    ) -> List[str]:
+        """Generate 2-3 short, relevant suggested user reply chips based on the assistant's response."""
+        fallback = self._get_fallback_suggestions(assistant_text, user_text)
+        if not self._is_ready or not assistant_text.strip():
+            return fallback
+
+        prompt_messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You suggest 3 short, natural replies a user could tap next in a calm mental health chat. "
+                    "Each reply must be 2 to 6 words long. "
+                    "Output only the 3 suggestions, separated by newlines, with no numbers, dashes, quotes, or markdown."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"The companion just said:\n\"{assistant_text[:180]}\"\n\nSuggest 3 quick user responses:",
+            },
+        ]
+
+        try:
+            tokens: List[str] = []
+            async for tok in self.generate_stream_async(
+                prompt_messages,
+                max_new_tokens=40,
+                temperature=0.6,
+                top_p=0.9,
+            ):
+                tokens.append(tok)
+            raw = "".join(tokens).strip()
+
+            candidates: List[str] = []
+            for line in raw.split("\n"):
+                clean = line.strip().lstrip("0123456789.-•*\"' ").rstrip("\"'.,")
+                if clean and 2 <= len(clean.split()) <= 7:
+                    candidates.append(clean)
+
+            if len(candidates) >= 2:
+                return candidates[:3]
+        except Exception as e:
+            logger.debug(f"LLM suggestion generation failed: {e}")
+
+        return fallback
+
+    @staticmethod
+    def _get_fallback_suggestions(assistant_text: str, user_text: str = "") -> List[str]:
+        """Contextual fallback suggestions based on keywords."""
+        lower = assistant_text.lower()
+        if any(w in lower for w in ("breathe", "breath", "inhale", "exhale", "chest")):
+            return [
+                "Let's try 1 minute",
+                "I feel tension in my shoulders",
+                "Can we try something else?",
+            ]
+        if any(w in lower for w in ("sleep", "night", "tired", "rest", "bed", "insomnia")):
+            return [
+                "My mind won't stop racing",
+                "Help me wind down",
+                "I'll try to rest now",
+            ]
+        if any(w in lower for w in ("anxious", "anxiety", "panic", "overwhelm", "stressed")):
+            return [
+                "It feels overwhelming",
+                "Can you stay with me?",
+                "Help me ground myself",
+            ]
+        if "?" in assistant_text:
+            return [
+                "I'm not really sure",
+                "Tell me more about that",
+                "A little bit of both",
+            ]
+        return [
+            "Tell me more",
+            "That resonates with me",
+            "What should I do next?",
+        ]

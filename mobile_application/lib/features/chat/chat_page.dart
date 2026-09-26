@@ -127,18 +127,19 @@ const _amber = Color(0xFFFFB534);
 const _coral = Color(0xFFFF7F50);
 const _surface = Color(0xFFFFFDF4);
 
-class _ChatPageState extends State<ChatPage>
-    with SingleTickerProviderStateMixin {
+class _ChatPageState extends State<ChatPage> {
   static const _greeting =
       "Hello. Take your time here. Whatever you're holding today, "
       "you don't have to carry it all by yourself. What feels present right now?";
 
-  static const _chips = [
+  static const _initialChips = [
     "I'm feeling a bit restless",
     'Help me unwind tonight',
     'Just want to vent',
     'Notice where I am',
   ];
+
+  late List<String> _chips = List.of(_initialChips);
 
   static const _replies = [
     "I hear you. You don't have to have it figured out to say it out loud — what part feels loudest right now?",
@@ -151,10 +152,6 @@ class _ChatPageState extends State<ChatPage>
   final _scroll = ScrollController();
   var _messages = <_Msg>[];
   var _replyIndex = 0;
-  late final _breath = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 3),
-  )..repeat(reverse: true);
 
   var _isRecording = false;
   var _isLocked = false;
@@ -446,6 +443,24 @@ class _ChatPageState extends State<ChatPage>
       final uttId = data['utterance_id'] as String?;
       final turnId = data['turn_id'] as String?;
       ChatMessageRecord? completedRecord;
+
+      final rawSuggestions = data['suggestions'];
+      List<String>? newSuggestions;
+      if (rawSuggestions is List && rawSuggestions.isNotEmpty) {
+        final parsed = rawSuggestions
+            .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+        if (parsed.isNotEmpty) {
+          newSuggestions = parsed;
+        }
+      }
+      newSuggestions ??= _generateLocalSuggestions(
+        finalText.isNotEmpty
+            ? finalText
+            : (_messages.isNotEmpty ? _messages.last.text : ''),
+      );
+
       setState(() {
         if (_messages.isNotEmpty &&
             !_messages.last.isUser &&
@@ -476,6 +491,7 @@ class _ChatPageState extends State<ChatPage>
           _messages.add(completed);
           completedRecord = completed.toRecord();
         }
+        _chips = newSuggestions!;
       });
       if (completedRecord != null) {
         _chatController.addMessage(completedRecord!);
@@ -493,11 +509,59 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
+  List<String> _generateLocalSuggestions(String text) {
+    final lower = text.toLowerCase();
+    if (lower.contains('breathe') ||
+        lower.contains('breath') ||
+        lower.contains('chest')) {
+      return const [
+        "Let's try 1 minute",
+        'I feel tension in my shoulders',
+        'Can we try something else?',
+      ];
+    }
+    if (lower.contains('sleep') ||
+        lower.contains('night') ||
+        lower.contains('rest') ||
+        lower.contains('unwind')) {
+      return const [
+        'My mind is racing a bit',
+        'Help me wind down',
+        "I'll try to rest now",
+      ];
+    }
+    if (lower.contains('anxious') ||
+        lower.contains('worry') ||
+        lower.contains('stress') ||
+        lower.contains('overwhelm')) {
+      return const [
+        'It feels overwhelming',
+        'Can you stay with me?',
+        'Help me ground myself',
+      ];
+    }
+    if (text.contains('?')) {
+      return const [
+        "I'm not really sure",
+        'Tell me more about that',
+        'A little bit of both',
+      ];
+    }
+    return const [
+      'Tell me more',
+      'That resonates with me',
+      'What should I do next?',
+    ];
+  }
+
   void _initChatHistory() {
     if (widget.initialMessages != null) return;
     final activeConv = _chatController.activeConversation;
     if (activeConv != null && activeConv.messages.isNotEmpty) {
       _messages = activeConv.messages.map(_Msg.fromRecord).toList();
+      if (_messages.isNotEmpty && !_messages.last.isUser) {
+        _chips = _generateLocalSuggestions(_messages.last.text);
+      }
       if (mounted) {
         setState(() {});
       }
@@ -509,6 +573,7 @@ class _ChatPageState extends State<ChatPage>
     final newConv = _chatController.startNewConversation();
     setState(() {
       _messages = newConv.messages.map(_Msg.fromRecord).toList();
+      _chips = List.of(_initialChips);
     });
     if (_wsStatus == CompanionConnectionStatus.connected) {
       _wsService.connect(sessionId: newConv.id);
@@ -521,6 +586,11 @@ class _ChatPageState extends State<ChatPage>
     if (conv != null) {
       setState(() {
         _messages = conv.messages.map(_Msg.fromRecord).toList();
+        if (_messages.isNotEmpty && !_messages.last.isUser) {
+          _chips = _generateLocalSuggestions(_messages.last.text);
+        } else {
+          _chips = List.of(_initialChips);
+        }
       });
       if (_wsStatus == CompanionConnectionStatus.connected) {
         _wsService.connect(sessionId: conv.id);
@@ -586,7 +656,6 @@ class _ChatPageState extends State<ChatPage>
     if (widget.webSocketService == null) {
       _wsService.dispose();
     }
-    _breath.dispose();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -796,7 +865,10 @@ class _ChatPageState extends State<ChatPage>
       text: text,
       timestamp: DateTime.now(),
     );
-    setState(() => _messages.add(_Msg.fromRecord(userRecord)));
+    setState(() {
+      _messages.add(_Msg.fromRecord(userRecord));
+      _chips = [];
+    });
     _chatController.addMessage(userRecord);
     _scrollDown();
 
@@ -834,7 +906,10 @@ class _ChatPageState extends State<ChatPage>
       timestamp: DateTime.now(),
     );
     _replyIndex++;
-    setState(() => _messages.add(_Msg.fromRecord(replyRecord)));
+    setState(() {
+      _messages.add(_Msg.fromRecord(replyRecord));
+      _chips = _generateLocalSuggestions(replyRecord.text);
+    });
     _chatController.addMessage(replyRecord);
     _scrollDown();
   }
@@ -891,7 +966,6 @@ class _ChatPageState extends State<ChatPage>
                     child: Column(
                       children: [
                         _buildHeader(),
-                        _buildConnectionBanner(),
                         Expanded(
                           child: ListView.builder(
                             controller: _scroll,
@@ -966,37 +1040,7 @@ class _ChatPageState extends State<ChatPage>
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          _SolMiniAvatar(controller: _breath),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Sol',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: _ink,
-                    height: 1.1,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'Always here · Non-clinical companion',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                    color: _softInk,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const Spacer(),
           IconButton(
             onPressed: () {
               ConversationHistorySheet.show(
@@ -1095,164 +1139,6 @@ class _ChatPageState extends State<ChatPage>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildConnectionBanner() {
-    final isConnected = _wsStatus == CompanionConnectionStatus.connected;
-    final isConnecting = _wsStatus == CompanionConnectionStatus.connecting;
-    final isError = _wsStatus == CompanionConnectionStatus.error;
-
-    Color bgColor;
-    Color borderColor;
-    Color textColor;
-    IconData icon;
-    String title;
-    String subtitle;
-    Widget trailingAction;
-
-    if (isConnected) {
-      bgColor = const Color(0xFFEBFDF2);
-      borderColor = const Color(0xFF6EE7B7);
-      textColor = const Color(0xFF065F46);
-      icon = Icons.sensors_rounded;
-      final rtt = _lastLatencyMs != null ? '${_lastLatencyMs}ms RTT' : 'Ready';
-      title = 'Companion Server Online';
-      subtitle = '${_wsService.host}:${_wsService.port} · $rtt';
-      trailingAction = const Icon(
-        Icons.tune_rounded,
-        size: 16,
-        color: Color(0xFF059669),
-      );
-    } else if (isConnecting) {
-      bgColor = const Color(0xFFFFFBEB);
-      borderColor = const Color(0xFFFCD34D);
-      textColor = const Color(0xFF92400E);
-      icon = Icons.sync_rounded;
-      title = 'Connecting to Server...';
-      subtitle = 'Attempting ${_wsService.host}:${_wsService.port}';
-      trailingAction = const SizedBox(
-        width: 14,
-        height: 14,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation(Color(0xFFD97706)),
-        ),
-      );
-    } else if (isError) {
-      bgColor = const Color(0xFFFEF2F2);
-      borderColor = const Color(0xFFFCA5A5);
-      textColor = const Color(0xFF991B1B);
-      icon = Icons.error_outline_rounded;
-      title = 'Connection Unreachable';
-      subtitle = _wsService.lastErrorMessage ??
-          'No route to host. If connected via USB, select 127.0.0.1';
-      trailingAction = InkWell(
-        onTap: () {
-          _wsService.connect();
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFFDC2626),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Text(
-            'Retry',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      );
-    } else {
-      bgColor = const Color(0xFFFFF7ED);
-      borderColor = const Color(0xFFFFD5A5);
-      textColor = const Color(0xFF9A3412);
-      icon = Icons.wifi_find_rounded;
-      title = 'Companion Server (PC): Offline';
-      subtitle = 'Tap to connect to ${_wsService.host}:${_wsService.port}';
-      trailingAction = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: _coral,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Text(
-          'Connect',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _showConnectionSettingsDialog,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor, width: 1.2),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x0A000000),
-                  blurRadius: 6,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 20, color: textColor),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: textColor,
-                        ),
-                      ),
-                      const SizedBox(height: 1),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: textColor.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                trailingAction,
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1706,7 +1592,7 @@ class _ChatPageState extends State<ChatPage>
   }
 
   Widget _buildChips() {
-    if (_messages.length > 1) {
+    if (_chips.isEmpty) {
       return const SizedBox.shrink();
     }
     return SizedBox(
@@ -2023,112 +1909,6 @@ class _ChatPageState extends State<ChatPage>
   }
 }
 
-class _SolMiniAvatar extends StatelessWidget {
-  const _SolMiniAvatar({required this.controller});
-
-  final AnimationController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (_, __) {
-        final t = controller.value;
-        return Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            // Ambient warm aura glow
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: _amber.withValues(alpha: 0.35 + 0.15 * t),
-                    blurRadius: 10 + 4 * t,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-            // Luminous golden sun-drop orb with gentle organic morph
-            Transform.scale(
-              scale: 1.0 + 0.04 * t,
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
-                  gradient: const RadialGradient(
-                    center: Alignment(-0.35, -0.4),
-                    radius: 0.95,
-                    colors: [
-                      Color(0xFFFFE8B5),
-                      Color(0xFFFFB534),
-                      Color(0xFFFF7F50),
-                    ],
-                    stops: [0.0, 0.52, 1.0],
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    width: 1.2,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    // Specular highlight at top-left
-                    Positioned(
-                      top: 4,
-                      left: 6,
-                      child: Container(
-                        width: 14,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(99),
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.white.withValues(alpha: 0.85),
-                              Colors.white.withValues(alpha: 0.1),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Subtle presence dot at bottom-right
-            Positioned(
-              right: -1,
-              bottom: -1,
-              child: Container(
-                width: 11,
-                height: 11,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF48BB78),
-                  border: Border.all(
-                    color: const Color(0xFFFEFCE8),
-                    width: 2,
-                  ),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x33000000),
-                      blurRadius: 3,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
 
 class _RecordingDot extends StatefulWidget {
   const _RecordingDot();

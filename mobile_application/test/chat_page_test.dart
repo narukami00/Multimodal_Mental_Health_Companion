@@ -29,7 +29,8 @@ void main() {
   testWidgets('greets and replies to a clear message', (tester) async {
     await pumpChat(tester);
 
-    expect(find.text('Sol'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.history_rounded), findsOneWidget);
     expect(find.textContaining("you don't have to carry it"), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'Feeling a bit anxious');

@@ -1887,14 +1887,6 @@ class _LivingFluidOrbPainter extends CustomPainter {
       stretchOffset: dragOffset,
     );
 
-    // Deep warm volumetric shadow
-    canvas.drawShadow(
-      path1,
-      const Color(0xFFD68A20).withValues(alpha: lerp3(0.60, 0.72, 0.30)),
-      28,
-      true,
-    );
-
     final paint1 = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topLeft,
