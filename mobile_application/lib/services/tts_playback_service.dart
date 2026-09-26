@@ -45,8 +45,7 @@ class TtsPlaybackService {
       iOS: AudioContextIOS(
         category: AVAudioSessionCategory.playback,
         options: const {
-          AVAudioSessionOptions.defaultToSpeaker,
-          AVAudioSessionOptions.allowBluetooth,
+          AVAudioSessionOptions.mixWithOthers,
         },
       ),
     );
