@@ -3,12 +3,12 @@ package com.sysmentalhealth.solace_mobile
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.media.AudioEffect
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AudioEffect
 import android.media.audiofx.NoiseSuppressor
 import android.os.Build
 import android.os.Handler
@@ -313,10 +313,10 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
         try {
             val config = audioManager.activeRecordingConfigurations
-                .firstOrNull { it.audioRecord == record }
+                .firstOrNull { it.clientAudioSessionId == record.audioSessionId }
                 ?: audioManager.activeRecordingConfigurations.firstOrNull()
             val hasAec = config?.effects?.any { it.type == AudioEffect.EFFECT_TYPE_AEC } ?: false
-            val hasNs = config?.effects?.any { it.type == AudioEffect.EFFECT_TYPE_NOISE_SUPPRESSION } ?: false
+            val hasNs = config?.effects?.any { it.type == AudioEffect.EFFECT_TYPE_NS } ?: false
             Log.i(
                 TAG,
                 "capture session=${record.audioSessionId} aec=$aecActive effectsAec=$hasAec " +
