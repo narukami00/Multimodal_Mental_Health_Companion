@@ -1,11 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/models/safety_assessment.dart';
 import '../../services/companion_websocket_service.dart';
+import '../../services/pcm_audio_recorder_service.dart';
 import '../call/call_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -15,17 +20,25 @@ class ChatPage extends StatefulWidget {
   const ChatPage({
     required this.safetyController,
     this.webSocketService,
+    this.audioRecorderService,
     this.autoConnect = false,
     super.key,
   });
 
   final SafetyController safetyController;
   final CompanionWebSocketService? webSocketService;
+  final PcmAudioRecorderService? audioRecorderService;
   final bool autoConnect;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
 }
+
+const List<double> _mockSpeechWaveform = [
+  0.15, 0.28, 0.58, 0.84, 0.66, 0.38, 0.20, 0.44,
+  0.80, 0.96, 0.72, 0.36, 0.18, 0.28, 0.62, 0.88,
+  0.70, 0.48, 0.22, 0.38, 0.65, 0.50, 0.28, 0.15,
+];
 
 class _Msg {
   const _Msg(
@@ -35,6 +48,8 @@ class _Msg {
     this.isVoice = false,
     this.voiceDuration = '0:00',
     this.isStreaming = false,
+    this.localAudioPath,
+    this.waveform,
   });
 
   final bool isUser;
@@ -43,6 +58,8 @@ class _Msg {
   final bool isVoice;
   final String voiceDuration;
   final bool isStreaming;
+  final String? localAudioPath;
+  final List<double>? waveform;
 }
 
 
@@ -96,24 +113,58 @@ class _ChatPageState extends State<ChatPage>
   StreamSubscription<Map<String, dynamic>>? _wsChunkSub;
   StreamSubscription<Map<String, dynamic>>? _wsDoneSub;
 
+  late final PcmAudioRecorderService _audioRecorder;
+  StreamSubscription<Uint8List>? _audioFrameSub;
+  StreamSubscription<double>? _amplitudeSub;
+  StreamSubscription<Map<String, dynamic>>? _wsAudioReceivedSub;
+  StreamSubscription<Map<String, dynamic>>? _wsTranscriptFinalSub;
+
+  final List<Uint8List> _recordedAudioChunks = [];
+  double _currentAmplitude = 0.0;
+  String? _activeAudioTurnId;
+  Offset? _pointerDownPos;
+  DateTime? _pointerDownTime;
+
   CompanionConnectionStatus _wsStatus = CompanionConnectionStatus.disconnected;
   int? _lastLatencyMs;
+  void Function(void Function())? _modalSetState;
 
   @override
   void initState() {
     super.initState();
     _wsService = widget.webSocketService ?? CompanionWebSocketService();
+    _audioRecorder = widget.audioRecorderService ?? PcmAudioRecorderService();
     _wsStatus = _wsService.status;
     _lastLatencyMs = _wsService.lastLatencyMs;
+
+    _amplitudeSub = _audioRecorder.amplitudeStream.listen((amp) {
+      if (!mounted || !_isRecording) return;
+      setState(() => _currentAmplitude = amp);
+    });
+
+    _wsAudioReceivedSub = _wsService.audioReceivedStream.listen((data) {
+      if (!mounted) return;
+      final wav = data['wav_file'] as String?;
+      final dur = data['duration_ms'] as int? ?? 0;
+      debugPrint('[ChatPage] Audio captured & saved on server: $wav ($dur ms)');
+    });
+
+    _wsTranscriptFinalSub = _wsService.transcriptFinalStream.listen((data) {
+      if (!mounted) return;
+      final text = data['text'] as String? ?? '';
+      debugPrint('[ChatPage] Server transcript: $text');
+    });
 
     _wsStatusSub = _wsService.statusStream.listen((status) {
       if (!mounted) return;
       setState(() => _wsStatus = status);
+      _modalSetState?.call(() {});
     });
 
     _wsLatencySub = _wsService.latencyStream.listen((latency) {
       if (!mounted) return;
       setState(() => _lastLatencyMs = latency);
+      _modalSetState?.call(() {});
     });
 
     _wsChunkSub = _wsService.llmChunkStream.listen((data) {
@@ -165,6 +216,7 @@ class _ChatPageState extends State<ChatPage>
         '8:12 PM',
         isVoice: true,
         voiceDuration: '0:14',
+        waveform: _mockSpeechWaveform,
       ),
       const _Msg(
         false,
@@ -201,6 +253,13 @@ class _ChatPageState extends State<ChatPage>
   @override
   void dispose() {
     _recordingTimer?.cancel();
+    _audioFrameSub?.cancel();
+    _amplitudeSub?.cancel();
+    _wsAudioReceivedSub?.cancel();
+    _wsTranscriptFinalSub?.cancel();
+    if (widget.audioRecorderService == null) {
+      _audioRecorder.dispose();
+    }
     _wsStatusSub?.cancel();
     _wsLatencySub?.cancel();
     _wsChunkSub?.cancel();
@@ -214,18 +273,62 @@ class _ChatPageState extends State<ChatPage>
     super.dispose();
   }
 
-  void _startRecording() {
+  Future<void> _startRecording() async {
     _recordingTimer?.cancel();
+    final turnId =
+        'turn_${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}';
+    _activeAudioTurnId = turnId;
+    _recordedAudioChunks.clear();
+
     setState(() {
       _isRecording = true;
       _isLocked = false;
       _recordingSeconds = 0;
       _dragOffset = 0.0;
       _cancelTriggered = false;
+      _currentAmplitude = 0.0;
     });
+
     _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || !_isRecording) return;
       setState(() => _recordingSeconds++);
+    });
+
+    final started = await _audioRecorder.startRecording(
+      sampleRate: 16000,
+      frameMs: 100,
+    );
+
+    if (!started) {
+      debugPrint('[ChatPage] Failed to start audio recorder');
+      _cancelRecording();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Microphone permission is required to record voice reflections.'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (_wsStatus == CompanionConnectionStatus.connected) {
+      _wsService.sendAudioStart(
+        turnId: turnId,
+        sampleRate: 16000,
+        frameMs: 100,
+      );
+    }
+
+    await _audioFrameSub?.cancel();
+    _audioFrameSub = _audioRecorder.audioStream.listen((chunk) {
+      if (!_isRecording) return;
+      _recordedAudioChunks.add(chunk);
+      if (_wsStatus == CompanionConnectionStatus.connected) {
+        _wsService.sendAudioChunk(chunk);
+      }
     });
   }
 
@@ -250,45 +353,118 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
-  void _cancelRecording() {
+  Future<void> _cancelRecording() async {
+    final turnId = _activeAudioTurnId;
+    _activeAudioTurnId = null;
+    _recordedAudioChunks.clear();
     _recordingTimer?.cancel();
+    await _audioFrameSub?.cancel();
+    _audioFrameSub = null;
+    await _audioRecorder.cancelRecording();
+
+    if (turnId != null && _wsStatus == CompanionConnectionStatus.connected) {
+      _wsService.sendAudioCancel(turnId: turnId);
+    }
+
+    if (!mounted) return;
     setState(() {
       _isRecording = false;
       _isLocked = false;
       _dragOffset = 0.0;
       _cancelTriggered = false;
+      _currentAmplitude = 0.0;
     });
   }
 
-  void _sendRecording() {
+  Future<void> _sendRecording() async {
+    final turnId = _activeAudioTurnId;
+    _activeAudioTurnId = null;
     _recordingTimer?.cancel();
-    final sec = _recordingSeconds < 2 ? 3 : _recordingSeconds;
+    await _audioFrameSub?.cancel();
+    _audioFrameSub = null;
+    await _audioRecorder.stopRecording();
+
+    // Accumulate all recorded PCM chunks
+    final pcmBytes = BytesBuilder();
+    for (final c in _recordedAudioChunks) {
+      pcmBytes.add(c);
+    }
+    final allPcm = pcmBytes.toBytes();
+    _recordedAudioChunks.clear();
+
+    String? localAudioPath;
+    List<double>? waveform;
+
+    if (allPcm.isNotEmpty) {
+      waveform = PcmAudioRecorderService.extractWaveform(allPcm, barCount: 24);
+      try {
+        final wavData = PcmAudioRecorderService.createWav(
+          allPcm,
+          sampleRate: 16000,
+          channels: 1,
+          bitsPerSample: 16,
+        );
+        final tempDir = await getTemporaryDirectory();
+        final filePath =
+            '${tempDir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.wav';
+        final file = File(filePath);
+        await file.writeAsBytes(wavData, flush: true);
+        localAudioPath = filePath;
+      } catch (e) {
+        debugPrint('[ChatPage] Error saving local WAV audio: $e');
+      }
+    }
+
+    waveform ??= _mockSpeechWaveform;
+
+    final sec = _recordingSeconds < 1 ? 1 : _recordingSeconds;
+    final durMs = sec * 1000;
     final durStr = '0:${sec.toString().padLeft(2, '0')}';
+
+    if (turnId != null && _wsStatus == CompanionConnectionStatus.connected) {
+      _wsService.sendAudioEnd(
+        turnId: turnId,
+        durationMs: durMs,
+      );
+    }
+
+    if (!mounted) return;
     setState(() {
       _messages.add(
-        _Msg(true, 'Audio message', _now(), isVoice: true, voiceDuration: durStr),
+        _Msg(
+          true,
+          'Audio reflection',
+          _now(),
+          isVoice: true,
+          voiceDuration: durStr,
+          localAudioPath: localAudioPath,
+          waveform: waveform,
+        ),
       );
       _isRecording = false;
       _isLocked = false;
       _dragOffset = 0.0;
       _cancelTriggered = false;
+      _currentAmplitude = 0.0;
     });
     _scrollDown();
 
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      if (!mounted) return;
-      setState(() {
-        _messages.add(
-          _Msg(
-            false,
-            _replies[_replyIndex % _replies.length],
-            _now(),
-          ),
-        );
-        _replyIndex++;
+    if (_wsStatus != CompanionConnectionStatus.connected) {
+      Future.delayed(const Duration(milliseconds: 1400), () {
+        if (!mounted) return;
+        setState(() {
+          _messages.add(
+            _Msg(
+              false,
+              _replies[_replyIndex % _replies.length],
+              _now(),
+            ),
+          );
+          _replyIndex++;
+        });
+        _scrollDown();
       });
-      _scrollDown();
-    });
+    }
   }
 
   String _now() {
@@ -578,6 +754,7 @@ class _ChatPageState extends State<ChatPage>
   Widget _buildConnectionBanner() {
     final isConnected = _wsStatus == CompanionConnectionStatus.connected;
     final isConnecting = _wsStatus == CompanionConnectionStatus.connecting;
+    final isError = _wsStatus == CompanionConnectionStatus.error;
 
     Color bgColor;
     Color borderColor;
@@ -613,6 +790,35 @@ class _ChatPageState extends State<ChatPage>
         child: CircularProgressIndicator(
           strokeWidth: 2,
           valueColor: AlwaysStoppedAnimation(Color(0xFFD97706)),
+        ),
+      );
+    } else if (isError) {
+      bgColor = const Color(0xFFFEF2F2);
+      borderColor = const Color(0xFFFCA5A5);
+      textColor = const Color(0xFF991B1B);
+      icon = Icons.error_outline_rounded;
+      title = 'Connection Unreachable';
+      subtitle = _wsService.lastErrorMessage ??
+          'No route to host. If connected via USB, select 127.0.0.1';
+      trailingAction = InkWell(
+        onTap: () {
+          _wsService.connect();
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFDC2626),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Text(
+            'Retry',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
         ),
       );
     } else {
@@ -717,10 +923,13 @@ class _ChatPageState extends State<ChatPage>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
+            _modalSetState = setModalState;
             final isConnected =
                 _wsStatus == CompanionConnectionStatus.connected;
             final isConnecting =
                 _wsStatus == CompanionConnectionStatus.connecting;
+            final isError =
+                _wsStatus == CompanionConnectionStatus.error;
 
             return Padding(
               padding: EdgeInsets.only(
@@ -773,7 +982,7 @@ class _ChatPageState extends State<ChatPage>
                           controller: hostCtrl,
                           decoration: InputDecoration(
                             labelText: 'Host / IP',
-                            hintText: '192.168.0.38',
+                            hintText: '127.0.0.1',
                             filled: true,
                             fillColor: const Color(0xFFF9F5EC),
                             border: OutlineInputBorder(
@@ -826,13 +1035,29 @@ class _ChatPageState extends State<ChatPage>
                     runSpacing: 6,
                     children: [
                       ActionChip(
-                        avatar: const Icon(Icons.wifi_rounded, size: 14, color: _coral),
-                        label: const Text('Wi-Fi PC: 192.168.0.38'),
+                        avatar: const Icon(Icons.computer_rounded, size: 14, color: _coral),
+                        label: const Text('Localhost (USB): 127.0.0.1'),
                         backgroundColor: const Color(0xFFFFF2E6),
                         side: const BorderSide(color: Color(0xFFFFCC99)),
                         labelStyle: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
+                          color: _ink,
+                        ),
+                        onPressed: () {
+                          hostCtrl.text = '127.0.0.1';
+                          portCtrl.text = '8000';
+                          setModalState(() {});
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.wifi_rounded, size: 14, color: _softInk),
+                        label: const Text('Wi-Fi PC: 192.168.0.38'),
+                        backgroundColor: const Color(0xFFF7F2E7),
+                        side: const BorderSide(color: Color(0xFFDDD2BE)),
+                        labelStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
                           color: _ink,
                         ),
                         onPressed: () {
@@ -857,30 +1082,19 @@ class _ChatPageState extends State<ChatPage>
                           setModalState(() {});
                         },
                       ),
-                      ActionChip(
-                        avatar: const Icon(Icons.computer_rounded, size: 14, color: _softInk),
-                        label: const Text('Localhost: 127.0.0.1'),
-                        backgroundColor: const Color(0xFFF7F2E7),
-                        side: const BorderSide(color: Color(0xFFDDD2BE)),
-                        labelStyle: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: _ink,
-                        ),
-                        onPressed: () {
-                          hostCtrl.text = '127.0.0.1';
-                          portCtrl.text = '8000';
-                          setModalState(() {});
-                        },
-                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF7F2E7),
+                      color: isError
+                          ? const Color(0xFFFEF2F2)
+                          : const Color(0xFFF7F2E7),
                       borderRadius: BorderRadius.circular(12),
+                      border: isError
+                          ? Border.all(color: const Color(0xFFFCA5A5))
+                          : null,
                     ),
                     child: Row(
                       children: [
@@ -889,25 +1103,36 @@ class _ChatPageState extends State<ChatPage>
                               ? Icons.check_circle_rounded
                               : isConnecting
                                   ? Icons.hourglass_top_rounded
-                                  : Icons.radio_button_unchecked_rounded,
+                                  : (isError
+                                      ? Icons.error_outline_rounded
+                                      : Icons.radio_button_unchecked_rounded),
                           size: 18,
                           color: isConnected
                               ? const Color(0xFF38A169)
                               : isConnecting
                                   ? const Color(0xFFD69E2E)
-                                  : _faint,
+                                  : (isError
+                                      ? const Color(0xFFDC2626)
+                                      : _faint),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          isConnected
-                              ? 'Connected · Latency: ${_lastLatencyMs ?? 0}ms'
-                              : isConnecting
-                                  ? 'Connecting to ${hostCtrl.text}...'
-                                  : 'Disconnected',
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: _ink,
+                        Expanded(
+                          child: Text(
+                            isConnected
+                                ? 'Connected · Latency: ${_lastLatencyMs ?? 0}ms'
+                                : isConnecting
+                                    ? 'Connecting to ${hostCtrl.text}...'
+                                    : (isError
+                                        ? (_wsService.lastErrorMessage ??
+                                            'Connection unreachable')
+                                        : 'Disconnected'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: isError ? const Color(0xFFDC2626) : _ink,
+                            ),
                           ),
                         ),
                       ],
@@ -955,29 +1180,31 @@ class _ChatPageState extends State<ChatPage>
                       ] else ...[
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () async {
-                              final host = hostCtrl.text.trim();
-                              final port =
-                                  int.tryParse(portCtrl.text.trim()) ?? 8000;
-                              final effectiveHost =
-                                  host.isNotEmpty ? host : '192.168.0.38';
-                              final prefs =
-                                  await SharedPreferences.getInstance();
-                              await prefs.setString(
-                                'companion_server_host',
-                                effectiveHost,
-                              );
-                              await prefs.setInt(
-                                'companion_server_port',
-                                port,
-                              );
-                              await _wsService.connect(
-                                customHost: effectiveHost,
-                                customPort: port,
-                              );
-                              setModalState(() {});
-                              setState(() {});
-                            },
+                            onPressed: isConnecting
+                                ? null
+                                : () async {
+                                    final host = hostCtrl.text.trim();
+                                    final port =
+                                        int.tryParse(portCtrl.text.trim()) ?? 8000;
+                                    final effectiveHost =
+                                        host.isNotEmpty ? host : '127.0.0.1';
+                                    final prefs =
+                                        await SharedPreferences.getInstance();
+                                    await prefs.setString(
+                                      'companion_server_host',
+                                      effectiveHost,
+                                    );
+                                    await prefs.setInt(
+                                      'companion_server_port',
+                                      port,
+                                    );
+                                    _wsService.connect(
+                                      customHost: effectiveHost,
+                                      customPort: port,
+                                    );
+                                    setModalState(() {});
+                                    setState(() {});
+                                  },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _coral,
                               foregroundColor: Colors.white,
@@ -986,7 +1213,24 @@ class _ChatPageState extends State<ChatPage>
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            child: const Text('Connect Now'),
+                            child: isConnecting
+                                ? const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation(Colors.white),
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text('Connecting...'),
+                                    ],
+                                  )
+                                : Text(isError ? 'Retry Connection' : 'Connect Now'),
                           ),
                         ),
                       ],
@@ -998,7 +1242,9 @@ class _ChatPageState extends State<ChatPage>
           },
         );
       },
-    );
+    ).whenComplete(() {
+      _modalSetState = null;
+    });
   }
 
   Widget _buildChips() {
@@ -1054,37 +1300,58 @@ class _ChatPageState extends State<ChatPage>
         height: 54,
         child: Row(
           children: [
-            GestureDetector(
-              onLongPressStart: (_) => _startRecording(),
-              onLongPressMoveUpdate: (d) => _handleDragUpdate(
-                DragUpdateDetails(
-                  globalPosition: d.globalPosition,
-                  primaryDelta: d.offsetFromOrigin.dx,
-                ),
-              ),
-              onLongPressEnd: (_) => _handleDragEnd(),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Hold to record voice message · Slide right to lock'),
-                    duration: Duration(milliseconds: 1800),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+            Listener(
+              onPointerDown: (e) {
+                _pointerDownPos = e.position;
+                _pointerDownTime = DateTime.now();
+                HapticFeedback.selectionClick();
+                _startRecording();
+              },
+              onPointerMove: (e) {
+                if (_pointerDownPos == null || !_isRecording) return;
+                final dx = e.position.dx - _pointerDownPos!.dx;
+                final dy = e.position.dy - _pointerDownPos!.dy;
+                setState(() {
+                  _dragOffset = dx;
+                  _cancelTriggered = dx < -50;
+                  if (dy < -45 || dx > 60) {
+                    _isLocked = true;
+                  }
+                });
+              },
+              onPointerUp: (e) {
+                if (_pointerDownPos == null) return;
+                final held = DateTime.now().difference(_pointerDownTime!);
+                if (_cancelTriggered) {
+                  _cancelRecording();
+                } else if (_isLocked) {
+                  // Remains in locked hands-free recording mode
+                } else if (held < const Duration(milliseconds: 350)) {
+                  // Short tap -> enter locked hands-free recording mode
+                  setState(() => _isLocked = true);
+                } else {
+                  _sendRecording();
+                }
+                _pointerDownPos = null;
+              },
+              onPointerCancel: (e) {
+                if (_cancelTriggered) {
+                  _cancelRecording();
+                } else if (!_isLocked) {
+                  _cancelRecording();
+                }
+                _pointerDownPos = null;
               },
               child: Tooltip(
-                message: 'Hold to record voice note',
+                message: 'Tap or hold to record voice reflection',
                 child: Container(
                   width: 44,
                   height: 44,
                   alignment: Alignment.center,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                  ),
                   child: const Icon(
-                    Icons.mic_none_rounded,
+                    Icons.mic_rounded,
                     size: 22,
-                    color: _softInk,
+                    color: _coral,
                   ),
                 ),
               ),
@@ -1202,7 +1469,7 @@ class _ChatPageState extends State<ChatPage>
             ),
           ),
           const SizedBox(width: 10),
-          const Expanded(child: _AnimatedAudioWave()),
+          Expanded(child: _AnimatedAudioWave(amplitude: _currentAmplitude)),
           const SizedBox(width: 8),
           if (!_isLocked) ...[
             Transform.translate(
@@ -1448,7 +1715,8 @@ class _RecordingDotState extends State<_RecordingDot>
 }
 
 class _AnimatedAudioWave extends StatefulWidget {
-  const _AnimatedAudioWave();
+  final double amplitude;
+  const _AnimatedAudioWave({this.amplitude = 0.0});
 
   @override
   State<_AnimatedAudioWave> createState() => _AnimatedAudioWaveState();
@@ -1474,10 +1742,12 @@ class _AnimatedAudioWaveState extends State<_AnimatedAudioWave>
       animation: _waveAnim,
       builder: (_, __) {
         final t = _waveAnim.value * 2 * math.pi;
+        final amp = widget.amplitude.clamp(0.0, 1.0);
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(barCount, (i) {
-            final h = 5.0 + 16.0 * (0.5 + 0.5 * math.sin(t + i * 0.55));
+            final waveMod = 0.4 + 0.6 * math.sin(t + i * 0.55);
+            final h = 5.0 + (10.0 + 20.0 * amp) * waveMod;
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 1.5),
               width: 3,
@@ -1502,58 +1772,194 @@ class _VoiceBubbleContent extends StatefulWidget {
   const _VoiceBubbleContent({
     required this.duration,
     required this.isUser,
+    this.audioPath,
+    this.waveform,
   });
 
   final String duration;
   final bool isUser;
+  final String? audioPath;
+  final List<double>? waveform;
 
   @override
   State<_VoiceBubbleContent> createState() => _VoiceBubbleContentState();
 }
 
-class _VoiceBubbleContentState extends State<_VoiceBubbleContent>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _player = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 4),
-  );
+class _VoiceBubbleContentState extends State<_VoiceBubbleContent> {
+  static _VoiceBubbleContentState? _activePlayingState;
+
+  AudioPlayer? _player;
   bool _isPlaying = false;
+  double _progress = 0.0;
+  Duration _currentPosition = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+  Timer? _simulatedTimer;
+
+  StreamSubscription<Duration>? _posSub;
+  StreamSubscription<Duration>? _durSub;
+  StreamSubscription<void>? _completeSub;
 
   @override
-  void initState() {
-    super.initState();
-    _player.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        setState(() => _isPlaying = false);
-        _player.reset();
+  void dispose() {
+    if (_activePlayingState == this) {
+      _activePlayingState = null;
+    }
+    _simulatedTimer?.cancel();
+    _posSub?.cancel();
+    _durSub?.cancel();
+    _completeSub?.cancel();
+    _player?.dispose();
+    super.dispose();
+  }
+
+  void _initPlayerIfNeeded() {
+    if (_player != null) return;
+    _player = AudioPlayer();
+    _posSub = _player!.onPositionChanged.listen((pos) {
+      if (!mounted) return;
+      final total = _totalDuration.inMilliseconds > 0
+          ? _totalDuration.inMilliseconds
+          : _parseDurationMs(widget.duration);
+      if (total > 0) {
+        setState(() {
+          _currentPosition = pos;
+          _progress = (pos.inMilliseconds / total).clamp(0.0, 1.0);
+        });
+      }
+    });
+
+    _durSub = _player!.onDurationChanged.listen((dur) {
+      if (!mounted) return;
+      setState(() => _totalDuration = dur);
+    });
+
+    _completeSub = _player!.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = false;
+        _progress = 0.0;
+        _currentPosition = Duration.zero;
+      });
+      if (_activePlayingState == this) {
+        _activePlayingState = null;
       }
     });
   }
 
-  @override
-  void dispose() {
-    _player.dispose();
-    super.dispose();
+  static int _parseDurationMs(String durationStr) {
+    try {
+      final parts = durationStr.split(':');
+      if (parts.length == 2) {
+        final m = int.parse(parts[0]);
+        final s = int.parse(parts[1]);
+        return math.max(1000, (m * 60 + s) * 1000);
+      }
+    } catch (_) {}
+    return 4000;
   }
 
-  void _togglePlay() {
+  Future<void> _togglePlay() async {
+    if (_isPlaying) {
+      await _pause();
+    } else {
+      await _play();
+    }
+  }
+
+  Future<void> _play() async {
+    if (_activePlayingState != null && _activePlayingState != this) {
+      await _activePlayingState?._pause();
+    }
+    _activePlayingState = this;
+
+    final path = widget.audioPath;
+    if (path != null && File(path).existsSync()) {
+      _initPlayerIfNeeded();
+      try {
+        await _player!.play(DeviceFileSource(path));
+        if (mounted) setState(() => _isPlaying = true);
+      } catch (e) {
+        debugPrint('[VoiceBubble] AudioPlayer play error: $e');
+        _startSimulatedPlayback();
+      }
+    } else {
+      _startSimulatedPlayback();
+    }
+  }
+
+  Future<void> _pause() async {
+    _simulatedTimer?.cancel();
+    _simulatedTimer = null;
+    if (_player != null) {
+      try {
+        await _player!.pause();
+      } catch (_) {}
+    }
+    if (_activePlayingState == this) {
+      _activePlayingState = null;
+    }
+    if (mounted) setState(() => _isPlaying = false);
+  }
+
+  Future<void> _seekToProgress(double ratio) async {
+    final clampedRatio = ratio.clamp(0.0, 1.0);
+    final totalMs = _totalDuration.inMilliseconds > 0
+        ? _totalDuration.inMilliseconds
+        : _parseDurationMs(widget.duration);
+    final targetMs = (totalMs * clampedRatio).round();
+
+    final path = widget.audioPath;
+    if (path != null && File(path).existsSync()) {
+      _initPlayerIfNeeded();
+      try {
+        await _player!.seek(Duration(milliseconds: targetMs));
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      setState(() {
+        _progress = clampedRatio;
+        _currentPosition = Duration(milliseconds: targetMs);
+      });
+    }
+  }
+
+  void _startSimulatedPlayback() {
+    _simulatedTimer?.cancel();
     setState(() {
-      if (_isPlaying) {
-        _player.stop();
-        _isPlaying = false;
+      _isPlaying = true;
+      if (_progress >= 1.0) _progress = 0.0;
+    });
+    final totalMs = _parseDurationMs(widget.duration);
+    const intervalMs = 60;
+    _simulatedTimer =
+        Timer.periodic(const Duration(milliseconds: intervalMs), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final nextProgress = _progress + (intervalMs / totalMs);
+      if (nextProgress >= 1.0) {
+        timer.cancel();
+        _simulatedTimer = null;
+        setState(() {
+          _isPlaying = false;
+          _progress = 0.0;
+        });
+        if (_activePlayingState == this) {
+          _activePlayingState = null;
+        }
       } else {
-        _isPlaying = true;
-        _player.forward(from: _player.value == 1.0 ? 0.0 : _player.value);
+        setState(() {
+          _progress = nextProgress;
+        });
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    const bars = [
-      0.35, 0.6, 0.45, 0.8, 1.0, 0.7, 0.9, 0.5,
-      0.75, 0.65, 0.85, 0.4, 0.95, 0.6, 0.5, 0.3,
-    ];
+    final bars = widget.waveform ?? _mockSpeechWaveform;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1582,35 +1988,40 @@ class _VoiceBubbleContentState extends State<_VoiceBubbleContent>
           ),
         ),
         const SizedBox(width: 10),
-        AnimatedBuilder(
-          animation: _player,
-          builder: (_, __) {
-            final progress = _player.value;
-            return SizedBox(
-              height: 28,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  for (var i = 0; i < bars.length; i++) ...[
-                    Container(
-                      width: 3,
-                      height: 4 + 20 * bars[i],
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(2),
-                        color: (i / bars.length) <= progress
-                            ? const Color(0xFFFF7F50)
-                            : (widget.isUser
-                                ? const Color(0xFFC99B6A)
-                                : const Color(0xFFD6BE98)),
-                      ),
-                    ),
-                    if (i < bars.length - 1) const SizedBox(width: 3),
-                  ],
-                ],
-              ),
-            );
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (details) {
+            const barWidth = 3.0;
+            const spacing = 2.5;
+            final totalWidth =
+                bars.length * barWidth + (bars.length - 1) * spacing;
+            final ratio = (details.localPosition.dx / totalWidth).clamp(0.0, 1.0);
+            _seekToProgress(ratio);
           },
+          child: SizedBox(
+            height: 28,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                for (var i = 0; i < bars.length; i++) ...[
+                  Container(
+                    width: 3,
+                    height: (4 + 20 * bars[i]).clamp(4.0, 26.0),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(2),
+                      color: (i / bars.length) <= _progress
+                          ? const Color(0xFFFF7F50)
+                          : (widget.isUser
+                              ? const Color(0xFFC99B6A)
+                              : const Color(0xFFD6BE98)),
+                    ),
+                  ),
+                  if (i < bars.length - 1) const SizedBox(width: 2.5),
+                ],
+              ],
+            ),
+          ),
         ),
         const SizedBox(width: 10),
         Text(
@@ -1618,7 +2029,9 @@ class _VoiceBubbleContentState extends State<_VoiceBubbleContent>
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: widget.isUser ? const Color(0xFF8A5A26) : const Color(0xFF8A6A1C),
+            color: widget.isUser
+                ? const Color(0xFF8A5A26)
+                : const Color(0xFF8A6A1C),
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
@@ -1673,6 +2086,8 @@ class _Bubble extends StatelessWidget {
                 ? _VoiceBubbleContent(
                     duration: msg.voiceDuration,
                     isUser: isUser,
+                    audioPath: msg.localAudioPath,
+                    waveform: msg.waveform,
                   )
                 : Text.rich(
                     TextSpan(

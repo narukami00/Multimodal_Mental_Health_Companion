@@ -29,5 +29,23 @@ void main() {
       expect(service.token, 'custom-token');
       service.dispose();
     });
+
+    test('failed connection transitions cleanly to error without infinite reconnect loop', () async {
+      // Point to an invalid unreachable port
+      final service = CompanionWebSocketService(
+        host: '127.0.0.1',
+        port: 59999,
+      );
+      await service.connect();
+      expect(service.status, CompanionConnectionStatus.error);
+      expect(service.lastErrorMessage, isNotNull);
+
+      // Subsequent connect call to another invalid port should also transition to error without hanging
+      await service.connect(customPort: 59998);
+      expect(service.status, CompanionConnectionStatus.error);
+      expect(service.lastErrorMessage, isNotNull);
+
+      service.dispose();
+    });
   });
 }

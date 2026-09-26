@@ -28,7 +28,7 @@ def test_http_endpoints():
     data = resp.json()
     print(f"[PASS] /healthz response: {data}")
     assert data["status"] == "ok"
-    assert data["phase"] == 1
+    assert data["phase"] >= 1
 
     # 2. GET /v1/models
     resp = requests.get(f"{BASE_HTTP}/v1/models", timeout=5)

@@ -42,6 +42,11 @@ class CompanionWebSocketService {
 
   bool _isDisposed = false;
   bool _manualDisconnect = false;
+  bool _wasConnected = false;
+  String? _lastErrorMessage;
+  String? get lastErrorMessage => _lastErrorMessage;
+
+  int _connectSequence = 0;
   int _reconnectAttempts = 0;
   static const int _maxReconnectDelaySec = 15;
 
@@ -78,6 +83,25 @@ class CompanionWebSocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get llmDoneStream => _llmDoneController.stream;
 
+  final _audioAckController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get audioAckStream => _audioAckController.stream;
+
+  final _audioReceivedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get audioReceivedStream =>
+      _audioReceivedController.stream;
+
+  final _turnCancelledController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get turnCancelledStream =>
+      _turnCancelledController.stream;
+
+  final _transcriptFinalController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get transcriptFinalStream =>
+      _transcriptFinalController.stream;
+
   void _updateStatus(CompanionConnectionStatus newStatus) {
     if (_status != newStatus) {
       _status = newStatus;
@@ -95,12 +119,21 @@ class CompanionWebSocketService {
     String? threadId,
   }) async {
     if (_isDisposed) return;
+    final seq = ++_connectSequence;
+
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+
     if (customHost != null) host = customHost;
     if (customPort != null) port = customPort;
     if (sessionId != null) _sessionId = sessionId;
     if (threadId != null) _threadId = threadId;
 
     _manualDisconnect = false;
+    _wasConnected = false;
+    _lastErrorMessage = null;
     _sessionId ??=
         'sess_${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}';
     _threadId ??= 'thread_main';
@@ -112,11 +145,23 @@ class CompanionWebSocketService {
 
     try {
       await _cleanUpConnection(resetManual: false);
+      if (seq != _connectSequence || _isDisposed) return;
+
       final channel = WebSocketChannel.connect(uri);
       _channel = channel;
 
-      // Wait for socket to be established
-      await channel.ready;
+      // Wait for socket to be established with 5s timeout to prevent infinite hang
+      await channel.ready.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          throw TimeoutException('Connection to $host:$port timed out (5s)');
+        },
+      );
+
+      if (seq != _connectSequence || _isDisposed) {
+        _safeClose(channel);
+        return;
+      }
 
       _reconnectAttempts = 0;
 
@@ -124,6 +169,7 @@ class CompanionWebSocketService {
         _handleIncomingMessage,
         onError: (dynamic error) {
           debugPrint('[CompanionWS] WebSocket stream error: $error');
+          _lastErrorMessage = error.toString();
           _updateStatus(CompanionConnectionStatus.error);
           _scheduleReconnect();
         },
@@ -141,9 +187,14 @@ class CompanionWebSocketService {
       // Send JSON hello handshake immediately per specification 13.1
       _sendHello();
     } catch (e) {
+      if (seq != _connectSequence || _isDisposed) return;
       debugPrint('[CompanionWS] Connection initiation error: $e');
+      _wasConnected = false;
+      _lastErrorMessage = e is TimeoutException
+          ? 'Timed out connecting to $host:$port'
+          : 'Failed: $e';
       _updateStatus(CompanionConnectionStatus.error);
-      _scheduleReconnect();
+      await _cleanUpConnection(resetManual: false);
     }
   }
 
@@ -208,6 +259,75 @@ class CompanionWebSocketService {
     _sendJson(payload);
   }
 
+  /// Sends audio_start envelope before streaming raw PCM chunks (Phase 2).
+  Future<void> sendAudioStart({
+    required String turnId,
+    int sampleRate = 16000,
+    int channels = 1,
+    int frameMs = 100,
+    String mode = 'voice_note',
+  }) async {
+    final payload = {
+      'v': 1,
+      'type': 'audio_start',
+      'session_id': _sessionId,
+      'turn_id': turnId,
+      'encoding': 'pcm16',
+      'sample_rate': sampleRate,
+      'channels': channels,
+      'frame_ms': frameMs,
+      'mode': mode,
+      'client_vad': true,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
+  /// Sends raw 16-bit PCM binary chunk over the active WebSocket (Phase 2).
+  void sendAudioChunk(Uint8List chunk) {
+    if (_channel != null && _status == CompanionConnectionStatus.connected) {
+      try {
+        _channel!.sink.add(chunk);
+      } catch (e) {
+        debugPrint('[CompanionWS] Failed to send binary audio chunk: $e');
+      }
+    }
+  }
+
+  /// Sends audio_end envelope after finishing recording (Phase 2).
+  Future<void> sendAudioEnd({
+    required String turnId,
+    required int durationMs,
+    bool clientVadEndpoint = true,
+  }) async {
+    final payload = {
+      'v': 1,
+      'type': 'audio_end',
+      'session_id': _sessionId,
+      'turn_id': turnId,
+      'duration_ms': durationMs,
+      'client_vad_endpoint': clientVadEndpoint,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
+  /// Sends audio_cancel envelope when the user slides to cancel (Phase 2).
+  Future<void> sendAudioCancel({
+    required String turnId,
+    String reason = 'user_cancelled',
+  }) async {
+    final payload = {
+      'v': 1,
+      'type': 'audio_cancel',
+      'session_id': _sessionId,
+      'turn_id': turnId,
+      'reason': reason,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
   void _sendJson(Map<String, dynamic> data) {
     if (_channel != null) {
       try {
@@ -233,6 +353,8 @@ class CompanionWebSocketService {
 
       switch (type) {
         case 'session_ready':
+          _wasConnected = true;
+          _lastErrorMessage = null;
           _updateStatus(CompanionConnectionStatus.connected);
           _startHeartbeat();
           debugPrint('[CompanionWS] Session ready: $_sessionId');
@@ -273,6 +395,30 @@ class CompanionWebSocketService {
           }
           break;
 
+        case 'audio_ack':
+          if (!_audioAckController.isClosed) {
+            _audioAckController.add(data);
+          }
+          break;
+
+        case 'audio_received':
+          if (!_audioReceivedController.isClosed) {
+            _audioReceivedController.add(data);
+          }
+          break;
+
+        case 'turn_cancelled':
+          if (!_turnCancelledController.isClosed) {
+            _turnCancelledController.add(data);
+          }
+          break;
+
+        case 'transcript_final':
+          if (!_transcriptFinalController.isClosed) {
+            _transcriptFinalController.add(data);
+          }
+          break;
+
         case 'error':
           debugPrint('[CompanionWS] Server error: ${data['message']}');
           break;
@@ -286,7 +432,7 @@ class CompanionWebSocketService {
   }
 
   void _scheduleReconnect() {
-    if (_manualDisconnect || _isDisposed) return;
+    if (_manualDisconnect || _isDisposed || !_wasConnected) return;
     _updateStatus(CompanionConnectionStatus.connecting);
     _heartbeatTimer?.cancel();
     _reconnectTimer?.cancel();
@@ -298,7 +444,7 @@ class CompanionWebSocketService {
     );
 
     _reconnectTimer = Timer(Duration(seconds: delaySec), () {
-      if (!_isDisposed && !_manualDisconnect) {
+      if (!_isDisposed && !_manualDisconnect && _wasConnected) {
         connect();
       }
     });
@@ -307,6 +453,8 @@ class CompanionWebSocketService {
   /// Disconnect explicitly (disables auto-reconnect).
   Future<void> disconnect() async {
     _manualDisconnect = true;
+    _wasConnected = false;
+    _lastErrorMessage = null;
     _reconnectTimer?.cancel();
     _heartbeatTimer?.cancel();
     await _cleanUpConnection(resetManual: false);
@@ -315,23 +463,41 @@ class CompanionWebSocketService {
 
   Future<void> _cleanUpConnection({bool resetManual = true}) async {
     if (resetManual) _manualDisconnect = false;
-    await _subscription?.cancel();
-    _subscription = null;
     try {
-      await _channel?.sink.close();
+      await _subscription?.cancel();
     } catch (_) {}
+    _subscription = null;
+
+    final oldChannel = _channel;
     _channel = null;
+    if (oldChannel != null) {
+      _safeClose(oldChannel);
+    }
+  }
+
+  void _safeClose(WebSocketChannel? ch) {
+    if (ch == null) return;
+    try {
+      ch.sink.close().timeout(
+        const Duration(milliseconds: 250),
+        onTimeout: () => null,
+      );
+    } catch (_) {}
   }
 
   void dispose() {
     _isDisposed = true;
     _manualDisconnect = true;
+    _wasConnected = false;
+    _connectSequence++;
     _heartbeatTimer?.cancel();
     _reconnectTimer?.cancel();
-    _subscription?.cancel();
     try {
-      _channel?.sink.close();
+      _subscription?.cancel();
     } catch (_) {}
+    _subscription = null;
+    _safeClose(_channel);
+    _channel = null;
     _statusController.close();
     _latencyController.close();
     _rawEventController.close();
@@ -339,5 +505,9 @@ class CompanionWebSocketService {
     _llmStartController.close();
     _llmChunkController.close();
     _llmDoneController.close();
+    _audioAckController.close();
+    _audioReceivedController.close();
+    _turnCancelledController.close();
+    _transcriptFinalController.close();
   }
 }
