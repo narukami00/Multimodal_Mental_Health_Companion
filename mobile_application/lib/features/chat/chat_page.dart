@@ -50,6 +50,8 @@ class _Msg {
     this.isStreaming = false,
     this.localAudioPath,
     this.waveform,
+    this.turnId,
+    this.transcription,
   });
 
   final bool isUser;
@@ -60,6 +62,8 @@ class _Msg {
   final bool isStreaming;
   final String? localAudioPath;
   final List<double>? waveform;
+  final String? turnId;
+  final String? transcription;
 }
 
 
@@ -118,6 +122,7 @@ class _ChatPageState extends State<ChatPage>
   StreamSubscription<double>? _amplitudeSub;
   StreamSubscription<Map<String, dynamic>>? _wsAudioReceivedSub;
   StreamSubscription<Map<String, dynamic>>? _wsTranscriptFinalSub;
+  StreamSubscription<Map<String, dynamic>>? _wsTranscriptFailedSub;
 
   final List<Uint8List> _recordedAudioChunks = [];
   double _currentAmplitude = 0.0;
@@ -152,7 +157,59 @@ class _ChatPageState extends State<ChatPage>
     _wsTranscriptFinalSub = _wsService.transcriptFinalStream.listen((data) {
       if (!mounted) return;
       final text = data['text'] as String? ?? '';
-      debugPrint('[ChatPage] Server transcript: $text');
+      final turnId = data['turn_id'] as String? ?? '';
+      if (text.isNotEmpty) {
+        setState(() {
+          for (var i = _messages.length - 1; i >= 0; i--) {
+            if (_messages[i].isVoice &&
+                (_messages[i].turnId == turnId || turnId.isEmpty)) {
+              final old = _messages[i];
+              _messages[i] = _Msg(
+                old.isUser,
+                text,
+                old.time,
+                isVoice: true,
+                voiceDuration: old.voiceDuration,
+                localAudioPath: old.localAudioPath,
+                waveform: old.waveform,
+                turnId: old.turnId,
+                transcription: text,
+              );
+              break;
+            }
+          }
+        });
+        _scrollDown();
+      }
+    });
+
+    _wsTranscriptFailedSub = _wsService.transcriptFailedStream.listen((data) {
+      if (!mounted) return;
+      final reason = data['reason'] as String? ?? '';
+      final turnId = data['turn_id'] as String? ?? '';
+      final label = reason == 'silence'
+          ? '(No speech detected)'
+          : '(Unintelligible audio)';
+      setState(() {
+        for (var i = _messages.length - 1; i >= 0; i--) {
+          if (_messages[i].isVoice &&
+              (_messages[i].turnId == turnId || turnId.isEmpty)) {
+            final old = _messages[i];
+            _messages[i] = _Msg(
+              old.isUser,
+              old.text,
+              old.time,
+              isVoice: true,
+              voiceDuration: old.voiceDuration,
+              localAudioPath: old.localAudioPath,
+              waveform: old.waveform,
+              turnId: old.turnId,
+              transcription: label,
+            );
+            break;
+          }
+        }
+      });
     });
 
     _wsStatusSub = _wsService.statusStream.listen((status) {
@@ -257,6 +314,7 @@ class _ChatPageState extends State<ChatPage>
     _amplitudeSub?.cancel();
     _wsAudioReceivedSub?.cancel();
     _wsTranscriptFinalSub?.cancel();
+    _wsTranscriptFailedSub?.cancel();
     if (widget.audioRecorderService == null) {
       _audioRecorder.dispose();
     }
@@ -439,6 +497,7 @@ class _ChatPageState extends State<ChatPage>
           voiceDuration: durStr,
           localAudioPath: localAudioPath,
           waveform: waveform,
+          turnId: turnId,
         ),
       );
       _isRecording = false;
@@ -1469,7 +1528,7 @@ class _ChatPageState extends State<ChatPage>
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(child: _AnimatedAudioWave(amplitude: _currentAmplitude)),
+          Expanded(child: ClipRect(child: _AnimatedAudioWave(amplitude: _currentAmplitude))),
           const SizedBox(width: 8),
           if (!_isLocked) ...[
             Transform.translate(
@@ -1737,31 +1796,43 @@ class _AnimatedAudioWaveState extends State<_AnimatedAudioWave>
 
   @override
   Widget build(BuildContext context) {
-    const barCount = 14;
-    return AnimatedBuilder(
-      animation: _waveAnim,
-      builder: (_, __) {
-        final t = _waveAnim.value * 2 * math.pi;
-        final amp = widget.amplitude.clamp(0.0, 1.0);
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(barCount, (i) {
-            final waveMod = 0.4 + 0.6 * math.sin(t + i * 0.55);
-            final h = 5.0 + (10.0 + 20.0 * amp) * waveMod;
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 1.5),
-              width: 3,
-              height: h,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(2),
-                gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [_amber, _coral],
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        // Each bar is 3px wide + 3px margin (1.5 on each side) = 6px
+        final barCount = (availableWidth / 6.0).floor().clamp(4, 16);
+        return AnimatedBuilder(
+          animation: _waveAnim,
+          builder: (_, __) {
+            final t = _waveAnim.value * 2 * math.pi;
+            final amp = widget.amplitude.clamp(0.0, 1.0);
+            return SizedBox(
+              height: 38,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(barCount, (i) {
+                  // Guaranteed normalized [0.0, 1.0] multiplier
+                  final waveMod = 0.5 + 0.5 * math.sin(t + i * 0.55);
+                  // Never negative, strictly clamped to fit container without overflow
+                  final h = (6.0 + 24.0 * amp * waveMod).clamp(4.0, 32.0);
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                    width: 3,
+                    height: h,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(2),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [_amber, _coral],
+                      ),
+                    ),
+                  );
+                }),
               ),
             );
-          }),
+          },
         );
       },
     );
@@ -2083,11 +2154,38 @@ class _Bubble extends StatelessWidget {
               ],
             ),
             child: isVoice
-                ? _VoiceBubbleContent(
-                    duration: msg.voiceDuration,
-                    isUser: isUser,
-                    audioPath: msg.localAudioPath,
-                    waveform: msg.waveform,
+                ? Column(
+                    crossAxisAlignment: isUser
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _VoiceBubbleContent(
+                        duration: msg.voiceDuration,
+                        isUser: isUser,
+                        audioPath: msg.localAudioPath,
+                        waveform: msg.waveform,
+                      ),
+                      if (msg.transcription != null &&
+                          msg.transcription!.isNotEmpty) ...[
+                        const SizedBox(height: 7),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Text(
+                            msg.transcription!,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontStyle: FontStyle.italic,
+                              fontWeight: FontWeight.w500,
+                              color: isUser
+                                  ? const Color(0xFF6E4A22)
+                                  : const Color(0xFF5A4A28),
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   )
                 : Text.rich(
                     TextSpan(

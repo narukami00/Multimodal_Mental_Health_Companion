@@ -11,6 +11,8 @@ from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from stt_service import SttService
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -20,11 +22,19 @@ logger = logging.getLogger("solace_companion")
 RECORDINGS_DIR = Path(__file__).resolve().parent / "debug_recordings"
 RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Initialize STT and VAD service
+stt = SttService(model_size="base.en")
+
 app = FastAPI(
     title="Solace Companion Backend",
     version="0.1.0",
     description="Local mental health companion server supporting STT, LLM, and real-time WebSocket communication."
 )
+
+@app.on_event("startup")
+async def on_startup():
+    logger.info("Server startup: warming up STT & VAD in background...")
+    asyncio.create_task(asyncio.to_thread(stt.initialize))
 
 # Enable CORS for local Flutter development (web, emulator, LAN)
 app.add_middleware(
@@ -63,10 +73,11 @@ async def healthz():
 
     return {
         "status": "ok",
-        "phase": 2,
-        "phase_name": "pcm_audio_capture",
+        "phase": 3,
+        "phase_name": "vad_stt_transcription",
         "gpu_vram_used_mb": gpu_vram_used,
-        "stt_ready": False,
+        "stt_ready": stt.is_ready,
+        "stt_device": stt.device,
         "llm_ready": False,
         "recordings_dir": str(RECORDINGS_DIR),
     }
@@ -76,10 +87,11 @@ async def get_models():
     """Model status per specifications section 11."""
     return {
         "stt": {
-            "model": "faster-distil-whisper-large-v3",
+            "model": stt.model_size,
             "precision": "int8",
+            "device": stt.device,
             "language": "en",
-            "ready": False
+            "ready": stt.is_ready
         },
         "llm": {
             "model": "qwen3-4b-instruct-q4_k_m",
@@ -358,19 +370,50 @@ async def websocket_session(
                             "ts": int(time.time() * 1000)
                         }))
 
-                        # Emit transcript_final for UI voice-note confirmation
-                        await websocket.send_text(json.dumps({
-                            "v": 1,
-                            "type": "transcript_final",
-                            "turn_id": turn_id,
-                            "session_id": current_session_id,
-                            "text": f"Voice message ({duration_sec:.1f}s)",
-                            "stable": True,
-                            "language": "en",
-                            "confidence": 1.0,
-                            "audio_ms": int(duration_sec * 1000),
-                            "ts": int(time.time() * 1000)
-                        }))
+                        # Phase 3: Silero VAD check followed by Whisper transcription
+                        has_speech = await asyncio.to_thread(stt.has_speech, raw_pcm, sr)
+                        if not has_speech:
+                            logger.info(f"VAD: Silence / no speech detected for turn {turn_id}")
+                            await websocket.send_text(json.dumps({
+                                "v": 1,
+                                "type": "transcript_failed",
+                                "turn_id": turn_id,
+                                "session_id": current_session_id,
+                                "reason": "silence",
+                                "confidence": 0.0,
+                                "ts": int(time.time() * 1000)
+                            }))
+                        else:
+                            text, confidence, language = await asyncio.to_thread(
+                                stt.transcribe, raw_pcm, sr
+                            )
+                            if text:
+                                logger.info(
+                                    f"Transcribed turn {turn_id}: \"{text}\" (conf={confidence:.2f}, lang={language})"
+                                )
+                                await websocket.send_text(json.dumps({
+                                    "v": 1,
+                                    "type": "transcript_final",
+                                    "turn_id": turn_id,
+                                    "session_id": current_session_id,
+                                    "text": text,
+                                    "stable": True,
+                                    "language": language,
+                                    "confidence": round(confidence, 2),
+                                    "audio_ms": int(duration_sec * 1000),
+                                    "ts": int(time.time() * 1000)
+                                }))
+                            else:
+                                logger.warning(f"Speech detected but transcription empty for turn {turn_id}")
+                                await websocket.send_text(json.dumps({
+                                    "v": 1,
+                                    "type": "transcript_failed",
+                                    "turn_id": turn_id,
+                                    "session_id": current_session_id,
+                                    "reason": "unintelligible",
+                                    "confidence": round(confidence, 2),
+                                    "ts": int(time.time() * 1000)
+                                }))
 
                         active_audio_turns.pop(turn_id, None)
                     else:

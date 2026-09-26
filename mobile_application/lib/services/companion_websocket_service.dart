@@ -102,6 +102,11 @@ class CompanionWebSocketService {
   Stream<Map<String, dynamic>> get transcriptFinalStream =>
       _transcriptFinalController.stream;
 
+  final _transcriptFailedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get transcriptFailedStream =>
+      _transcriptFailedController.stream;
+
   void _updateStatus(CompanionConnectionStatus newStatus) {
     if (_status != newStatus) {
       _status = newStatus;
@@ -419,6 +424,12 @@ class CompanionWebSocketService {
           }
           break;
 
+        case 'transcript_failed':
+          if (!_transcriptFailedController.isClosed) {
+            _transcriptFailedController.add(data);
+          }
+          break;
+
         case 'error':
           debugPrint('[CompanionWS] Server error: ${data['message']}');
           break;
@@ -509,5 +520,6 @@ class CompanionWebSocketService {
     _audioReceivedController.close();
     _turnCancelledController.close();
     _transcriptFinalController.close();
+    _transcriptFailedController.close();
   }
 }
