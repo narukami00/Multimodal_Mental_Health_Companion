@@ -13,6 +13,7 @@ import '../../core/models/chat_message_record.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../services/companion_websocket_service.dart';
 import '../../services/pcm_audio_recorder_service.dart';
+import '../../services/tts_playback_service.dart';
 import '../call/call_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -26,6 +27,7 @@ class ChatPage extends StatefulWidget {
     this.initialMessages,
     this.webSocketService,
     this.audioRecorderService,
+    this.ttsPlaybackService,
     this.autoConnect = false,
     super.key,
   });
@@ -35,6 +37,7 @@ class ChatPage extends StatefulWidget {
   final List<ChatMessageRecord>? initialMessages;
   final CompanionWebSocketService? webSocketService;
   final PcmAudioRecorderService? audioRecorderService;
+  final TtsPlaybackService? ttsPlaybackService;
   final bool autoConnect;
 
   @override
@@ -60,6 +63,8 @@ class _Msg {
     this.waveform,
     this.turnId,
     this.transcription,
+    this.utteranceId,
+    this.audioPath,
   });
 
   final String? id;
@@ -73,6 +78,8 @@ class _Msg {
   final List<double>? waveform;
   final String? turnId;
   final String? transcription;
+  final String? utteranceId;
+  final String? audioPath;
 
   static _Msg fromRecord(ChatMessageRecord r) {
     var h = r.timestamp.hour % 12;
@@ -91,6 +98,7 @@ class _Msg {
       waveform: r.waveform,
       turnId: r.turnId,
       transcription: r.transcription,
+      audioPath: r.localAudioPath,
     );
   }
 
@@ -102,7 +110,7 @@ class _Msg {
       timestamp: DateTime.now(),
       isVoice: isVoice,
       voiceDuration: voiceDuration,
-      localAudioPath: localAudioPath,
+      localAudioPath: localAudioPath ?? audioPath,
       waveform: waveform,
       turnId: turnId,
       transcription: transcription,
@@ -178,6 +186,14 @@ class _ChatPageState extends State<ChatPage>
   Offset? _pointerDownPos;
   DateTime? _pointerDownTime;
 
+  late final TtsPlaybackService _ttsPlayback;
+  StreamSubscription<bool>? _ttsPlayingSub;
+  StreamSubscription<Map<String, String>>? _ttsAudioReadySub;
+
+  bool _ttsEnabled = true;
+  String _selectedVoiceId = 'af_heart';
+  double _ttsSpeed = 0.96;
+
   CompanionConnectionStatus _wsStatus = CompanionConnectionStatus.disconnected;
   int? _lastLatencyMs;
   void Function(void Function())? _modalSetState;
@@ -187,8 +203,53 @@ class _ChatPageState extends State<ChatPage>
     super.initState();
     _wsService = widget.webSocketService ?? CompanionWebSocketService();
     _audioRecorder = widget.audioRecorderService ?? PcmAudioRecorderService();
+    _ttsPlayback = widget.ttsPlaybackService ??
+        TtsPlaybackService(webSocketService: _wsService);
     _wsStatus = _wsService.status;
     _lastLatencyMs = _wsService.lastLatencyMs;
+
+    _ttsPlayingSub = _ttsPlayback.playingStream.listen((_) {
+      if (mounted) setState(() {});
+    });
+
+    _ttsAudioReadySub = _ttsPlayback.audioReadyStream.listen((data) {
+      if (!mounted) return;
+      final uttId = data['utterance_id'];
+      final path = data['audio_path'];
+      if (uttId == null || path == null) return;
+      ChatMessageRecord? recordToUpdate;
+      setState(() {
+        for (var i = _messages.length - 1; i >= 0; i--) {
+          if (_messages[i].utteranceId == uttId ||
+              (_messages[i].utteranceId == null &&
+                  !_messages[i].isUser &&
+                  i == _messages.length - 1)) {
+            final old = _messages[i];
+            final updated = _Msg(
+              old.isUser,
+              old.text,
+              old.time,
+              id: old.id,
+              isStreaming: old.isStreaming,
+              isVoice: old.isVoice,
+              voiceDuration: old.voiceDuration,
+              localAudioPath: old.localAudioPath,
+              waveform: old.waveform,
+              turnId: old.turnId,
+              transcription: old.transcription,
+              utteranceId: old.utteranceId ?? uttId,
+              audioPath: path,
+            );
+            _messages[i] = updated;
+            recordToUpdate = updated.toRecord();
+            break;
+          }
+        }
+      });
+      if (recordToUpdate != null && recordToUpdate!.id.isNotEmpty) {
+        _chatController.updateMessage(recordToUpdate!.id, recordToUpdate!);
+      }
+    });
 
     if (widget.initialMessages != null) {
       _messages = widget.initialMessages!.map(_Msg.fromRecord).toList();
@@ -302,6 +363,14 @@ class _ChatPageState extends State<ChatPage>
       if (!mounted) return;
       setState(() => _wsStatus = status);
       _modalSetState?.call(() {});
+      if (status == CompanionConnectionStatus.connected) {
+        _wsService.sendSessionConfigure(
+          mode: 'chat_voice_playback',
+          ttsEnabled: _ttsEnabled,
+          voiceId: _selectedVoiceId,
+          speed: _ttsSpeed,
+        );
+      }
     });
 
     _wsLatencySub = _wsService.latencyStream.listen((latency) {
@@ -313,9 +382,19 @@ class _ChatPageState extends State<ChatPage>
     _wsStartSub = _wsService.llmStartStream.listen((data) {
       if (!mounted) return;
       final msgId = 'msg_${DateTime.now().microsecondsSinceEpoch}';
+      final uttId = data['utterance_id'] as String?;
+      final turnId = data['turn_id'] as String?;
       setState(() {
         if (_messages.isEmpty || !_messages.last.isStreaming) {
-          _messages.add(_Msg(false, '', _now(), id: msgId, isStreaming: true));
+          _messages.add(_Msg(
+            false,
+            '',
+            _now(),
+            id: msgId,
+            isStreaming: true,
+            utteranceId: uttId,
+            turnId: turnId,
+          ));
         }
       });
       _scrollDown();
@@ -324,6 +403,8 @@ class _ChatPageState extends State<ChatPage>
     _wsChunkSub = _wsService.llmChunkStream.listen((data) {
       if (!mounted) return;
       final delta = data['delta'] as String? ?? '';
+      final uttId = data['utterance_id'] as String?;
+      final turnId = data['turn_id'] as String?;
       setState(() {
         if (_messages.isNotEmpty &&
             !_messages.last.isUser &&
@@ -335,10 +416,21 @@ class _ChatPageState extends State<ChatPage>
             old.time,
             id: old.id,
             isStreaming: true,
+            utteranceId: uttId ?? old.utteranceId,
+            turnId: turnId ?? old.turnId,
+            audioPath: old.audioPath,
           );
         } else {
           final msgId = 'msg_${DateTime.now().microsecondsSinceEpoch}';
-          _messages.add(_Msg(false, delta, _now(), id: msgId, isStreaming: true));
+          _messages.add(_Msg(
+            false,
+            delta,
+            _now(),
+            id: msgId,
+            isStreaming: true,
+            utteranceId: uttId,
+            turnId: turnId,
+          ));
         }
       });
       _scrollDown();
@@ -347,6 +439,8 @@ class _ChatPageState extends State<ChatPage>
     _wsDoneSub = _wsService.llmDoneStream.listen((data) {
       if (!mounted) return;
       final finalText = data['text'] as String? ?? '';
+      final uttId = data['utterance_id'] as String?;
+      final turnId = data['turn_id'] as String?;
       ChatMessageRecord? completedRecord;
       setState(() {
         if (_messages.isNotEmpty &&
@@ -359,6 +453,9 @@ class _ChatPageState extends State<ChatPage>
             _now(),
             id: old.id,
             isStreaming: false,
+            utteranceId: uttId ?? old.utteranceId,
+            turnId: turnId ?? old.turnId,
+            audioPath: old.audioPath,
           );
           _messages[_messages.length - 1] = completed;
           completedRecord = completed.toRecord();
@@ -369,6 +466,8 @@ class _ChatPageState extends State<ChatPage>
             _now(),
             id: 'msg_${DateTime.now().microsecondsSinceEpoch}',
             isStreaming: false,
+            utteranceId: uttId,
+            turnId: turnId,
           );
           _messages.add(completed);
           completedRecord = completed.toRecord();
@@ -440,6 +539,10 @@ class _ChatPageState extends State<ChatPage>
     SharedPreferences.getInstance().then((prefs) {
       final savedHost = prefs.getString('companion_server_host');
       final savedPort = prefs.getInt('companion_server_port');
+      _ttsEnabled = prefs.getBool('companion_tts_enabled') ?? true;
+      _selectedVoiceId =
+          prefs.getString('companion_tts_voice_id') ?? 'af_heart';
+      _ttsSpeed = prefs.getDouble('companion_tts_speed') ?? 0.96;
       if (savedHost != null && savedHost.isNotEmpty) {
         _wsService.host = savedHost;
       } else {
@@ -456,6 +559,11 @@ class _ChatPageState extends State<ChatPage>
   void dispose() {
     if (_ownsChatController) {
       _chatController.dispose();
+    }
+    _ttsPlayingSub?.cancel();
+    _ttsAudioReadySub?.cancel();
+    if (widget.ttsPlaybackService == null) {
+      _ttsPlayback.dispose();
     }
     _recordingTimer?.cancel();
     _audioFrameSub?.cancel();
@@ -786,8 +894,34 @@ class _ChatPageState extends State<ChatPage>
                             padding:
                                 const EdgeInsets.fromLTRB(16, 8, 16, 12),
                             itemCount: _messages.length,
-                            itemBuilder: (_, i) =>
-                                _Bubble(msg: _messages[i]),
+                            itemBuilder: (_, i) {
+                              final msg = _messages[i];
+                              final isSpeaking = !msg.isUser &&
+                                  (_ttsPlayback.isPlaying ||
+                                      _ttsPlayback.isReceivingStream) &&
+                                  ((_ttsPlayback.activeUtteranceId != null &&
+                                          _ttsPlayback.activeUtteranceId ==
+                                              msg.utteranceId) ||
+                                      (_ttsPlayback.activePlayingPath != null &&
+                                          _ttsPlayback.activePlayingPath ==
+                                              msg.audioPath) ||
+                                      (_ttsPlayback.activeUtteranceId == null &&
+                                          i == _messages.length - 1));
+
+                              return _Bubble(
+                                msg: msg,
+                                isSpeaking: isSpeaking,
+                                onCancelVoice: () => _ttsPlayback.cancelVoice(
+                                  utteranceId: msg.utteranceId,
+                                ),
+                                onReplayVoice: msg.audioPath != null
+                                    ? () => _ttsPlayback.playAudioFile(
+                                          msg.audioPath!,
+                                          utteranceId: msg.utteranceId,
+                                        )
+                                    : null,
+                              );
+                            },
                           ),
                         ),
                         _buildChips(),
@@ -1331,6 +1465,116 @@ class _ChatPageState extends State<ChatPage>
                       ],
                     ),
                   ),
+                  const Divider(color: Color(0xFFE8DECF), height: 28),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.record_voice_over_rounded, color: _coral, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Voice Playback',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: _ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Switch(
+                        value: _ttsEnabled,
+                        activeColor: _coral,
+                        onChanged: (val) async {
+                          _ttsEnabled = val;
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('companion_tts_enabled', val);
+                          if (isConnected) {
+                            _wsService.sendSessionConfigure(
+                              mode: 'chat_voice_playback',
+                              ttsEnabled: _ttsEnabled,
+                              voiceId: _selectedVoiceId,
+                              speed: _ttsSpeed,
+                            );
+                          }
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  if (_ttsEnabled) ...[
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Voice Persona:',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: _softInk,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Builder(
+                      builder: (ctx) {
+                        Widget voiceChip(String voiceId, String label) {
+                          final isSelected = _selectedVoiceId == voiceId;
+                          return ChoiceChip(
+                            label: Text(label),
+                            selected: isSelected,
+                            selectedColor: const Color(0xFFFFE0D0),
+                            backgroundColor: const Color(0xFFF7F2E7),
+                            labelStyle: TextStyle(
+                              fontSize: 11,
+                              fontWeight:
+                                  isSelected ? FontWeight.w700 : FontWeight.w500,
+                              color: isSelected
+                                  ? const Color(0xFF9E4010)
+                                  : _ink,
+                            ),
+                            side: BorderSide(
+                              color: isSelected
+                                  ? const Color(0xFFFF9E70)
+                                  : const Color(0xFFDDD2BE),
+                            ),
+                            onSelected: (selected) async {
+                              if (selected) {
+                                _selectedVoiceId = voiceId;
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                await prefs.setString(
+                                  'companion_tts_voice_id',
+                                  voiceId,
+                                );
+                                if (isConnected) {
+                                  _wsService.sendSessionConfigure(
+                                    mode: 'chat_voice_playback',
+                                    ttsEnabled: _ttsEnabled,
+                                    voiceId: _selectedVoiceId,
+                                    speed: _ttsSpeed,
+                                  );
+                                }
+                                setModalState(() {});
+                                setState(() {});
+                              }
+                            },
+                          );
+                        }
+
+                        return Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            voiceChip('af_heart', 'Heart · Warm'),
+                            voiceChip('af_bella', 'Bella · Gentle'),
+                            voiceChip('af_sarah', 'Sarah · Soft'),
+                            voiceChip('am_michael', 'Michael · Grounded'),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -2251,9 +2495,17 @@ class _VoiceBubbleContentState extends State<_VoiceBubbleContent> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.msg});
+  const _Bubble({
+    required this.msg,
+    this.isSpeaking = false,
+    this.onCancelVoice,
+    this.onReplayVoice,
+  });
 
   final _Msg msg;
+  final bool isSpeaking;
+  final VoidCallback? onCancelVoice;
+  final VoidCallback? onReplayVoice;
 
   @override
   Widget build(BuildContext context) {
@@ -2349,6 +2601,19 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
           ),
+          if (!isUser && isSpeaking) ...[
+            const SizedBox(height: 6),
+            _AssistantVoicePill(
+              isSpeaking: true,
+              onStop: onCancelVoice,
+            ),
+          ] else if (!isUser && msg.audioPath != null) ...[
+            const SizedBox(height: 5),
+            _AssistantVoicePill(
+              isSpeaking: false,
+              onReplay: onReplayVoice,
+            ),
+          ],
           const SizedBox(height: 3),
           Text(
             msg.time,
@@ -2359,6 +2624,192 @@ class _Bubble extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AssistantVoicePill extends StatelessWidget {
+  const _AssistantVoicePill({
+    required this.isSpeaking,
+    this.onStop,
+    this.onReplay,
+  });
+
+  final bool isSpeaking;
+  final VoidCallback? onStop;
+  final VoidCallback? onReplay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isSpeaking) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const Key('stop_voice_pill'),
+          onTap: onStop,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF2DC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0x40FFB534)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0F7A5A28),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _MiniEqualizerWave(),
+                SizedBox(width: 7),
+                Text(
+                  'Stop voice',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF8B4513),
+                    letterSpacing: -0.1,
+                  ),
+                ),
+                SizedBox(width: 5),
+                Icon(
+                  Icons.stop_circle_rounded,
+                  size: 15,
+                  color: Color(0xFFFF7F50),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: const Key('listen_again_pill'),
+        onTap: onReplay,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0x0C7A5A28),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0x187A5A28)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.volume_up_rounded,
+                size: 14,
+                color: Color(0xFF7A6855),
+              ),
+              SizedBox(width: 5),
+              Text(
+                'Listen',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF7A6855),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniEqualizerWave extends StatefulWidget {
+  const _MiniEqualizerWave();
+
+  @override
+  State<_MiniEqualizerWave> createState() => _MiniEqualizerWaveState();
+}
+
+class _MiniEqualizerWaveState extends State<_MiniEqualizerWave>
+    with SingleTickerProviderStateMixin {
+  AnimationController? _controller;
+
+  static bool get _isTestEnvironment =>
+      Platform.environment.containsKey('FLUTTER_TEST');
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_isTestEnvironment) {
+      _controller = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 650),
+      )..repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isTestEnvironment || _controller == null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _bar(7),
+          const SizedBox(width: 2),
+          _bar(13),
+          const SizedBox(width: 2),
+          _bar(9),
+          const SizedBox(width: 2),
+          _bar(5),
+        ],
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _controller!,
+      builder: (context, _) {
+        final t = _controller!.value;
+        final h1 = 4.0 + 8.0 * math.sin(t * math.pi);
+        final h2 = 5.0 + 9.0 * math.sin((t + 0.3) * math.pi);
+        final h3 = 4.0 + 10.0 * math.sin((t + 0.6) * math.pi);
+        final h4 = 3.5 + 7.0 * math.sin((t + 0.9) * math.pi);
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _bar(h1),
+            const SizedBox(width: 2),
+            _bar(h2),
+            const SizedBox(width: 2),
+            _bar(h3),
+            const SizedBox(width: 2),
+            _bar(h4),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _bar(double height) {
+    return Container(
+      width: 2.2,
+      height: height.clamp(3.5, 14.0),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF7F50),
+        borderRadius: BorderRadius.circular(1.2),
       ),
     );
   }

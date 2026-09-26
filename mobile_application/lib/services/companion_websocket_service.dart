@@ -107,6 +107,21 @@ class CompanionWebSocketService {
   Stream<Map<String, dynamic>> get transcriptFailedStream =>
       _transcriptFailedController.stream;
 
+  final _binaryAudioController = StreamController<Uint8List>.broadcast();
+  Stream<Uint8List> get binaryAudioStream => _binaryAudioController.stream;
+
+  final _ttsStartController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get ttsStartStream => _ttsStartController.stream;
+
+  final _ttsEndController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get ttsEndStream => _ttsEndController.stream;
+
+  final _callStateController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get callStateStream => _callStateController.stream;
+
   void _updateStatus(CompanionConnectionStatus newStatus) {
     if (_status != newStatus) {
       _status = newStatus;
@@ -333,6 +348,88 @@ class CompanionWebSocketService {
     _sendJson(payload);
   }
 
+  /// Configures session mode, voice settings, and audio parameters (Phase 6).
+  Future<void> sendSessionConfigure({
+    required String mode,
+    bool ttsEnabled = true,
+    String voiceId = 'af_heart',
+    double speed = 0.96,
+    int micSampleRate = 16000,
+    int playbackSampleRate = 24000,
+    String codec = 'pcm_s16le',
+  }) async {
+    final payload = {
+      'v': 1,
+      'type': 'session.configure',
+      'session_id': _sessionId,
+      'mode': mode,
+      'tts': {
+        'enabled': ttsEnabled,
+        'voice_id': voiceId,
+        'speed': speed,
+      },
+      'audio': {
+        'mic_sample_rate': micSampleRate,
+        'playback_sample_rate': playbackSampleRate,
+        'codec': codec,
+      },
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
+  /// Cancels voice audio synthesis without stopping LLM text streaming (Phase 6).
+  Future<void> sendSpeechCancel({
+    String? utteranceId,
+    bool cancelTts = true,
+    bool cancelLlm = false,
+    String reason = 'user_tapped_cancel_voice',
+  }) async {
+    final payload = {
+      'v': 1,
+      'type': 'speech.cancel',
+      'session_id': _sessionId,
+      if (utteranceId != null) 'utterance_id': utteranceId,
+      'cancel_tts': cancelTts,
+      'cancel_llm': cancelLlm,
+      'reason': reason,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
+  /// Aborts assistant response immediately on user speech in call mode (Phase 6).
+  Future<void> sendCallBargeIn({
+    String? turnId,
+    String? utteranceId,
+    String reason = 'vad_speech_detected',
+  }) async {
+    final payload = {
+      'v': 1,
+      'type': 'call.barge_in',
+      'session_id': _sessionId,
+      if (turnId != null) 'turn_id': turnId,
+      if (utteranceId != null) 'utterance_id': utteranceId,
+      'cancel_tts': true,
+      'cancel_llm': true,
+      'reason': reason,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
+  /// Ends call mode and returns to chat mode (Phase 6).
+  Future<void> sendCallEnd({String reason = 'user_ended_call'}) async {
+    final payload = {
+      'v': 1,
+      'type': 'call.end',
+      'session_id': _sessionId,
+      'reason': reason,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _sendJson(payload);
+  }
+
   void _sendJson(Map<String, dynamic> data) {
     if (_channel != null) {
       try {
@@ -345,6 +442,13 @@ class CompanionWebSocketService {
 
   void _handleIncomingMessage(dynamic raw) {
     try {
+      if (raw is List<int>) {
+        final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
+        if (!_binaryAudioController.isClosed) {
+          _binaryAudioController.add(bytes);
+        }
+        return;
+      }
       if (raw is! String) return;
       final data = jsonDecode(raw) as Map<String, dynamic>;
       _rawEventController.add(data);
@@ -358,6 +462,7 @@ class CompanionWebSocketService {
 
       switch (type) {
         case 'session_ready':
+        case 'session.ready':
           _wasConnected = true;
           _lastErrorMessage = null;
           _updateStatus(CompanionConnectionStatus.connected);
@@ -397,6 +502,24 @@ class CompanionWebSocketService {
         case 'llm_done':
           if (!_llmDoneController.isClosed) {
             _llmDoneController.add(data);
+          }
+          break;
+
+        case 'tts.start':
+          if (!_ttsStartController.isClosed) {
+            _ttsStartController.add(data);
+          }
+          break;
+
+        case 'tts.end':
+          if (!_ttsEndController.isClosed) {
+            _ttsEndController.add(data);
+          }
+          break;
+
+        case 'call.state':
+          if (!_callStateController.isClosed) {
+            _callStateController.add(data);
           }
           break;
 
@@ -521,5 +644,9 @@ class CompanionWebSocketService {
     _turnCancelledController.close();
     _transcriptFinalController.close();
     _transcriptFailedController.close();
+    _binaryAudioController.close();
+    _ttsStartController.close();
+    _ttsEndController.close();
+    _callStateController.close();
   }
 }
