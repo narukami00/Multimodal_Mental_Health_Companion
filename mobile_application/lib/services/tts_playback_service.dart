@@ -30,20 +30,20 @@ class TtsPlaybackService {
   static bool get _isTestEnv =>
       Platform.environment.containsKey('FLUTTER_TEST');
 
-  /// The call holds the mic open in `MODE_IN_COMMUNICATION`, where Android
-  /// routes media-usage playback to the earpiece. Voice-communication usage +
-  /// speakerphone keeps TTS on the loudspeaker (see MainActivity).
+  /// Configures clean, high-fidelity media playback through the main loudspeaker
+  /// in both chat mode and call mode. Avoids telephony DSP filtering and earpiece routing.
   void _configureAudioContext() {
     final context = AudioContext(
       android: const AudioContextAndroid(
         isSpeakerphoneOn: true,
         stayAwake: true,
-        contentType: AndroidContentType.speech,
-        usageType: AndroidUsageType.voiceCommunication,
+        contentType: AndroidContentType.music,
+        usageType: AndroidUsageType.media,
         audioFocus: AndroidAudioFocus.gainTransient,
+        audioMode: AndroidAudioMode.normal,
       ),
       iOS: AudioContextIOS(
-        category: AVAudioSessionCategory.playAndRecord,
+        category: AVAudioSessionCategory.playback,
         options: const {
           AVAudioSessionOptions.defaultToSpeaker,
           AVAudioSessionOptions.allowBluetooth,

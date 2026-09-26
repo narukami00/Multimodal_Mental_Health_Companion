@@ -158,31 +158,33 @@ class MainActivity : FlutterActivity() {
         val bufferSize = maxOf(minBufferSize, frameBytes * 4)
 
         try {
-            // Put the audio policy manager on the voice-communication path so
-            // capture and playback are routed for a conversation, not for media.
-            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-            // MODE_IN_COMMUNICATION defaults to the earpiece, which makes TTS
-            // inaudible during a hands-free duplex call: force the loudspeaker.
+            // Keep normal media audio mode so all audio playback routes to the
+            // main loudspeaker with full-frequency fidelity, not through the in-call earpiece.
+            audioManager.mode = AudioManager.MODE_NORMAL
             audioManager.isSpeakerphoneOn = true
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val speakerDevice = audioManager.availableCommunicationDevices.firstOrNull {
-                    it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-                }
-                if (speakerDevice != null) {
-                    audioManager.setCommunicationDevice(speakerDevice)
-                }
-            }
 
-            audioRecord = AudioRecord(
-                // The only source whose contract promises echo cancellation. AOSP
-                // configures no preprocessing at all for VOICE_RECOGNITION.
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                bufferSize
-            )
-            val record = audioRecord
+            var record = try {
+                AudioRecord(
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                    sampleRate,
+                    channelConfig,
+                    audioFormat,
+                    bufferSize
+                )
+            } catch (e: Exception) {
+                null
+            }
+            if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
+                record?.release()
+                record = AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    sampleRate,
+                    channelConfig,
+                    audioFormat,
+                    bufferSize
+                )
+            }
+            audioRecord = record
             if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
                 record?.release()
                 audioRecord = null
