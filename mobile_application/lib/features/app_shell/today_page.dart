@@ -251,173 +251,91 @@ class TodayPage extends StatelessWidget {
     );
   }
 
+  void _openChatFromPrompt() {
+    final active = chatController?.activeConversation;
+    if (active != null && active.messages.any((m) => m.isUser)) {
+      onStartNewChat?.call();
+    } else {
+      onOpenChat?.call();
+    }
+  }
+
   Widget _buildSecondaryCard() {
+    final now = currentTime ?? DateTime.now();
+    final timeStr =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFFFFDF8),
-            Color(0xFFFFF5E9),
-          ],
-        ),
+        color: const Color(0xE6FFFDF8),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: const Color(0x52FFB534),
-          width: 1.2,
-        ),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x14784614),
-            blurRadius: 20,
+            color: Color(0x0F784614),
+            blurRadius: 24,
             offset: Offset(0, 8),
-          ),
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 6,
-            offset: Offset(0, 2),
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(28),
-          onTap: () {
-            final active = chatController?.activeConversation;
-            if (active != null && active.messages.any((m) => m.isUser)) {
-              onStartNewChat?.call();
-            } else {
-              onOpenChat?.call();
-            }
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(28),
+            onTap: _openChatFromPrompt,
+            child: Stack(
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFFF9E7A),
-                            Color(0xFFFF6F43),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x40E86034),
-                            blurRadius: 12,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.forum_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFE86034),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Text(
-                                'SOL AI COMPANION',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.2,
-                                  color: Color(0xFFD65D20),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          const Text(
-                            'Talk it through',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF3E2818),
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFFFF9E7A),
-                            Color(0xFFFF6F43),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(999),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x38E86034),
-                            blurRadius: 8,
-                            offset: Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Open chat',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: 0.1,
-                            ),
-                          ),
-                          SizedBox(width: 4),
-                          Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 14,
-                            color: Colors.white,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                const Positioned(
+                  left: -60,
+                  top: -70,
+                  width: 240,
+                  height: 240,
+                  child: _BreathingGlow(),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'A quiet, private space to speak or write whatever is on your mind right now.',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    height: 1.4,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF7B6A55),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const _Eyebrow('SOL · AI COMPANION'),
+                          const Spacer(),
+                          Text(
+                            timeStr,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFA5937C),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Talk it through',
+                        style: TextStyle(
+                          fontSize: 24,
+                          height: 1.15,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          color: Color(0xFF3E2818),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'A quiet, private space to speak or write whatever is on your mind right now.',
+                        style: TextStyle(
+                          fontSize: 15,
+                          height: 1.5,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF7B6A55),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      _TextCta('Open chat', onTap: _openChatFromPrompt),
+                    ],
                   ),
                 ),
               ],
@@ -463,208 +381,131 @@ class TodayPage extends StatelessWidget {
             ? chatController!.activeConversation!
             : convs.first;
         final excerpt = activeConv.preview;
-        final timeStr = '${activeConv.dateStr} · Recent';
+        final meta = '${activeConv.dateStr} · Recent';
 
         return Padding(
-          padding: const EdgeInsets.only(top: 14),
+          padding: const EdgeInsets.only(top: 16),
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFFFFDF8),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: const Color(0x387A5D3A),
-                width: 1.0,
-              ),
+              color: const Color(0xE6FFFDF8),
+              borderRadius: BorderRadius.circular(24),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x1278501E),
-                  blurRadius: 14,
-                  offset: Offset(0, 4),
+                  color: Color(0x0F784614),
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
                 ),
               ],
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(22),
-                onTap: () {
-                  chatController?.switchConversation(activeConv.id);
-                  onOpenChat?.call();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Top row: Sol Avatar icon, Eyebrow, and History Sheet Button
-                      Row(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () {
+                    chatController?.switchConversation(activeConv.id);
+                    onOpenChat?.call();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 26,
-                          height: 26,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [Color(0xFFFFE8B5), Color(0xFFFFB534)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: _Eyebrow('CONVERSATION WITH SOL'),
                             ),
-                          ),
-                          child: const Icon(
-                            Icons.forum_outlined,
-                            color: Color(0xFF5A3B10),
-                            size: 14,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'CONVERSATION WITH SOL',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8,
-                              color: Color(0xFF8A6A4E),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        InkWell(
-                          onTap: () => _openHistorySheet(context),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3.5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0x18FFB534),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0x40FFB534)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.history_rounded,
-                                  size: 13,
-                                  color: Color(0xFF8A601E),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () => _openHistorySheet(context),
+                              borderRadius: BorderRadius.circular(6),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                  vertical: 2,
                                 ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  count > 0 ? 'History ($count)' : 'History',
+                                child: Text(
+                                  count > 0 ? 'History · $count' : 'History',
                                   style: const TextStyle(
-                                    fontSize: 10.5,
+                                    fontSize: 12.5,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF8A601E),
+                                    letterSpacing: 0.4,
+                                    color: Color(0xFFB08A5E),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // Conversation excerpt
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 9,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF7E6),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0x26FFB534)),
-                      ),
-                      child: Text(
-                        '“$excerpt”',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.45,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF4A3728),
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // Footer row: Status dot, timestamp, and glowing Resume pill
-                    Row(
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(0xFF48BB78),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            timeStr,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF8C7C69),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4.5,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFFB534), Color(0xFFFF7F50)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x2ECA6A1A),
-                                blurRadius: 8,
-                                offset: Offset(0, 3),
                               ),
-                            ],
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Resume',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFFFFFDF5),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(
+                              width: 2,
+                              height: 46,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Color(0x73E86034),
+                                      Color(0x1AE86034),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              SizedBox(width: 3),
-                              Icon(
-                                Icons.arrow_forward_rounded,
-                                size: 12,
-                                color: Color(0xFFFFFDF5),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Text(
+                                '“$excerpt”',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  height: 1.55,
+                                  fontWeight: FontWeight.w600,
+                                  fontStyle: FontStyle.italic,
+                                  color: Color(0xFF4A3728),
+                                ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                meta,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
+                                  color: Color(0xFFA5937C),
+                                ),
+                              ),
+                            ),
+                            _TextCta(
+                              'Resume',
+                              onTap: () {
+                                chatController?.switchConversation(activeConv.id);
+                                onOpenChat?.call();
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
             ),
           ),
         );
@@ -819,6 +660,159 @@ class _CardPetalPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _CardPetalPainter oldDelegate) =>
       oldDelegate.rotationAngle != rotationAngle;
+}
+
+class _BreathingGlow extends StatefulWidget {
+  const _BreathingGlow();
+
+  @override
+  State<_BreathingGlow> createState() => _BreathingGlowState();
+}
+
+class _BreathingGlowState extends State<_BreathingGlow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3200),
+    );
+    if (!_isTestEnvironment) {
+      _c.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ponytail: reduced-motion check needs an inherited lookup, so it lives here
+    if (!_isTestEnvironment && MediaQuery.disableAnimationsOf(context)) {
+      _c.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_c.isAnimating) {
+      return _glow(0.75, 1.0);
+    }
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) => _glow(
+        0.55 + 0.40 * Curves.easeInOutSine.transform(_c.value),
+        0.96 + 0.10 * _c.value,
+      ),
+    );
+  }
+
+  Widget _glow(double opacity, double scale) => Opacity(
+        opacity: opacity,
+        child: Transform.scale(
+          scale: scale,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: const [
+                  Color(0x57FFB534),
+                  Color(0x00FFB534),
+                ],
+              ),
+            ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      );
+}
+
+class _Eyebrow extends StatelessWidget {
+  const _Eyebrow(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 4,
+          height: 4,
+          decoration: const BoxDecoration(
+            color: Color(0xFFC2622F),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.6,
+            color: Color(0xFFC2622F),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TextCta extends StatefulWidget {
+  const _TextCta(this.label, {required this.onTap});
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  State<_TextCta> createState() => _TextCtaState();
+}
+
+class _TextCtaState extends State<_TextCta> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.2,
+      color: Color(0xFFE86034),
+    );
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(widget.label, style: style),
+            const SizedBox(width: 6),
+            // typographic arrow, NOT Icon; nudges 4px right while pressed
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              transform: Matrix4.translationValues(_pressed ? 4 : 0, 0, 0),
+              child: const Text('→', style: style),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _PrimaryCardContent {
