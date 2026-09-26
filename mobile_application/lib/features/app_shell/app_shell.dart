@@ -236,7 +236,10 @@ class _AppShellState extends State<AppShell> {
   void _openCall(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => CallPage(safetyController: widget.safetyController),
+        builder: (_) => CallPage(
+          safetyController: widget.safetyController,
+          chatController: _chatController,
+        ),
       ),
     );
   }

@@ -198,6 +198,10 @@ class _ChatPageState extends State<ChatPage>
   int? _lastLatencyMs;
   void Function(void Function())? _modalSetState;
 
+  /// True while [CallPage] owns the shared socket: it records the call's
+  /// turns itself, so this page must not record them a second time.
+  var _callActive = false;
+
   @override
   void initState() {
     super.initState();
@@ -288,7 +292,7 @@ class _ChatPageState extends State<ChatPage>
     });
 
     _wsTranscriptFinalSub = _wsService.transcriptFinalStream.listen((data) {
-      if (!mounted) return;
+      if (!mounted || _callActive) return;
       final text = data['text'] as String? ?? '';
       final turnId = data['turn_id'] as String? ?? '';
       if (text.isNotEmpty) {
@@ -324,7 +328,7 @@ class _ChatPageState extends State<ChatPage>
     });
 
     _wsTranscriptFailedSub = _wsService.transcriptFailedStream.listen((data) {
-      if (!mounted) return;
+      if (!mounted || _callActive) return;
       final reason = data['reason'] as String? ?? '';
       final turnId = data['turn_id'] as String? ?? '';
       final label = reason == 'silence'
@@ -380,7 +384,7 @@ class _ChatPageState extends State<ChatPage>
     });
 
     _wsStartSub = _wsService.llmStartStream.listen((data) {
-      if (!mounted) return;
+      if (!mounted || _callActive) return;
       final msgId = 'msg_${DateTime.now().microsecondsSinceEpoch}';
       final uttId = data['utterance_id'] as String?;
       final turnId = data['turn_id'] as String?;
@@ -401,7 +405,7 @@ class _ChatPageState extends State<ChatPage>
     });
 
     _wsChunkSub = _wsService.llmChunkStream.listen((data) {
-      if (!mounted) return;
+      if (!mounted || _callActive) return;
       final delta = data['delta'] as String? ?? '';
       final uttId = data['utterance_id'] as String?;
       final turnId = data['turn_id'] as String?;
@@ -437,7 +441,7 @@ class _ChatPageState extends State<ChatPage>
     });
 
     _wsDoneSub = _wsService.llmDoneStream.listen((data) {
-      if (!mounted) return;
+      if (!mounted || _callActive) return;
       final finalText = data['text'] as String? ?? '';
       final uttId = data['utterance_id'] as String?;
       final turnId = data['turn_id'] as String?;
@@ -1013,6 +1017,7 @@ class _ChatPageState extends State<ChatPage>
           ),
           IconButton(
             onPressed: () {
+              setState(() => _callActive = true);
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => CallPage(
@@ -1020,9 +1025,20 @@ class _ChatPageState extends State<ChatPage>
                     webSocketService: _wsService,
                     audioRecorderService: _audioRecorder,
                     ttsPlaybackService: _ttsPlayback,
+                    chatController: _chatController,
                   ),
                 ),
-              );
+              ).then((_) {
+                if (!mounted) return;
+                setState(() => _callActive = false);
+                final conv = _chatController.activeConversation;
+                if (conv != null) {
+                  setState(() {
+                    _messages = conv.messages.map(_Msg.fromRecord).toList();
+                  });
+                  _scrollDown();
+                }
+              });
             },
             tooltip: 'Call Sol',
             icon: const Icon(Icons.phone_in_talk_rounded, size: 21),

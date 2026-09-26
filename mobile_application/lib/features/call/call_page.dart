@@ -7,10 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/models/chat_message_record.dart';
 import '../../services/audio_processor.dart';
 import '../../services/companion_websocket_service.dart';
 import '../../services/pcm_audio_recorder_service.dart';
 import '../../services/tts_playback_service.dart';
+import '../chat/chat_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'call_turn_controller.dart';
@@ -21,6 +23,7 @@ class CallPage extends StatefulWidget {
     this.webSocketService,
     this.audioRecorderService,
     this.ttsPlaybackService,
+    this.chatController,
     super.key,
   });
 
@@ -28,6 +31,10 @@ class CallPage extends StatefulWidget {
   final CompanionWebSocketService? webSocketService;
   final PcmAudioRecorderService? audioRecorderService;
   final TtsPlaybackService? ttsPlaybackService;
+
+  /// When present, the call's transcripts and Sol's replies are written into
+  /// the chat history instead of vanishing with the page.
+  final ChatController? chatController;
 
   @override
   State<CallPage> createState() => _CallPageState();
@@ -113,6 +120,14 @@ class _CallPageState extends State<CallPage> {
   double _ttsLevelRms = 0.0;
 
   bool _isLiveCall = false;
+
+  /// Sol's reply as it streams this response; committed to the chat history
+  /// once the utterance lands (or when the call ends mid-turn).
+  final _assistantTurnBuffer = StringBuffer();
+
+  /// Set when the server tore a response down (barge-in): its partial text is
+  /// never committed, only a resumed or fresh response is.
+  bool _assistantTurnCancelled = false;
 
   @override
   void initState() {
@@ -278,7 +293,9 @@ class _CallPageState extends State<CallPage> {
       final cancelled = data['cancelled'] as bool? ?? false;
       if (cancelled) {
         // Our own interruption tore down a response; only the visuals reset,
-        // the phase is already USER_SPEAKING.
+        // the phase is already USER_SPEAKING. Its half-spoken text stays out
+        // of the history.
+        _assistantTurnCancelled = true;
         _ttsStartedAtMs = -1;
         setState(() {
           _ariaSpeaking = false;
@@ -289,6 +306,7 @@ class _CallPageState extends State<CallPage> {
       }
       // Generation finished: this turn will send nothing else, so stop
       // matching events against it.
+      _commitAssistantTurn();
       _ttsStartedAtMs = -1;
       _turnId = null;
     });
@@ -340,6 +358,7 @@ class _CallPageState extends State<CallPage> {
     // A false interruption timed out and the assistant resumes from where it
     // stopped: the provisional barge-in reverts (spec 5.8).
     _on(_wsService?.ttsResumeStream, (Map<String, dynamic> data) {
+      _assistantTurnCancelled = false;
       _turn.onTtsResume(
         data['utterance_id'] as String?,
         data['from_ms'] as int? ?? 0,
@@ -347,6 +366,8 @@ class _CallPageState extends State<CallPage> {
     });
 
     _on(_wsService?.llmStartStream, (_) {
+      _assistantTurnBuffer.clear();
+      _assistantTurnCancelled = false;
       setState(() {
         if (_lines.length >= 2) _lines.removeAt(0);
         _lines.add(_CaptionLine(aria: true, words: []));
@@ -359,6 +380,9 @@ class _CallPageState extends State<CallPage> {
 
     _on(_wsService?.llmChunkStream, (Map<String, dynamic> data) {
       final delta = data['delta'] as String? ?? '';
+      if (delta.isNotEmpty) {
+        _assistantTurnBuffer.write(delta);
+      }
       if (delta.trim().isNotEmpty && _lines.isNotEmpty && _lines.last.aria) {
         final newWords = delta.trim().split(' ');
         setState(() {
@@ -378,6 +402,8 @@ class _CallPageState extends State<CallPage> {
         _flushInterruption();
       }
 
+      _commitUserTurn(text.trim());
+
       setState(() {
         if (_lines.length >= 2) _lines.removeAt(0);
         final words = text.split(' ');
@@ -386,6 +412,44 @@ class _CallPageState extends State<CallPage> {
         _lines.add(line);
       });
     });
+  }
+
+  // --- chat history ---------------------------------------------------------
+
+  void _commitUserTurn(String text) {
+    if (text.isEmpty || widget.chatController == null) return;
+    unawaited(
+      widget.chatController!.addMessage(
+        ChatMessageRecord(
+          id: ChatController.generateId('msg'),
+          isUser: true,
+          text: text,
+          timestamp: DateTime.now(),
+        ),
+      ),
+    );
+  }
+
+  /// Commit Sol's buffered reply. A response the server cancelled never
+  /// reaches the history (spec 7.5 barge-in).
+  void _commitAssistantTurn() {
+    if (_assistantTurnCancelled) {
+      _assistantTurnBuffer.clear();
+      return;
+    }
+    final responseText = _assistantTurnBuffer.toString().trim();
+    _assistantTurnBuffer.clear();
+    if (responseText.isEmpty || widget.chatController == null) return;
+    unawaited(
+      widget.chatController!.addMessage(
+        ChatMessageRecord(
+          id: ChatController.generateId('msg'),
+          isUser: false,
+          text: responseText,
+          timestamp: DateTime.now(),
+        ),
+      ),
+    );
   }
 
   // --- turn lifecycle --------------------------------------------------------
@@ -605,6 +669,7 @@ class _CallPageState extends State<CallPage> {
     _generation++;
     _releaseDelay();
     _ticker?.cancel();
+    _commitAssistantTurn();
 
     for (final sub in _subs) {
       sub.cancel();
@@ -793,6 +858,7 @@ class _CallPageState extends State<CallPage> {
       _wsService?.sendCallEnd(reason: 'user_ended_call');
       _wsService?.sendSessionConfigure(mode: 'chat_voice_playback');
     }
+    _commitAssistantTurn();
     _turn.onCallEnded();
   }
 
