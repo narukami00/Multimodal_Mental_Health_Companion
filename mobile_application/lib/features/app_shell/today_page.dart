@@ -1001,18 +1001,22 @@ class _LivingCompanionOrbState extends State<_LivingCompanionOrb>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 3800),
-  );
-  late final Animation<double> _pulse = CurvedAnimation(
-    parent: _ctrl,
-    curve: Curves.easeInOut,
+    duration: const Duration(milliseconds: 6200),
   );
 
   @override
   void initState() {
     super.initState();
     if (!_isTestEnvironment) {
-      _ctrl.repeat(reverse: true);
+      _ctrl.repeat();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isTestEnvironment && MediaQuery.disableAnimationsOf(context)) {
+      _ctrl.stop();
     }
   }
 
@@ -1024,66 +1028,290 @@ class _LivingCompanionOrbState extends State<_LivingCompanionOrb>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _pulse,
-      builder: (_, __) {
-        final t = _pulse.value;
-        return Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            // Ambient warm breathing glow
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFFB534)
-                        .withValues(alpha: 0.25 + 0.20 * t),
-                    blurRadius: 10 + 6 * t,
-                    spreadRadius: 1 + 1.5 * t,
-                  ),
-                ],
-              ),
-            ),
-            // Luminous golden sun-drop orb with gentle breathing scale
-            Transform.scale(
-              scale: 1.0 + 0.05 * t,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const RadialGradient(
-                    center: Alignment(-0.35, -0.4),
-                    radius: 0.95,
-                    colors: [
-                      Color(0xFFFFE8B5),
-                      Color(0xFFFFB534),
-                      Color(0xFFFF7F50),
-                    ],
-                    stops: [0.0, 0.52, 1.0],
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    width: 1.2,
-                  ),
-                ),
-                child: Center(
+    return SizedBox(
+      width: 42,
+      height: 42,
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: _WaterBubblePainter(animation: _ctrl),
+          child: Center(
+            child: AnimatedBuilder(
+              animation: _ctrl,
+              builder: (context, _) {
+                final tau = _ctrl.value * 2 * math.pi;
+                return Transform.translate(
+                  offset: Offset(0, math.sin(tau) * 0.8),
                   child: Icon(
                     Icons.bubble_chart_rounded,
                     size: 16,
-                    color: Colors.white.withValues(alpha: 0.92),
+                    color: Colors.white.withValues(alpha: 0.94),
+                    shadows: [
+                      Shadow(
+                        color: const Color(0xFF9E3D0A).withValues(alpha: 0.40),
+                        blurRadius: 3.5,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
-                ),
-              ),
+                );
+              },
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ),
     );
+  }
+}
+
+class _WaterBubblePainter extends CustomPainter {
+  _WaterBubblePainter({required this.animation}) : super(repaint: animation);
+
+  final Animation<double> animation;
+
+  static Path _buildClosedFluidSpline(List<Offset> points) {
+    final path = Path();
+    final count = points.length;
+    if (count < 3) return path;
+
+    final midPoints = List<Offset>.generate(count, (i) {
+      final p0 = points[i];
+      final p1 = points[(i + 1) % count];
+      return Offset((p0.dx + p1.dx) / 2, (p0.dy + p1.dy) / 2);
+    });
+
+    path.moveTo(midPoints[count - 1].dx, midPoints[count - 1].dy);
+    for (var i = 0; i < count; i++) {
+      path.quadraticBezierTo(
+        points[i].dx,
+        points[i].dy,
+        midPoints[i].dx,
+        midPoints[i].dy,
+      );
+    }
+    path.close();
+    return path;
+  }
+
+  static Path _generateFluidBlob({
+    required Offset center,
+    required double radius,
+    required double tau,
+    required double rotation,
+    required double amp1,
+    required double amp2,
+    required double amp3,
+    double phase1 = 0.0,
+    double phase2 = 1.1,
+    double phase3 = 2.3,
+    int freq1 = 1,
+    int freq2 = -1,
+    int freq3 = 2,
+  }) {
+    const numPoints = 36;
+    final points = <Offset>[];
+
+    for (var i = 0; i < numPoints; i++) {
+      final theta = (i / numPoints) * 2 * math.pi;
+
+      final harmR = 1.0 +
+          amp1 * math.sin(2 * theta + freq1 * tau + phase1) +
+          amp2 * math.cos(3 * theta + freq2 * tau + phase2) +
+          amp3 * math.sin(5 * theta + freq3 * tau + phase3);
+
+      final r = radius * harmR;
+      final rotTheta = theta + rotation;
+      final x = center.dx + r * math.cos(rotTheta);
+      final y = center.dy + r * math.sin(rotTheta);
+      points.add(Offset(x, y));
+    }
+
+    return _buildClosedFluidSpline(points);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final baseRadius = size.width * 0.39; // ~16.4dp on 42x42
+    final tau = animation.value * 2 * math.pi;
+
+    // 1. Radiant Living Atmosphere Glow (breathing warm aura)
+    final glowPulse = 0.28 + 0.12 * math.sin(tau);
+    final glowRadius = baseRadius * 1.38;
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFFFB534).withValues(alpha: glowPulse),
+          const Color(0xFFFF7F50).withValues(alpha: glowPulse * 0.5),
+          const Color(0xFFFF7F50).withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 0.52, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: glowRadius));
+    canvas.drawCircle(center, glowRadius, glowPaint);
+
+    // 2. Primary Fluid Water Bubble Body
+    final outerPath = _generateFluidBlob(
+      center: center,
+      radius: baseRadius * (1.0 + 0.032 * math.sin(tau)),
+      tau: tau,
+      rotation: tau, // 1 complete slow clockwise rotation per 6.2s period
+      amp1: 0.052,
+      amp2: 0.036,
+      amp3: 0.016,
+    );
+
+    // Orbiting gradient center creates rich fluid refraction
+    final orbitX = 0.32 * math.cos(tau) - 0.12;
+    final orbitY = 0.32 * math.sin(tau) - 0.18;
+    final bodyPaint = Paint()
+      ..shader = RadialGradient(
+        center: Alignment(orbitX, orbitY),
+        radius: 0.98,
+        colors: const [
+          Color(0xFFFFF1D6), // Sunlight reflection core
+          Color(0xFFFFC248), // Golden honey body
+          Color(0xFFFF8B3D), // Warm amber refraction
+          Color(0xFFFF6238), // Soft coral water depth
+        ],
+        stops: [0.0, 0.36, 0.72, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: baseRadius * 1.15));
+    canvas.drawPath(outerPath, bodyPaint);
+
+    // 3. Inner Counter-Swirling Liquid Depth
+    final innerCenter = Offset(
+      center.dx - baseRadius * 0.08 * math.cos(tau),
+      center.dy - baseRadius * 0.08 * math.sin(tau),
+    );
+    final innerPath = _generateFluidBlob(
+      center: innerCenter,
+      radius: baseRadius * 0.66 * (1.0 + 0.04 * math.cos(tau)),
+      tau: tau,
+      rotation: -tau, // Counter-rotating for 3D liquid shear
+      amp1: 0.060,
+      amp2: 0.042,
+      amp3: 0.018,
+      freq1: -2,
+      freq2: 1,
+      freq3: -2,
+      phase1: 0.8,
+      phase2: 2.1,
+      phase3: 1.4,
+    );
+
+    final innerPaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.25, -0.25),
+        radius: 0.88,
+        colors: [
+          Colors.white.withValues(alpha: 0.45),
+          const Color(0xFFFFE6A8).withValues(alpha: 0.28),
+          const Color(0xFFFF953E).withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 0.48, 1.0],
+      ).createShader(
+        Rect.fromCircle(center: innerCenter, radius: baseRadius * 0.72),
+      );
+    canvas.drawPath(innerPath, innerPaint);
+
+    // 4. Floating Micro-Bubbles (effervescent liquid droplets inside)
+    final mb1Center = Offset(
+      center.dx + math.sin(tau) * (baseRadius * 0.28),
+      center.dy + math.cos(tau) * (baseRadius * 0.20) - 1.8,
+    );
+    canvas.drawCircle(
+      mb1Center,
+      1.7,
+      Paint()..color = Colors.white.withValues(alpha: 0.40),
+    );
+    canvas.drawCircle(
+      Offset(mb1Center.dx - 0.4, mb1Center.dy - 0.4),
+      0.6,
+      Paint()..color = Colors.white.withValues(alpha: 0.90),
+    );
+
+    final mb2Center = Offset(
+      center.dx - math.cos(tau) * (baseRadius * 0.24),
+      center.dy + math.sin(tau) * (baseRadius * 0.22) + 2.2,
+    );
+    canvas.drawCircle(
+      mb2Center,
+      1.2,
+      Paint()..color = Colors.white.withValues(alpha: 0.30),
+    );
+    canvas.drawCircle(
+      Offset(mb2Center.dx - 0.3, mb2Center.dy - 0.3),
+      0.4,
+      Paint()..color = Colors.white.withValues(alpha: 0.85),
+    );
+
+    // 5. Specular Water Bubble Caustics & Sheen
+    // Top-Left Primary Specular Arc Highlight
+    final sheenCenter = Offset(
+      center.dx - baseRadius * (0.32 + 0.025 * math.sin(tau)),
+      center.dy - baseRadius * (0.36 + 0.025 * math.cos(tau)),
+    );
+    final sheenRadius = baseRadius * 0.40;
+    final sheenPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white.withValues(alpha: 0.88),
+          Colors.white.withValues(alpha: 0.30),
+          Colors.white.withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 0.45, 1.0],
+      ).createShader(Rect.fromCircle(center: sheenCenter, radius: sheenRadius));
+    canvas.drawCircle(sheenCenter, sheenRadius, sheenPaint);
+
+    // Secondary Pinpoint Glint (water shine)
+    final glintCenter = Offset(
+      center.dx - baseRadius * (0.50 + 0.015 * math.cos(tau)),
+      center.dy - baseRadius * (0.12 + 0.015 * math.sin(tau)),
+    );
+    canvas.drawCircle(
+      glintCenter,
+      1.3,
+      Paint()..color = Colors.white.withValues(alpha: 0.85),
+    );
+
+    // Bottom-Right Subsurface Caustic Bounce
+    final bounceCenter = Offset(
+      center.dx + baseRadius * (0.28 + 0.02 * math.cos(tau)),
+      center.dy + baseRadius * (0.30 + 0.02 * math.sin(tau)),
+    );
+    final bounceRadius = baseRadius * 0.42;
+    final bouncePaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFFFE8C2).withValues(alpha: 0.35),
+          const Color(0xFFFFB534).withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(
+        Rect.fromCircle(center: bounceCenter, radius: bounceRadius),
+      );
+    canvas.drawCircle(bounceCenter, bounceRadius, bouncePaint);
+
+    // 6. Surface-Tension Shimmer Rim Stroke
+    final rimPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.15
+      ..shader = SweepGradient(
+        startAngle: 0.0,
+        endAngle: 2 * math.pi,
+        transform: GradientRotation(tau - math.pi * 0.75),
+        colors: [
+          Colors.white.withValues(alpha: 0.88),
+          Colors.white.withValues(alpha: 0.35),
+          const Color(0xFFFFCA7A).withValues(alpha: 0.22),
+          Colors.white.withValues(alpha: 0.88),
+        ],
+        stops: const [0.0, 0.38, 0.70, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: baseRadius * 1.15));
+    canvas.drawPath(outerPath, rimPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WaterBubblePainter oldDelegate) {
+    return oldDelegate.animation.value != animation.value;
   }
 }
 
