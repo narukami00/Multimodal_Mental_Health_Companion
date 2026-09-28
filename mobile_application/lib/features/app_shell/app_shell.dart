@@ -226,6 +226,7 @@ class _AppShellState extends State<AppShell> {
         builder: (_) => ChatPage(
           safetyController: widget.safetyController,
           chatController: _chatController,
+          autoConnect: true,
         ),
       ),
     ).then((_) {

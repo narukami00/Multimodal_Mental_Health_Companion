@@ -29,7 +29,7 @@ class ChatPage extends StatefulWidget {
     this.webSocketService,
     this.audioRecorderService,
     this.ttsPlaybackService,
-    this.autoConnect = false,
+    this.autoConnect = true,
     super.key,
   });
 
@@ -505,7 +505,9 @@ class _ChatPageState extends State<ChatPage> {
     _loadSavedServerConfig();
 
     if (widget.autoConnect &&
-        _wsStatus == CompanionConnectionStatus.disconnected) {
+        !CompanionServerConfig.isTestEnvironment &&
+        _wsStatus != CompanionConnectionStatus.connected &&
+        _wsStatus != CompanionConnectionStatus.connecting) {
       _wsService.connect(sessionId: _chatController.activeConversation?.id);
     }
   }
@@ -576,7 +578,7 @@ class _ChatPageState extends State<ChatPage> {
       _messages = newConv.messages.map(_Msg.fromRecord).toList();
       _chips = List.of(_initialChips);
     });
-    if (_wsStatus == CompanionConnectionStatus.connected) {
+    if (widget.autoConnect && !CompanionServerConfig.isTestEnvironment) {
       _wsService.connect(sessionId: newConv.id);
     }
   }
@@ -593,7 +595,7 @@ class _ChatPageState extends State<ChatPage> {
           _chips = List.of(_initialChips);
         }
       });
-      if (_wsStatus == CompanionConnectionStatus.connected) {
+      if (widget.autoConnect && !CompanionServerConfig.isTestEnvironment) {
         _wsService.connect(sessionId: conv.id);
       }
       _scrollDown();
@@ -637,6 +639,14 @@ class _ChatPageState extends State<ChatPage> {
         _wsService.port = savedPort;
       }
       if (mounted) setState(() {});
+
+      // Auto-connect once config is loaded if not already connected/connecting
+      if (widget.autoConnect &&
+          !CompanionServerConfig.isTestEnvironment &&
+          _wsService.status != CompanionConnectionStatus.connected &&
+          _wsService.status != CompanionConnectionStatus.connecting) {
+        _wsService.connect(sessionId: _chatController.activeConversation?.id);
+      }
     }).catchError((_) {});
   }
 

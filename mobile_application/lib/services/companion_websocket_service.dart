@@ -271,12 +271,14 @@ class CompanionWebSocketService {
       final channel = WebSocketChannel.connect(uri);
       _channel = channel;
 
-      // 4s timeout for socket connection
+      final timeoutDuration = CompanionServerConfig.isTestEnvironment
+          ? const Duration(milliseconds: 100)
+          : const Duration(seconds: 4);
       await channel.ready.timeout(
-        const Duration(seconds: 4),
+        timeoutDuration,
         onTimeout: () {
           throw TimeoutException(
-            'Connection to $candidateHost:$candidatePort timed out (4s)',
+            'Connection to $candidateHost:$candidatePort timed out (${timeoutDuration.inSeconds}s)',
           );
         },
       );
@@ -882,10 +884,14 @@ class CompanionWebSocketService {
   void _safeClose(WebSocketChannel? ch) {
     if (ch == null) return;
     try {
-      ch.sink.close().timeout(
-        const Duration(milliseconds: 250),
-        onTimeout: () => null,
-      );
+      if (CompanionServerConfig.isTestEnvironment) {
+        unawaited(ch.sink.close());
+      } else {
+        ch.sink.close().timeout(
+          const Duration(milliseconds: 250),
+          onTimeout: () => null,
+        );
+      }
     } catch (_) {}
   }
 

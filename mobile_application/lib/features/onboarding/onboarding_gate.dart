@@ -59,7 +59,10 @@ class _OnboardingGateState extends State<OnboardingGate> {
     try {
       final route = Uri.base.queryParameters['route'];
       if (route == 'chat') {
-        return ChatPage(safetyController: widget.safetyController);
+        return ChatPage(
+          safetyController: widget.safetyController,
+          autoConnect: true,
+        );
       }
       if (route == 'history') {
         return Scaffold(
