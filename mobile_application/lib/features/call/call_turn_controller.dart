@@ -157,10 +157,11 @@ const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   (CallPhase.idle, TurnEvent.turnStarted): CallPhase.userSpeaking,
   (CallPhase.idle, TurnEvent.localOnset): CallPhase.userSpeaking,
   (CallPhase.idle, TurnEvent.speechDetected): CallPhase.userSpeaking,
-  (CallPhase.idle, TurnEvent.interrupted): CallPhase.assistantSpeaking,
+  (CallPhase.idle, TurnEvent.interrupted): CallPhase.userSpeaking,
   (CallPhase.idle, TurnEvent.firstToken): CallPhase.thinking,
   (CallPhase.idle, TurnEvent.firstAudioFrame): CallPhase.assistantSpeaking,
   (CallPhase.idle, TurnEvent.processing): CallPhase.thinking,
+  (CallPhase.idle, TurnEvent.ttsComplete): CallPhase.idle,
   // USER_SPEAKING
   // Confirmations of a turn the client already opened locally: no change.
   (CallPhase.userSpeaking, TurnEvent.turnStarted): CallPhase.userSpeaking,
@@ -175,6 +176,7 @@ const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   (CallPhase.userSpeaking, TurnEvent.discarded): CallPhase.idle,
   (CallPhase.userSpeaking, TurnEvent.cancelled): CallPhase.idle,
   (CallPhase.userSpeaking, TurnEvent.interrupted): CallPhase.assistantSpeaking,
+  (CallPhase.userSpeaking, TurnEvent.ttsComplete): CallPhase.userSpeaking,
   // THINKING
   // The user reclaimed the floor while a response was still in flight.
   (CallPhase.thinking, TurnEvent.localOnset): CallPhase.userSpeaking,
@@ -185,7 +187,8 @@ const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   (CallPhase.thinking, TurnEvent.firstAudioFrame): CallPhase.assistantSpeaking,
   (CallPhase.thinking, TurnEvent.discarded): CallPhase.idle,
   (CallPhase.thinking, TurnEvent.cancelled): CallPhase.idle,
-  (CallPhase.thinking, TurnEvent.interrupted): CallPhase.assistantSpeaking,
+  (CallPhase.thinking, TurnEvent.interrupted): CallPhase.userSpeaking,
+  (CallPhase.thinking, TurnEvent.ttsComplete): CallPhase.idle,
   // MUTED / ENDED absorb a late server event without leaving their state.
   (CallPhase.muted, TurnEvent.cancelled): CallPhase.muted,
   (CallPhase.muted, TurnEvent.discarded): CallPhase.muted,
@@ -428,7 +431,13 @@ class CallTurnController extends ChangeNotifier {
     if (_ended || _muted == muted) return;
     _muted = muted;
     final from = currentPhase;
-    final to = muted ? CallPhase.muted : _phaseBeforeMute;
+    final to = muted
+        ? CallPhase.muted
+        : (_phaseBeforeMute == CallPhase.muted ||
+                _phaseBeforeMute == CallPhase.thinking ||
+                _phaseBeforeMute == CallPhase.assistantSpeaking
+            ? CallPhase.idle
+            : _phaseBeforeMute);
     if (from != CallPhase.muted) {
       _tau = _transitionTau[(from, to)] ?? 0.35;
     }

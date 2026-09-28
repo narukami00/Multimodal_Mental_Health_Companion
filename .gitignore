@@ -37,6 +37,8 @@ debug_recordings/
 *.wav
 models/
 companion_server/models/
+dataset_samples/
+*.png
 
 # Feature specifications
 docs/specifications/

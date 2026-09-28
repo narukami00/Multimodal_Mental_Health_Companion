@@ -48,7 +48,7 @@ class AdaptiveNoiseFloor {
   /// Asymmetric: a door slam (fast up) is tracked, a lull (slow down) is not
   /// mistaken for a permanently louder room.
   static const double alphaUp = 0.40; // ~4 frames to track +6 dB
-  static const double alphaDown = 0.985; // ~67 frames to track -6 dB
+  static const double alphaDown = 0.015; // ~67 frames to track -6 dB
 
   /// Ambiguity band, mirroring the gate's own band. Only frames below
   /// [negThreshold] may update the estimate.
@@ -449,12 +449,17 @@ class AudioProcessor {
     final now = nowMs;
     final rms = computeRms(frame, floorRms: noiseFloor.floorRms);
 
-    // Classify against current floor. Ambient room noise when the gate is idle
-    // (RMS < 1200 / 32768) updates the noise floor so turn-taking never locks.
+    // Classify against current floor.
+    // If the assistant is speaking or echo is active, the microphone is picking up
+    // the loudspeaker/reverb — never adapt the ambient noise floor to our own voice.
+    // Any frame at or above the gate's exit threshold (offDb) is a speech candidate,
+    // not background noise.
+    final playbackActive = assistantSpeaking || echo.playbackActive;
     final provisional = noiseFloor.snrDb(rms);
-    final isSpeechProb = gate.state == GateState.speech ||
+    final isSpeechProb = playbackActive ||
+        gate.state == GateState.speech ||
         gate.state == GateState.onsetRun ||
-        (provisional >= gate.onDbSilent && rms >= (1200 / _fullScale));
+        provisional >= gate.offDb;
     noiseFloor.update(
       rms: rms,
       speechProb: isSpeechProb ? 1.0 : 0.0,
@@ -499,6 +504,7 @@ class AudioProcessor {
 
   void reset() {
     noiseFloor.reset();
+    echo.reset();
     gate.reset();
     preRoll.clear();
   }

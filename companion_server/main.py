@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 import struct
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
 import wave
 
@@ -201,6 +201,7 @@ async def stream_llm_response(
     stream_id_counter: Optional[list] = None,
     active_generation: Optional[dict] = None,
     is_voice_turn: bool = False,
+    on_phase_change: Optional[Callable] = None,
 ):
     """Streams real-time token-by-token LLM generation and synchronized TTS audio over WebSocket."""
     assistant_turn_id = f"asst_{uuid4().hex[:8]}"
@@ -312,6 +313,7 @@ async def stream_llm_response(
             last_frame_at = 0.0
 
             seg_idx = 0
+            phase_notified = False
             try:
                 while True:
                     chunk_text = await sentence_queue.get()
@@ -337,6 +339,11 @@ async def stream_llm_response(
                     pcm = audio_res.pcm_bytes
                     if not pcm:
                         continue
+
+                    # Transition to ASSISTANT_SPEAKING on the first audio segment.
+                    if not phase_notified and on_phase_change is not None:
+                        await on_phase_change(CallPhase.ASSISTANT_SPEAKING, "tts_first_segment")
+                        phase_notified = True
 
                     # Send segment start notification
                     await websocket.send_text(json.dumps({
@@ -553,6 +560,10 @@ async def stream_llm_response(
                 await tts_task
             except Exception as err:
                 logger.error(f"Error awaiting TTS task: {err}")
+        if on_phase_change is not None and not tts_cancel_event.is_set():
+            await on_phase_change(CallPhase.IDLE, "tts_complete")
+    elif on_phase_change is not None and not llm_cancel_event.is_set():
+        await on_phase_change(CallPhase.IDLE, "llm_complete")
 
 @app.websocket("/ws/v1/session")
 async def websocket_session(
@@ -860,6 +871,9 @@ async def websocket_session(
                     reason = data.get("reason", "barge_in")
                     logger.info(f"Call barge-in received: turn={turn_id}, utt={utterance_id}, reason={reason}")
                     cancel_active(cancel_tts=True, cancel_llm=True, reason=reason)
+                    # Close any in-flight audio turn so new input.start can take over.
+                    if current_audio_turn_id and current_audio_turn_id in active_audio_turns:
+                        close_turn(current_audio_turn_id)
                     await websocket.send_text(json.dumps({
                         "v": 1,
                         "type": "call.state",
@@ -881,6 +895,9 @@ async def websocket_session(
                     )
                     active_generation["truncate_to_ms"] = played_ms
                     cancel_active(cancel_tts=True, cancel_llm=True, reason="user_speech")
+                    # Close any in-flight audio turn so new input.start can take over.
+                    if current_audio_turn_id and current_audio_turn_id in active_audio_turns:
+                        close_turn(current_audio_turn_id)
                     await notify_tts_cancelled("user_speech")
                     await set_phase(CallPhase.USER_SPEAKING, "client_interrupted")
 
@@ -995,10 +1012,13 @@ async def websocket_session(
                         "vad": await asyncio.to_thread(stt.new_streaming_vad, sample_rate)
                         if is_duplex else None,
                     }
-                    # Never orphan an existing open turn: the newest one does not
-                    # silently steal the buffer pointer from a turn in flight.
-                    if current_audio_turn_id is None:
-                        current_audio_turn_id = turn_id
+                    # Always take over: close any stale turn so new audio is
+                    # routed to the current turn, not an orphaned one.
+                    if current_audio_turn_id is not None and current_audio_turn_id != turn_id:
+                        stale = current_audio_turn_id
+                        close_turn(stale)
+                        logger.info(f"Closed stale turn {stale} for new turn {turn_id}")
+                    current_audio_turn_id = turn_id
                     logger.info(
                         f"Turn started: {turn_id} "
                         f"(sr={sample_rate}, ch={channels}, frame_ms={frame_ms}, framed={is_framed}, "
@@ -1182,6 +1202,7 @@ async def websocket_session(
                             stream_id_counter=stream_id_counter,
                             active_generation=active_generation,
                             is_voice_turn=True,
+                            on_phase_change=set_phase if is_duplex else None,
                         )
                     )
                     active_generation["llm_task"] = task

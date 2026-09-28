@@ -82,6 +82,17 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('MUTED'), findsOneWidget);
 
+    // Unmute restores clean mic state
+    await tester.tap(find.byIcon(Icons.mic_none_rounded), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('MIC ON'), findsOneWidget);
+
+    // Raise hand button is rendered and toggles to listening state
+    expect(find.text('RAISE HAND'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.front_hand_rounded), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('LISTENING'), findsOneWidget);
+
     await tester.tap(find.byIcon(Icons.videocam_outlined).last, warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('CAM ON'), findsOneWidget);

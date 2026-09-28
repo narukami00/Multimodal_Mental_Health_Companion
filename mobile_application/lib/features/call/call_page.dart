@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/companion_server_config.dart';
@@ -77,7 +77,7 @@ class _CallPageState extends State<CallPage> {
   var _generation = 0;
   var _muted = false;
   var _camera = false;
-  var _speaker = true;
+  var _handRaised = false;
   var _paused = false;
   var _ended = false;
   var _ariaSpeaking = false;
@@ -221,6 +221,7 @@ class _CallPageState extends State<CallPage> {
     _turnOpen = false;
     _gateOpen = false;
     _pendingOnset = false;
+    _handRaised = false;
     _silenceSinceMs = -1;
 
     _wsService?.sendSessionConfigure(
@@ -278,16 +279,30 @@ class _CallPageState extends State<CallPage> {
     _on(_ttsPlayback?.playingStream, (bool playing) {
       final wasSpeaking = _ariaSpeaking;
       setState(() {
-        _ariaSpeaking = playing || (_ttsPlayback?.isReceivingStream ?? false);
+        _ariaSpeaking = playing;
       });
       _syncEchoFilter();
       if (playing) {
         _assistantSinceMs = _nowMs;
       } else if (wasSpeaking && !_ariaSpeaking) {
         // Playback drained: ASSISTANT_SPEAKING -> IDLE.
-        if (_turn.currentPhase == CallPhase.assistantSpeaking &&
-            !_pendingOnset) {
+        // Instantly purge loudspeaker leakage from echo filter, gate, and floor
+        // so the user's voice is recognized immediately without delay!
+        final p = _audioRecorder?.processor;
+        if (p != null) {
+          p.echo.reset();
+          p.gate.reset();
+          p.noiseFloor.reset();
+          p.preRoll.clear();
+        }
+        _gateOpen = false;
+        _pendingOnset = false;
+        _silenceSinceMs = -1;
+        if (_turn.currentPhase != CallPhase.userSpeaking) {
           _turn.onTtsComplete();
+          if (_turn.currentPhase != CallPhase.idle) {
+            _turn.phase.value = CallPhase.idle;
+          }
         }
       }
     });
@@ -324,6 +339,23 @@ class _CallPageState extends State<CallPage> {
       _commitAssistantTurn();
       _ttsStartedAtMs = -1;
       _turnId = null;
+      if (!_ariaSpeaking && _turn.currentPhase != CallPhase.userSpeaking) {
+        _turn.onTtsComplete();
+        if (_turn.currentPhase != CallPhase.idle) {
+          _turn.phase.value = CallPhase.idle;
+        }
+      }
+    });
+
+    _on(_wsService?.callStateStream, (Map<String, dynamic> data) {
+      final state = data['state'] as String? ?? data['phase'] as String?;
+      if (state == 'idle' || state == 'listening') {
+        if (!_turnOpen && !_muted && _turn.currentPhase != CallPhase.userSpeaking) {
+          if (_turn.currentPhase != CallPhase.idle) {
+            _turn.phase.value = CallPhase.idle;
+          }
+        }
+      }
     });
 
     _on(_wsService?.turnStartedStream, (Map<String, dynamic> data) {
@@ -615,6 +647,7 @@ class _CallPageState extends State<CallPage> {
     final durationMs = p == null ? 0 : (p.nowMs - _turnOpenedAtMs);
     _turnOpen = false;
     _silenceSinceMs = -1;
+    _handRaised = false;
     if (p != null && p.gate.speechConfirmed && p.gate.lastSpeechMs >= 0) {
       // Adaptive endpoint deadline learns from the gaps this client emitted.
       p.gate.noteAcceptedGap(p.nowMs - p.gate.lastSpeechMs);
@@ -626,6 +659,7 @@ class _CallPageState extends State<CallPage> {
       durationMs: durationMs,
       reason: reason,
     ));
+    if (mounted) setState(() {});
   }
 
   /// The silence deadline, and the hard cap no detector may exceed
@@ -846,18 +880,94 @@ class _CallPageState extends State<CallPage> {
       _turnId = null;
       _pendingOnset = false;
       _gateOpen = false;
+      _handRaised = false;
       _silenceSinceMs = -1;
       _syncEchoFilter();
+    } else {
+      // Unmuting: purge any stale audio, reset filters cleanly so user is heard immediately!
+      final p = _audioRecorder?.processor;
+      if (p != null) {
+        p.reset();
+      }
+      _turnOpen = false;
+      _turnId = null;
+      _pendingOnset = false;
+      _gateOpen = false;
+      _handRaised = false;
+      _silenceSinceMs = -1;
+      _syncEchoFilter();
+      if (!_ariaSpeaking && _turn.currentPhase != CallPhase.idle) {
+        _turn.reset();
+      }
     }
+  }
+
+  void _onRaiseHand() {
+    if (_ended) return;
+    HapticFeedback.heavyImpact();
+    debugPrint('[CallPage] Raise hand pressed: interrupting AI and forcing mic capture');
+
+    // 1. Unmute if muted
+    if (_muted) {
+      _muted = false;
+      _turn.onMicMutedChanged(false);
+    }
+
+    // 2. Stop assistant speech immediately
+    _ttsPlayback?.stopVoice(fadeMs: 10);
+    _ariaSpeaking = false;
+    _ttsLevelRms = 0.0;
+    final playedMs = _ttsStartedAtMs >= 0
+        ? (_nowMs - _ttsStartedAtMs).clamp(0, 60000)
+        : 0;
+    _ttsStartedAtMs = -1;
+
+    // 3. Signal server to cancel TTS and LLM, and interrupt the turn
+    _wsService?.sendCallBargeIn(reason: 'user_raised_hand');
+    _wsService?.sendSpeechCancel(
+      cancelTts: true,
+      cancelLlm: true,
+      reason: 'user_raised_hand',
+    );
+    _wsService?.sendTurnInterrupted(
+      turnId: _turnId ?? 'call_$_nowMs',
+      playedMs: playedMs,
+    );
+
+    // 4. Reset audio filters completely
+    final p = _audioRecorder?.processor;
+    if (p != null) {
+      p.echo.reset();
+      p.gate.reset();
+      p.noiseFloor.reset();
+      p.preRoll.clear();
+    }
+
+    // 5. Cancel any prior in-flight user turn
+    if (_turnOpen && _turnId != null) {
+      _wsService?.sendTurnCancel(turnId: _turnId!, reason: 'user_raised_hand');
+    }
+
+    // 6. Force-open a fresh user turn and transition to userSpeaking
+    _turnOpen = false;
+    _gateOpen = true;
+    _pendingOnset = false;
+    _silenceSinceMs = -1;
+    final newTurnId = 'call_hand_$_nowMs';
+    _turn.onInterrupted(turnId: newTurnId, playedMs: playedMs);
+    _turn.phase.value = CallPhase.userSpeaking;
+    _openUserTurn(newTurnId);
+
+    setState(() {
+      _handRaised = true;
+      _ariaSpeaking = false;
+    });
+    _syncEchoFilter();
   }
 
   void _toggleCamera() {
     if (_ended) return;
     setState(() => _camera = !_camera);
-  }
-
-  void _toggleSpeaker() {
-    setState(() => _speaker = !_speaker);
   }
 
   void _endSession() {
@@ -867,6 +977,7 @@ class _CallPageState extends State<CallPage> {
       _paused = false;
       _generation++;
       _ariaSpeaking = false;
+      _handRaised = false;
     });
     _releaseDelay();
 
@@ -891,6 +1002,7 @@ class _CallPageState extends State<CallPage> {
       _lineIndex = 0;
       _lines.clear();
       _generation++;
+      _handRaised = false;
     });
     _releaseDelay();
     _turn.reset();
@@ -898,6 +1010,7 @@ class _CallPageState extends State<CallPage> {
     _turnOpen = false;
     _gateOpen = false;
     _pendingOnset = false;
+    _handRaised = false;
     _silenceSinceMs = -1;
     if (_isLiveCall) {
       _startLiveDuplexCall();
@@ -1277,11 +1390,11 @@ class _CallPageState extends State<CallPage> {
               slashed: _muted,
             ),
             _Ctrl(
-              label: _speaker ? 'Speaker' : 'Earpiece',
-              active: _speaker,
-              onTap: _toggleSpeaker,
-              icon: _speaker ? Icons.volume_up_rounded : Icons.hearing_rounded,
-              slashed: !_speaker,
+              label: _handRaised ? 'Listening' : 'Raise hand',
+              active: _handRaised || _turn.currentPhase == CallPhase.userSpeaking,
+              onTap: _onRaiseHand,
+              icon: Icons.front_hand_rounded,
+              slashed: false,
             ),
             _Ctrl(
               label: _camera ? 'Cam on' : 'Cam off',

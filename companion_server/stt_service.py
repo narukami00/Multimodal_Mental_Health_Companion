@@ -284,7 +284,7 @@ class SttService:
             beam_size=1,
             language="en",
             temperature=0.0,
-            vad_filter=False,
+            vad_filter=True,
         )
 
         texts = []
