@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import '../core/constants/companion_server_config.dart';
 
 enum CompanionConnectionStatus {
   disconnected,
@@ -19,8 +20,8 @@ enum CompanionConnectionStatus {
 ///   - Exponential backoff auto-reconnect on network drop
 class CompanionWebSocketService {
   CompanionWebSocketService({
-    this.host = '127.0.0.1',
-    this.port = 8000,
+    this.host = CompanionServerConfig.defaultTailscaleIp,
+    this.port = CompanionServerConfig.defaultPort,
     this.token = 'local-auth-token',
   });
 
@@ -186,11 +187,14 @@ class CompanionWebSocketService {
   }
 
   /// Connect to the companion backend.
+  /// If [customHost] is not provided and the primary [host] fails, attempts
+  /// candidate fallbacks from [CompanionServerConfig.candidateHosts] (Tailscale -> MagicDNS -> LAN -> USB).
   Future<void> connect({
     String? customHost,
     int? customPort,
     String? sessionId,
     String? threadId,
+    bool allowFallback = true,
   }) async {
     if (_isDisposed) return;
     final seq = ++_connectSequence;
@@ -212,29 +216,74 @@ class CompanionWebSocketService {
         'sess_${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}';
     _threadId ??= 'thread_main';
 
-    final uri = Uri.parse(
-      'ws://$host:$port/ws/v1/session?session_id=$_sessionId&token=$token',
-    );
     _updateStatus(CompanionConnectionStatus.connecting);
 
-    try {
-      await _cleanUpConnection(resetManual: false);
+    final shouldTryFallback = customHost == null &&
+        customPort == null &&
+        allowFallback &&
+        !CompanionServerConfig.isTestEnvironment;
+
+    final hostsToTry = shouldTryFallback
+        ? [host, ...CompanionServerConfig.candidateHosts.where((h) => h != host)]
+        : [host];
+
+    for (var i = 0; i < hostsToTry.length; i++) {
+      final currentCandidate = hostsToTry[i];
       if (seq != _connectSequence || _isDisposed) return;
 
+      final success = await _attemptSingleConnect(
+        candidateHost: currentCandidate,
+        candidatePort: port,
+        seq: seq,
+      );
+
+      if (success) {
+        host = currentCandidate;
+        debugPrint('[CompanionWS] Successfully connected via $host:$port');
+        return;
+      }
+
+      if (i < hostsToTry.length - 1) {
+        debugPrint(
+          '[CompanionWS] Connection to $currentCandidate:$port failed, trying fallback: ${hostsToTry[i + 1]}',
+        );
+      }
+    }
+
+    if (seq != _connectSequence || _isDisposed) return;
+    _wasConnected = false;
+    _updateStatus(CompanionConnectionStatus.error);
+    await _cleanUpConnection(resetManual: false);
+  }
+
+  Future<bool> _attemptSingleConnect({
+    required String candidateHost,
+    required int candidatePort,
+    required int seq,
+  }) async {
+    try {
+      await _cleanUpConnection(resetManual: false);
+      if (seq != _connectSequence || _isDisposed) return false;
+
+      final uri = Uri.parse(
+        'ws://$candidateHost:$candidatePort/ws/v1/session?session_id=$_sessionId&token=$token',
+      );
       final channel = WebSocketChannel.connect(uri);
       _channel = channel;
 
-      // Wait for socket to be established with 5s timeout to prevent infinite hang
+      // 4s timeout for socket connection
       await channel.ready.timeout(
-        const Duration(seconds: 5),
+        const Duration(seconds: 4),
         onTimeout: () {
-          throw TimeoutException('Connection to $host:$port timed out (5s)');
+          throw TimeoutException(
+            'Connection to $candidateHost:$candidatePort timed out (4s)',
+          );
         },
       );
 
       if (seq != _connectSequence || _isDisposed) {
         _safeClose(channel);
-        return;
+        return false;
       }
 
       _reconnectAttempts = 0;
@@ -242,13 +291,15 @@ class CompanionWebSocketService {
       _subscription = channel.stream.listen(
         _handleIncomingMessage,
         onError: (dynamic error) {
-          debugPrint('[CompanionWS] WebSocket stream error: $error');
+          debugPrint(
+            '[CompanionWS] WebSocket stream error on $candidateHost: $error',
+          );
           _lastErrorMessage = error.toString();
           _updateStatus(CompanionConnectionStatus.error);
           _scheduleReconnect();
         },
         onDone: () {
-          debugPrint('[CompanionWS] WebSocket stream done');
+          debugPrint('[CompanionWS] WebSocket stream done on $candidateHost');
           if (!_manualDisconnect) {
             _scheduleReconnect();
           } else {
@@ -260,15 +311,13 @@ class CompanionWebSocketService {
 
       // Send JSON hello handshake immediately per specification 13.1
       _sendHello();
+      return true;
     } catch (e) {
-      if (seq != _connectSequence || _isDisposed) return;
-      debugPrint('[CompanionWS] Connection initiation error: $e');
-      _wasConnected = false;
+      debugPrint('[CompanionWS] Attempt failed on $candidateHost:$candidatePort: $e');
       _lastErrorMessage = e is TimeoutException
-          ? 'Timed out connecting to $host:$port'
+          ? 'Timed out connecting to $candidateHost:$candidatePort'
           : 'Failed: $e';
-      _updateStatus(CompanionConnectionStatus.error);
-      await _cleanUpConnection(resetManual: false);
+      return false;
     }
   }
 

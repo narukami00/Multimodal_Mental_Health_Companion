@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/constants/companion_server_config.dart';
 import '../../core/models/chat_message_record.dart';
 import '../../services/audio_processor.dart';
 import '../../services/companion_websocket_service.dart';
@@ -160,17 +161,31 @@ class _CallPageState extends State<CallPage> {
       Platform.environment.containsKey('FLUTTER_TEST');
 
   /// The same saved address the chat settings screen writes; otherwise the
-  /// service defaults.
+  /// service defaults to Tailscale.
   Future<void> _connectSavedServer() async {
     final ws = _wsService!;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final host = prefs.getString('companion_server_host');
-      final port = prefs.getInt('companion_server_port');
-      if (host != null && host.isNotEmpty) ws.host = host;
+      final tailscaleMigrated =
+          prefs.getBool(CompanionServerConfig.prefKeyTailscaleMigrated) ?? false;
+      var host = prefs.getString(CompanionServerConfig.prefKeyHost);
+      final port = prefs.getInt(CompanionServerConfig.prefKeyPort);
+
+      // Auto-migrate from old local Wi-Fi / localhost IPs to Tailscale
+      if (!tailscaleMigrated ||
+          host == '192.168.0.38' ||
+          host == '127.0.0.1' ||
+          host == null ||
+          host.isEmpty) {
+        host = CompanionServerConfig.defaultTailscaleIp;
+        await prefs.setString(CompanionServerConfig.prefKeyHost, host);
+        await prefs.setBool(CompanionServerConfig.prefKeyTailscaleMigrated, true);
+      }
+
+      ws.host = host;
       if (port != null && port > 0) ws.port = port;
     } catch (_) {
-      // ponytail: no readable config, connect with the service defaults
+      ws.host = CompanionServerConfig.defaultTailscaleIp;
     }
     if (ws.status == CompanionConnectionStatus.connecting ||
         ws.status == CompanionConnectionStatus.connected) {

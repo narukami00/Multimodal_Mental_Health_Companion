@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/constants/companion_server_config.dart';
 import '../../core/models/chat_message_record.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../services/companion_websocket_service.dart';
@@ -611,17 +612,27 @@ class _ChatPageState extends State<ChatPage> {
 
   void _loadSavedServerConfig() {
     SharedPreferences.getInstance().then((prefs) {
-      final savedHost = prefs.getString('companion_server_host');
-      final savedPort = prefs.getInt('companion_server_port');
+      final tailscaleMigrated =
+          prefs.getBool(CompanionServerConfig.prefKeyTailscaleMigrated) ?? false;
+      var savedHost = prefs.getString(CompanionServerConfig.prefKeyHost);
+      final savedPort = prefs.getInt(CompanionServerConfig.prefKeyPort);
       _ttsEnabled = prefs.getBool('companion_tts_enabled') ?? true;
       _selectedVoiceId =
           prefs.getString('companion_tts_voice_id') ?? 'af_heart';
       _ttsSpeed = prefs.getDouble('companion_tts_speed') ?? 0.96;
-      if (savedHost != null && savedHost.isNotEmpty) {
-        _wsService.host = savedHost;
-      } else {
-        _wsService.host = '192.168.0.38';
+
+      // Auto-migrate from old local Wi-Fi / localhost IPs to Tailscale
+      if (!tailscaleMigrated ||
+          savedHost == '192.168.0.38' ||
+          savedHost == '127.0.0.1' ||
+          savedHost == null ||
+          savedHost.isEmpty) {
+        savedHost = CompanionServerConfig.defaultTailscaleIp;
+        prefs.setString(CompanionServerConfig.prefKeyHost, savedHost);
+        prefs.setBool(CompanionServerConfig.prefKeyTailscaleMigrated, true);
       }
+
+      _wsService.host = savedHost;
       if (savedPort != null && savedPort > 0) {
         _wsService.port = savedPort;
       }
@@ -1216,7 +1227,7 @@ class _ChatPageState extends State<ChatPage> {
                           controller: hostCtrl,
                           decoration: InputDecoration(
                             labelText: 'Host / IP',
-                            hintText: '127.0.0.1',
+                            hintText: CompanionServerConfig.defaultTailscaleIp,
                             filled: true,
                             fillColor: const Color(0xFFF9F5EC),
                             border: OutlineInputBorder(
@@ -1269,8 +1280,8 @@ class _ChatPageState extends State<ChatPage> {
                     runSpacing: 6,
                     children: [
                       ActionChip(
-                        avatar: const Icon(Icons.computer_rounded, size: 14, color: _coral),
-                        label: const Text('Localhost (USB): 127.0.0.1'),
+                        avatar: const Icon(Icons.vpn_lock_rounded, size: 14, color: _coral),
+                        label: const Text('Tailscale: 100.88.46.59 (Direct Mesh)'),
                         backgroundColor: const Color(0xFFFFF2E6),
                         side: const BorderSide(color: Color(0xFFFFCC99)),
                         labelStyle: const TextStyle(
@@ -1279,7 +1290,23 @@ class _ChatPageState extends State<ChatPage> {
                           color: _ink,
                         ),
                         onPressed: () {
-                          hostCtrl.text = '127.0.0.1';
+                          hostCtrl.text = CompanionServerConfig.defaultTailscaleIp;
+                          portCtrl.text = '8000';
+                          setModalState(() {});
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.dns_rounded, size: 14, color: _softInk),
+                        label: const Text('MagicDNS: desktop-cdej4vj'),
+                        backgroundColor: const Color(0xFFF7F2E7),
+                        side: const BorderSide(color: Color(0xFFDDD2BE)),
+                        labelStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _ink,
+                        ),
+                        onPressed: () {
+                          hostCtrl.text = CompanionServerConfig.defaultMagicDns;
                           portCtrl.text = '8000';
                           setModalState(() {});
                         },
@@ -1295,14 +1322,14 @@ class _ChatPageState extends State<ChatPage> {
                           color: _ink,
                         ),
                         onPressed: () {
-                          hostCtrl.text = '192.168.0.38';
+                          hostCtrl.text = CompanionServerConfig.defaultLanIp;
                           portCtrl.text = '8000';
                           setModalState(() {});
                         },
                       ),
                       ActionChip(
-                        avatar: const Icon(Icons.devices_rounded, size: 14, color: _softInk),
-                        label: const Text('Emulator: 10.0.2.2'),
+                        avatar: const Icon(Icons.computer_rounded, size: 14, color: _softInk),
+                        label: const Text('Localhost (USB): 127.0.0.1'),
                         backgroundColor: const Color(0xFFF7F2E7),
                         side: const BorderSide(color: Color(0xFFDDD2BE)),
                         labelStyle: const TextStyle(
@@ -1311,7 +1338,7 @@ class _ChatPageState extends State<ChatPage> {
                           color: _ink,
                         ),
                         onPressed: () {
-                          hostCtrl.text = '10.0.2.2';
+                          hostCtrl.text = CompanionServerConfig.defaultLocalhost;
                           portCtrl.text = '8000';
                           setModalState(() {});
                         },
@@ -1529,18 +1556,24 @@ class _ChatPageState extends State<ChatPage> {
                                 : () async {
                                     final host = hostCtrl.text.trim();
                                     final port =
-                                        int.tryParse(portCtrl.text.trim()) ?? 8000;
-                                    final effectiveHost =
-                                        host.isNotEmpty ? host : '127.0.0.1';
+                                        int.tryParse(portCtrl.text.trim()) ??
+                                            CompanionServerConfig.defaultPort;
+                                    final effectiveHost = host.isNotEmpty
+                                        ? host
+                                        : CompanionServerConfig.defaultTailscaleIp;
                                     final prefs =
                                         await SharedPreferences.getInstance();
                                     await prefs.setString(
-                                      'companion_server_host',
+                                      CompanionServerConfig.prefKeyHost,
                                       effectiveHost,
                                     );
                                     await prefs.setInt(
-                                      'companion_server_port',
+                                      CompanionServerConfig.prefKeyPort,
                                       port,
+                                    );
+                                    await prefs.setBool(
+                                      CompanionServerConfig.prefKeyTailscaleMigrated,
+                                      true,
                                     );
                                     _wsService.connect(
                                       customHost: effectiveHost,
