@@ -35,7 +35,7 @@ firebase_options.dart
 screenshots/
 debug_recordings/
 *.wav
-models/
+/models/
 companion_server/models/
 dataset_samples/
 *.png
