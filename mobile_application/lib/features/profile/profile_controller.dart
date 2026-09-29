@@ -78,6 +78,41 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
+  /// Records the first launch time once, so the You tab can show a real
+  /// "member since" date instead of a hardcoded one.
+  Future<void> ensureFirstRun() async {
+    if (_profile.firstRunAt != null) return;
+    _profile = _profile.copyWith(firstRunAt: DateTime.now());
+    await _persist();
+  }
+
+  /// Stores the user's display name and/or chosen profile photo.
+  Future<void> saveIdentity({String? displayName, String? avatarPath}) async {
+    _profile = _profile.copyWith(
+      displayName: displayName,
+      avatarPath: avatarPath,
+    );
+    await _persist();
+  }
+
+  /// Enables or disables gentle haptic feedback across the app.
+  Future<void> setHapticsEnabled(bool enabled) async {
+    _profile = _profile.copyWith(hapticsEnabled: enabled);
+    await _persist();
+  }
+
+  /// Enables or disables ambient breath audio during pause moments.
+  Future<void> setAmbientAudioEnabled(bool enabled) async {
+    _profile = _profile.copyWith(ambientAudioEnabled: enabled);
+    await _persist();
+  }
+
+  /// Switches the active colour palette.
+  Future<void> setPaletteId(String paletteId) async {
+    _profile = _profile.copyWith(paletteId: paletteId);
+    await _persist();
+  }
+
   Future<void> _persist() async {
     await _repository.save(_profile);
     notifyListeners();
