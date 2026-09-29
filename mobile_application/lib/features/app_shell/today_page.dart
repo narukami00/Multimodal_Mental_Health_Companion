@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/theme/solace_palette.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../chat/chat_controller.dart';
 import '../chat/conversation_history.dart';
@@ -53,18 +54,19 @@ class TodayPage extends StatelessWidget {
     final date = MaterialLocalizations.of(context).formatMediumDate(now);
     final card = _PrimaryCardContent.fromType(primaryCard);
 
+    final colors = SolaceColors.from(context);
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFFEFCE8),
+      decoration: BoxDecoration(
+        color: colors.background,
         gradient: RadialGradient(
-          center: Alignment(0.88, -0.6),
+          center: const Alignment(0.88, -0.6),
           radius: 1.3,
           colors: [
-            Color(0x4DFFD07A),
-            Color(0x1AFF7F50),
-            Color(0xFFFEFCE8),
+            const Color(0x4DFFD07A),
+            const Color(0x1AFF7F50),
+            colors.background,
           ],
-          stops: [0.0, 0.45, 1.0],
+          stops: const [0.0, 0.45, 1.0],
         ),
       ),
       child: SafeArea(

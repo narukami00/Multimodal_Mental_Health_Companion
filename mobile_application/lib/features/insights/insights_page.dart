@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/theme/solace_palette.dart';
 import '../sessions/session_controller.dart';
 
 class InsightsPage extends StatefulWidget {
@@ -16,7 +17,6 @@ class InsightsPage extends StatefulWidget {
 }
 
 class _InsightsPageState extends State<InsightsPage> {
-  static const _bg = Color(0xFFFEFCE8);
   static const _line = Color(0x143B2F26);
 
   bool _isMonth = false;
@@ -27,7 +27,7 @@ class _InsightsPageState extends State<InsightsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: SolaceColors.from(context).background,
       body: ClipRect(
         child: Stack(
           clipBehavior: Clip.hardEdge,

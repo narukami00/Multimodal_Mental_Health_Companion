@@ -46,7 +46,7 @@ class ProfilePage extends StatelessWidget {
             : 'Add your name';
 
         return Scaffold(
-          backgroundColor: const Color(0xFFFEFCE8),
+          backgroundColor: SolaceColors.from(context).background,
           body: SafeArea(
             child: Center(
               child: ConstrainedBox(

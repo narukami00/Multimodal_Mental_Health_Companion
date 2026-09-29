@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
+import '../../core/theme/solace_palette.dart';
 import '../sessions/session_controller.dart';
 import 'session_detail_page.dart';
 
@@ -15,12 +16,13 @@ class JournalPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = SolaceColors.from(context);
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFFEFCE8), Color(0xFFFFFBEC)],
+          colors: [colors.background, colors.surface],
         ),
       ),
       child: Center(

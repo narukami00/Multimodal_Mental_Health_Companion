@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/models/safety_assessment.dart';
 import '../../core/navigation/app_tab.dart';
+import '../../core/theme/solace_palette.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../call/call_page.dart';
 import '../chat/chat_controller.dart';
@@ -121,13 +125,17 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _buildBottomNav(BuildContext context) {
+    final colors = SolaceColors.from(context);
     return Container(width: double.infinity,
-      decoration: const BoxDecoration(
-        color: Color(0xFAFFFDF6),
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: 0.98),
         border: Border(
-          top: BorderSide(color: Color(0x174A3728), width: 1.0),
+          top: BorderSide(
+            color: colors.ink.withValues(alpha: 0.09),
+            width: 1.0,
+          ),
         ),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Color(0x0F78501E),
             blurRadius: 16,
@@ -149,14 +157,27 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// Switches tab, giving a gentle haptic cue when the user has enabled them.
+  void _selectTab(AppTab tab) {
+    if (_selectedTab == tab) return;
+    if (widget.profileController.profile.hapticsEnabled) {
+      // Best effort: never block navigation on the haptics channel.
+      unawaited(HapticFeedback.selectionClick());
+    }
+    setState(() => _selectedTab = tab);
+  }
+
   Widget _buildTabItem(AppTab tab) {
+    final colors = SolaceColors.from(context);
     final isSelected = _selectedTab == tab;
+    // Amber stays constant across palettes for brand contrast; only the
+    // inactive ink follows the palette neutrals.
     const activeColor = Color(0xFFC87F10);
-    const inactiveColor = Color(0xFFA5937C);
+    final inactiveColor = colors.mutedInk;
 
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _selectedTab = tab),
+        onTap: () => _selectTab(tab),
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
@@ -167,7 +188,9 @@ class _AppShellState extends State<AppShell> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0x28FFB534) : Colors.transparent,
+                color: isSelected
+                    ? colors.amber.withValues(alpha: 0.16)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
