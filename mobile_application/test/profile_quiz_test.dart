@@ -98,14 +98,13 @@ void main() {
 
     await _tapAndSettle(tester, 'Several days');
 
-    expect(find.textContaining('You deserve support'), findsOneWidget);
+    // Urgent flags lead with the national emergency number.
+    expect(find.textContaining('Call 999'), findsOneWidget);
     expect(safetyController.latestEvent?.source, 'phq9_item_9');
     expect(safetyController.latestEvent?.level, SafetyLevel.urgentSupport);
     expect(profileController.profile.baselineCompletedAt, isNull);
 
-    final returnButton = find.text('Return to reflection');
-    await tester.scrollUntilVisible(returnButton, 300);
-    await tester.tap(returnButton);
+    await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
 
     expect(find.text('A useful starting point'), findsOneWidget);

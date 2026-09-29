@@ -384,12 +384,10 @@ class ProfilePage extends StatelessWidget {
                         MaterialPageRoute<void>(
                           builder: (_) => SupportResourcesPage(
                             safetyController: safetyController,
+                            profileController: profileController,
                             assessment:
                                 safetyController.activeAssessment ??
                                 const SafetyAssessment.clear(),
-                            regionCode:
-                                Localizations.localeOf(context).countryCode ??
-                                'GLOBAL',
                           ),
                         ),
                       ),

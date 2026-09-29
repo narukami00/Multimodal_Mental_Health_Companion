@@ -1,12 +1,16 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
-import '../../core/models/support_resource.dart';
+import '../../core/theme/solace_palette.dart';
 import '../../services/dialer_service.dart';
+import '../profile/profile_controller.dart';
+import 'breathing_pattern.dart';
+import 'care_contacts_page.dart';
 import 'safety_controller.dart';
-import 'support_resource_catalog.dart';
 
 bool get _isTestEnvironment {
   try {
@@ -16,61 +20,118 @@ bool get _isTestEnvironment {
   }
 }
 
+/// The support screen reached when someone needs help right now.
+///
+/// Deliberately short: every block is something the user can *do*. It carries
+/// no helpline directory — the only external number is the national emergency
+/// number, and the main action is calling a person the user has saved
+/// themselves, so nothing here can go stale on them.
 class SupportResourcesPage extends StatefulWidget {
   const SupportResourcesPage({
     required this.safetyController,
+    this.profileController,
     this.assessment,
-    this.regionCode = 'GLOBAL',
     this.dialer = const DialerService(),
     super.key,
   });
 
   final SafetyController safetyController;
+
+  /// Supplies the user's own saved contact. When absent, the personal block is
+  /// simply omitted rather than showing a placeholder number.
+  final ProfileController? profileController;
+
   final SafetyAssessment? assessment;
-  final String regionCode;
   final DialerService dialer;
+
+  /// Bangladesh national emergency service: police, fire and ambulance.
+  static const emergencyNumber = '999';
 
   @override
   State<SupportResourcesPage> createState() => _SupportResourcesPageState();
 }
 
+/// Drives the paced breathing guide and the personal-contact block.
 class _SupportResourcesPageState extends State<SupportResourcesPage>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _breathController;
+  static const _pattern = BreathingPattern();
+
+  late final AnimationController _breath;
+  BreathPhase _phase = BreathPhase.inhale;
+  int _breaths = 0;
 
   @override
   void initState() {
     super.initState();
-    _breathController = AnimationController(
+    _breath = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 4),
-    );
+      duration: Duration(milliseconds: _pattern.cycleMs),
+    )
+      ..addListener(_onBreathTick)
+      ..addStatusListener(_onBreathStatus);
+
+    // Never auto-run under test: an endless animation would hang pumpAndSettle.
     if (!_isTestEnvironment) {
-      _breathController.repeat(reverse: true);
+      _breath.forward(from: 0);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Respect the platform's reduced-motion setting.
+    if (MediaQuery.of(context).disableAnimations && _breath.isAnimating) {
+      _breath.stop();
     }
   }
 
   @override
   void dispose() {
-    _breathController.dispose();
+    _breath.dispose();
     super.dispose();
   }
 
-  /// Opens the dialer pre-filled, with a gentle note if none is available.
+  /// Repaints only when the cue actually changes, not every frame.
+  void _onBreathTick() {
+    final next = _pattern.phaseAt(_breath.value);
+    if (next != _phase && mounted) {
+      setState(() => _phase = next);
+    }
+  }
+
+  void _onBreathStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    if (mounted) setState(() => _breaths++);
+    if (!_isTestEnvironment) {
+      _breath.forward(from: 0);
+    }
+  }
+
+  String get _cueLabel => _pattern.cueFor(_phase);
+
+  /// The contact to surface first: the one marked call-first, else the only
+  /// saved contact.
+  EmergencyContact? get _primaryContact {
+    final contacts = widget.profileController?.profile.emergencyContacts;
+    if (contacts == null || contacts.isEmpty) return null;
+    for (final contact in contacts) {
+      if (contact.isIce) return contact;
+    }
+    return contacts.first;
+  }
+
+  bool get _isUrgent =>
+      widget.assessment?.level == SafetyLevel.urgentSupport;
+
+  Future<void> _close() async {
+    await widget.safetyController.markSupportShown();
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  /// Pre-fills the dialer. The user still confirms the call.
   Future<void> _dial(String number) async {
     final opened = await widget.dialer.openDialer(number);
     if (!mounted || opened) return;
-    _showUnavailable();
-  }
-
-  /// Opens the SMS composer with the given message body.
-  Future<void> _text(String number, String body) async {
-    final opened = await widget.dialer.openSms(number, body: body);
-    if (!mounted || opened) return;
-    _showUnavailable();
-  }
-
-  void _showUnavailable() {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -81,339 +142,88 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
       );
   }
 
+  Future<void> _openContacts() async {
+    final controller = widget.profileController;
+    if (controller == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CareContactsPage(profileController: controller),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final resources = SupportResourceCatalog.forRegion(widget.regionCode);
-    final isUrgent = widget.assessment?.level == SafetyLevel.urgentSupport;
+    final colors = SolaceColors.from(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFEFCE8),
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 360),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
               children: [
-                // Top header bar
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFFB534), Color(0xFFFF7F50)],
-                            ),
-                            borderRadius: BorderRadius.circular(7),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x66FF7F50),
-                                blurRadius: 8,
-                                offset: Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'SOLACE CARE',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.4,
-                            color: Color(0xFFB9A98C),
-                          ),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Color(0xFF8E8272),
-                      ),
-                      onPressed: () async {
-                        await widget.safetyController.markSupportShown();
-                        if (context.mounted) Navigator.of(context).pop();
-                      },
-                      tooltip: 'Close',
-                    ),
-                  ],
+                _buildHeader(colors),
+                const SizedBox(height: 6),
+                const Text(
+                  'Right now',
+                  style: TextStyle(
+                    fontSize: 27,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    height: 1.15,
+                    color: Color(0xFF3A3125),
+                  ),
                 ),
-                const SizedBox(height: 16),
-
-                // Warm reassuring hero card
-                _SupportHero(isUrgent: isUrgent),
+                const SizedBox(height: 5),
+                const Text(
+                  'One of these is enough.',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF7B6A55),
+                  ),
+                ),
                 const SizedBox(height: 18),
 
-                // Grounding breath pause
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFF2ECDD)),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x1078501E),
-                        blurRadius: 14,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      AnimatedBuilder(
-                        animation: _breathController,
-                        builder: (context, child) {
-                          final scale = 0.85 + (_breathController.value * 0.25);
-                          return Transform.scale(
-                            scale: scale,
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: RadialGradient(
-                                  colors: [
-                                    const Color(0xFFFFB534),
-                                    const Color(0xFFFF7F50).withValues(alpha: 0.7),
-                                  ],
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0x40FF7F50),
-                                    blurRadius: 10 * scale,
-                                    spreadRadius: 2,
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.air_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Take one gentle breath',
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF4A3728),
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Inhale slowly... hold... release. You are safe here.',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF93887A),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 22),
-
-                // Fast Direct Hotlines (Always Available)
-                const Text(
-                  'IMMEDIATE CRISIS HELPLINES · 24/7 FREE',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.3,
-                    color: Color(0xFFBCAC8E),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // 988 Suicide & Crisis Lifeline
-                _HotlineActionCard(
-                  title: '988 Suicide & Crisis Lifeline',
-                  subtitle: 'Call or text 988 · Free, confidential, anytime',
-                  actionLabel: 'Call 988',
-                  icon: Icons.phone_in_talk_rounded,
-                  accentColor: const Color(0xFFD2603A),
-                  bgColor: const Color(0xFFFFF1EA),
-                  onTap: () => _dial('988'),
-                ),
-                const SizedBox(height: 10),
-
-                // Crisis Text Line 741741
-                _HotlineActionCard(
-                  title: 'Crisis Text Line',
-                  subtitle: 'Text HOME to 741741 · Free 24/7 text support',
-                  actionLabel: 'Text 741741',
-                  icon: Icons.chat_bubble_outline_rounded,
-                  accentColor: const Color(0xFFB57A12),
-                  bgColor: const Color(0xFFFFF3DC),
-                  onTap: () => _text('741741', 'HOME'),
-                ),
-                const SizedBox(height: 22),
-
-                // Section title
-                const Text(
-                  'RECOMMENDED NEXT STEPS',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.3,
-                    color: Color(0xFFBCAC8E),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Resource cards
-                for (final resource in resources) ...[
-                  _ResourceCard(
-                    resource: resource,
-                    onDial: resource.phone == null
-                        ? null
-                        : () => _dial(resource.phone!),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-
-                // Regional unverified disclaimer if needed
-                if (SupportResourceCatalog.hasUnverifiedEntries(widget.regionCode)) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF8EA),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFF4E5CA)),
-                    ),
-                    child: const Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.info_outline_rounded,
-                          color: Color(0xFFB57A12),
-                          size: 18,
-                        ),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Regional contact details are not verified for external use yet. The project team must review local resources before launch.',
-                            style: TextStyle(
-                              color: Color(0xFF96620C),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ],
+                // For an acute flag, the emergency number comes before anything.
+                if (_isUrgent) ...[
+                  _DangerRow(
+                    number: SupportResourcesPage.emergencyNumber,
+                    emphasised: true,
+                    onTap: () => _dial(
+                      SupportResourcesPage.emergencyNumber,
                     ),
                   ),
                   const SizedBox(height: 14),
                 ],
 
-                // 3 Grounding Anchors Card
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: const Color(0xFFF2ECDD)),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x1078501E),
-                        blurRadius: 16,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(
-                            Icons.shield_outlined,
-                            size: 18,
-                            color: Color(0xFFB57A12),
-                          ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Small anchors for right now',
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF4A3728),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _anchorStep('1', 'Sip a glass of cool water slowly.'),
-                      _anchorStep('2', 'Wrap yourself in a blanket or feel your feet on the floor.'),
-                      _anchorStep('3', 'Tell someone you trust: "I am having a hard moment today."'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
+                _buildPersonBlock(),
+                const SizedBox(height: 14),
 
-                // Return to reflection button
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF4A3728),
-                      side: const BorderSide(
-                        color: Color(0xFFE2D6C0),
-                        width: 1.2,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      backgroundColor: Colors.white,
-                    ),
-                    onPressed: () async {
-                      await widget.safetyController.markSupportShown();
-                      if (context.mounted) Navigator.of(context).pop();
-                    },
-                    icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                    label: const Text(
-                      'Return to reflection',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.2,
-                      ),
+                _buildBreathCard(colors),
+
+                if (!_isUrgent) ...[
+                  const SizedBox(height: 16),
+                  _DangerRow(
+                    number: SupportResourcesPage.emergencyNumber,
+                    emphasised: false,
+                    onTap: () => _dial(
+                      SupportResourcesPage.emergencyNumber,
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
+                ],
 
-                // Control & privacy reassurance
+                const SizedBox(height: 22),
                 const Text(
-                  'You remain in control. Solace does not notify anyone automatically.',
+                  'Solace is not an emergency service.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Color(0xFFA2988A),
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
-                    height: 1.4,
+                    color: Color(0xFFA2988A),
                   ),
                 ),
               ],
@@ -424,40 +234,109 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
     );
   }
 
-  static Widget _anchorStep(String num, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 18,
-            height: 18,
-            decoration: const BoxDecoration(
-              color: Color(0xFFFFF3DC),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                num,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFFB57A12),
-                ),
-              ),
+  Widget _buildHeader(SolaceColors colors) {
+    return Row(
+      children: [
+        IconButton(
+          onPressed: _close,
+          tooltip: 'Close',
+          icon: const Icon(Icons.close_rounded, size: 20),
+          style: IconButton.styleFrom(
+            foregroundColor: const Color(0xFF8E8272),
+            minimumSize: const Size(44, 44),
+            backgroundColor: colors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                fontSize: 12.2,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF7A6E5D),
-                height: 1.35,
-              ),
+        ),
+        const SizedBox(width: 8),
+        const Text(
+          'SOLACE CARE',
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.4,
+            color: Color(0xFFB9A98C),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPersonBlock() {
+    final controller = widget.profileController;
+    if (controller == null) return const SizedBox.shrink();
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final contact = _primaryContact;
+        if (contact == null) {
+          return _AddPersonCard(onAdd: _openContacts);
+        }
+        return _PersonCard(
+          contact: contact,
+          onCall: () => _dial(contact.phone),
+          onManage: _openContacts,
+        );
+      },
+    );
+  }
+
+  Widget _buildBreathCard(SolaceColors colors) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF2ECDD)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1278501E),
+            blurRadius: 18,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Text(
+            'BREATHE WITH ME',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.3,
+              color: Color(0xFFBCAC8E),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 168,
+            child: Center(
+              child: reduceMotion
+                  ? _BreathCircle(scale: 0.8, label: 'Breathe in, then out')
+                  : AnimatedBuilder(
+                      animation: _breath,
+                      builder: (context, _) => _BreathCircle(
+                        scale: _pattern.scaleAt(_breath.value),
+                        label: _cueLabel,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _breaths == 0
+                ? 'Follow the circle. In for four, hold, out for six.'
+                : '$_breaths ${_breaths == 1 ? 'breath' : 'breaths'}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF93887A),
             ),
           ),
         ],
@@ -466,176 +345,84 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
   }
 }
 
-class _HotlineActionCard extends StatelessWidget {
-  const _HotlineActionCard({
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
-    required this.icon,
-    required this.accentColor,
-    required this.bgColor,
-    required this.onTap,
-  });
+/// Expanding circle with the current breathing cue inside it.
+class _BreathCircle extends StatelessWidget {
+  const _BreathCircle({required this.scale, required this.label});
 
-  final String title;
-  final String subtitle;
-  final String actionLabel;
-  final IconData icon;
-  final Color accentColor;
-  final Color bgColor;
-  final VoidCallback onTap;
+  final double scale;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF2ECDD)),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x1078501E),
-              blurRadius: 14,
-              offset: Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: accentColor, size: 20),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF3A3226),
-                      letterSpacing: -0.15,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF8A7F72),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                actionLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: accentColor,
+    return SizedBox(
+      width: 160,
+      height: 160,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Transform.scale(
+            scale: scale,
+            child: Container(
+              width: 132,
+              height: 132,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Color(0x59FFC46B), Color(0x1AFF7F50)],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          Transform.scale(
+            scale: scale,
+            child: Container(
+              width: 96,
+              height: 96,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFFFD98A), Color(0xFFFF9A6A)],
+                ),
+              ),
+            ),
+          ),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF5A3B10),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SupportHero extends StatelessWidget {
-  const _SupportHero({required this.isUrgent});
+/// Prominent card for the person the user has saved, with one-tap calling.
+class _PersonCard extends StatelessWidget {
+  const _PersonCard({
+    required this.contact,
+    required this.onCall,
+    required this.onManage,
+  });
 
-  final bool isUrgent;
+  final EmergencyContact contact;
+  final VoidCallback onCall;
+  final VoidCallback onManage;
 
   @override
   Widget build(BuildContext context) {
-    if (isUrgent) {
-      return Container(
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFFF7F50), Color(0xFFF35D39)],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x40FF7F50),
-              blurRadius: 24,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.22),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: const Icon(
-                Icons.favorite_rounded,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'You deserve support\nfrom a person right now.',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-                height: 1.2,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'If you may act on thoughts of harm or cannot stay safe, move toward immediate human support now. These resources are confidential, free, and open 24/7.',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.92),
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [Color(0xFFFFF6E2), Color(0xFFFFEDE0)],
         ),
         borderRadius: BorderRadius.circular(24),
@@ -651,38 +438,154 @@ class _SupportHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFE2CC),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: const Icon(
-              Icons.wb_sunny_rounded,
-              color: Color(0xFFD2603A),
-              size: 24,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'You do not have to\nhold this alone.',
-            style: TextStyle(
-              color: Color(0xFF3A3226),
-              fontSize: 21,
+          Text(
+            contact.isIce ? 'YOUR CALL-FIRST PERSON' : 'YOUR PERSON',
+            style: const TextStyle(
+              fontSize: 11,
               fontWeight: FontWeight.w800,
-              height: 1.2,
-              letterSpacing: -0.3,
+              letterSpacing: 1.3,
+              color: Color(0xFFB58A4C),
             ),
           ),
           const SizedBox(height: 10),
+          Text(
+            contact.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              color: Color(0xFF3A3125),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            contact.phone,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF8A7A62),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              key: const ValueKey('call-person'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFB534),
+                foregroundColor: const Color(0xFF3D2E14),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              onPressed: onCall,
+              icon: const Icon(Icons.call_rounded, size: 20),
+              label: Text(
+                'Call ${contact.name}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Saved on your device. You control it.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF9A8B74),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: onManage,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF96620C),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Manage',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown when the user has not saved anyone yet.
+class _AddPersonCard extends StatelessWidget {
+  const _AddPersonCard({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFDF6),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF6EFD9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           const Text(
-            'It sounds like today may be carrying more than usual. These options are here without pressure or judgment.',
+            'Add someone you can call',
             style: TextStyle(
-              color: Color(0xFF7A6E5D),
-              fontSize: 13.5,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF3A3125),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Pick one person you trust and save their number. It stays on this '
+            'device, and you can change it whenever you want.',
+            style: TextStyle(
+              fontSize: 12.5,
               fontWeight: FontWeight.w600,
               height: 1.45,
+              color: Color(0xFF7B6A55),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              key: const ValueKey('add-person'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFB534),
+                foregroundColor: const Color(0xFF3D2E14),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_rounded, size: 19),
+              label: const Text(
+                'Add a contact',
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+              ),
             ),
           ),
         ],
@@ -691,170 +594,63 @@ class _SupportHero extends StatelessWidget {
   }
 }
 
-class _ResourceCard extends StatelessWidget {
-  const _ResourceCard({required this.resource, this.onDial});
+/// Tap-to-dial line for the national emergency number.
+class _DangerRow extends StatelessWidget {
+  const _DangerRow({
+    required this.number,
+    required this.onTap,
+    required this.emphasised,
+  });
 
-  final SupportResource resource;
-
-  /// Opens the dialer for this resource, or null when it has no number.
-  final VoidCallback? onDial;
+  final String number;
+  final VoidCallback onTap;
+  final bool emphasised;
 
   @override
   Widget build(BuildContext context) {
-    final (icon, tileBg, tileColor) = switch (resource.kind) {
-      SupportResourceKind.trustedPerson => (
-        Icons.people_outline_rounded,
-        const Color(0xFFFFF2D9),
-        const Color(0xFFB57A12),
-      ),
-      SupportResourceKind.localEmergency => (
-        Icons.emergency_outlined,
-        const Color(0xFFFFE5DA),
-        const Color(0xFFD2603A),
-      ),
-      SupportResourceKind.professionalSupport => (
-        Icons.medical_services_outlined,
-        const Color(0xFFFFF2D9),
-        const Color(0xFFB57A12),
-      ),
-    };
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFF4EEE2)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1278501E),
-            blurRadius: 18,
-            offset: Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: emphasised ? const Color(0xFFFFE9DE) : const Color(0xFFFFF7F0),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: emphasised
+                  ? const Color(0xFFFFC7AC)
+                  : const Color(0xFFF6E2D6),
+            ),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: tileBg,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: tileColor, size: 22),
+              const Icon(
+                Icons.emergency_outlined,
+                size: 20,
+                color: Color(0xFFD2603A),
               ),
-              const SizedBox(width: 13),
+              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            resource.title,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF3A3226),
-                              letterSpacing: -0.15,
-                            ),
-                          ),
-                        ),
-                        if (resource.isVerified)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEBF7EB),
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                            child: const Text(
-                              'Verified 24/7',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF3F823B),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      resource.description,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF7D7262),
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'In immediate danger? Call $number',
+                  style: TextStyle(
+                    fontSize: emphasised ? 14.5 : 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFB4522C),
+                  ),
                 ),
+              ),
+              const Icon(
+                Icons.call_rounded,
+                size: 18,
+                color: Color(0xFFD2603A),
               ),
             ],
           ),
-          if (resource.phone != null) ...[
-            const SizedBox(height: 12),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onDial,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFFDFC8)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.phone_rounded,
-                        size: 16,
-                        color: Color(0xFFD2603A),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Direct dial: ${resource.phone}',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFB4522C),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Tap to call',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFD2603A),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

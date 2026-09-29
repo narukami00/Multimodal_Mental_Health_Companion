@@ -16,6 +16,7 @@ import '../../services/companion_websocket_service.dart';
 import '../../services/pcm_audio_recorder_service.dart';
 import '../../services/tts_playback_service.dart';
 import '../call/call_page.dart';
+import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'chat_controller.dart';
@@ -24,6 +25,7 @@ import 'conversation_history.dart';
 class ChatPage extends StatefulWidget {
   const ChatPage({
     required this.safetyController,
+    this.profileController,
     this.chatController,
     this.initialMessages,
     this.webSocketService,
@@ -34,6 +36,7 @@ class ChatPage extends StatefulWidget {
   });
 
   final SafetyController safetyController;
+  final ProfileController? profileController;
   final ChatController? chatController;
   final List<ChatMessageRecord>? initialMessages;
   final CompanionWebSocketService? webSocketService;
@@ -904,9 +907,8 @@ class _ChatPageState extends State<ChatPage> {
         MaterialPageRoute<void>(
           builder: (_) => SupportResourcesPage(
             safetyController: widget.safetyController,
+            profileController: widget.profileController,
             assessment: assessment,
-            regionCode: Localizations.localeOf(context).countryCode ??
-                'GLOBAL',
           ),
         ),
       );
@@ -940,8 +942,8 @@ class _ChatPageState extends State<ChatPage> {
       MaterialPageRoute<void>(
         builder: (_) => SupportResourcesPage(
           safetyController: widget.safetyController,
+          profileController: widget.profileController,
           assessment: const SafetyAssessment.clear(),
-          regionCode: Localizations.localeOf(context).countryCode ?? 'GLOBAL',
         ),
       ),
     );
@@ -1087,6 +1089,7 @@ class _ChatPageState extends State<ChatPage> {
                 MaterialPageRoute<void>(
                   builder: (_) => CallPage(
                     safetyController: widget.safetyController,
+                    profileController: widget.profileController,
                     webSocketService: _wsService,
                     audioRecorderService: _audioRecorder,
                     ttsPlaybackService: _ttsPlayback,

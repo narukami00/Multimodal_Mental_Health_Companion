@@ -224,6 +224,7 @@ class _AppShellState extends State<AppShell> {
         builder: (_) => CheckInModePage(
           sessionController: widget.sessionController,
           safetyController: widget.safetyController,
+          profileController: widget.profileController,
         ),
       ),
     );
@@ -234,10 +235,10 @@ class _AppShellState extends State<AppShell> {
       MaterialPageRoute<void>(
         builder: (_) => SupportResourcesPage(
           safetyController: widget.safetyController,
+          profileController: widget.profileController,
           assessment:
               widget.safetyController.activeAssessment ??
               const SafetyAssessment.clear(),
-          regionCode: Localizations.localeOf(context).countryCode ?? 'GLOBAL',
         ),
       ),
     );
@@ -251,6 +252,7 @@ class _AppShellState extends State<AppShell> {
       MaterialPageRoute<void>(
         builder: (_) => ChatPage(
           safetyController: widget.safetyController,
+          profileController: widget.profileController,
           chatController: _chatController,
           autoConnect: true,
         ),
@@ -265,6 +267,7 @@ class _AppShellState extends State<AppShell> {
       MaterialPageRoute<void>(
         builder: (_) => CallPage(
           safetyController: widget.safetyController,
+          profileController: widget.profileController,
           chatController: _chatController,
         ),
       ),

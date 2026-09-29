@@ -45,13 +45,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('text-check-in-save')));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('You deserve support'), findsOneWidget);
+    // Urgent flags lead with the national emergency number.
+    expect(find.textContaining('Call 999'), findsOneWidget);
     expect(sessionController.sessions, isEmpty);
     expect(safetyController.hasActiveFlag, isTrue);
 
-    final returnButton = find.text('Return to reflection');
-    await tester.scrollUntilVisible(returnButton, 300);
-    await tester.tap(returnButton);
+    await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
     expect(find.text('What feels present right now?'), findsOneWidget);
   });

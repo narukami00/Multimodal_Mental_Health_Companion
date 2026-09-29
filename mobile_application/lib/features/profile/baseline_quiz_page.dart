@@ -320,9 +320,8 @@ class _BaselineQuizPageState extends State<BaselineQuizPage> {
           MaterialPageRoute<void>(
             builder: (_) => SupportResourcesPage(
               safetyController: widget.safetyController,
+              profileController: widget.profileController,
               assessment: assessment,
-              regionCode:
-                  Localizations.localeOf(context).countryCode ?? 'GLOBAL',
             ),
           ),
         );

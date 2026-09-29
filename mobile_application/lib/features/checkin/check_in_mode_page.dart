@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
 import '../call/call_page.dart';
+import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../sessions/session_controller.dart';
 import 'text_check_in_page.dart';
@@ -10,11 +11,13 @@ class CheckInModePage extends StatelessWidget {
   const CheckInModePage({
     required this.sessionController,
     required this.safetyController,
+    this.profileController,
     super.key,
   });
 
   final SessionController sessionController;
   final SafetyController safetyController;
+  final ProfileController? profileController;
 
   @override
   Widget build(BuildContext context) {
@@ -208,6 +211,7 @@ class CheckInModePage extends StatelessWidget {
         builder: (_) => TextCheckInPage(
           sessionController: sessionController,
           safetyController: safetyController,
+          profileController: profileController,
         ),
       ),
     );
@@ -216,7 +220,10 @@ class CheckInModePage extends StatelessWidget {
   void _openVoiceCall(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => CallPage(safetyController: safetyController),
+        builder: (_) => CallPage(
+          safetyController: safetyController,
+          profileController: profileController,
+        ),
       ),
     );
   }

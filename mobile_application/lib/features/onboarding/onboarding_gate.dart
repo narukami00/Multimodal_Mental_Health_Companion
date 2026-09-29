@@ -74,16 +74,19 @@ class _OnboardingGateState extends State<OnboardingGate> {
         );
       }
       if (route == 'call') {
-        return CallPage(safetyController: widget.safetyController);
+        return CallPage(
+          safetyController: widget.safetyController,
+          profileController: widget.profileController,
+        );
       }
       if (route == 'support' || route == 'emergency') {
         return SupportResourcesPage(
           safetyController: widget.safetyController,
+          profileController: widget.profileController,
           assessment: const SafetyAssessment(
             level: SafetyLevel.urgentSupport,
             matchedSignals: ['manual_request'],
           ),
-          regionCode: 'GLOBAL',
         );
       }
       if (route == 'baseline') {

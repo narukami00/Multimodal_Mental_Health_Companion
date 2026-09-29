@@ -14,6 +14,7 @@ import '../../services/companion_websocket_service.dart';
 import '../../services/pcm_audio_recorder_service.dart';
 import '../../services/tts_playback_service.dart';
 import '../chat/chat_controller.dart';
+import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'call_turn_controller.dart';
@@ -21,6 +22,7 @@ import 'call_turn_controller.dart';
 class CallPage extends StatefulWidget {
   const CallPage({
     required this.safetyController,
+    this.profileController,
     this.webSocketService,
     this.audioRecorderService,
     this.ttsPlaybackService,
@@ -29,6 +31,7 @@ class CallPage extends StatefulWidget {
   });
 
   final SafetyController safetyController;
+  final ProfileController? profileController;
   final CompanionWebSocketService? webSocketService;
   final PcmAudioRecorderService? audioRecorderService;
   final TtsPlaybackService? ttsPlaybackService;
@@ -1040,7 +1043,7 @@ class _CallPageState extends State<CallPage> {
       MaterialPageRoute<void>(
         builder: (_) => SupportResourcesPage(
           safetyController: widget.safetyController,
-          regionCode: Localizations.localeOf(context).countryCode ?? 'GLOBAL',
+          profileController: widget.profileController,
         ),
       ),
     );

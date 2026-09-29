@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/session_input.dart';
 import '../../core/models/safety_assessment.dart';
 import '../journal/session_detail_page.dart';
+import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
@@ -11,11 +12,13 @@ class TextCheckInPage extends StatefulWidget {
   const TextCheckInPage({
     required this.sessionController,
     required this.safetyController,
+    this.profileController,
     super.key,
   });
 
   final SessionController sessionController;
   final SafetyController safetyController;
+  final ProfileController? profileController;
 
   @override
   State<TextCheckInPage> createState() => _TextCheckInPageState();
@@ -61,9 +64,8 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
             MaterialPageRoute<void>(
               builder: (_) => SupportResourcesPage(
                 safetyController: widget.safetyController,
+                profileController: widget.profileController,
                 assessment: assessment,
-                regionCode:
-                    Localizations.localeOf(context).countryCode ?? 'GLOBAL',
               ),
             ),
           );
