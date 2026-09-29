@@ -12,7 +12,16 @@ class UserProfile {
     this.gad7Answers = const {},
     this.phq9Answers = const {},
     this.baselineCompletedAt,
+    this.displayName,
+    this.avatarPath,
+    this.hapticsEnabled = true,
+    this.ambientAudioEnabled = false,
+    this.paletteId = defaultPaletteId,
+    this.firstRunAt,
   });
+
+  /// Identifier of the default colour palette.
+  static const defaultPaletteId = 'warmCream';
 
   final List<String> preferredActivities;
   final List<String> constraints;
@@ -24,6 +33,24 @@ class UserProfile {
   final Map<String, int> gad7Answers;
   final Map<String, int> phq9Answers;
   final DateTime? baselineCompletedAt;
+
+  /// User-chosen display name. Null until the user sets one from the You tab.
+  final String? displayName;
+
+  /// Absolute path to a user-picked profile photo in app-private storage.
+  final String? avatarPath;
+
+  /// Whether gentle haptic feedback is enabled across the app.
+  final bool hapticsEnabled;
+
+  /// Whether ambient breath audio may play during grounding and pause moments.
+  final bool ambientAudioEnabled;
+
+  /// Identifier of the active colour palette (see `SolaceColors`).
+  final String paletteId;
+
+  /// First launch time, used to show an honest "member since" date.
+  final DateTime? firstRunAt;
 
   bool get hasPreferences => preferredActivities.isNotEmpty;
   bool get erqSComplete => erqSAnswers.length == 6;
@@ -49,6 +76,12 @@ class UserProfile {
     Map<String, int>? gad7Answers,
     Map<String, int>? phq9Answers,
     DateTime? baselineCompletedAt,
+    String? displayName,
+    String? avatarPath,
+    bool? hapticsEnabled,
+    bool? ambientAudioEnabled,
+    String? paletteId,
+    DateTime? firstRunAt,
   }) {
     return UserProfile(
       preferredActivities: preferredActivities ?? this.preferredActivities,
@@ -62,6 +95,12 @@ class UserProfile {
       gad7Answers: gad7Answers ?? this.gad7Answers,
       phq9Answers: phq9Answers ?? this.phq9Answers,
       baselineCompletedAt: baselineCompletedAt ?? this.baselineCompletedAt,
+      displayName: displayName ?? this.displayName,
+      avatarPath: avatarPath ?? this.avatarPath,
+      hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
+      ambientAudioEnabled: ambientAudioEnabled ?? this.ambientAudioEnabled,
+      paletteId: paletteId ?? this.paletteId,
+      firstRunAt: firstRunAt ?? this.firstRunAt,
     );
   }
 
@@ -77,6 +116,12 @@ class UserProfile {
       'gad7Answers': gad7Answers,
       'phq9Answers': phq9Answers,
       'baselineCompletedAt': baselineCompletedAt?.toIso8601String(),
+      'displayName': displayName,
+      'avatarPath': avatarPath,
+      'hapticsEnabled': hapticsEnabled,
+      'ambientAudioEnabled': ambientAudioEnabled,
+      'paletteId': paletteId,
+      'firstRunAt': firstRunAt?.toIso8601String(),
     };
   }
 
@@ -94,7 +139,20 @@ class UserProfile {
       baselineCompletedAt: DateTime.tryParse(
         map['baselineCompletedAt'] as String? ?? '',
       ),
+      displayName: _nonEmpty(map['displayName']),
+      avatarPath: _nonEmpty(map['avatarPath']),
+      hapticsEnabled: map['hapticsEnabled'] as bool? ?? true,
+      ambientAudioEnabled: map['ambientAudioEnabled'] as bool? ?? false,
+      paletteId: _nonEmpty(map['paletteId']) ?? defaultPaletteId,
+      firstRunAt: DateTime.tryParse(map['firstRunAt'] as String? ?? ''),
     );
+  }
+
+  /// Returns a trimmed string, or null when absent or blank.
+  static String? _nonEmpty(Object? value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   static List<String> _strings(Object? value) {
