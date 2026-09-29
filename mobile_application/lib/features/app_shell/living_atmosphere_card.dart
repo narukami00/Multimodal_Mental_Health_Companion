@@ -33,11 +33,19 @@ enum SanctuaryBiome {
 class LivingAtmosphereCard extends StatefulWidget {
   const LivingAtmosphereCard({
     this.initialBiome = SanctuaryBiome.dunes,
+    this.ambientAudioEnabled = true,
     this.onBiomeChanged,
     super.key,
   });
 
   final SanctuaryBiome initialBiome;
+
+  /// Whether the user has allowed ambient audio in Settings.
+  ///
+  /// When false the soundscape shelf stays visible but does not play, so the
+  /// setting genuinely governs playback.
+  final bool ambientAudioEnabled;
+
   final ValueChanged<SanctuaryBiome>? onBiomeChanged;
 
   @override
@@ -211,6 +219,18 @@ class _LivingAtmosphereCardState extends State<LivingAtmosphereCard>
   }
 
   void _toggleSound(SoundscapeMode mode) {
+    if (!widget.ambientAudioEnabled) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Ambient audio is off in Settings.'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      return;
+    }
     AmbientAudioService.instance.toggleSound(mode);
   }
 
@@ -373,7 +393,10 @@ class _LivingAtmosphereCardState extends State<LivingAtmosphereCard>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xB816120E),
+                  // Dimmed when ambient audio is disabled in Settings.
+                  color: widget.ambientAudioEnabled
+                      ? const Color(0xB816120E)
+                      : const Color(0x5916120E),
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(color: const Color(0x38FFFFFF)),
                   boxShadow: const [

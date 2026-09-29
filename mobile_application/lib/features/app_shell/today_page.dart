@@ -23,6 +23,7 @@ class TodayPage extends StatelessWidget {
     this.primaryCard = HomeCardType.checkIn,
     this.currentTime,
     this.chatController,
+    this.ambientAudioEnabled = true,
     this.onStartCheckIn,
     this.onOpenSupport,
     this.onOpenChat,
@@ -34,6 +35,10 @@ class TodayPage extends StatelessWidget {
   final HomeCardType primaryCard;
   final DateTime? currentTime;
   final ChatController? chatController;
+
+  /// Whether the user has allowed ambient audio in Settings.
+  final bool ambientAudioEnabled;
+
   final VoidCallback? onStartCheckIn;
   final VoidCallback? onOpenSupport;
   final VoidCallback? onOpenChat;
@@ -94,7 +99,7 @@ class TodayPage extends StatelessWidget {
             const SizedBox(height: 14),
             _buildSolCompanionHub(context),
             const SizedBox(height: 18),
-            const LivingAtmosphereCard(),
+            LivingAtmosphereCard(ambientAudioEnabled: ambientAudioEnabled),
             const SizedBox(height: 24),
             _buildFooter(context),
           ],

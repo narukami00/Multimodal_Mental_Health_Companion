@@ -97,6 +97,8 @@ class _AppShellState extends State<AppShell> {
             children: [
               TodayPage(
                 chatController: _chatController,
+                ambientAudioEnabled:
+                    widget.profileController.profile.ambientAudioEnabled,
                 primaryCard: HomeCardPriority.select(
                   HomeState(safetyFlagActive: safetyActive),
                 ),
