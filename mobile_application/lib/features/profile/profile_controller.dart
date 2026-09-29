@@ -113,6 +113,20 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
+  /// Turns the daily check-in reminder on or off.
+  Future<void> setReminderEnabled(bool enabled) async {
+    _profile = _profile.copyWith(reminderEnabled: enabled);
+    await _persist();
+  }
+
+  /// Updates the daily reminder time, in minutes past midnight.
+  Future<void> setReminderMinutes(int minutes) async {
+    _profile = _profile.copyWith(
+      reminderMinutes: minutes.clamp(0, 24 * 60 - 1),
+    );
+    await _persist();
+  }
+
   Future<void> _persist() async {
     await _repository.save(_profile);
     notifyListeners();

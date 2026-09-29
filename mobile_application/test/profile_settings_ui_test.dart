@@ -141,9 +141,33 @@ void main() {
     expect(find.text('Warm Cream'), findsOneWidget);
     expect(find.text('Soft Twilight'), findsOneWidget);
 
-    // Reminder delivery must not be presented as a working switch yet.
-    expect(find.text('Arriving with the notifications update'), findsOneWidget);
-    expect(find.text('Soon'), findsOneWidget);
+    // The reminder is a real control with a scheduled time, not a placeholder.
+    expect(find.text('Daily check-in reminder'), findsOneWidget);
+    expect(find.text('8:30 PM'), findsOneWidget);
+  });
+
+  testWidgets('reminder fails closed when notifications are unavailable', (
+    tester,
+  ) async {
+    await profileController.load();
+
+    await pumpProfile(tester);
+
+    await tester.tap(find.byIcon(Icons.tune_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(profileController.profile.reminderEnabled, isFalse);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('setting-reminder')),
+        matching: find.byType(Switch),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Never claim a reminder that cannot actually be delivered.
+    expect(profileController.profile.reminderEnabled, isFalse);
   });
 
   testWidgets('selecting a palette persists it', (tester) async {

@@ -10,9 +10,13 @@ dependencies:
   audioplayers: ^6.6.0
   flutter:
     sdk: flutter
+  flutter_local_notifications: ^20.1.0
+  flutter_timezone: ^5.1.0
   image_picker: ^1.1.2
   path_provider: ^2.1.5
   shared_preferences: ^2.5.3
+  timezone: ^0.10.1
+  url_launcher: ^6.3.2
   web_socket_channel: ^3.0.3
 
 dev_dependencies:

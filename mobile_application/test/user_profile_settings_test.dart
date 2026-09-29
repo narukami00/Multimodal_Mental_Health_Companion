@@ -12,6 +12,20 @@ void main() {
       expect(profile.ambientAudioEnabled, isFalse);
       expect(profile.paletteId, UserProfile.defaultPaletteId);
       expect(profile.firstRunAt, isNull);
+      expect(profile.reminderEnabled, isFalse);
+      expect(profile.reminderMinutes, UserProfile.defaultReminderMinutes);
+    });
+
+    test('round-trips reminder settings through toMap/fromMap', () {
+      const profile = UserProfile(
+        reminderEnabled: true,
+        reminderMinutes: 7 * 60 + 15,
+      );
+
+      final restored = UserProfile.fromMap(profile.toMap());
+
+      expect(restored.reminderEnabled, isTrue);
+      expect(restored.reminderMinutes, 7 * 60 + 15);
     });
 
     test('round-trips identity and settings through toMap/fromMap', () {

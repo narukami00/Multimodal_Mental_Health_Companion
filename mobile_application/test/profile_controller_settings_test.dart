@@ -55,5 +55,22 @@ void main() {
 
       expect(notifications, 2);
     });
+
+    test('reminder settings persist and clamp to a valid day range', () async {
+      final repository = InMemoryProfileRepository();
+      final controller = ProfileController(repository: repository);
+      await controller.load();
+
+      await controller.setReminderMinutes(7 * 60 + 45);
+      await controller.setReminderEnabled(true);
+
+      final stored = await repository.load();
+      expect(stored.reminderEnabled, isTrue);
+      expect(stored.reminderMinutes, 7 * 60 + 45);
+
+      // Values outside a single day are clamped rather than stored as-is.
+      await controller.setReminderMinutes(24 * 60 + 10);
+      expect(controller.profile.reminderMinutes, 24 * 60 - 1);
+    });
   });
 }

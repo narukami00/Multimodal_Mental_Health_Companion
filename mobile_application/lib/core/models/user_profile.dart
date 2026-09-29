@@ -18,10 +18,15 @@ class UserProfile {
     this.ambientAudioEnabled = false,
     this.paletteId = defaultPaletteId,
     this.firstRunAt,
+    this.reminderEnabled = false,
+    this.reminderMinutes = defaultReminderMinutes,
   });
 
   /// Identifier of the default colour palette.
   static const defaultPaletteId = 'warmCream';
+
+  /// Default daily reminder time, 8:30 PM, as minutes past midnight.
+  static const defaultReminderMinutes = 20 * 60 + 30;
 
   final List<String> preferredActivities;
   final List<String> constraints;
@@ -51,6 +56,12 @@ class UserProfile {
 
   /// First launch time, used to show an honest "member since" date.
   final DateTime? firstRunAt;
+
+  /// Whether the daily check-in reminder is scheduled.
+  final bool reminderEnabled;
+
+  /// Reminder time as minutes past midnight.
+  final int reminderMinutes;
 
   bool get hasPreferences => preferredActivities.isNotEmpty;
   bool get erqSComplete => erqSAnswers.length == 6;
@@ -82,6 +93,8 @@ class UserProfile {
     bool? ambientAudioEnabled,
     String? paletteId,
     DateTime? firstRunAt,
+    bool? reminderEnabled,
+    int? reminderMinutes,
   }) {
     return UserProfile(
       preferredActivities: preferredActivities ?? this.preferredActivities,
@@ -101,6 +114,8 @@ class UserProfile {
       ambientAudioEnabled: ambientAudioEnabled ?? this.ambientAudioEnabled,
       paletteId: paletteId ?? this.paletteId,
       firstRunAt: firstRunAt ?? this.firstRunAt,
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+      reminderMinutes: reminderMinutes ?? this.reminderMinutes,
     );
   }
 
@@ -122,6 +137,8 @@ class UserProfile {
       'ambientAudioEnabled': ambientAudioEnabled,
       'paletteId': paletteId,
       'firstRunAt': firstRunAt?.toIso8601String(),
+      'reminderEnabled': reminderEnabled,
+      'reminderMinutes': reminderMinutes,
     };
   }
 
@@ -145,6 +162,9 @@ class UserProfile {
       ambientAudioEnabled: map['ambientAudioEnabled'] as bool? ?? false,
       paletteId: _nonEmpty(map['paletteId']) ?? defaultPaletteId,
       firstRunAt: DateTime.tryParse(map['firstRunAt'] as String? ?? ''),
+      reminderEnabled: map['reminderEnabled'] as bool? ?? false,
+      reminderMinutes:
+          (map['reminderMinutes'] as num?)?.toInt() ?? defaultReminderMinutes,
     );
   }
 

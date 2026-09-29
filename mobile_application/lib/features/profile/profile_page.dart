@@ -11,6 +11,7 @@ import '../../core/models/session_record.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../services/ambient_audio_service.dart';
+import '../../services/check_in_reminder_service.dart';
 import '../library/activity_library_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -1858,6 +1859,63 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
     unawaited(_previewHaptic());
   }
 
+  /// Enables the daily reminder, requesting the notification permission first.
+  Future<void> _setReminder(bool enabled) async {
+    if (!enabled) {
+      await _controller.setReminderEnabled(false);
+      await CheckInReminderService.instance.cancel();
+      return;
+    }
+
+    final granted = await CheckInReminderService.instance.requestPermission();
+    if (!granted) {
+      // Stay off rather than implying a reminder that will never arrive.
+      await _controller.setReminderEnabled(false);
+      await CheckInReminderService.instance.cancel();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Notifications are off for Solace. You can allow them in '
+              'system settings.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      return;
+    }
+
+    await _controller.setReminderEnabled(true);
+    await CheckInReminderService.instance.scheduleDaily(
+      minutesPastMidnight: _controller.profile.reminderMinutes,
+    );
+  }
+
+  /// Lets the user pick the reminder time and reschedules if it is on.
+  Future<void> _pickReminderTime() async {
+    final profile = _controller.profile;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: (profile.reminderMinutes ~/ 60) % 24,
+        minute: profile.reminderMinutes % 60,
+      ),
+      helpText: 'Check-in reminder time',
+    );
+    if (picked == null) return;
+
+    final minutes = picked.hour * 60 + picked.minute;
+    await _controller.setReminderMinutes(minutes);
+    if (_controller.profile.reminderEnabled) {
+      await CheckInReminderService.instance.scheduleDaily(
+        minutesPastMidnight: minutes,
+      );
+    }
+  }
+
   /// Plays a short haptic cue, ignoring platforms that do not support it.
   ///
   /// Haptics are best effort: a missing or slow channel must never block a
@@ -1874,6 +1932,10 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
   Widget build(BuildContext context) {
     final profile = _controller.profile;
     final activePalette = SolacePaletteId.fromId(profile.paletteId);
+    final reminderTimeLabel = TimeOfDay(
+      hour: (profile.reminderMinutes ~/ 60) % 24,
+      minute: profile.reminderMinutes % 60,
+    ).format(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1934,7 +1996,13 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
           value: profile.ambientAudioEnabled,
           onChanged: _setAmbientAudio,
         ),
-        const _PendingReminderRow(),
+        _ReminderSetting(
+          key: const ValueKey('setting-reminder'),
+          enabled: profile.reminderEnabled,
+          timeLabel: reminderTimeLabel,
+          onToggle: _setReminder,
+          onPickTime: _pickReminderTime,
+        ),
         const SizedBox(height: 14),
         const Text(
           'COLOR PALETTE',
@@ -2040,54 +2108,95 @@ class _SettingToggle extends StatelessWidget {
   }
 }
 
-/// Informational row for reminder delivery, which ships with notifications.
+/// Daily check-in reminder: a switch plus a tappable time.
 ///
-/// Kept non-interactive so it never implies a capability the app lacks.
-class _PendingReminderRow extends StatelessWidget {
-  const _PendingReminderRow();
+/// The time is only scheduled when the switch is on, so the label never
+/// implies a reminder that is not actually set.
+class _ReminderSetting extends StatelessWidget {
+  const _ReminderSetting({
+    required this.enabled,
+    required this.timeLabel,
+    required this.onToggle,
+    required this.onPickTime,
+    super.key,
+  });
+
+  final bool enabled;
+  final String timeLabel;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onPickTime;
 
   @override
   Widget build(BuildContext context) {
+    final accent = enabled
+        ? const Color(0xFFB57A12)
+        : const Color(0xFF887D6E);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Evening Reminder',
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Daily check-in reminder',
                   style: TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF3B3327),
                   ),
                 ),
-                Text(
-                  'Arriving with the notifications update',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF93887A),
-                  ),
+              ),
+              Switch(
+                value: enabled,
+                activeColor: const Color(0xFFFFB534),
+                onChanged: onToggle,
+              ),
+            ],
+          ),
+          GestureDetector(
+            onTap: onPickTime,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: enabled
+                    ? const Color(0xFFFFF9EE)
+                    : const Color(0xFFF4F1E7),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: enabled
+                      ? const Color(0xFFFFB534)
+                      : Colors.transparent,
                 ),
-              ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.schedule_rounded, size: 15, color: accent),
+                  const SizedBox(width: 7),
+                  Text(
+                    timeLabel,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: accent,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF4F1E7),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: const Text(
-              'Soon',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF7A6E5D),
-              ),
+          const SizedBox(height: 4),
+          Text(
+            enabled
+                ? 'One gentle reminder a day, delivered on this device.'
+                : 'Turn on for a single gentle reminder each day.',
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF93887A),
             ),
           ),
         ],

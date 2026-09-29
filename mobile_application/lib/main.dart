@@ -20,6 +20,7 @@ import 'features/sessions/session_controller.dart';
 import 'features/suggestions/suggestion_controller.dart';
 import 'providers/mock/mock_providers.dart';
 import 'providers/safety/keyword_safety_screener.dart';
+import 'services/check_in_reminder_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +43,15 @@ Future<void> main() async {
   );
   await profileController.load();
   await profileController.ensureFirstRun();
+
+  // Restore the daily reminder in case the OS dropped it (for example after a
+  // reboot or an app update).
+  await CheckInReminderService.instance.initialize();
+  if (profileController.profile.reminderEnabled) {
+    await CheckInReminderService.instance.scheduleDaily(
+      minutesPastMidnight: profileController.profile.reminderMinutes,
+    );
+  }
   final suggestionController = SuggestionController(
     libraryRepository: AssetActivityLibraryRepository(),
     suggestionRepository: SharedPreferencesSuggestionRepository(preferences),
