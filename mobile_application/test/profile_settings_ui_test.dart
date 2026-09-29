@@ -203,4 +203,36 @@ void main() {
 
     expect(profileController.profile.hapticsEnabled, isFalse);
   });
+
+  testWidgets('settings sheet reflects changes without being reopened', (
+    tester,
+  ) async {
+    await profileController.load();
+
+    await pumpProfile(tester);
+
+    await tester.tap(find.byIcon(Icons.tune_rounded).first);
+    await tester.pumpAndSettle();
+
+    Switch hapticsSwitch() => tester.widget<Switch>(
+          find.descendant(
+            of: find.byKey(const ValueKey('toggle-haptics')),
+            matching: find.byType(Switch),
+          ),
+        );
+
+    expect(hapticsSwitch().value, isTrue);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('toggle-haptics')),
+        matching: find.byType(Switch),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The sheet is still open and already shows the new state.
+    expect(find.text('Daily check-in reminder'), findsOneWidget);
+    expect(hapticsSwitch().value, isFalse);
+  });
 }

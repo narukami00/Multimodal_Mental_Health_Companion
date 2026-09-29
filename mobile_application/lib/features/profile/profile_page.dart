@@ -805,10 +805,10 @@ class ProfilePage extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFFFFDF8),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: [
+          decoration: BoxDecoration(
+            color: SolaceColors.from(ctx).surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: const [
               BoxShadow(
                 color: Color(0x33684B20),
                 blurRadius: 32,
@@ -1892,6 +1892,25 @@ class _AppSettingsForm extends StatefulWidget {
 
 class _AppSettingsFormState extends State<_AppSettingsForm> {
   ProfileController get _controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // This sheet is pushed on the root navigator, so it is not rebuilt by the
+    // ProfilePage's AnimatedBuilder. Subscribe directly so every control shows
+    // its new value immediately instead of only after the sheet is reopened.
+    _controller.addListener(_onProfileChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onProfileChanged);
+    super.dispose();
+  }
+
+  void _onProfileChanged() {
+    if (mounted) setState(() {});
+  }
 
   Future<void> _setHaptics(bool enabled) async {
     // Persist first so the preference always applies, then preview the change
