@@ -121,6 +121,6 @@ void main() {
     // Tap on You tab
     await tester.tap(find.text('You'));
     await tester.pumpAndSettle();
-    expect(find.text('Maya Lin'), findsOneWidget);
+    expect(find.text('Add your name'), findsOneWidget);
   });
 }

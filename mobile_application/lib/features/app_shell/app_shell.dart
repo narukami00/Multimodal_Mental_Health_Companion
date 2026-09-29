@@ -110,6 +110,7 @@ class _AppShellState extends State<AppShell> {
                 profileController: widget.profileController,
                 safetyController: widget.safetyController,
                 suggestionController: widget.suggestionController,
+                sessionController: widget.sessionController,
               ),
             ],
           ),

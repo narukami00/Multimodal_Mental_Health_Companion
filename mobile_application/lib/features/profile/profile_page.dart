@@ -1,10 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/user_profile.dart';
+import '../../core/theme/solace_palette.dart';
+import '../../services/ambient_audio_service.dart';
 import '../library/activity_library_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
+import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
 import '../suggestions/suggestion_page.dart';
 import 'baseline_quiz_page.dart';
@@ -15,21 +23,25 @@ class ProfilePage extends StatelessWidget {
     required this.profileController,
     required this.safetyController,
     required this.suggestionController,
+    required this.sessionController,
     super.key,
   });
 
   final ProfileController profileController;
   final SafetyController safetyController;
   final SuggestionController suggestionController;
+  final SessionController sessionController;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: profileController,
+      animation: Listenable.merge([profileController, sessionController]),
       builder: (context, _) {
         final profile = profileController.profile;
         final completeCount = _completedBlocks(profile);
-        const displayName = 'Maya Lin';
+        final displayName = profile.displayName?.trim().isNotEmpty == true
+            ? profile.displayName!.trim()
+            : 'Add your name';
 
         return Scaffold(
           backgroundColor: const Color(0xFFFEFCE8),
@@ -78,7 +90,10 @@ class ProfilePage extends StatelessWidget {
                           ],
                         ),
                         InkWell(
-                          onTap: () => _showAppSettingsSheet(context),
+                          onTap: () => _showAppSettingsSheet(
+                            context,
+                            profileController,
+                          ),
                           borderRadius: BorderRadius.circular(13),
                           child: Container(
                             width: 38,
@@ -138,13 +153,12 @@ class ProfilePage extends StatelessWidget {
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(23),
-                                child: Container(
-                                  color: const Color(0xFFFFF6E4),
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.face_3_rounded,
-                                      size: 42,
-                                      color: Color(0xFF7A5832),
+                                child: GestureDetector(
+                                  onTap: () => _pickAvatar(context),
+                                  child: Container(
+                                    color: const Color(0xFFFFF6E4),
+                                    child: _AvatarContent(
+                                      avatarPath: profile.avatarPath,
                                     ),
                                   ),
                                 ),
@@ -181,18 +195,25 @@ class ProfilePage extends StatelessWidget {
                             children: [
                               Row(
                                 children: [
-                                  const Text(
-                                    displayName,
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF332C21),
-                                      letterSpacing: -0.2,
+                                  Flexible(
+                                    child: Text(
+                                      displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF332C21),
+                                        letterSpacing: -0.2,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 6),
                                   InkWell(
-                                    onTap: () => _showEditProfileSheet(context),
+                                    onTap: () => _showEditProfileSheet(
+                                      context,
+                                      profileController,
+                                    ),
                                     borderRadius: BorderRadius.circular(99),
                                     child: const Padding(
                                       padding: EdgeInsets.all(4),
@@ -206,9 +227,9 @@ class ProfilePage extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 4),
-                              const Text(
-                                'Member since September 2026',
-                                style: TextStyle(
+                              Text(
+                                _memberSinceLabel(profile.firstRunAt),
+                                style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF93887A),
@@ -697,7 +718,10 @@ class ProfilePage extends StatelessWidget {
                             iconColor: const Color(0xFFC08A1E),
                             title: 'App settings',
                             subtitle: 'Theme, sounds, notifications & language',
-                            onTap: () => _showAppSettingsSheet(context),
+                            onTap: () => _showAppSettingsSheet(
+                              context,
+                              profileController,
+                            ),
                           ),
                         ],
                       ),
@@ -1536,117 +1560,372 @@ class ProfilePage extends StatelessWidget {
   }
 
   // 5. App Settings Sheet
-  static void _showAppSettingsSheet(BuildContext context) {
+  static void _showAppSettingsSheet(
+    BuildContext context,
+    ProfileController controller,
+  ) {
     _showModalSheet(
       context: context,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3DC),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.tune_rounded,
-                  size: 20,
-                  color: Color(0xFFB57A12),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'App settings',
-                      style: TextStyle(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF3B3327),
-                      ),
-                    ),
-                    Text(
-                      'Sensory & gentle interaction preferences',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF93887A),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          _settingToggle(
-            title: 'Gentle Haptics',
-            subtitle: 'Subtle vibrational cues on taps and sliders',
-            value: true,
-          ),
-          _settingToggle(
-            title: 'Soft Ambient Breath Audio',
-            subtitle: 'Calming chimes during grounding pauses',
-            value: true,
-          ),
-          _settingToggle(
-            title: 'Evening Reminder',
-            subtitle: 'Gentle 8:30 PM notification (silent, no alarm)',
-            value: true,
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'COLOR PALETTE',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
-              color: Color(0xFFBCAC8E),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _rangeChip('Warm Cream (Default)', true),
-              const SizedBox(width: 8),
-              _rangeChip('Soft Twilight', false),
-            ],
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFB534),
-                foregroundColor: const Color(0xFF3D2E14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Save Preferences',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: _AppSettingsForm(controller: controller),
     );
   }
 
-  static Widget _settingToggle({
-    required String title,
-    required String subtitle,
-    required bool value,
-  }) {
+  // 6. Edit Profile Sheet
+  static void _showEditProfileSheet(
+    BuildContext context,
+    ProfileController controller,
+  ) {
+    _showModalSheet(
+      context: context,
+      child: _EditProfileForm(controller: controller),
+    );
+  }
+
+  /// Formats the first-run date as a gentle membership line.
+  static String _memberSinceLabel(DateTime? firstRunAt) {
+    if (firstRunAt == null) return 'Welcome to Solace';
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return 'Member since ${months[firstRunAt.month - 1]} ${firstRunAt.year}';
+  }
+
+  /// Opens the system photo picker and stores the chosen image.
+  ///
+  /// The picked file is copied into app-private storage so it survives the
+  /// picker's temporary cache being cleared.
+  Future<void> _pickAvatar(BuildContext context) async {
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      final saved = await _persistAvatar(File(picked.path));
+      await profileController.saveIdentity(avatarPath: saved);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save that photo. Try again.')),
+      );
+    }
+  }
+
+  /// Copies the picked image into app-private storage and returns its path.
+  static Future<String> _persistAvatar(File source) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final target = File(
+      '${dir.path}/avatar_${DateTime.now().millisecondsSinceEpoch}'
+      '${_extensionOf(source.path)}',
+    );
+    await source.copy(target.path);
+    return target.path;
+  }
+
+  static String _extensionOf(String path) {
+    final dot = path.lastIndexOf('.');
+    if (dot == -1 || dot == path.length - 1) return '.jpg';
+    return path.substring(dot);
+  }
+
+  int _completedBlocks(UserProfile profile) {
+    var completed = profile.preferencesCompleted ? 1 : 0;
+    if (profile.erqSComplete || profile.erqSSkipped) completed++;
+    if (profile.gad7Complete || profile.gad7Skipped) completed++;
+    if (profile.phq9Complete || profile.phq9Skipped) completed++;
+    return completed;
+  }
+}
+
+/// Name editor that persists through the profile controller.
+class _EditProfileForm extends StatefulWidget {
+  const _EditProfileForm({required this.controller});
+
+  final ProfileController controller;
+
+  @override
+  State<_EditProfileForm> createState() => _EditProfileFormState();
+}
+
+class _EditProfileFormState extends State<_EditProfileForm> {
+  late final TextEditingController _name;
+  var _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(
+      text: widget.controller.profile.displayName ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+
+    final name = _name.text.trim();
+    await widget.controller.saveIdentity(
+      displayName: name.isEmpty ? null : name,
+    );
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Your Profile & Identity',
+          style: TextStyle(
+            fontSize: 16.5,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF3B3327),
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'How Solace gently greets you in reflections.',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF93887A),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _name,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: 'Preferred Name',
+            hintText: 'Leave blank to stay anonymous',
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFFFB534), width: 1.8),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFB534),
+              foregroundColor: const Color(0xFF3D2E14),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: _saving ? null : _save,
+            child: const Text(
+              'Save Profile',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Real app settings: haptics, ambient audio and palette, all persisted.
+class _AppSettingsForm extends StatefulWidget {
+  const _AppSettingsForm({required this.controller});
+
+  final ProfileController controller;
+
+  @override
+  State<_AppSettingsForm> createState() => _AppSettingsFormState();
+}
+
+class _AppSettingsFormState extends State<_AppSettingsForm> {
+  ProfileController get _controller => widget.controller;
+
+  Future<void> _setHaptics(bool enabled) async {
+    // Preview the change immediately when switching on; turning haptics off
+    // stays silent by definition.
+    if (enabled) {
+      await HapticFeedback.selectionClick();
+    }
+    await _controller.setHapticsEnabled(enabled);
+  }
+
+  Future<void> _setAmbientAudio(bool enabled) async {
+    await _controller.setAmbientAudioEnabled(enabled);
+    if (enabled) {
+      await AmbientAudioService.instance.play(SoundscapeMode.solfeggio);
+    } else {
+      await AmbientAudioService.instance.stop();
+    }
+  }
+
+  Future<void> _setPalette(SolacePaletteId palette) async {
+    await HapticFeedback.selectionClick();
+    await _controller.setPaletteId(palette.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = _controller.profile;
+    final activePalette = SolacePaletteId.fromId(profile.paletteId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3DC),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.tune_rounded,
+                size: 20,
+                color: Color(0xFFB57A12),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'App settings',
+                    style: TextStyle(
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF3B3327),
+                    ),
+                  ),
+                  Text(
+                    'Sensory & gentle interaction preferences',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF93887A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _SettingToggle(
+          title: 'Gentle Haptics',
+          subtitle: 'Subtle vibrational cues on taps and sliders',
+          value: profile.hapticsEnabled,
+          onChanged: _setHaptics,
+        ),
+        _SettingToggle(
+          title: 'Soft Ambient Breath Audio',
+          subtitle: 'Plays a calm soundscape during grounding pauses',
+          value: profile.ambientAudioEnabled,
+          onChanged: _setAmbientAudio,
+        ),
+        const _PendingReminderRow(),
+        const SizedBox(height: 14),
+        const Text(
+          'COLOR PALETTE',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+            color: Color(0xFFBCAC8E),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (final palette in SolacePaletteId.values) ...[
+              if (palette != SolacePaletteId.values.first)
+                const SizedBox(width: 8),
+              _PaletteChip(
+                palette: palette,
+                selected: palette == activePalette,
+                onTap: () => _setPalette(palette),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFB534),
+              foregroundColor: const Color(0xFF3D2E14),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Done',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Settings row with a working switch.
+class _SettingToggle extends StatelessWidget {
+  const _SettingToggle({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -1677,88 +1956,163 @@ class ProfilePage extends StatelessWidget {
           Switch(
             value: value,
             activeColor: const Color(0xFFFFB534),
-            onChanged: (_) {},
+            onChanged: onChanged,
           ),
         ],
       ),
     );
   }
+}
 
-  // 6. Edit Profile Sheet
-  static void _showEditProfileSheet(BuildContext context) {
-    _showModalSheet(
-      context: context,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+/// Informational row for reminder delivery, which ships with notifications.
+///
+/// Kept non-interactive so it never implies a capability the app lacks.
+class _PendingReminderRow extends StatelessWidget {
+  const _PendingReminderRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
         children: [
-          const Text(
-            'Your Profile & Identity',
-            style: TextStyle(
-              fontSize: 16.5,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF3B3327),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Evening Reminder',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF3B3327),
+                  ),
+                ),
+                Text(
+                  'Arriving with the notifications update',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF93887A),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'How Solace gently greets you in reflections.',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF93887A),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F1E7),
+              borderRadius: BorderRadius.circular(999),
             ),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            initialValue: 'Maya Lin',
-            decoration: InputDecoration(
-              labelText: 'Preferred Name',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFFFB534), width: 1.8),
+            child: const Text(
+              'Soon',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF7A6E5D),
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFB534),
-                foregroundColor: const Color(0xFF3D2E14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+        ],
+      ),
+    );
+  }
+}
+
+/// Selectable palette chip showing a swatch of the palette itself.
+class _PaletteChip extends StatelessWidget {
+  const _PaletteChip({
+    required this.palette,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final SolacePaletteId palette;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = SolaceColors.of(palette);
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFFFF9EE) : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFFFFB534)
+                  : const Color(0xFFF2ECDD),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [colors.amber, colors.coral],
+                  ),
+                  borderRadius: BorderRadius.circular(6),
                 ),
               ),
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Save Profile',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  palette.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: selected
+                        ? const Color(0xFFB57A12)
+                        : const Color(0xFF887D6E),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
 
-  int _completedBlocks(UserProfile profile) {
-    var completed = profile.preferencesCompleted ? 1 : 0;
-    if (profile.erqSComplete || profile.erqSSkipped) completed++;
-    if (profile.gad7Complete || profile.gad7Skipped) completed++;
-    if (profile.phq9Complete || profile.phq9Skipped) completed++;
-    return completed;
+/// Renders the user's chosen profile photo, falling back to the default icon.
+class _AvatarContent extends StatelessWidget {
+  const _AvatarContent({required this.avatarPath});
+
+  final String? avatarPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = avatarPath;
+    if (path != null && File(path).existsSync()) {
+      return Image.file(
+        File(path),
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _fallback(),
+      );
+    }
+    return _fallback();
+  }
+
+  static Widget _fallback() {
+    return const Center(
+      child: Icon(
+        Icons.face_3_rounded,
+        size: 42,
+        color: Color(0xFF7A5832),
+      ),
+    );
   }
 }
