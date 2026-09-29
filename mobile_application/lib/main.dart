@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/theme/solace_palette.dart';
 import 'data/contracts/onboarding_repository.dart';
 import 'data/repositories/shared_preferences_onboarding_repository.dart';
 import 'data/repositories/in_memory_profile_repository.dart';
@@ -40,6 +41,7 @@ Future<void> main() async {
     repository: SharedPreferencesProfileRepository(preferences),
   );
   await profileController.load();
+  await profileController.ensureFirstRun();
   final suggestionController = SuggestionController(
     libraryRepository: AssetActivityLibraryRepository(),
     suggestionRepository: SharedPreferencesSuggestionRepository(preferences),
@@ -88,17 +90,26 @@ class SolaceApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Solace',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      home: OnboardingGate(
-        repository: onboardingRepository,
-        sessionController: sessionController,
-        safetyController: safetyController,
-        profileController: profileController,
-        suggestionController: suggestionController,
-      ),
+    // Rebuild the theme whenever the user switches palette.
+    return AnimatedBuilder(
+      animation: profileController,
+      builder: (context, _) {
+        final palette = SolaceColors.of(
+          SolacePaletteId.fromId(profileController.profile.paletteId),
+        );
+        return MaterialApp(
+          title: 'Solace',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(palette: palette),
+          home: OnboardingGate(
+            repository: onboardingRepository,
+            sessionController: sessionController,
+            safetyController: safetyController,
+            profileController: profileController,
+            suggestionController: suggestionController,
+          ),
+        );
+      },
     );
   }
 }

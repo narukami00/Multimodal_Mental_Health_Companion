@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'solace_palette.dart';
+
+/// Brand accent constants kept for legacy call sites.
+///
+/// New code should prefer [SolaceColors] from the theme so it follows the
+/// user's selected palette.
 abstract final class AppColors {
   static const amber = Color(0xFFFFB534);
   static const coral = Color(0xFFFF7F50);
@@ -10,44 +16,46 @@ abstract final class AppColors {
 }
 
 abstract final class AppTheme {
-  static ThemeData light() {
+  /// Builds the app theme for the selected [palette].
+  static ThemeData light({SolaceColors palette = SolaceColors.warmCream}) {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.amber,
+      seedColor: palette.amber,
       brightness: Brightness.light,
     ).copyWith(
-      primary: AppColors.amber,
+      primary: palette.amber,
       onPrimary: AppColors.deepAmber,
-      secondary: AppColors.coral,
+      secondary: palette.coral,
       onSecondary: Colors.white,
-      surface: AppColors.cream,
-      onSurface: AppColors.ink,
+      surface: palette.background,
+      onSurface: palette.ink,
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.cream,
+      scaffoldBackgroundColor: palette.background,
       fontFamily: 'Nunito',
-      textTheme: const TextTheme(
+      extensions: [palette],
+      textTheme: TextTheme(
         headlineMedium: TextStyle(
-          color: AppColors.ink,
+          color: palette.ink,
           fontWeight: FontWeight.w800,
         ),
         titleLarge: TextStyle(
-          color: AppColors.ink,
+          color: palette.ink,
           fontWeight: FontWeight.w800,
         ),
         bodyLarge: TextStyle(
-          color: AppColors.ink,
+          color: palette.ink,
           fontWeight: FontWeight.w600,
         ),
         bodyMedium: TextStyle(
-          color: AppColors.mutedInk,
+          color: palette.mutedInk,
           fontWeight: FontWeight.w600,
         ),
       ),
       cardTheme: CardThemeData(
-        color: Colors.white.withValues(alpha: 0.82),
+        color: palette.surface.withValues(alpha: 0.82),
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
@@ -55,15 +63,15 @@ abstract final class AppTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white.withValues(alpha: 0.92),
-        indicatorColor: AppColors.amber.withValues(alpha: 0.22),
+        backgroundColor: palette.surface.withValues(alpha: 0.92),
+        indicatorColor: palette.amber.withValues(alpha: 0.22),
         labelTextStyle: WidgetStatePropertyAll(
           const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.amber,
+          backgroundColor: palette.amber,
           foregroundColor: AppColors.deepAmber,
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
