@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/models/safety_assessment.dart';
+import '../../core/models/session_record.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../services/ambient_audio_service.dart';
@@ -242,88 +244,8 @@ class ProfilePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
 
-                    // Gentle Rhythm Card (Non-punitive streak)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xFFFFFDF6), Color(0xFFFFFAEE)],
-                        ),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: const Color(0xFFF6EFD9)),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x14785C28),
-                            blurRadius: 18,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFF3DC),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(
-                              Icons.eco_rounded,
-                              size: 20,
-                              color: Color(0xFFB57A12),
-                            ),
-                          ),
-                          const SizedBox(width: 13),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '4-day rhythm',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF4A4133),
-                                    letterSpacing: -0.1,
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  'Showing up when it feels right · 2 rest days',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF93887A),
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // 7-day gentle rhythm indicators
-                          Row(
-                            children: [
-                              _dot(true, false),
-                              const SizedBox(width: 4),
-                              _dot(true, false),
-                              const SizedBox(width: 4),
-                              _dot(false, false),
-                              const SizedBox(width: 4),
-                              _dot(true, false),
-                              const SizedBox(width: 4),
-                              _dot(true, true),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                    // Gentle Rhythm Card (Non-punitive streak, real data)
+                    _RhythmCard(sessions: sessionController.sessions),
                     const SizedBox(height: 22),
 
                     // SECTION: YOUR CARE (Matching HTML Reference)
@@ -746,21 +668,6 @@ class ProfilePage extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-
-  static Widget _dot(bool active, bool isToday) {
-    return Container(
-      width: isToday ? 9 : 7,
-      height: isToday ? 9 : 7,
-      decoration: BoxDecoration(
-        color: isToday
-            ? const Color(0xFFFF7F50)
-            : active
-                ? const Color(0xFFFFB534)
-                : const Color(0xFFEFE6D2),
-        shape: BoxShape.circle,
-      ),
     );
   }
 
@@ -1762,6 +1669,159 @@ class _EditProfileFormState extends State<_EditProfileForm> {
   }
 }
 
+/// Non-punitive weekly rhythm summary built from real check-in history.
+///
+/// Only the last seven days are considered, and rest days are described
+/// neutrally rather than as a broken streak.
+class _RhythmCard extends StatelessWidget {
+  const _RhythmCard({required this.sessions});
+
+  final List<SessionRecord> sessions;
+
+  static const _windowDays = 7;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = _dateOnly(DateTime.now());
+    final activeDays = <DateTime>{
+      for (final session in sessions) _dateOnly(session.createdAt),
+    };
+
+    final window = [
+      for (var offset = _windowDays - 1; offset >= 0; offset--)
+        today.subtract(Duration(days: offset)),
+    ];
+    final presentCount = window.where(activeDays.contains).length;
+    final (title, subtitle) = _summary(
+      presentCount,
+      _windowDays - presentCount,
+      sessions,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFFFFDF6), Color(0xFFFFFAEE)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFF6EFD9)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14785C28),
+            blurRadius: 18,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF3DC),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.eco_rounded,
+              size: 20,
+              color: Color(0xFFB57A12),
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF4A4133),
+                    letterSpacing: -0.1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF93887A),
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Row(
+            children: [
+              for (var i = 0; i < window.length; i++) ...[
+                if (i > 0) const SizedBox(width: 4),
+                _RhythmDot(
+                  active: activeDays.contains(window[i]),
+                  isToday: i == window.length - 1,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds a gentle title and subtitle for the current week.
+  static (String, String) _summary(
+    int presentCount,
+    int restCount,
+    List<SessionRecord> all,
+  ) {
+    if (all.isEmpty) {
+      return ('Your rhythm', 'Appears here after a few check-ins.');
+    }
+    if (presentCount == 0) {
+      return ('A quiet week', 'Nothing logged in 7 days · rest is part of it.');
+    }
+    return (
+      '$presentCount-day rhythm',
+      'Showing up when it feels right · $restCount rest days',
+    );
+  }
+
+  static DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+}
+
+/// A single day indicator within the rhythm card.
+class _RhythmDot extends StatelessWidget {
+  const _RhythmDot({required this.active, required this.isToday});
+
+  final bool active;
+  final bool isToday;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: isToday ? 9 : 7,
+      height: isToday ? 9 : 7,
+      decoration: BoxDecoration(
+        color: isToday
+            ? const Color(0xFFFF7F50)
+            : active
+                ? const Color(0xFFFFB534)
+                : const Color(0xFFEFE6D2),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
 /// Real app settings: haptics, ambient audio and palette, all persisted.
 class _AppSettingsForm extends StatefulWidget {
   const _AppSettingsForm({required this.controller});
@@ -1776,12 +1836,12 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
   ProfileController get _controller => widget.controller;
 
   Future<void> _setHaptics(bool enabled) async {
-    // Preview the change immediately when switching on; turning haptics off
-    // stays silent by definition.
-    if (enabled) {
-      await HapticFeedback.selectionClick();
-    }
+    // Persist first so the preference always applies, then preview the change
+    // when switching on. Turning haptics off stays silent by definition.
     await _controller.setHapticsEnabled(enabled);
+    if (enabled) {
+      unawaited(_previewHaptic());
+    }
   }
 
   Future<void> _setAmbientAudio(bool enabled) async {
@@ -1794,8 +1854,20 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
   }
 
   Future<void> _setPalette(SolacePaletteId palette) async {
-    await HapticFeedback.selectionClick();
     await _controller.setPaletteId(palette.id);
+    unawaited(_previewHaptic());
+  }
+
+  /// Plays a short haptic cue, ignoring platforms that do not support it.
+  ///
+  /// Haptics are best effort: a missing or slow channel must never block a
+  /// real setting change, so callers do not await this.
+  static Future<void> _previewHaptic() async {
+    try {
+      await HapticFeedback.selectionClick();
+    } catch (_) {
+      // Haptics are unavailable here; the preference still applies.
+    }
   }
 
   @override
@@ -1849,12 +1921,14 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
         ),
         const SizedBox(height: 18),
         _SettingToggle(
+          key: const ValueKey('toggle-haptics'),
           title: 'Gentle Haptics',
           subtitle: 'Subtle vibrational cues on taps and sliders',
           value: profile.hapticsEnabled,
           onChanged: _setHaptics,
         ),
         _SettingToggle(
+          key: const ValueKey('toggle-ambient-audio'),
           title: 'Soft Ambient Breath Audio',
           subtitle: 'Plays a calm soundscape during grounding pauses',
           value: profile.ambientAudioEnabled,
@@ -1878,6 +1952,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
               if (palette != SolacePaletteId.values.first)
                 const SizedBox(width: 8),
               _PaletteChip(
+                key: ValueKey('palette-${palette.id}'),
                 palette: palette,
                 selected: palette == activePalette,
                 onTap: () => _setPalette(palette),
@@ -1917,6 +1992,7 @@ class _SettingToggle extends StatelessWidget {
     required this.subtitle,
     required this.value,
     required this.onChanged,
+    super.key,
   });
 
   final String title;
@@ -2026,6 +2102,7 @@ class _PaletteChip extends StatelessWidget {
     required this.palette,
     required this.selected,
     required this.onTap,
+    super.key,
   });
 
   final SolacePaletteId palette;
