@@ -6,13 +6,16 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/session_record.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../services/ambient_audio_service.dart';
 import '../../services/check_in_reminder_service.dart';
+import '../../services/dialer_service.dart';
 import '../library/activity_library_page.dart';
+import '../safety/care_contacts_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
@@ -42,6 +45,8 @@ class ProfilePage extends StatelessWidget {
       builder: (context, _) {
         final profile = profileController.profile;
         final completeCount = _completedBlocks(profile);
+        final emergencyContacts = profile.emergencyContacts;
+        final iceContact = profileController.iceContact;
         final displayName = profile.displayName?.trim().isNotEmpty == true
             ? profile.displayName!.trim()
             : 'Add your name';
@@ -278,6 +283,30 @@ class ProfilePage extends StatelessWidget {
                       child: Column(
                         children: [
                           _menuRow(
+                            icon: Icons.people_outline_rounded,
+                            iconBg: const Color(0xFFFFF3DC),
+                            iconColor: const Color(0xFFC08A1E),
+                            title: 'Your people & emergency numbers',
+                            subtitle: emergencyContacts.isEmpty
+                                ? 'Add someone you trust, kept on this device'
+                                : '${emergencyContacts.length} saved on this device',
+                            badgeText: emergencyContacts.isEmpty
+                                ? null
+                                : '${emergencyContacts.length}',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => CareContactsPage(
+                                  profileController: profileController,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFF2ECDD),
+                          ),
+                          _menuRow(
                             icon: Icons.checklist_rounded,
                             iconBg: const Color(0xFFFFF3DC),
                             iconColor: const Color(0xFFC08A1E),
@@ -424,6 +453,15 @@ class ProfilePage extends StatelessWidget {
                                 ],
                               ),
                             ),
+                            if (iceContact != null) ...[
+                              const SizedBox(width: 8),
+                              _IceCallButton(
+                                contact: iceContact,
+                                onCall: () =>
+                                    _callIceContact(context, iceContact),
+                              ),
+                            ],
+                            const SizedBox(width: 8),
                             const Icon(
                               Icons.arrow_forward_ios_rounded,
                               size: 14,
@@ -1489,6 +1527,25 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
+  /// Hands the call-first contact to the platform dialer.
+  ///
+  /// The dialer is pre-filled only; the user still confirms the call.
+  Future<void> _callIceContact(
+    BuildContext context,
+    EmergencyContact contact,
+  ) async {
+    final opened = await const DialerService().openDialer(contact.phone);
+    if (!context.mounted || opened) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('No dialer available on this device.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   /// Formats the first-run date as a gentle membership line.
   static String _memberSinceLabel(DateTime? firstRunAt) {
     if (firstRunAt == null) return 'Welcome to Solace';
@@ -2265,6 +2322,48 @@ class _PaletteChip extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact one-tap call button for the call-first contact.
+class _IceCallButton extends StatelessWidget {
+  const _IceCallButton({required this.contact, required this.onCall});
+
+  final EmergencyContact contact;
+  final VoidCallback onCall;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onCall,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFE4D6),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.call_rounded, size: 15, color: Color(0xFFD2603A)),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 80),
+              child: Text(
+                contact.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFFB4522C),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

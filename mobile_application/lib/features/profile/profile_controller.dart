@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/models/emergency_contact.dart';
 import '../../core/models/user_profile.dart';
 import '../../data/contracts/profile_repository.dart';
 
@@ -123,6 +124,47 @@ class ProfileController extends ChangeNotifier {
   Future<void> setReminderMinutes(int minutes) async {
     _profile = _profile.copyWith(
       reminderMinutes: minutes.clamp(0, 24 * 60 - 1),
+    );
+    await _persist();
+  }
+
+  /// The contact the user has marked as the person to call first, if any.
+  EmergencyContact? get iceContact {
+    for (final contact in _profile.emergencyContacts) {
+      if (contact.isIce) return contact;
+    }
+    return null;
+  }
+
+  /// Adds or replaces a support contact.
+  ///
+  /// Marking one contact as ICE clears the flag on every other contact, so
+  /// there is never more than one "call first" number.
+  Future<void> saveEmergencyContact(EmergencyContact contact) async {
+    final others = _profile.emergencyContacts
+        .where((item) => item.id != contact.id)
+        .map(
+          (item) => contact.isIce && item.isIce
+              ? item.copyWith(isIce: false)
+              : item,
+        )
+        .toList();
+
+    _profile = _profile.copyWith(
+      emergencyContacts: List.unmodifiable([...others, contact]),
+    );
+    await _persist();
+  }
+
+  /// Removes a support contact. Missing ids are ignored.
+  Future<void> removeEmergencyContact(String id) async {
+    final remaining = _profile.emergencyContacts
+        .where((contact) => contact.id != id)
+        .toList();
+    if (remaining.length == _profile.emergencyContacts.length) return;
+
+    _profile = _profile.copyWith(
+      emergencyContacts: List.unmodifiable(remaining),
     );
     await _persist();
   }

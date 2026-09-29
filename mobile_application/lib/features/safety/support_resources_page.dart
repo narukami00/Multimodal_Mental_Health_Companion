@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/support_resource.dart';
+import '../../services/dialer_service.dart';
 import 'safety_controller.dart';
 import 'support_resource_catalog.dart';
 
@@ -20,12 +21,14 @@ class SupportResourcesPage extends StatefulWidget {
     required this.safetyController,
     this.assessment,
     this.regionCode = 'GLOBAL',
+    this.dialer = const DialerService(),
     super.key,
   });
 
   final SafetyController safetyController;
   final SafetyAssessment? assessment;
   final String regionCode;
+  final DialerService dialer;
 
   @override
   State<SupportResourcesPage> createState() => _SupportResourcesPageState();
@@ -51,6 +54,31 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
   void dispose() {
     _breathController.dispose();
     super.dispose();
+  }
+
+  /// Opens the dialer pre-filled, with a gentle note if none is available.
+  Future<void> _dial(String number) async {
+    final opened = await widget.dialer.openDialer(number);
+    if (!mounted || opened) return;
+    _showUnavailable();
+  }
+
+  /// Opens the SMS composer with the given message body.
+  Future<void> _text(String number, String body) async {
+    final opened = await widget.dialer.openSms(number, body: body);
+    if (!mounted || opened) return;
+    _showUnavailable();
+  }
+
+  void _showUnavailable() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('No dialer available on this device.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override
@@ -222,14 +250,7 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
                   icon: Icons.phone_in_talk_rounded,
                   accentColor: const Color(0xFFD2603A),
                   bgColor: const Color(0xFFFFF1EA),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Dialing 988 Crisis Lifeline...'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
+                  onTap: () => _dial('988'),
                 ),
                 const SizedBox(height: 10),
 
@@ -241,14 +262,7 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
                   icon: Icons.chat_bubble_outline_rounded,
                   accentColor: const Color(0xFFB57A12),
                   bgColor: const Color(0xFFFFF3DC),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Opening SMS to 741741...'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
+                  onTap: () => _text('741741', 'HOME'),
                 ),
                 const SizedBox(height: 22),
 
@@ -266,7 +280,12 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
 
                 // Resource cards
                 for (final resource in resources) ...[
-                  _ResourceCard(resource: resource),
+                  _ResourceCard(
+                    resource: resource,
+                    onDial: resource.phone == null
+                        ? null
+                        : () => _dial(resource.phone!),
+                  ),
                   const SizedBox(height: 10),
                 ],
 
@@ -673,9 +692,12 @@ class _SupportHero extends StatelessWidget {
 }
 
 class _ResourceCard extends StatelessWidget {
-  const _ResourceCard({required this.resource});
+  const _ResourceCard({required this.resource, this.onDial});
 
   final SupportResource resource;
+
+  /// Opens the dialer for this resource, or null when it has no number.
+  final VoidCallback? onDial;
 
   @override
   Widget build(BuildContext context) {
@@ -782,43 +804,53 @@ class _ResourceCard extends StatelessWidget {
           ),
           if (resource.phone != null) ...[
             const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onDial,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFFDFC8)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.phone_rounded,
-                    size: 16,
-                    color: Color(0xFFD2603A),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Direct dial: ${resource.phone}',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFFB4522C),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFFDFC8)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.phone_rounded,
+                        size: 16,
+                        color: Color(0xFFD2603A),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Direct dial: ${resource.phone}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFB4522C),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Tap to call',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFD2603A),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Tap to call',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFFD2603A),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],

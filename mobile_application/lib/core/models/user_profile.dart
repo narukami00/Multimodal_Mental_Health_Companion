@@ -1,3 +1,5 @@
+import 'emergency_contact.dart';
+
 enum QuizBlock { erqS, gad7, phq9 }
 
 class UserProfile {
@@ -20,6 +22,7 @@ class UserProfile {
     this.firstRunAt,
     this.reminderEnabled = false,
     this.reminderMinutes = defaultReminderMinutes,
+    this.emergencyContacts = const [],
   });
 
   /// Identifier of the default colour palette.
@@ -63,6 +66,10 @@ class UserProfile {
   /// Reminder time as minutes past midnight.
   final int reminderMinutes;
 
+  /// Support contacts the user has chosen to keep. At most one is the ICE
+  /// (in-case-of-emergency) contact.
+  final List<EmergencyContact> emergencyContacts;
+
   bool get hasPreferences => preferredActivities.isNotEmpty;
   bool get erqSComplete => erqSAnswers.length == 6;
   bool get gad7Complete => gad7Answers.length == 7;
@@ -95,6 +102,7 @@ class UserProfile {
     DateTime? firstRunAt,
     bool? reminderEnabled,
     int? reminderMinutes,
+    List<EmergencyContact>? emergencyContacts,
   }) {
     return UserProfile(
       preferredActivities: preferredActivities ?? this.preferredActivities,
@@ -116,6 +124,7 @@ class UserProfile {
       firstRunAt: firstRunAt ?? this.firstRunAt,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       reminderMinutes: reminderMinutes ?? this.reminderMinutes,
+      emergencyContacts: emergencyContacts ?? this.emergencyContacts,
     );
   }
 
@@ -139,6 +148,9 @@ class UserProfile {
       'firstRunAt': firstRunAt?.toIso8601String(),
       'reminderEnabled': reminderEnabled,
       'reminderMinutes': reminderMinutes,
+      'emergencyContacts': emergencyContacts
+          .map((contact) => contact.toMap())
+          .toList(),
     };
   }
 
@@ -165,7 +177,18 @@ class UserProfile {
       reminderEnabled: map['reminderEnabled'] as bool? ?? false,
       reminderMinutes:
           (map['reminderMinutes'] as num?)?.toInt() ?? defaultReminderMinutes,
+      emergencyContacts: _contacts(map['emergencyContacts']),
     );
+  }
+
+  /// Reads stored contacts, skipping malformed or incomplete entries.
+  static List<EmergencyContact> _contacts(Object? value) {
+    final list = value as List<dynamic>? ?? const [];
+    return [
+      for (final entry in list)
+        if (entry is Map)
+          EmergencyContact.fromMap(Map<String, dynamic>.from(entry)),
+    ].where((contact) => contact.id.isNotEmpty).toList();
   }
 
   /// Returns a trimmed string, or null when absent or blank.
