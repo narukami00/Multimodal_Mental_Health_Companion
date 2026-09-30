@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Solace</string>
+    <string name="checkin_widget_description">A one-word check-in, one tap away</string>
+    <string name="checkin_widget_eyebrow">SOLACE</string>
+    <!-- Shown before today's check-in. -->
+    <string name="checkin_widget_prompt">How are you, in one word?</string>
+</resources>

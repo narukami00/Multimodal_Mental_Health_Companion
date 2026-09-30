@@ -1734,9 +1734,6 @@ class _AppSettingsForm extends StatefulWidget {
 class _AppSettingsFormState extends State<_AppSettingsForm> {
   ProfileController get _controller => widget.controller;
 
-  /// How the reminder was actually scheduled. Null when it is off.
-  ReminderScheduleOutcome? _scheduleOutcome;
-
   @override
   void initState() {
     super.initState();
@@ -1790,7 +1787,6 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
     if (!enabled) {
       await _controller.setReminderEnabled(false);
       await service.cancel();
-      if (mounted) setState(() => _scheduleOutcome = null);
       return;
     }
 
@@ -1799,7 +1795,6 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
       await _controller.setReminderEnabled(false);
       await service.cancel();
       if (!mounted) return;
-      setState(() => _scheduleOutcome = null);
       _notify(
         'Notifications are off for Solace. You can allow them in '
         'system settings.',
@@ -1807,33 +1802,20 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
       return;
     }
 
-    // Ask for exact alarms so the time the user chose is the time it fires.
-    await service.requestExactAlarmPermission();
-
+    // Ask for notifications, then schedule. No exact-alarm request: this is a
+    // gentle nudge, so a few minutes of drift is fine.
     final result = await service.scheduleDaily(
       minutesPastMidnight: _controller.profile.reminderMinutes,
     );
     final scheduled = result.isScheduled;
     await _controller.setReminderEnabled(scheduled);
 
-    if (!mounted) return;
-    setState(() => _scheduleOutcome = scheduled ? result.outcome : null);
-
-    if (!scheduled) {
-      _notify(
-        result.outcome == ReminderScheduleOutcome.notificationsDisabled
-            ? 'Notifications are off for Solace, so no reminder was set.'
-            : 'The reminder could not be set. ${result.error ?? ''}'.trim(),
-      );
-      return;
-    }
-
-    if (result.outcome == ReminderScheduleOutcome.inexact) {
-      _notify(
-        'Reminder set. Android may deliver it a little late until alarms '
-        'are allowed for Solace.',
-      );
-    }
+    if (!mounted || scheduled) return;
+    _notify(
+      result.outcome == ReminderScheduleOutcome.notificationsDisabled
+          ? 'Notifications are off for Solace, so no reminder was set.'
+          : 'The reminder could not be set. ${result.error ?? ''}'.trim(),
+    );
   }
 
   /// Confirms delivery on the spot, without waiting for the chosen time.
@@ -1855,10 +1837,8 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
     final result = await CheckInReminderService.instance.scheduleDaily(
       minutesPastMidnight: _controller.profile.reminderMinutes,
     );
-    if (!mounted) return;
-
-    setState(() => _scheduleOutcome = result.isScheduled ? result.outcome : null);
     if (!result.isScheduled) {
+      // Could not be re-registered, so stop claiming it is set.
       await _controller.setReminderEnabled(false);
     }
   }
@@ -1892,11 +1872,9 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
     await _controller.setReminderMinutes(minutes);
     if (!_controller.profile.reminderEnabled) return;
 
-    final result = await CheckInReminderService.instance.scheduleDaily(
+    await CheckInReminderService.instance.scheduleDaily(
       minutesPastMidnight: minutes,
     );
-    if (!mounted) return;
-    setState(() => _scheduleOutcome = result.isScheduled ? result.outcome : null);
   }
 
   /// Plays a short haptic cue, ignoring platforms that do not support it.
@@ -1989,9 +1967,6 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
           enabled: profile.reminderEnabled,
           timeLabel: reminderTimeLabel,
           nextFireLabel: nextFireLabel,
-          mayBeLate:
-              profile.reminderEnabled &&
-              _scheduleOutcome == ReminderScheduleOutcome.inexact,
           onToggle: _setReminder,
           onPickTime: _pickReminderTime,
           onSendTest: _sendTestReminder,
@@ -2103,14 +2078,13 @@ class _SettingToggle extends StatelessWidget {
 
 /// Daily check-in reminder: a switch, a tappable time, and an honest status.
 ///
-/// The status line states the real next fire time, admits when Android may
-/// deliver late, and offers a way to confirm delivery immediately.
+/// The status line states the real next fire time and offers a way to confirm
+/// delivery immediately.
 class _ReminderSetting extends StatelessWidget {
   const _ReminderSetting({
     required this.enabled,
     required this.timeLabel,
     required this.nextFireLabel,
-    required this.mayBeLate,
     required this.onToggle,
     required this.onPickTime,
     required this.onSendTest,
@@ -2120,9 +2094,6 @@ class _ReminderSetting extends StatelessWidget {
   final bool enabled;
   final String timeLabel;
   final String nextFireLabel;
-
-  /// True when Android withheld exact alarms, so delivery may drift.
-  final bool mayBeLate;
 
   final ValueChanged<bool> onToggle;
   final VoidCallback onPickTime;
@@ -2200,19 +2171,6 @@ class _ReminderSetting extends StatelessWidget {
               color: Color(0xFF93887A),
             ),
           ),
-          if (enabled && mayBeLate) ...[
-            const SizedBox(height: 3),
-            const Text(
-              'Android is not allowing exact alarms, so it may arrive a '
-              'little late.',
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                height: 1.4,
-                color: Color(0xFF96620C),
-              ),
-            ),
-          ],
           if (enabled) ...[
             const SizedBox(height: 2),
             TextButton(

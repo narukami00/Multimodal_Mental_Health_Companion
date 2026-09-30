@@ -7,10 +7,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Lets the OS restore the scheduled reminder after a reboot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <!-- Lets a reminder the user chose a time for fire at that time. Android
-         12+ may withhold it, in which case the reminder is scheduled inexactly
-         and the app says so rather than silently drifting. -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
 
     <application
         android:label="solace_mobile"
@@ -39,6 +35,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Home-screen check-in widget. Tapping it opens the check-in flow. -->
+        <receiver
+            android:name=".CheckInWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/checkin_widget_info" />
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

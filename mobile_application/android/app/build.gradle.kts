@@ -25,9 +25,10 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.sysmentalhealth.solace_mobile"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // 23 rather than Flutter's default 21: home_widget pulls in
+        // androidx.work, which requires API 23. This drops Android 5.x, which
+        // is below 0.1% of devices and cannot run the widget anyway.
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

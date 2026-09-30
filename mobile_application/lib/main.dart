@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/theme/app_theme.dart';
@@ -14,6 +15,7 @@ import 'data/repositories/shared_preferences_safety_event_repository.dart';
 import 'data/repositories/shared_preferences_session_repository.dart';
 import 'data/repositories/shared_preferences_suggestion_repository.dart';
 import 'domain/rhythm/reminder_lapse_policy.dart';
+import 'features/checkin/check_in_mode_page.dart';
 import 'features/onboarding/onboarding_gate.dart';
 import 'features/profile/profile_controller.dart';
 import 'features/safety/safety_controller.dart';
@@ -22,6 +24,7 @@ import 'features/suggestions/suggestion_controller.dart';
 import 'providers/mock/mock_providers.dart';
 import 'providers/safety/keyword_safety_screener.dart';
 import 'services/check_in_reminder_service.dart';
+import 'services/check_in_widget_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,6 +76,53 @@ Future<void> main() async {
   );
   await suggestionController.load();
 
+  final navigatorKey = GlobalKey<NavigatorState>();
+
+  void openCheckInFromWidget(Uri? uri) {
+    if (uri == null || uri.host != 'checkin') return;
+    navigatorKey.currentState?.push(
+      MaterialPageRoute<void>(
+        builder: (_) => CheckInModePage(
+          sessionController: sessionController,
+          safetyController: safetyController,
+          profileController: profileController,
+        ),
+      ),
+    );
+  }
+
+  // Keep the home-screen widget in step, but only when the line it shows
+  // actually changes, so unrelated settings edits do not redraw it.
+  String? lastWidgetPrompt;
+
+  Future<void> refreshCheckInWidget() async {
+    final prompt = CheckInWidgetService.promptFor(
+      checkedInToday: CheckInWidgetService.checkedInToday(
+        sessionController.sessions,
+      ),
+      restingToday: CheckInWidgetService.restingToday(
+        profileController.restDays,
+      ),
+    );
+    if (prompt == lastWidgetPrompt) return;
+    lastWidgetPrompt = prompt;
+    await CheckInWidgetService.instance.push(prompt);
+  }
+
+  sessionController.addListener(refreshCheckInWidget);
+  profileController.addListener(refreshCheckInWidget);
+  await refreshCheckInWidget();
+
+  // Tapping the widget opens the check-in flow, whether the app was cold
+  // started by the tap or is already running.
+  HomeWidget.widgetClicked.listen(openCheckInFromWidget);
+  final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
+  if (launchUri != null) {
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => openCheckInFromWidget(launchUri),
+    );
+  }
+
   runApp(
     SolaceApp(
       onboardingRepository: SharedPreferencesOnboardingRepository(preferences),
@@ -80,6 +130,7 @@ Future<void> main() async {
       safetyController: safetyController,
       profileController: profileController,
       suggestionController: suggestionController,
+      navigatorKey: navigatorKey,
     ),
   );
 }
@@ -91,6 +142,7 @@ class SolaceApp extends StatelessWidget {
     SafetyController? safetyController,
     ProfileController? profileController,
     SuggestionController? suggestionController,
+    this.navigatorKey,
     super.key,
   }) : safetyController =
            safetyController ??
@@ -113,6 +165,9 @@ class SolaceApp extends StatelessWidget {
   final ProfileController profileController;
   final SuggestionController suggestionController;
 
+  /// Lets the home-screen widget push the check-in flow from outside the tree.
+  final GlobalKey<NavigatorState>? navigatorKey;
+
   @override
   Widget build(BuildContext context) {
     // Rebuild the theme whenever the user switches palette.
@@ -124,6 +179,7 @@ class SolaceApp extends StatelessWidget {
         );
         return MaterialApp(
           title: 'Solace',
+          navigatorKey: navigatorKey,
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(palette: palette),
           home: OnboardingGate(

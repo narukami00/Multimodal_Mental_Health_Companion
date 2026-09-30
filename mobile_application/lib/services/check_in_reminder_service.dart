@@ -6,11 +6,8 @@ import 'package:timezone/timezone.dart' as tz;
 
 /// Result of trying to schedule the daily reminder.
 enum ReminderScheduleOutcome {
-  /// Scheduled at the exact time the user chose.
-  exact,
-
-  /// Scheduled, but Android may deliver it late (exact alarms not permitted).
-  inexact,
+  /// Registered with the OS. Android may deliver it a little late.
+  scheduled,
 
   /// The user has notifications switched off for Solace.
   notificationsDisabled,
@@ -26,11 +23,14 @@ class ReminderScheduleResult {
   final ReminderScheduleOutcome outcome;
   final String? error;
 
-  bool get isScheduled => outcome == ReminderScheduleOutcome.exact ||
-      outcome == ReminderScheduleOutcome.inexact;
+  bool get isScheduled => outcome == ReminderScheduleOutcome.scheduled;
 }
 
 /// Schedules the gentle daily check-in reminder.
+///
+/// Scheduling is deliberately inexact. A wellbeing nudge does not need to be
+/// punctual, and asking for exact alarms would make Android treat it as one.
+/// The system may therefore deliver it a few minutes late, which is fine.
 ///
 /// Two things this deliberately does *not* do:
 /// - it never schedules against a timezone it could not resolve, because doing
@@ -135,16 +135,6 @@ class CheckInReminderService {
     }
   }
 
-  /// Whether Android will honour an exact alarm.
-  Future<bool> canScheduleExact() async {
-    if (!await initialize()) return false;
-    try {
-      return await _android?.canScheduleExactNotifications() ?? false;
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// Asks for the Android 13+ notification permission.
   Future<bool> requestPermission() async {
     if (!await initialize()) return false;
@@ -155,17 +145,6 @@ class CheckInReminderService {
     }
     // Ask the OS what it actually decided rather than trusting the dialog.
     return notificationsEnabled();
-  }
-
-  /// Asks for the exact-alarm permission (Android 12+).
-  Future<bool> requestExactAlarmPermission() async {
-    if (!await initialize()) return false;
-    try {
-      await _android?.requestExactAlarmsPermission();
-    } catch (error) {
-      debugPrint('CheckInReminderService exact alarm warning: $error');
-    }
-    return canScheduleExact();
   }
 
   /// Schedules, replacing any existing reminder, at [minutesPastMidnight].
@@ -211,13 +190,6 @@ class CheckInReminderService {
       next = next.add(const Duration(days: 1));
     }
 
-    // Prefer an exact alarm so the chosen time means the chosen time. Android
-    // 12+ may withhold that permission; fall back to inexact and say so.
-    final exactAllowed = await canScheduleExact();
-    final mode = exactAllowed
-        ? AndroidScheduleMode.exactAllowWhileIdle
-        : AndroidScheduleMode.inexactAllowWhileIdle;
-
     try {
       await _plugin.zonedSchedule(
         id: reminderNotificationId,
@@ -225,7 +197,10 @@ class CheckInReminderService {
         body: _body,
         scheduledDate: next,
         notificationDetails: _notificationDetails,
-        androidScheduleMode: mode,
+        // Inexact on purpose: a nudge, not an alarm. Android may shift this by
+        // a few minutes, which is an acceptable trade for not asking for the
+        // exact-alarm permission.
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.time,
       );
     } catch (error) {
@@ -244,11 +219,7 @@ class CheckInReminderService {
       );
     }
 
-    return ReminderScheduleResult(
-      exactAllowed
-          ? ReminderScheduleOutcome.exact
-          : ReminderScheduleOutcome.inexact,
-    );
+    return const ReminderScheduleResult(ReminderScheduleOutcome.scheduled);
   }
 
   /// Whether the reminder is actually registered with the OS.

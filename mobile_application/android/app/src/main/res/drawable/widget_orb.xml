@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The same amber-to-coral orb the app uses as its mark. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:angle="315"
+        android:startColor="#FFD98A"
+        android:centerColor="#FFB534"
+        android:endColor="#FF9A6A" />
+</shape>
