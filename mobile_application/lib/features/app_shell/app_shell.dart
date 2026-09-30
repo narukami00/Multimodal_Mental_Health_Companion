@@ -202,6 +202,10 @@ class _AppShellState extends State<AppShell> {
       context: choice.context,
       proactive: true,
     );
+    // While the budget is off, declining must not suppress the activity either:
+    // suppressing it made the card vanish with nothing to replace it, which is
+    // not behaviour that should be showing up during design work.
+    if (SuggestionTuning.alwaysOfferForTesting) return;
     await widget.suggestionController.dismissRecord(
       record.id,
       reason: SuggestionSkipReason.notNow,
@@ -304,9 +308,11 @@ class _AppShellState extends State<AppShell> {
               ),
             ],
           ),
-          // Not extendBody: the Scaffold reserves the pill's space, so content
-          // can never be cut off underneath it. The pill still floats visually,
-          // since the area around it is transparent to the page behind.
+          // extendBody is what removes the white band: without it the Scaffold
+          // paints its own background in the navigation's strip, so the capsule
+          // sat on a pale rectangle instead of on the page. Pages reserve the
+          // capsule's height at the end of their scroll so nothing hides.
+          extendBody: true,
           bottomNavigationBar: SolaceNavCapsule(
             selected: _selectedTab,
             onSelect: _selectTab,

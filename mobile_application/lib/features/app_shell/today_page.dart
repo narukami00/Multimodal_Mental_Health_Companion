@@ -9,6 +9,7 @@ import '../../domain/home/home_card_priority.dart';
 import '../chat/chat_controller.dart';
 import '../chat/conversation_history.dart';
 import 'living_atmosphere_card.dart';
+import 'nav_pill.dart';
 
 bool get _isTestEnvironment {
   try {
@@ -106,7 +107,11 @@ class TodayPage extends StatelessWidget {
         // full-bleed, and a single padded column is what made the page read as
         // one stack of identical slabs.
         child: ListView(
-          padding: EdgeInsets.zero,
+          // Bottom padding reserves the floating capsule's height, since the
+          // page now extends behind it.
+          padding: EdgeInsets.only(
+            bottom: SolaceNavCapsule.reservedSpace(context) + 8,
+          ),
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),

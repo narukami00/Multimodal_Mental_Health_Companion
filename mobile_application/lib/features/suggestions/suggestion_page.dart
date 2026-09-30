@@ -340,15 +340,22 @@ class _SuggestionPageState extends State<SuggestionPage> {
           ).ink,
         ),
         const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: _didIt,
-          icon: const Icon(Icons.check_rounded),
-          label: const Text('I did it'),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton(
-          onPressed: _openNotToday,
-          child: const Text('Not today'),
+        // Two buttons that hug their own labels rather than two slabs spanning
+        // the screen. A full-width pill around three words is 80% empty space.
+        Row(
+          children: [
+            _ActionButton(
+              label: 'I did it',
+              filled: true,
+              onPressed: _didIt,
+            ),
+            const SizedBox(width: 10),
+            _ActionButton(
+              label: 'Not today',
+              filled: false,
+              onPressed: _openNotToday,
+            ),
+          ],
         ),
         const SizedBox(height: 14),
         const Text(
@@ -471,6 +478,56 @@ class _SuggestionPageState extends State<SuggestionPage> {
     final target = _ratingTarget ?? widget.suggestionController.currentRecord;
     if (target == null) return null;
     return widget.suggestionController.activityFor(target.activityId);
+  }
+}
+
+/// An action sized to its own label.
+///
+/// Not a full-width bar: a pill spanning the screen around three words is
+/// mostly empty, and reads as a slab rather than as a button.
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.label,
+    required this.filled,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool filled;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(const Size(0, 50)),
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 24),
+      ),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+
+    if (filled) {
+      return FilledButton(
+        onPressed: onPressed,
+        style: base,
+        child: Text(label),
+      );
+    }
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: base.copyWith(
+        side: WidgetStatePropertyAll(
+          BorderSide(color: AppColors.mutedInk.withValues(alpha: 0.35)),
+        ),
+        foregroundColor: const WidgetStatePropertyAll(AppColors.mutedInk),
+      ),
+      child: Text(label),
+    );
   }
 }
 
@@ -912,28 +969,24 @@ class _FeedbackThanks extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
-            if (upbeat)
-              FilledButton(
-                onPressed: onNext,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 16,
-                  ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _ActionButton(
+                  label: upbeat ? 'Another idea' : 'Done',
+                  filled: true,
+                  onPressed: upbeat ? onNext : onDone,
                 ),
-                child: const Text('Another idea'),
-              )
-            else
-              FilledButton(
-                onPressed: onDone,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 16,
-                  ),
+                const SizedBox(width: 10),
+                // The only way out used to be a small close icon in the far
+                // corner, which is nowhere near the thumb.
+                _ActionButton(
+                  label: 'Not now',
+                  filled: false,
+                  onPressed: onDone,
                 ),
-                child: const Text('Done'),
-              ),
+              ],
+            ),
           ],
         ),
       ),
