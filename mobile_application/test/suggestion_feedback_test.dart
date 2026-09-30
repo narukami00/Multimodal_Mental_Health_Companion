@@ -345,6 +345,34 @@ void main() {
     });
   });
 
+  group('the design testing switch', () {
+    test('ignoring the budget keeps offering after a nudge', () async {
+      final controller = _controller([_activity(id: 'a'), _activity(id: 'b')]);
+      await controller.load();
+      await controller.warmUp();
+      final profile = const UserProfile();
+      const earlyContext = RecommendationContext(profileAgeDays: 5);
+
+      // Exhaust the day with a real nudge first.
+      final first = controller.peek(
+        profile: profile,
+        context: earlyContext,
+      )!;
+      await controller.commit(first, context: earlyContext, proactive: true);
+      expect(controller.peek(profile: profile, context: earlyContext), isNull);
+
+      // With the switch on, Home keeps getting something to show.
+      expect(
+        controller.peek(
+          profile: profile,
+          context: earlyContext,
+          ignoreBudget: true,
+        ),
+        isNotNull,
+      );
+    });
+  });
+
   group('impact', () {
     test('"not for me" takes the activity out of future picks', () async {
       final controller = _controller([_activity(id: 'only')]);

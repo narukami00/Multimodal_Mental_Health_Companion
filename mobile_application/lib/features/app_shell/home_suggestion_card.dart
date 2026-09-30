@@ -24,6 +24,7 @@ class HomeSuggestionCard extends StatefulWidget {
     required this.choice,
     required this.onAccept,
     this.onDecline,
+    this.onVanished,
     super.key,
   });
 
@@ -33,6 +34,9 @@ class HomeSuggestionCard extends StatefulWidget {
   /// Called when the user says they did it, with the suggestion they saw.
   final void Function(SuggestionCardChoice choice) onAccept;
   final VoidCallback? onDecline;
+
+  /// Called once the card has closed, so the next one can be brought in.
+  final VoidCallback? onVanished;
 
   @override
   State<HomeSuggestionCard> createState() => _HomeSuggestionCardState();
@@ -62,7 +66,12 @@ class _HomeSuggestionCardState extends State<HomeSuggestionCard> {
     widget.onDecline?.call();
     // Long enough to read the goodbye, short enough not to feel like a delay.
     Future<void>.delayed(const Duration(milliseconds: 1400), () {
-      if (mounted) setState(() => _choice = null);
+      if (!mounted) return;
+      setState(() {
+        _choice = null;
+        _sayingGoodbye = false;
+      });
+      widget.onVanished?.call();
     });
   }
 
@@ -135,7 +144,7 @@ class _CardShell extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
             child: Row(
               children: [
-                ActivityTypeGlyph(type: activity.type, size: 52),
+                ActivityTypeGlyph(type: activity.type, size: 58),
                 const SizedBox(width: 16),
                 Expanded(
                   child: AnimatedSwitcher(
@@ -312,21 +321,35 @@ class _GlyphPainter extends CustomPainter {
   final ActivityType type;
   final double progress;
 
-  /// A slow drift, so the glyph breathes without demanding attention.
-  double get _drift => math.sin(progress * 2 * math.pi) * 0.06;
+  /// A slow drift and sway, so the glyph feels alive without demanding
+  /// attention. Deliberately more movement than a static icon would need: a
+  /// still glyph at this size reads as decoration, and the point is that it is
+  /// a living card.
+  double get _scale => 1 + math.sin(progress * 2 * math.pi) * 0.09;
+
+  double get _tilt => math.sin(progress * 2 * math.pi) * 0.07;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
-    canvas.scale(1 + _drift);
+
+    // A filled disc, so the glyph reads as an icon rather than a stray line.
+    canvas.drawCircle(
+      Offset.zero,
+      size.width * 0.46,
+      Paint()..color = const Color(0x33FFFFFF),
+    );
+
+    canvas.scale(_scale);
+    canvas.rotate(_tilt);
 
     final stroke = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.075
+      ..strokeWidth = size.width * 0.095
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..color = const Color(0xFF7A5A3A);
+      ..color = const Color(0xFF6B4A2C);
 
     switch (type) {
       case ActivityType.movement:

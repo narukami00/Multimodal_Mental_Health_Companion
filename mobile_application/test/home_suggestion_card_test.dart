@@ -47,6 +47,7 @@ Future<void> _pump(
   SuggestionCardChoice? choice,
   void Function(SuggestionCardChoice)? onAccept,
   VoidCallback? onDecline,
+  VoidCallback? onVanished,
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.0;
@@ -63,6 +64,7 @@ Future<void> _pump(
           choice: choice,
           onAccept: onAccept ?? (_) {},
           onDecline: onDecline,
+          onVanished: onVanished,
         ),
       ),
     ),
@@ -111,10 +113,12 @@ void main() {
     tester,
   ) async {
     var declined = false;
+    var vanished = false;
     await _pump(
       tester,
       choice: _choice(),
       onDecline: () => declined = true,
+      onVanished: () => vanished = true,
     );
 
     await tester.tap(find.byKey(const ValueKey('suggestion-decline')));
@@ -124,11 +128,15 @@ void main() {
     expect(declined, isTrue);
     expect(find.text('Okay, have a nice day.'), findsOneWidget);
     expect(find.text('Take a five minute walk'), findsNothing);
+    // Not yet: the goodbye is still on screen.
+    expect(vanished, isFalse);
 
     // Then it goes, and the space it took with it.
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     expect(find.text('Okay, have a nice day.'), findsNothing);
+    // And Home is told, so the next one can be brought in.
+    expect(vanished, isTrue);
   });
 
   testWidgets('a suggestion already on screen is not swapped underneath', (

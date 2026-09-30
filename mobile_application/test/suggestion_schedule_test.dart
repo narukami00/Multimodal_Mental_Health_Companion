@@ -129,4 +129,37 @@ void main() {
       isTrue,
     );
   });
+
+  group('design testing switch', () {
+    test('ignoring the budget always offers one', () {
+      // Even with the day exhausted and no check-in at all.
+      expect(
+        _schedule.isDue(
+          history: [
+            _shown(at: DateTime(2026, 9, 22, 9), id: 'a'),
+            _shown(at: DateTime(2026, 9, 22, 10), id: 'b'),
+            _shown(at: DateTime(2026, 9, 22, 11), id: 'c'),
+          ],
+          profileAgeDays: 3,
+          checkInCompletedToday: false,
+          now: _now,
+          ignoreBudget: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('the real rules are untouched when it is off', () {
+      expect(
+        _schedule.isDue(
+          history: [_shown(at: DateTime(2026, 9, 22, 9))],
+          profileAgeDays: 3,
+          checkInCompletedToday: true,
+          now: _now,
+          ignoreBudget: false,
+        ),
+        isFalse,
+      );
+    });
+  });
 }

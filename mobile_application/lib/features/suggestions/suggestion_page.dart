@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/models/activity.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/recommendations/recommendation_engine.dart';
@@ -355,12 +356,50 @@ class _SuggestionPageState extends State<SuggestionPage> {
 
   /// How it went, asked only after the user says they did it.
   ///
-  /// Rating and doing are separate questions, so this never appears first —
-  /// and skipping it is a first-class answer, not a failure to answer.
+  /// The activity is shown again here, in full. Rating a bare row of stars with
+  /// no reminder of what the idea was gives the user nothing to answer against.
   Widget _buildRate() {
+    final activity = _ratingActivity;
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
       children: [
+        if (activity != null) ...[
+          Card(
+            color: AppColors.amber,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    activity.title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: AppColors.deepAmber,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    activity.description,
+                    style: const TextStyle(
+                      color: AppColors.deepAmber,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${activity.durationMinutes} minutes · ${_label(activity.effort)} effort',
+                    style: const TextStyle(
+                      color: AppColors.deepAmber,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 22),
+        ],
         Text(
           'How did it go?',
           style: Theme.of(context).textTheme.headlineSmall,
@@ -386,6 +425,13 @@ class _SuggestionPageState extends State<SuggestionPage> {
         OutlinedButton(onPressed: _skipRating, child: const Text('Skip')),
       ],
     );
+  }
+
+  /// The activity being rated, whether it came from Home or this page.
+  Activity? get _ratingActivity {
+    final target = _ratingTarget ?? widget.suggestionController.currentRecord;
+    if (target == null) return null;
+    return widget.suggestionController.activityFor(target.activityId);
   }
 
   String _label(Enum value) {

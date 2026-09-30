@@ -104,6 +104,7 @@ class RecommendationEngine {
     required Iterable<SuggestionRecord> history,
     DateTime? now,
     bool userInitiated = false,
+    bool ignoreBudget = false,
   }) {
     if (context.safetyActive) return null;
 
@@ -114,7 +115,9 @@ class RecommendationEngine {
 
     final ageDays = context.profileAgeDays;
     final dailyCap = ageDays != null && ageDays < starterTourDays ? 1 : 2;
-    if (!userInitiated && _shownToday(records, currentTime) >= dailyCap) {
+    if (!userInitiated &&
+        !ignoreBudget &&
+        _shownToday(records, currentTime) >= dailyCap) {
       return null;
     }
 

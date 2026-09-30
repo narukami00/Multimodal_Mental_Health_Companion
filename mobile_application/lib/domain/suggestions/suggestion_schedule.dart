@@ -19,7 +19,11 @@ class SuggestionSchedule {
     required int? profileAgeDays,
     required bool checkInCompletedToday,
     required DateTime now,
+    bool ignoreBudget = false,
   }) {
+    // Design testing only: no budget at all, so the card keeps coming back.
+    if (ignoreBudget) return true;
+
     // The first slot sits straight after the day's check-in, so an idea arrives
     // as a follow-on from reflecting rather than as a separate demand.
     if (!checkInCompletedToday) return false;

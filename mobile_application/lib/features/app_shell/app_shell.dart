@@ -9,6 +9,7 @@ import '../../core/navigation/app_tab.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../../domain/suggestions/suggestion_schedule.dart';
+import '../../domain/suggestions/suggestion_tuning.dart';
 import '../call/call_page.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_page.dart';
@@ -114,11 +115,16 @@ class _AppShellState extends State<AppShell> {
 
     final now = DateTime.now();
     final profile = widget.profileController.profile;
+    // Temporary: while the design is being tried out, the budget is off so the
+    // card keeps coming back. See SuggestionTuning.
+    const ignoreBudget = SuggestionTuning.alwaysOfferForTesting;
+
     final due = const SuggestionSchedule().isDue(
       history: widget.suggestionController.history,
       profileAgeDays: profileAgeInDays(profile),
       checkInCompletedToday: widget.sessionController.hasCheckedInOn(now),
       now: now,
+      ignoreBudget: ignoreBudget,
     );
     if (!due) return null;
 
@@ -131,6 +137,7 @@ class _AppShellState extends State<AppShell> {
       profile: profile,
       context: context,
       now: now,
+      ignoreBudget: ignoreBudget,
     );
     if (recommendation == null) return null;
     return SuggestionCardChoice(
@@ -233,6 +240,9 @@ class _AppShellState extends State<AppShell> {
                   choice: suggestionChoice,
                   onAccept: _acceptSuggestion,
                   onDecline: _declineSuggestion,
+                  // Once the card has closed, ask for the next one so Home is
+                  // not left waiting for some unrelated rebuild.
+                  onVanished: () => setState(() {}),
                 ),
                 onStartCheckIn: safetyActive
                     ? () => _openSupport(context)

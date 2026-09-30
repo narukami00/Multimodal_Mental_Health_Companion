@@ -57,6 +57,7 @@ class SuggestionController extends ChangeNotifier {
     required UserProfile profile,
     required RecommendationContext context,
     DateTime? now,
+    bool ignoreBudget = false,
   }) {
     if (_library.isEmpty) return null;
     return _engine.choose(
@@ -65,6 +66,7 @@ class SuggestionController extends ChangeNotifier {
       context: context,
       history: _history,
       now: now,
+      ignoreBudget: ignoreBudget,
     );
   }
 
