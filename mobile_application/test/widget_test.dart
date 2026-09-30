@@ -35,7 +35,7 @@ void main() {
     expect(find.text(TodayPage.greetingForHour(DateTime.now().hour)), findsOneWidget);
     // The floating pill shows only the selected tab's label; the rest are
     // icon-only, with their names carried by semantics.
-    expect(find.byType(SolaceNavPill), findsOneWidget);
+    expect(find.byType(SolaceNavCapsule), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
     expect(find.bySemanticsLabel('Journal'), findsOneWidget);
     expect(find.bySemanticsLabel('Insights'), findsOneWidget);

@@ -12,6 +12,7 @@ import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../sessions/session_controller.dart';
+import 'suggestion_card_surface.dart';
 import 'suggestion_context.dart';
 import 'suggestion_controller.dart';
 
@@ -22,6 +23,7 @@ class SuggestionPage extends StatefulWidget {
     required this.safetyController,
     this.sessionController,
     this.seededRecordId,
+    this.seededChoice,
     super.key,
   });
 
@@ -39,6 +41,13 @@ class SuggestionPage extends StatefulWidget {
   /// a suggestion, because asking again would write a second record for the
   /// same thing the user is looking at.
   final String? seededRecordId;
+
+  /// A suggestion Home peeked at but did not record, so this page can show it
+  /// in full before anything is written down.
+  ///
+  /// Opening this page must not count as having been offered the idea — only
+  /// answering does — so the record is created on the first answer instead.
+  final SuggestionCardChoice? seededChoice;
 
   @override
   State<SuggestionPage> createState() => _SuggestionPageState();
@@ -61,6 +70,9 @@ class _SuggestionPageState extends State<SuggestionPage> {
   /// Session-only, so declining to rate is not asked again right away.
   bool _ratingPromptDismissed = false;
 
+  /// The suggestion this page is showing when Home peeked at it.
+  SuggestionCardChoice? _seeded;
+
   @override
   void initState() {
     super.initState();
@@ -72,7 +84,28 @@ class _SuggestionPageState extends State<SuggestionPage> {
       _step = _Step.rate;
       return;
     }
+    if (widget.seededChoice != null) {
+      // Opened by tapping the card: show it in full, record nothing yet.
+      _seeded = widget.seededChoice;
+      _isLoading = false;
+      return;
+    }
     _requestSuggestion();
+  }
+
+  /// Creates the record for a peeked suggestion, the first time it is answered.
+  ///
+  /// Reading about an idea is not the same as being offered it, so nothing is
+  /// written until the user actually says something.
+  Future<bool> _ensureRecord() async {
+    if (_currentRecordId != null) return true;
+    final seeded = _seeded;
+    if (seeded == null) return false;
+    await widget.suggestionController.commit(
+      seeded.recommendation,
+      context: seeded.context,
+    );
+    return true;
   }
 
   @override
@@ -110,6 +143,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
   /// The user did it. Completion is recorded first so that walking away from
   /// the rating step still counts.
   Future<void> _didIt() async {
+    if (!await _ensureRecord()) return;
     await widget.suggestionController.recordCompletion();
     if (!mounted) return;
     setState(() {
@@ -159,6 +193,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
 
   Future<void> _dismiss(_Outcome outcome) async {
     setState(() => _outcome = outcome);
+    if (!await _ensureRecord()) return;
     await widget.suggestionController.submitFeedback(
       status: SuggestionStatus.skipped,
       skipReason: outcome.skipReason,
@@ -232,7 +267,9 @@ class _SuggestionPageState extends State<SuggestionPage> {
           if (_isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
-          final recommendation = widget.suggestionController.current;
+          // A peeked suggestion takes precedence: it is what the user tapped.
+          final recommendation = _seeded?.recommendation ??
+              widget.suggestionController.current;
           if (widget.suggestionController.shouldHelpMeKnowYouBetter) {
             return _FallbackState(
               onRevisit: () => Navigator.of(context).push(
@@ -288,59 +325,21 @@ class _SuggestionPageState extends State<SuggestionPage> {
           ),
           const SizedBox(height: 14),
         ],
-        Card(
-          color: AppColors.amber,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: AppColors.deepAmber,
-                  size: 30,
-                ),
-                const SizedBox(height: 15),
-                Text(
-                  recommendation.activity.title,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: AppColors.deepAmber,
-                  ),
-                ),
-                const SizedBox(height: 9),
-                Text(
-                  recommendation.activity.description,
-                  style: const TextStyle(
-                    color: AppColors.deepAmber,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 15),
-                Text(
-                  '${recommendation.activity.durationMinutes} minutes · ${_label(recommendation.activity.effort)} effort',
-                  style: const TextStyle(
-                    color: AppColors.deepAmber,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Card(
-          child: ExpansionTile(
-            leading: const Icon(
-              Icons.help_outline_rounded,
-              color: AppColors.coral,
-            ),
-            title: const Text('Why this?'),
-            childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-            children: [Text(recommendation.explanation)],
-          ),
-        ),
+        // The activity leads, in its own palette and with its own scene, so the
+        // page is about one specific thing rather than a generic idea in a
+        // block of flat colour.
+        _ActivityHeadline(activity: recommendation.activity),
         const SizedBox(height: 18),
+        // The reasoning is shown, not folded away. "Why this?" behind a tap is
+        // the first thing anyone would want to know and the last thing the
+        // layout was offering.
+        _WhyThis(
+          explanation: recommendation.explanation,
+          ink: ActivitySuggestionCard.paletteFor(
+            recommendation.activity.type,
+          ).ink,
+        ),
+        const SizedBox(height: 20),
         FilledButton.icon(
           onPressed: _didIt,
           icon: const Icon(Icons.check_rounded),
@@ -473,9 +472,140 @@ class _SuggestionPageState extends State<SuggestionPage> {
     if (target == null) return null;
     return widget.suggestionController.activityFor(target.activityId);
   }
+}
 
-  String _label(Enum value) {
-    return value.name[0].toUpperCase() + value.name.substring(1);
+/// The activity, leading the page in its own palette with its own scene drawn
+/// behind it.
+class _ActivityHeadline extends StatelessWidget {
+  const _ActivityHeadline({required this.activity});
+
+  final Activity activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = ActivitySuggestionCard.paletteFor(activity.type);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              palette.wash,
+              Color.lerp(palette.wash, palette.ink, 0.16)!,
+            ],
+          ),
+          border: Border.all(color: palette.ink.withValues(alpha: 0.16)),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: 4,
+              top: 6,
+              bottom: 6,
+              width: 108,
+              child: ActivityScene(type: activity.type, color: palette.ink),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 200),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      activity.title,
+                      style: TextStyle(
+                        fontSize: 20,
+                        height: 1.22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.4,
+                        color: palette.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      activity.description,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.42,
+                        fontWeight: FontWeight.w500,
+                        color: palette.ink.withValues(alpha: 0.78),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Why this particular idea was chosen.
+///
+/// Always visible rather than folded into an expander: on an app that asks for
+/// trust, the reasoning is not a detail behind a tap.
+class _WhyThis extends StatelessWidget {
+  const _WhyThis({required this.explanation, required this.ink});
+
+  final String explanation;
+  final Color ink;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 15),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: ink.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // An accent rail, so this block is identifiable by shape rather than
+          // by being another card.
+          Container(
+            width: 3,
+            height: 34,
+            margin: const EdgeInsets.only(top: 2, right: 13),
+            decoration: BoxDecoration(
+              color: ink.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Why this one',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.3,
+                    color: ink.withValues(alpha: 0.85),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  explanation,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    height: 1.45,
+                    color: Color(0xFF5C4C36),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

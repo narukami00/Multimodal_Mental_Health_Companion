@@ -5,16 +5,15 @@ import 'package:flutter/material.dart';
 import '../../core/navigation/app_tab.dart';
 import '../../core/theme/solace_palette.dart';
 
-/// A floating navigation pill, inset from the edges so content visibly
-/// continues behind and beneath it.
+/// A floating capsule of destinations, hugging its own content rather than
+/// spanning the screen.
 ///
-/// Deliberately not docked to the bottom of the screen: a full-width bar pinned
-/// to the edge is the thing that made the app look dated, and it also forces the
-/// content to stop dead above it. Icons are drawn rather than taken from an icon
-/// font, so their weight matches the pill and nothing depends on a font being
-/// present.
-class SolaceNavPill extends StatelessWidget {
-  const SolaceNavPill({
+/// The selected destination grows to show its name; the rest stay icon-only.
+/// Selection is carried by colour, not by a second capsule nested inside the
+/// first. There is no ink splash: a capsule-shaped highlight appearing under a
+/// tap was reading as an unintended outline.
+class SolaceNavCapsule extends StatelessWidget {
+  const SolaceNavCapsule({
     required this.selected,
     required this.onSelect,
     super.key,
@@ -23,43 +22,70 @@ class SolaceNavPill extends StatelessWidget {
   final AppTab selected;
   final ValueChanged<AppTab> onSelect;
 
-  /// How far the pill floats above the bottom safe area.
+  /// How far the capsule floats above the bottom safe area.
   static const bottomInset = 14.0;
 
-  /// Total space the pill occupies, so a scrolling page can reserve room.
-  static const height = 64.0;
+  /// Total band the capsule occupies, so the page can end above it.
+  static const height = 62.0;
 
   static double reservedSpace(BuildContext context) {
     return height + bottomInset + MediaQuery.paddingOf(context).bottom;
   }
 
+  /// Amber stays constant across palettes for brand contrast.
+  static const _active = Color(0xFFC87F10);
+
   @override
   Widget build(BuildContext context) {
     final colors = SolaceColors.from(context);
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        bottomInset + MediaQuery.paddingOf(context).bottom,
+      padding: EdgeInsets.only(
+        bottom: bottomInset + MediaQuery.paddingOf(context).bottom,
       ),
-      child: Container(
+      // A Row, not a Center: Center inside bottomNavigationBar expands to fill
+      // whatever it is given, which squeezed the page body down to nothing.
+      // A Row reports the height of its tallest child instead.
+      child: SizedBox(
         height: height,
-        padding: const EdgeInsets.all(6),
-        // No surface at all: the page behind is the background. A filled or
-        // bordered container on top of the page made the navigation look like
-        // one more card stacked on the screen.
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            for (final tab in AppTab.values)
-              Expanded(
-                child: _NavItem(
-                  tab: tab,
-                  isSelected: selected == tab,
-                  colors: colors,
-                  onTap: () => onSelect(tab),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: colors.surface,
+                  border: Border.all(
+                    color: colors.ink.withValues(alpha: 0.07),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.ink.withValues(alpha: 0.10),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final tab in AppTab.values)
+                      _NavItem(
+                        tab: tab,
+                        isSelected: selected == tab,
+                        colors: colors,
+                        onTap: () => onSelect(tab),
+                      ),
+                  ],
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -82,50 +108,50 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Selected is expressed by colour alone: the icon and the label take the
-    // accent, nothing gets a nested capsule behind it. A filled chip inside a
-    // container inside the page was three surfaces to say one word.
-    // Amber stays constant across palettes for brand contrast; only the
-    // inactive ink follows the palette neutrals.
     final colour = isSelected
-        ? const Color(0xFFC87F10)
+        ? SolaceNavCapsule._active
         : colors.mutedInk;
+
     return Semantics(
       label: tab.label,
       selected: isSelected,
       button: true,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const StadiumBorder(),
-          onTap: onTap,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: CustomPaint(
-                  painter: _NavIconPainter(tab: tab, color: colour),
-                ),
-              ),
-              // The label appears only for the selected destination, so the
-              // active item is identifiable without a background shape.
-              if (isSelected) ...[
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Text(
-                    tab.label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                      color: colour,
-                    ),
+      // GestureDetector rather than InkWell: an ink splash here draws a
+      // capsule-shaped highlight on press, which read as a stray outline.
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: isSelected ? 12 : 11,
+              vertical: 9,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 21,
+                  height: 21,
+                  child: CustomPaint(
+                    painter: _NavIconPainter(tab: tab, color: colour),
                   ),
                 ),
+                if (isSelected) ...[
+                  const SizedBox(width: 7),
+                  Text(
+                    tab.label,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: SolaceNavCapsule._active,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -159,27 +185,29 @@ class _NavIconPainter extends CustomPainter {
 
     switch (tab) {
       case AppTab.today:
-        // A sun: one circle and eight short rays.
         canvas.drawCircle(centre, w * 0.20, stroke);
         for (var i = 0; i < 8; i++) {
           final angle = i * math.pi / 4;
-          final from = Offset(
-            centre.dx + w * 0.30 * math.cos(angle),
-            centre.dy + w * 0.30 * math.sin(angle),
+          canvas.drawLine(
+            Offset(
+              centre.dx + w * 0.30 * math.cos(angle),
+              centre.dy + w * 0.30 * math.sin(angle),
+            ),
+            Offset(
+              centre.dx + w * 0.42 * math.cos(angle),
+              centre.dy + w * 0.42 * math.sin(angle),
+            ),
+            stroke,
           );
-          final to = Offset(
-            centre.dx + w * 0.42 * math.cos(angle),
-            centre.dy + w * 0.42 * math.sin(angle),
-          );
-          canvas.drawLine(from, to, stroke);
         }
       case AppTab.journal:
-        // A page with two ruled lines.
-        final page = RRect.fromRectAndRadius(
-          Rect.fromLTWH(w * 0.20, h * 0.14, w * 0.60, h * 0.72),
-          Radius.circular(w * 0.14),
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.20, h * 0.14, w * 0.60, h * 0.72),
+            Radius.circular(w * 0.14),
+          ),
+          stroke,
         );
-        canvas.drawRRect(page, stroke);
         canvas.drawLine(
           Offset(w * 0.34, h * 0.40),
           Offset(w * 0.66, h * 0.40),
@@ -191,18 +219,15 @@ class _NavIconPainter extends CustomPainter {
           stroke,
         );
       case AppTab.insights:
-        // Bars rising to the right.
-        final bars = [0.34, 0.54, 0.74];
-        for (var i = 0; i < bars.length; i++) {
+        for (var i = 0; i < 3; i++) {
           final x = w * (0.24 + i * 0.26);
           canvas.drawLine(
-            Offset(x, h * bars[i]),
+            Offset(x, h * [0.34, 0.54, 0.74][i]),
             Offset(x, h * 0.80),
             stroke,
           );
         }
       case AppTab.you:
-        // A person: head and shoulders.
         canvas.drawCircle(Offset(centre.dx, h * 0.34), w * 0.16, fill);
         canvas.drawArc(
           Rect.fromCenter(

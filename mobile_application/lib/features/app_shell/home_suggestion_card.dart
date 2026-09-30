@@ -14,6 +14,7 @@ class HomeSuggestionCard extends StatefulWidget {
     required this.choice,
     required this.onAccept,
     this.onDecline,
+    this.onOpen,
     this.onVanished,
     super.key,
   });
@@ -24,6 +25,9 @@ class HomeSuggestionCard extends StatefulWidget {
   /// Called when the user says they did it, with the suggestion they saw.
   final void Function(SuggestionCardChoice choice) onAccept;
   final VoidCallback? onDecline;
+
+  /// Opens the full details for the suggestion being shown.
+  final VoidCallback? onOpen;
 
   /// Called once the card has closed, so the next one can be brought in.
   final VoidCallback? onVanished;
@@ -84,6 +88,7 @@ class _HomeSuggestionCardState extends State<HomeSuggestionCard> {
             sayingGoodbye: _sayingGoodbye,
             onAccept: _sayingGoodbye ? null : () => widget.onAccept(choice),
             onDecline: _sayingGoodbye ? null : _decline,
+            onOpen: _sayingGoodbye ? null : widget.onOpen,
           ),
         ),
       ),
@@ -97,6 +102,7 @@ class ActivitySuggestionCard extends StatelessWidget {
     required this.activity,
     required this.onAccept,
     this.onDecline,
+    this.onOpen,
     this.sayingGoodbye = false,
     super.key,
   });
@@ -104,6 +110,9 @@ class ActivitySuggestionCard extends StatelessWidget {
   final Activity activity;
   final VoidCallback? onAccept;
   final VoidCallback? onDecline;
+
+  /// Opens the full details for this suggestion.
+  final VoidCallback? onOpen;
   final bool sayingGoodbye;
 
   /// The palette each kind of activity is painted in.
@@ -147,7 +156,12 @@ class ActivitySuggestionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = paletteFor(activity.type);
 
-    return Container(
+    return GestureDetector(
+      // The whole card opens the details, not just the two answers. Tapping it
+      // and having nothing happen was the obvious thing to try first.
+      onTap: onOpen,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
         gradient: LinearGradient(
@@ -261,6 +275,7 @@ class ActivitySuggestionCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

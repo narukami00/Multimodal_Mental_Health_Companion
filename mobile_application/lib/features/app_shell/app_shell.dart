@@ -171,6 +171,25 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// Opens the full details for the suggestion Home is showing.
+  ///
+  /// Nothing is recorded by opening it: seeing an idea in full is not the same
+  /// as being offered it, and the record is written only when the user answers.
+  void _openSuggestionDetails(SuggestionCardChoice? choice) {
+    if (choice == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SuggestionPage(
+          suggestionController: widget.suggestionController,
+          profileController: widget.profileController,
+          safetyController: widget.safetyController,
+          sessionController: widget.sessionController,
+          seededChoice: choice,
+        ),
+      ),
+    );
+  }
+
   /// "Not today", recorded so the card does not simply return on the next
   /// rebuild. Declining is still free: it never counts against the activity.
   Future<void> _declineSuggestion() async {
@@ -253,6 +272,7 @@ class _AppShellState extends State<AppShell> {
                   choice: suggestionChoice,
                   onAccept: _acceptSuggestion,
                   onDecline: _declineSuggestion,
+                  onOpen: () => _openSuggestionDetails(suggestionChoice),
                   // Once the card has closed, ask for the next one so Home is
                   // not left waiting for some unrelated rebuild.
                   onVanished: () => setState(() {}),
@@ -287,7 +307,7 @@ class _AppShellState extends State<AppShell> {
           // Not extendBody: the Scaffold reserves the pill's space, so content
           // can never be cut off underneath it. The pill still floats visually,
           // since the area around it is transparent to the page behind.
-          bottomNavigationBar: SolaceNavPill(
+          bottomNavigationBar: SolaceNavCapsule(
             selected: _selectedTab,
             onSelect: _selectTab,
           ),
