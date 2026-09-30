@@ -70,7 +70,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('You').last);
+    await tester.tap(find.bySemanticsLabel('You'));
     await tester.pumpAndSettle();
     final continueBaseline = find.text('Continue baseline');
     await tester.scrollUntilVisible(continueBaseline, 300);

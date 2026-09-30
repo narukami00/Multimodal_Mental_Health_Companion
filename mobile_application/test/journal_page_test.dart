@@ -27,7 +27,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Journal').last);
+    await tester.tap(find.bySemanticsLabel('Journal'));
     await tester.pumpAndSettle();
     expect(find.text('A note from today.'), findsOneWidget);
     expect(find.text('TEXT CHECK-IN'), findsOneWidget);

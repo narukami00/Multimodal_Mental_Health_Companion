@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/navigation/app_tab.dart';
-import '../../core/theme/solace_palette.dart';
 import '../../domain/home/baseline_progress.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../../domain/suggestions/suggestion_schedule.dart';
@@ -31,6 +30,7 @@ import '../suggestions/suggestion_context.dart';
 import '../suggestions/suggestion_page.dart';
 import 'baseline_setup_card.dart';
 import 'home_suggestion_card.dart';
+import 'nav_pill.dart';
 import 'today_page.dart';
 
 class AppShell extends StatefulWidget {
@@ -284,42 +284,15 @@ class _AppShellState extends State<AppShell> {
               ),
             ],
           ),
-          bottomNavigationBar: _buildBottomNav(context),
+          // Not extendBody: the Scaffold reserves the pill's space, so content
+          // can never be cut off underneath it. The pill still floats visually,
+          // since the area around it is transparent to the page behind.
+          bottomNavigationBar: SolaceNavPill(
+            selected: _selectedTab,
+            onSelect: _selectTab,
+          ),
         );
       },
-    );
-  }
-
-  Widget _buildBottomNav(BuildContext context) {
-    final colors = SolaceColors.from(context);
-    return Container(width: double.infinity,
-      decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.98),
-        border: Border(
-          top: BorderSide(
-            color: colors.ink.withValues(alpha: 0.09),
-            width: 1.0,
-          ),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F78501E),
-            blurRadius: 16,
-            offset: Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            children: [
-              for (final tab in AppTab.values) _buildTabItem(tab),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -331,55 +304,6 @@ class _AppShellState extends State<AppShell> {
       unawaited(HapticFeedback.selectionClick());
     }
     setState(() => _selectedTab = tab);
-  }
-
-  Widget _buildTabItem(AppTab tab) {
-    final colors = SolaceColors.from(context);
-    final isSelected = _selectedTab == tab;
-    // Amber stays constant across palettes for brand contrast; only the
-    // inactive ink follows the palette neutrals.
-    const activeColor = Color(0xFFC87F10);
-    final inactiveColor = colors.mutedInk;
-
-    return Expanded(
-      child: InkWell(
-        onTap: () => _selectTab(tab),
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? colors.amber.withValues(alpha: 0.16)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                isSelected ? tab.selectedIcon : tab.icon,
-                size: 22,
-                color: isSelected ? activeColor : inactiveColor,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              tab.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? activeColor : inactiveColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _openCheckIn(BuildContext context) {

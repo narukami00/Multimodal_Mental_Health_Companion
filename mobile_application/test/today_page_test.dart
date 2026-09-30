@@ -109,17 +109,17 @@ void main() {
     expect(find.text('YOUR DAYS, GENTLY KEPT'), findsOneWidget);
 
     // Tap on Today tab
-    await tester.tap(find.text('Today'));
+    await tester.tap(find.bySemanticsLabel('Today'));
     await tester.pumpAndSettle();
     expect(find.text(TodayPage.greetingForHour(DateTime.now().hour)), findsOneWidget);
 
     // Tap on Insights tab
-    await tester.tap(find.text('Insights').last);
+    await tester.tap(find.bySemanticsLabel('Insights'));
     await tester.pumpAndSettle();
     expect(find.text('PATTERNS OVER TIME'), findsOneWidget);
 
     // Tap on You tab
-    await tester.tap(find.text('You'));
+    await tester.tap(find.bySemanticsLabel('You'));
     await tester.pumpAndSettle();
     expect(find.text('Add your name'), findsOneWidget);
   });
