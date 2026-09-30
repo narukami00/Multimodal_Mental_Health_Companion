@@ -1,0 +1,127 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/models/activity.dart';
+import 'package:solace_mobile/data/contracts/activity_library_repository.dart';
+import 'package:solace_mobile/data/repositories/in_memory_onboarding_repository.dart';
+import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
+import 'package:solace_mobile/data/repositories/in_memory_suggestion_repository.dart';
+import 'package:solace_mobile/features/sessions/session_controller.dart';
+import 'package:solace_mobile/features/suggestions/suggestion_controller.dart';
+import 'package:solace_mobile/main.dart';
+import 'package:solace_mobile/providers/mock/mock_providers.dart';
+
+/// Serves a fixed library so nothing waits on an asset read under fake async.
+class _FixedLibrary implements ActivityLibraryRepository {
+  const _FixedLibrary(this.activities);
+
+  final List<Activity> activities;
+
+  @override
+  Future<List<Activity>> load() async => activities;
+}
+
+final _library = _FixedLibrary([
+  Activity(
+    id: 'walk',
+    title: 'Take a short easy walk',
+    description: 'Walk at a comfortable pace for a few minutes.',
+    type: ActivityType.movement,
+    effort: ActivityEffort.low,
+    durationMinutes: 5,
+    contexts: const [],
+    targetStates: const [],
+    review: ActivityReviewMetadata(
+      status: ActivityReviewStatus.approved,
+      evidenceTier: ActivityEvidenceTier.lifestyle,
+      reviewerRole: 'test',
+      reviewedAt: DateTime(2026, 1, 1),
+    ),
+  ),
+]);
+
+SessionController _sessionController() {
+  return SessionController(
+    repository: InMemorySessionRepository(),
+    emotionAnalyzer: const MockEmotionAnalyzer(),
+  );
+}
+
+Future<void> _pumpShell(
+  WidgetTester tester,
+  SuggestionController suggestionController,
+) async {
+  tester.view.physicalSize = const Size(1080, 2400);
+  tester.view.devicePixelRatio = 2.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  final onboarding = InMemoryOnboardingRepository();
+  await onboarding.complete();
+
+  await tester.pumpWidget(
+    SolaceApp(
+      onboardingRepository: onboarding,
+      sessionController: _sessionController(),
+      suggestionController: suggestionController,
+    ),
+  );
+  await tester.pump();
+}
+
+void main() {
+  // These exercise the shell itself. Every earlier test covered the pieces —
+  // the schedule, the engine, the card in isolation — and all of them passed
+  // while the card could not appear at all, because the wiring between them was
+  // never checked.
+  testWidgets('a suggestion reaches the Home screen', (tester) async {
+    final controller = SuggestionController(
+      libraryRepository: _library,
+      suggestionRepository: InMemorySuggestionRepository(),
+    );
+    await controller.load();
+    await controller.warmUp();
+
+    await _pumpShell(tester, controller);
+
+    expect(find.byKey(const ValueKey('suggestion-accept')), findsOneWidget);
+    expect(find.text('Take a short easy walk'), findsOneWidget);
+  });
+
+  testWidgets('nothing is shown before the library has loaded', (tester) async {
+    // Without a warm-up the peek cannot choose anything, and Home must simply
+    // show no card rather than an empty one.
+    final controller = SuggestionController(
+      libraryRepository: _library,
+      suggestionRepository: InMemorySuggestionRepository(),
+    );
+    await controller.load();
+
+    await _pumpShell(tester, controller);
+
+    expect(find.byKey(const ValueKey('suggestion-accept')), findsNothing);
+  });
+
+  testWidgets('the peek on a Home rebuild records nothing', (tester) async {
+    final controller = SuggestionController(
+      libraryRepository: _library,
+      suggestionRepository: InMemorySuggestionRepository(),
+    );
+    await controller.load();
+    await controller.warmUp();
+
+    await _pumpShell(tester, controller);
+    expect(find.byKey(const ValueKey('suggestion-accept')), findsOneWidget);
+
+    // Home rebuilds often. If the peek wrote anything, these counts are the
+    // ones the confidence gate depends on.
+    controller.notifyListeners();
+    await tester.pump();
+    await tester.pump();
+    controller.notifyListeners();
+    await tester.pump();
+
+    expect(controller.history, isEmpty);
+  });
+}

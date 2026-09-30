@@ -199,11 +199,17 @@ class _AppShellState extends State<AppShell> {
         final checkInCompletedToday = widget.sessionController.hasCheckedInOn(
           now,
         );
+        // Temporary: while the design is being tried out, the budget is off so
+        // the card keeps coming back. See SuggestionTuning.
+        const ignoreBudget = SuggestionTuning.alwaysOfferForTesting;
         final suggestionDue = const SuggestionSchedule().isDue(
           history: widget.suggestionController.history,
           profileAgeDays: profileAgeInDays(widget.profileController.profile),
           checkInCompletedToday: checkInCompletedToday,
           now: now,
+          // Without this the switch never reached here, and every gate below
+          // stayed shut no matter what the tuning said.
+          ignoreBudget: ignoreBudget,
         );
         final homeState = HomeState(
           safetyFlagActive: safetyActive,
