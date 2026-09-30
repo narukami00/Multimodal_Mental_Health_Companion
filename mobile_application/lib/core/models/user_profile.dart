@@ -23,6 +23,8 @@ class UserProfile {
     this.reminderEnabled = false,
     this.reminderMinutes = defaultReminderMinutes,
     this.emergencyContacts = const [],
+    this.restDays = const [],
+    this.welcomeBackShownAt,
   });
 
   /// Identifier of the default colour palette.
@@ -70,6 +72,15 @@ class UserProfile {
   /// (in-case-of-emergency) contact.
   final List<EmergencyContact> emergencyContacts;
 
+  /// Days the user has declared as rest, as local `yyyy-MM-dd` keys.
+  ///
+  /// Rest is a choice the user owns; nothing ever infers it, caps it, or
+  /// rewards it.
+  final List<String> restDays;
+
+  /// When the welcome-back line was last shown, so a lapse surfaces it once.
+  final DateTime? welcomeBackShownAt;
+
   bool get hasPreferences => preferredActivities.isNotEmpty;
   bool get erqSComplete => erqSAnswers.length == 6;
   bool get gad7Complete => gad7Answers.length == 7;
@@ -103,6 +114,8 @@ class UserProfile {
     bool? reminderEnabled,
     int? reminderMinutes,
     List<EmergencyContact>? emergencyContacts,
+    List<String>? restDays,
+    DateTime? welcomeBackShownAt,
   }) {
     return UserProfile(
       preferredActivities: preferredActivities ?? this.preferredActivities,
@@ -125,6 +138,8 @@ class UserProfile {
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       reminderMinutes: reminderMinutes ?? this.reminderMinutes,
       emergencyContacts: emergencyContacts ?? this.emergencyContacts,
+      restDays: restDays ?? this.restDays,
+      welcomeBackShownAt: welcomeBackShownAt ?? this.welcomeBackShownAt,
     );
   }
 
@@ -151,6 +166,8 @@ class UserProfile {
       'emergencyContacts': emergencyContacts
           .map((contact) => contact.toMap())
           .toList(),
+      'restDays': restDays,
+      'welcomeBackShownAt': welcomeBackShownAt?.toIso8601String(),
     };
   }
 
@@ -178,6 +195,10 @@ class UserProfile {
       reminderMinutes:
           (map['reminderMinutes'] as num?)?.toInt() ?? defaultReminderMinutes,
       emergencyContacts: _contacts(map['emergencyContacts']),
+      restDays: _strings(map['restDays']),
+      welcomeBackShownAt: DateTime.tryParse(
+        map['welcomeBackShownAt'] as String? ?? '',
+      ),
     );
   }
 

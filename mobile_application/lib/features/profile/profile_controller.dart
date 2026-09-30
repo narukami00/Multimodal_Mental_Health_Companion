@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/day_key.dart';
 import '../../core/models/emergency_contact.dart';
 import '../../core/models/user_profile.dart';
 import '../../data/contracts/profile_repository.dart';
@@ -166,6 +167,39 @@ class ProfileController extends ChangeNotifier {
     _profile = _profile.copyWith(
       emergencyContacts: List.unmodifiable(remaining),
     );
+    await _persist();
+  }
+
+  /// The days the user has declared as rest.
+  Set<String> get restDays => _profile.restDays.toSet();
+
+  /// Records a day as rest. One tap, no reason, never capped.
+  Future<void> declareRestDay(DateTime day) async {
+    final key = dayKey(day);
+    if (_profile.restDays.contains(key)) return;
+
+    _profile = _profile.copyWith(
+      restDays: List.unmodifiable([..._profile.restDays, key]),
+    );
+    await _persist();
+  }
+
+  /// Undoes a rest declaration, for a mis-tap.
+  Future<void> removeRestDay(DateTime day) async {
+    final key = dayKey(day);
+    if (!_profile.restDays.contains(key)) return;
+
+    _profile = _profile.copyWith(
+      restDays: List.unmodifiable(
+        _profile.restDays.where((item) => item != key),
+      ),
+    );
+    await _persist();
+  }
+
+  /// Marks the welcome-back line as shown, so a lapse surfaces it once.
+  Future<void> markWelcomeBackShown() async {
+    _profile = _profile.copyWith(welcomeBackShownAt: DateTime.now());
     await _persist();
   }
 
