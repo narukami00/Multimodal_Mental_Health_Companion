@@ -9,12 +9,17 @@ class RecommendationContext {
     this.eventTags = const [],
     this.safetyActive = false,
     this.profileAgeDays,
+    this.preferGentle = false,
   });
 
   final String? currentState;
   final List<String> eventTags;
   final bool safetyActive;
   final int? profileAgeDays;
+
+  /// True when the user's own baseline screening suggests offering gentler
+  /// options first. Deliberately never surfaced as reasoning.
+  final bool preferGentle;
 
   Set<String> get normalizedTags => {
     ...eventTags.map(_normalize),
@@ -121,8 +126,18 @@ class RecommendationEngine {
     Set<String> contextTags,
     List<SuggestionRecord> records,
   ) {
+    // Only records where the user actually decided something count toward
+    // confidence. A suggestion that was merely shown, and then abandoned, is
+    // not a decision; and "not now" is explicitly free, so it must not lower
+    // this activity's standing. "Not for me" and "too hard" stay negative,
+    // because those are real answers.
     final similar = records.where((record) {
       if (record.activityId != activity.id) return false;
+      if (record.status == SuggestionStatus.shown) return false;
+      if (record.status == SuggestionStatus.skipped &&
+          record.skipReason == SuggestionSkipReason.notNow) {
+        return false;
+      }
       return record.contextTags
           .map(_normalize)
           .toSet()

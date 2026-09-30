@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/suggestion_record.dart';
 import '../../core/theme/app_theme.dart';
-import '../../domain/recommendations/recommendation_engine.dart';
 import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
+import '../sessions/session_controller.dart';
+import 'suggestion_context.dart';
 import 'suggestion_controller.dart';
 
 class SuggestionPage extends StatefulWidget {
@@ -13,12 +14,17 @@ class SuggestionPage extends StatefulWidget {
     required this.suggestionController,
     required this.profileController,
     required this.safetyController,
+    this.sessionController,
     super.key,
   });
 
   final SuggestionController suggestionController;
   final ProfileController profileController;
   final SafetyController safetyController;
+
+  /// Supplies the most recent check-in, which is what the suggestion is
+  /// actually chosen from. Optional so the page still works without it.
+  final SessionController? sessionController;
 
   @override
   State<SuggestionPage> createState() => _SuggestionPageState();
@@ -52,7 +58,12 @@ class _SuggestionPageState extends State<SuggestionPage> {
     try {
       await widget.suggestionController.suggest(
         profile: widget.profileController.profile,
-        context: const RecommendationContext(),
+        // Built from the user's most recent check-in rather than passed empty,
+        // which is what previously made every context match zero.
+        context: buildRecommendationContext(
+          profile: widget.profileController.profile,
+          sessions: widget.sessionController?.sessions ?? const [],
+        ),
         userInitiated: true,
       );
     } finally {

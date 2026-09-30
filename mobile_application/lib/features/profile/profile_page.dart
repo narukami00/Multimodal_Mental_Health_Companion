@@ -659,6 +659,7 @@ class ProfilePage extends StatelessWidget {
                                   suggestionController: suggestionController,
                                   profileController: profileController,
                                   safetyController: safetyController,
+                                  sessionController: sessionController,
                                 ),
                               ),
                             ),

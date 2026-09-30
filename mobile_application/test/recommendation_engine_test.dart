@@ -108,6 +108,128 @@ void main() {
       containsAll(['work', 'sleep']),
     );
   });
+
+  test('"not now" and abandoned suggestions never lower confidence', () {
+    final activity = _activity('movement-001');
+    final now = DateTime(2026, 9, 22, 10);
+    final history = [
+      for (var index = 0; index < 5; index++)
+        SuggestionRecord(
+          id: 'ok-$index',
+          activityId: activity.id,
+          shownAt: now.subtract(Duration(days: index + 3)),
+          contextTags: const ['steady'],
+          status: SuggestionStatus.completed,
+          rating: 5,
+        ),
+      // Declining for now is explicitly free, and a card the user never
+      // answered is not a decision at all.
+      SuggestionRecord(
+        id: 'later',
+        activityId: activity.id,
+        shownAt: now.subtract(const Duration(days: 9)),
+        contextTags: const ['steady'],
+        status: SuggestionStatus.skipped,
+        skipReason: SuggestionSkipReason.notNow,
+      ),
+      SuggestionRecord(
+        id: 'abandoned',
+        activityId: activity.id,
+        shownAt: now.subtract(const Duration(days: 10)),
+        contextTags: const ['steady'],
+      ),
+    ];
+
+    final recommendation = const RecommendationEngine().choose(
+      activities: [activity],
+      profile: const UserProfile(),
+      context: const RecommendationContext(
+        currentState: 'steady',
+        profileAgeDays: 20,
+      ),
+      history: history,
+      now: now,
+    );
+
+    expect(recommendation?.confidence, 1);
+  });
+
+  test('"not for me" and "too hard" still count against an activity', () {
+    final activity = _activity('movement-001');
+    final now = DateTime(2026, 9, 22, 10);
+    final history = [
+      for (var index = 0; index < 3; index++)
+        SuggestionRecord(
+          id: 'ok-$index',
+          activityId: activity.id,
+          shownAt: now.subtract(Duration(days: index + 3)),
+          contextTags: const ['steady'],
+          status: SuggestionStatus.completed,
+          rating: 5,
+        ),
+      SuggestionRecord(
+        id: 'no',
+        activityId: activity.id,
+        shownAt: now.subtract(const Duration(days: 6)),
+        contextTags: const ['steady'],
+        status: SuggestionStatus.skipped,
+        skipReason: SuggestionSkipReason.notForMe,
+      ),
+    ];
+
+    final recommendation = const RecommendationEngine().choose(
+      activities: [activity],
+      profile: const UserProfile(),
+      context: const RecommendationContext(
+        currentState: 'steady',
+        profileAgeDays: 20,
+      ),
+      history: history,
+      now: now,
+    );
+
+    // Four decisions, three of them successful.
+    expect(recommendation?.confidence, closeTo(4 / 5 * 0.75, 0.0001));
+  });
+
+  test('a real context reaches the engine and can mark a suggestion proactive', () {
+    final activity = _activity('movement-001');
+    final now = DateTime(2026, 9, 22, 10);
+    final history = [
+      for (var index = 0; index < 5; index++)
+        SuggestionRecord(
+          id: 'ok-$index',
+          activityId: activity.id,
+          shownAt: now.subtract(Duration(days: index + 3)),
+          contextTags: const ['steady'],
+          status: SuggestionStatus.completed,
+          rating: 5,
+        ),
+    ];
+
+    // Passing no context used to make contextMatches always zero, so the
+    // proactive path could never fire.
+    final withoutContext = const RecommendationEngine().choose(
+      activities: [activity],
+      profile: const UserProfile(),
+      context: const RecommendationContext(profileAgeDays: 20),
+      history: history,
+      now: now,
+    );
+    expect(withoutContext?.isProactive, isFalse);
+
+    final withContext = const RecommendationEngine().choose(
+      activities: [activity],
+      profile: const UserProfile(),
+      context: const RecommendationContext(
+        currentState: 'steady',
+        profileAgeDays: 20,
+      ),
+      history: history,
+      now: now,
+    );
+    expect(withContext?.isProactive, isTrue);
+  });
 }
 
 Activity _activity(String id) {
