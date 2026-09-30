@@ -19,6 +19,17 @@ class SessionController extends ChangeNotifier {
 
   List<SessionRecord> get sessions => List.unmodifiable(_sessions);
 
+  /// The most recent check-in time, or null when there are none.
+  DateTime? get lastCheckInAt {
+    DateTime? latest;
+    for (final session in _sessions) {
+      if (latest == null || session.createdAt.isAfter(latest)) {
+        latest = session.createdAt;
+      }
+    }
+    return latest;
+  }
+
   Future<void> load() async {
     _sessions = await _repository.listSessions();
     notifyListeners();

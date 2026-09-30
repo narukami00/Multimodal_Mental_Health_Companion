@@ -16,6 +16,7 @@ import '../journal/journal_page.dart';
 import '../profile/profile_controller.dart';
 import '../profile/profile_page.dart';
 import '../rhythm/rhythm_card.dart';
+import '../rhythm/welcome_back_notice.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
@@ -104,6 +105,10 @@ class _AppShellState extends State<AppShell> {
                   sessionController: widget.sessionController,
                   profileController: widget.profileController,
                   suggestionController: widget.suggestionController,
+                ),
+                welcomeBackNotice: WelcomeBackNotice(
+                  sessionController: widget.sessionController,
+                  profileController: widget.profileController,
                 ),
                 primaryCard: HomeCardPriority.select(
                   HomeState(safetyFlagActive: safetyActive),

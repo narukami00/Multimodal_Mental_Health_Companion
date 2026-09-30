@@ -4,15 +4,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/solace_palette.dart';
 import 'data/contracts/onboarding_repository.dart';
-import 'data/repositories/shared_preferences_onboarding_repository.dart';
-import 'data/repositories/in_memory_profile_repository.dart';
 import 'data/repositories/asset_activity_library_repository.dart';
+import 'data/repositories/in_memory_profile_repository.dart';
 import 'data/repositories/in_memory_safety_event_repository.dart';
 import 'data/repositories/in_memory_suggestion_repository.dart';
+import 'data/repositories/shared_preferences_onboarding_repository.dart';
 import 'data/repositories/shared_preferences_profile_repository.dart';
 import 'data/repositories/shared_preferences_safety_event_repository.dart';
 import 'data/repositories/shared_preferences_session_repository.dart';
 import 'data/repositories/shared_preferences_suggestion_repository.dart';
+import 'domain/rhythm/reminder_lapse_policy.dart';
 import 'features/onboarding/onboarding_gate.dart';
 import 'features/profile/profile_controller.dart';
 import 'features/safety/safety_controller.dart';
@@ -45,9 +46,18 @@ Future<void> main() async {
   await profileController.ensureFirstRun();
 
   // Restore the daily reminder in case the OS dropped it (for example after a
-  // reboot or an app update).
+  // reboot or an app update). If the user has been away a long time, stop
+  // nudging them instead: the reminder only ever gets quieter, never louder.
   await CheckInReminderService.instance.initialize();
-  if (profileController.profile.reminderEnabled) {
+  final daysSinceLastCheckIn = ReminderLapsePolicy.daysSince(
+    sessionController.lastCheckInAt,
+  );
+  if (ReminderLapsePolicy.shouldPauseReminder(daysSinceLastCheckIn)) {
+    if (profileController.profile.reminderEnabled) {
+      await profileController.setReminderEnabled(false);
+    }
+    await CheckInReminderService.instance.cancel();
+  } else if (profileController.profile.reminderEnabled) {
     await CheckInReminderService.instance.scheduleDaily(
       minutesPastMidnight: profileController.profile.reminderMinutes,
     );

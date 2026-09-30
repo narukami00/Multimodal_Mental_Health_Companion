@@ -1,3 +1,5 @@
+import '../../core/day_key.dart';
+
 /// Decides what happens to the daily reminder once someone has drifted away.
 ///
 /// The only direction this can move is *quieter*. Reminders are never made more
@@ -6,6 +8,13 @@
 abstract final class ReminderLapsePolicy {
   /// Days away before the app stops nudging.
   static const lapseDays = 14;
+
+  /// Whole days since [lastCheckIn], or null when there has never been one.
+  static int? daysSince(DateTime? lastCheckIn, {DateTime? now}) {
+    if (lastCheckIn == null) return null;
+    final today = dateOnly(now ?? DateTime.now());
+    return today.difference(dateOnly(lastCheckIn)).inDays;
+  }
 
   /// Whether the reminder should be paused.
   ///

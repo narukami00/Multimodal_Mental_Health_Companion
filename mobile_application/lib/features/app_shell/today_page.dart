@@ -25,6 +25,7 @@ class TodayPage extends StatelessWidget {
     this.chatController,
     this.ambientAudioEnabled = true,
     this.rhythmCard,
+    this.welcomeBackNotice,
     this.onStartCheckIn,
     this.onOpenSupport,
     this.onOpenChat,
@@ -43,6 +44,9 @@ class TodayPage extends StatelessWidget {
   /// Optional rhythm summary, shown under the primary card so it stays
   /// subordinate to the one primary action.
   final Widget? rhythmCard;
+
+  /// Optional one-off line for someone returning after a long gap.
+  final Widget? welcomeBackNotice;
 
   final VoidCallback? onStartCheckIn;
   final VoidCallback? onOpenSupport;
@@ -100,6 +104,7 @@ class TodayPage extends StatelessWidget {
                   ),
             ),
             const SizedBox(height: 18),
+            if (welcomeBackNotice != null) welcomeBackNotice!,
             _buildPrimaryCard(card),
             if (rhythmCard != null) ...[
               const SizedBox(height: 14),
