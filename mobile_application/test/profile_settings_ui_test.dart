@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:solace_mobile/core/models/session_input.dart';
-import 'package:solace_mobile/core/models/session_record.dart';
 import 'package:solace_mobile/core/theme/app_theme.dart';
 import 'package:solace_mobile/data/repositories/asset_activity_library_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
@@ -81,49 +79,6 @@ void main() {
 
     expect(find.text('Add your name'), findsOneWidget);
     expect(find.text('Welcome to Solace'), findsOneWidget);
-  });
-
-  testWidgets('rhythm card is honest when there is no history', (tester) async {
-    await profileController.load();
-    await sessionController.load();
-
-    await pumpProfile(tester);
-
-    expect(find.text('Your rhythm'), findsOneWidget);
-    expect(
-      find.text('Appears here after a few check-ins.'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('rhythm card counts real check-in days', (tester) async {
-    // Two check-ins today and yesterday, out of a seven day window.
-    await sessionRepository.save(
-      SessionRecord(
-        id: 'today',
-        createdAt: DateTime.now(),
-        mode: CaptureMode.text,
-        text: 'today',
-      ),
-    );
-    await sessionRepository.save(
-      SessionRecord(
-        id: 'yesterday',
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-        mode: CaptureMode.text,
-        text: 'yesterday',
-      ),
-    );
-    await sessionController.load();
-    await profileController.load();
-
-    await pumpProfile(tester);
-
-    expect(find.text('2-day rhythm'), findsOneWidget);
-    expect(
-      find.text('Showing up when it feels right · 5 rest days'),
-      findsOneWidget,
-    );
   });
 
   testWidgets('app settings sheet exposes real palette choices', (

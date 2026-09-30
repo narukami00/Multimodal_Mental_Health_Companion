@@ -24,6 +24,7 @@ class TodayPage extends StatelessWidget {
     this.currentTime,
     this.chatController,
     this.ambientAudioEnabled = true,
+    this.rhythmCard,
     this.onStartCheckIn,
     this.onOpenSupport,
     this.onOpenChat,
@@ -38,6 +39,10 @@ class TodayPage extends StatelessWidget {
 
   /// Whether the user has allowed ambient audio in Settings.
   final bool ambientAudioEnabled;
+
+  /// Optional rhythm summary, shown under the primary card so it stays
+  /// subordinate to the one primary action.
+  final Widget? rhythmCard;
 
   final VoidCallback? onStartCheckIn;
   final VoidCallback? onOpenSupport;
@@ -96,6 +101,10 @@ class TodayPage extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             _buildPrimaryCard(card),
+            if (rhythmCard != null) ...[
+              const SizedBox(height: 14),
+              rhythmCard!,
+            ],
             const SizedBox(height: 14),
             _buildSolCompanionHub(context),
             const SizedBox(height: 18),

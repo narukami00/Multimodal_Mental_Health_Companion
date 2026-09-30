@@ -25,6 +25,13 @@ class SuggestionController extends ChangeNotifier {
 
   bool get isLoaded => _isLoaded;
   Recommendation? get current => _current;
+
+  /// Every suggestion record, including ones that were only shown.
+  ///
+  /// Read-only: callers must not mutate history, and anything reasoning about
+  /// what the user actually decided should filter out `shown` records.
+  List<SuggestionRecord> get history => List.unmodifiable(_history);
+
   bool get shouldHelpMeKnowYouBetter => _rejections >= 3;
   int get _rejections => _history
       .where(
