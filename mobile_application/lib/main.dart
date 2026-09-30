@@ -58,9 +58,14 @@ Future<void> main() async {
     }
     await CheckInReminderService.instance.cancel();
   } else if (profileController.profile.reminderEnabled) {
-    await CheckInReminderService.instance.scheduleDaily(
+    final result = await CheckInReminderService.instance.scheduleDaily(
       minutesPastMidnight: profileController.profile.reminderMinutes,
     );
+    if (!result.isScheduled) {
+      // Keep the stored preference honest rather than claiming a reminder that
+      // is not actually registered with Android.
+      await profileController.setReminderEnabled(false);
+    }
   }
   final suggestionController = SuggestionController(
     libraryRepository: AssetActivityLibraryRepository(),

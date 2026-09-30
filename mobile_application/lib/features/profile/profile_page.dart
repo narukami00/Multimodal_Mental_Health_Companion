@@ -10,6 +10,7 @@ import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../domain/rhythm/reminder_schedule.dart';
 import '../../services/ambient_audio_service.dart';
 import '../../services/check_in_reminder_service.dart';
 import '../../services/dialer_service.dart';
@@ -1733,6 +1734,9 @@ class _AppSettingsForm extends StatefulWidget {
 class _AppSettingsFormState extends State<_AppSettingsForm> {
   ProfileController get _controller => widget.controller;
 
+  /// How the reminder was actually scheduled. Null when it is off.
+  ReminderScheduleOutcome? _scheduleOutcome;
+
   @override
   void initState() {
     super.initState();
@@ -1740,6 +1744,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
     // ProfilePage's AnimatedBuilder. Subscribe directly so every control shows
     // its new value immediately instead of only after the sheet is reopened.
     _controller.addListener(_onProfileChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _verifyReminder());
   }
 
   @override
@@ -1775,39 +1780,99 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
     unawaited(_previewHaptic());
   }
 
-  /// Enables the daily reminder, requesting the notification permission first.
+  /// Enables the daily reminder, requesting the permissions it needs.
+  ///
+  /// The switch only stays on when a notification is genuinely registered, and
+  /// an inexact schedule is disclosed rather than presented as on time.
   Future<void> _setReminder(bool enabled) async {
+    final service = CheckInReminderService.instance;
+
     if (!enabled) {
       await _controller.setReminderEnabled(false);
-      await CheckInReminderService.instance.cancel();
+      await service.cancel();
+      if (mounted) setState(() => _scheduleOutcome = null);
       return;
     }
 
-    final granted = await CheckInReminderService.instance.requestPermission();
+    final granted = await service.requestPermission();
     if (!granted) {
-      // Stay off rather than implying a reminder that will never arrive.
       await _controller.setReminderEnabled(false);
-      await CheckInReminderService.instance.cancel();
+      await service.cancel();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Notifications are off for Solace. You can allow them in '
-              'system settings.',
-            ),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 3),
-          ),
-        );
+      setState(() => _scheduleOutcome = null);
+      _notify(
+        'Notifications are off for Solace. You can allow them in '
+        'system settings.',
+      );
       return;
     }
 
-    await _controller.setReminderEnabled(true);
-    await CheckInReminderService.instance.scheduleDaily(
+    // Ask for exact alarms so the time the user chose is the time it fires.
+    await service.requestExactAlarmPermission();
+
+    final result = await service.scheduleDaily(
       minutesPastMidnight: _controller.profile.reminderMinutes,
     );
+    final scheduled = result.isScheduled;
+    await _controller.setReminderEnabled(scheduled);
+
+    if (!mounted) return;
+    setState(() => _scheduleOutcome = scheduled ? result.outcome : null);
+
+    if (!scheduled) {
+      _notify(
+        result.outcome == ReminderScheduleOutcome.notificationsDisabled
+            ? 'Notifications are off for Solace, so no reminder was set.'
+            : 'The reminder could not be set. ${result.error ?? ''}'.trim(),
+      );
+      return;
+    }
+
+    if (result.outcome == ReminderScheduleOutcome.inexact) {
+      _notify(
+        'Reminder set. Android may deliver it a little late until alarms '
+        'are allowed for Solace.',
+      );
+    }
+  }
+
+  /// Confirms delivery on the spot, without waiting for the chosen time.
+  Future<void> _sendTestReminder() async {
+    final sent = await CheckInReminderService.instance.showTestNotification();
+    if (!mounted) return;
+    _notify(
+      sent
+          ? 'Test reminder sent.'
+          : 'Notifications are off for Solace, so nothing was sent.',
+    );
+  }
+
+  /// Re-asserts the schedule on open, so the row can state the truth rather
+  /// than trusting a stored preference Android may have quietly dropped.
+  Future<void> _verifyReminder() async {
+    if (!_controller.profile.reminderEnabled) return;
+
+    final result = await CheckInReminderService.instance.scheduleDaily(
+      minutesPastMidnight: _controller.profile.reminderMinutes,
+    );
+    if (!mounted) return;
+
+    setState(() => _scheduleOutcome = result.isScheduled ? result.outcome : null);
+    if (!result.isScheduled) {
+      await _controller.setReminderEnabled(false);
+    }
+  }
+
+  void _notify(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   /// Lets the user pick the reminder time and reschedules if it is on.
@@ -1825,11 +1890,13 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
 
     final minutes = picked.hour * 60 + picked.minute;
     await _controller.setReminderMinutes(minutes);
-    if (_controller.profile.reminderEnabled) {
-      await CheckInReminderService.instance.scheduleDaily(
-        minutesPastMidnight: minutes,
-      );
-    }
+    if (!_controller.profile.reminderEnabled) return;
+
+    final result = await CheckInReminderService.instance.scheduleDaily(
+      minutesPastMidnight: minutes,
+    );
+    if (!mounted) return;
+    setState(() => _scheduleOutcome = result.isScheduled ? result.outcome : null);
   }
 
   /// Plays a short haptic cue, ignoring platforms that do not support it.
@@ -1852,6 +1919,11 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
       hour: (profile.reminderMinutes ~/ 60) % 24,
       minute: profile.reminderMinutes % 60,
     ).format(context);
+    // The next time it will actually fire, computed rather than guessed.
+    final nextFireDate = MaterialLocalizations.of(
+      context,
+    ).formatMediumDate(ReminderSchedule.nextOccurrence(profile.reminderMinutes));
+    final nextFireLabel = '$nextFireDate at $reminderTimeLabel';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1916,8 +1988,13 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
           key: const ValueKey('setting-reminder'),
           enabled: profile.reminderEnabled,
           timeLabel: reminderTimeLabel,
+          nextFireLabel: nextFireLabel,
+          mayBeLate:
+              profile.reminderEnabled &&
+              _scheduleOutcome == ReminderScheduleOutcome.inexact,
           onToggle: _setReminder,
           onPickTime: _pickReminderTime,
+          onSendTest: _sendTestReminder,
         ),
         const SizedBox(height: 14),
         const Text(
@@ -2024,23 +2101,32 @@ class _SettingToggle extends StatelessWidget {
   }
 }
 
-/// Daily check-in reminder: a switch plus a tappable time.
+/// Daily check-in reminder: a switch, a tappable time, and an honest status.
 ///
-/// The time is only scheduled when the switch is on, so the label never
-/// implies a reminder that is not actually set.
+/// The status line states the real next fire time, admits when Android may
+/// deliver late, and offers a way to confirm delivery immediately.
 class _ReminderSetting extends StatelessWidget {
   const _ReminderSetting({
     required this.enabled,
     required this.timeLabel,
+    required this.nextFireLabel,
+    required this.mayBeLate,
     required this.onToggle,
     required this.onPickTime,
+    required this.onSendTest,
     super.key,
   });
 
   final bool enabled;
   final String timeLabel;
+  final String nextFireLabel;
+
+  /// True when Android withheld exact alarms, so delivery may drift.
+  final bool mayBeLate;
+
   final ValueChanged<bool> onToggle;
   final VoidCallback onPickTime;
+  final VoidCallback onSendTest;
 
   @override
   Widget build(BuildContext context) {
@@ -2106,19 +2192,50 @@ class _ReminderSetting extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            enabled
-                ? 'One gentle reminder a day, delivered on this device.'
-                : 'Turn on for a single gentle reminder each day.',
+            enabled ? 'Next reminder: $nextFireLabel.' : _offCopy,
             style: const TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
+              height: 1.4,
               color: Color(0xFF93887A),
             ),
           ),
+          if (enabled && mayBeLate) ...[
+            const SizedBox(height: 3),
+            const Text(
+              'Android is not allowing exact alarms, so it may arrive a '
+              'little late.',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+                color: Color(0xFF96620C),
+              ),
+            ),
+          ],
+          if (enabled) ...[
+            const SizedBox(height: 2),
+            TextButton(
+              key: const ValueKey('send-test-reminder'),
+              onPressed: onSendTest,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF96620C),
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Send a test reminder',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
+
+  static const _offCopy = 'Turn on for a single gentle reminder each day.';
 }
 
 /// Selectable palette chip showing a swatch of the palette itself.
