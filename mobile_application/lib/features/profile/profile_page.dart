@@ -8,8 +8,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
-import '../../core/models/user_profile.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../domain/home/baseline_progress.dart';
 import '../../domain/rhythm/reminder_schedule.dart';
 import '../../services/ambient_audio_service.dart';
 import '../../services/check_in_reminder_service.dart';
@@ -45,7 +45,7 @@ class ProfilePage extends StatelessWidget {
       animation: Listenable.merge([profileController, sessionController]),
       builder: (context, _) {
         final profile = profileController.profile;
-        final completeCount = _completedBlocks(profile);
+        final completeCount = BaselineProgress.of(profile).completed;
         final emergencyContacts = profile.emergencyContacts;
         final iceContact = profileController.iceContact;
         final displayName = profile.displayName?.trim().isNotEmpty == true
@@ -1462,14 +1462,6 @@ class ProfilePage extends StatelessWidget {
     final dot = path.lastIndexOf('.');
     if (dot == -1 || dot == path.length - 1) return '.jpg';
     return path.substring(dot);
-  }
-
-  int _completedBlocks(UserProfile profile) {
-    var completed = profile.preferencesCompleted ? 1 : 0;
-    if (profile.erqSComplete || profile.erqSSkipped) completed++;
-    if (profile.gad7Complete || profile.gad7Skipped) completed++;
-    if (profile.phq9Complete || profile.phq9Skipped) completed++;
-    return completed;
   }
 }
 

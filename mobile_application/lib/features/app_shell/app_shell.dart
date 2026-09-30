@@ -7,6 +7,7 @@ import '../../core/models/safety_assessment.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/navigation/app_tab.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../domain/home/baseline_progress.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../../domain/suggestions/suggestion_schedule.dart';
 import '../../domain/suggestions/suggestion_tuning.dart';
@@ -18,6 +19,7 @@ import '../insights/insights_page.dart';
 import '../journal/journal_page.dart';
 import '../profile/profile_controller.dart';
 import '../profile/profile_page.dart';
+import '../profile/baseline_quiz_page.dart';
 import '../rhythm/rhythm_card.dart';
 import '../rhythm/welcome_back_notice.dart';
 import '../safety/safety_controller.dart';
@@ -27,6 +29,7 @@ import '../suggestions/suggestion_card_surface.dart';
 import '../suggestions/suggestion_controller.dart';
 import '../suggestions/suggestion_context.dart';
 import '../suggestions/suggestion_page.dart';
+import 'baseline_setup_card.dart';
 import 'home_suggestion_card.dart';
 import 'today_page.dart';
 
@@ -211,9 +214,13 @@ class _AppShellState extends State<AppShell> {
           // stayed shut no matter what the tuning said.
           ignoreBudget: ignoreBudget,
         );
+        final baseline = BaselineProgress.of(widget.profileController.profile);
         final homeState = HomeState(
           safetyFlagActive: safetyActive,
           checkInCompletedToday: checkInCompletedToday,
+          // Real setup state, so the onboarding card can actually appear. It
+          // used to default to complete and could never render.
+          onboardingComplete: baseline.isComplete,
           suggestionDue: suggestionDue,
         );
         final showSuggestion = HomeCardPriority.showSuggestion(homeState);
@@ -250,6 +257,15 @@ class _AppShellState extends State<AppShell> {
                   // not left waiting for some unrelated rebuild.
                   onVanished: () => setState(() {}),
                 ),
+                // Hidden once setup is done, and never shown to someone in a
+                // safety state, where it would read as one more thing to do.
+                setupCard: baseline.isComplete || safetyActive
+                    ? null
+                    : BaselineSetupCard(
+                        progress: baseline,
+                        onContinue: () => _openSetup(context),
+                      ),
+                onContinueSetup: () => _openSetup(context),
                 onStartCheckIn: safetyActive
                     ? () => _openSupport(context)
                     : () => _openCheckIn(context),
@@ -373,6 +389,18 @@ class _AppShellState extends State<AppShell> {
           sessionController: widget.sessionController,
           safetyController: widget.safetyController,
           profileController: widget.profileController,
+        ),
+      ),
+    );
+  }
+
+  /// Opens the baseline reflection quiz, where setup is continued.
+  void _openSetup(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BaselineQuizPage(
+          profileController: widget.profileController,
+          safetyController: widget.safetyController,
         ),
       ),
     );

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/models/activity.dart';
+import 'package:solace_mobile/core/models/user_profile.dart';
 import 'package:solace_mobile/data/contracts/activity_library_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_onboarding_repository.dart';
+import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_suggestion_repository.dart';
+import 'package:solace_mobile/features/profile/profile_controller.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
 import 'package:solace_mobile/features/suggestions/suggestion_controller.dart';
 import 'package:solace_mobile/main.dart';
@@ -48,8 +51,9 @@ SessionController _sessionController() {
 
 Future<void> _pumpShell(
   WidgetTester tester,
-  SuggestionController suggestionController,
-) async {
+  SuggestionController suggestionController, {
+  ProfileController? profileController,
+}) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.0;
   addTearDown(() {
@@ -65,6 +69,7 @@ Future<void> _pumpShell(
       onboardingRepository: onboarding,
       sessionController: _sessionController(),
       suggestionController: suggestionController,
+      profileController: profileController,
     ),
   );
   await tester.pump();
@@ -123,5 +128,53 @@ void main() {
     await tester.pump();
 
     expect(controller.history, isEmpty);
+  });
+
+  group('setup card', () {
+    testWidgets('appears while setup is unfinished', (tester) async {
+      // It could never render before: the completion flag was defaulted to
+      // true, so Home always believed there was nothing left to do.
+      final controller = SuggestionController(
+        libraryRepository: _library,
+        suggestionRepository: InMemorySuggestionRepository(),
+      );
+      await controller.load();
+      await controller.warmUp();
+
+      await _pumpShell(tester, controller);
+
+      expect(find.textContaining('Setup'), findsOneWidget);
+    });
+
+    testWidgets('disappears once setup is done', (tester) async {
+      final controller = SuggestionController(
+        libraryRepository: _library,
+        suggestionRepository: InMemorySuggestionRepository(),
+      );
+      await controller.load();
+      await controller.warmUp();
+
+      final profileController = ProfileController(
+        repository: InMemoryProfileRepository(),
+      );
+      await profileController.load();
+      await profileController.savePreferences(
+        preferredActivities: const ['movement'],
+        constraints: const [],
+        interactionPreferences: const [],
+        neverSuggest: const [],
+      );
+      await profileController.markBlockSkipped(QuizBlock.erqS);
+      await profileController.markBlockSkipped(QuizBlock.gad7);
+      await profileController.markBlockSkipped(QuizBlock.phq9);
+
+      await _pumpShell(
+        tester,
+        controller,
+        profileController: profileController,
+      );
+
+      expect(find.textContaining('Setup'), findsNothing);
+    });
   });
 }

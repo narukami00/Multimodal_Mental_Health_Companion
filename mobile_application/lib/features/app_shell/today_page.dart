@@ -23,6 +23,8 @@ class TodayPage extends StatelessWidget {
     this.primaryCard = HomeCardType.checkIn,
     this.showSuggestion = false,
     this.suggestionCard,
+    this.setupCard,
+    this.onContinueSetup,
     this.currentTime,
     this.chatController,
     this.ambientAudioEnabled = true,
@@ -44,6 +46,12 @@ class TodayPage extends StatelessWidget {
   /// The suggestion card itself, built by the shell so it can peek at the
   /// engine without the page needing to know about suggestions at all.
   final Widget? suggestionCard;
+
+  /// The standing setup-progress card, or null once setup is done.
+  final Widget? setupCard;
+
+  /// Opens the baseline reflection quiz.
+  final VoidCallback? onContinueSetup;
 
   final DateTime? currentTime;
   final ChatController? chatController;
@@ -125,6 +133,10 @@ class TodayPage extends StatelessWidget {
             ],
             const SizedBox(height: 14),
             _buildSolCompanionHub(context),
+            if (setupCard != null) ...[
+              const SizedBox(height: 14),
+              setupCard!,
+            ],
             const SizedBox(height: 18),
             LivingAtmosphereCard(ambientAudioEnabled: ambientAudioEnabled),
             const SizedBox(height: 24),
@@ -133,6 +145,21 @@ class TodayPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// What the top card's button does.
+  ///
+  /// Every card used to run the check-in flow regardless of what it said, so
+  /// "Continue setup" opened a check-in and the support card did too. Each card
+  /// now does what its own label promises.
+  VoidCallback? _primaryAction(HomeCardType type) {
+    return switch (type) {
+      HomeCardType.support => onOpenSupport,
+      HomeCardType.checkIn => onStartCheckIn,
+      HomeCardType.onboarding => onContinueSetup,
+      // "Open a journal or conversation whenever you are ready."
+      HomeCardType.defaultAction => onOpenChat,
+    };
   }
 
   Widget _buildPrimaryCard(_PrimaryCardContent card) {
@@ -210,7 +237,7 @@ class TodayPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   GestureDetector(
-                    onTap: onStartCheckIn,
+                    onTap: _primaryAction(primaryCard),
                     child: Container(
                       padding: const EdgeInsets.fromLTRB(20, 9, 10, 9),
                       decoration: BoxDecoration(
