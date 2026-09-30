@@ -29,6 +29,9 @@ class _SuggestionPageState extends State<SuggestionPage> {
   bool _isLoading = true;
   bool _hasFeedback = false;
 
+  /// Left unset unless the user chooses. A rating is never assumed.
+  int? _rating;
+
   @override
   void initState() {
     super.initState();
@@ -42,17 +45,26 @@ class _SuggestionPageState extends State<SuggestionPage> {
   }
 
   Future<void> _requestSuggestion() async {
-    setState(() => _isLoading = true);
-    await widget.suggestionController.suggest(
-      profile: widget.profileController.profile,
-      context: const RecommendationContext(),
-      userInitiated: true,
-    );
-    if (!mounted) return;
     setState(() {
-      _isLoading = false;
-      _hasFeedback = false;
+      _isLoading = true;
+      _rating = null;
     });
+    try {
+      await widget.suggestionController.suggest(
+        profile: widget.profileController.profile,
+        context: const RecommendationContext(),
+        userInitiated: true,
+      );
+    } finally {
+      // Always clear the spinner: a failed lookup must fall through to the
+      // empty state rather than leaving the page loading forever.
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasFeedback = false;
+        });
+      }
+    }
   }
 
   Future<void> _submit(
@@ -62,13 +74,18 @@ class _SuggestionPageState extends State<SuggestionPage> {
     await widget.suggestionController.submitFeedback(
       status: status,
       skipReason: reason,
-      rating: status == SuggestionStatus.completed ? 5 : null,
+      // Only a completed suggestion can carry a rating, and only if the user
+      // gave one. Anything else stays null rather than inventing a score.
+      rating: status == SuggestionStatus.completed ? _rating : null,
       comment: _commentController.text.trim().isEmpty
           ? null
           : _commentController.text.trim(),
     );
     if (!mounted) return;
-    setState(() => _hasFeedback = true);
+    setState(() {
+      _hasFeedback = true;
+      _rating = null;
+    });
     _commentController.clear();
   }
 
@@ -163,6 +180,8 @@ class _SuggestionPageState extends State<SuggestionPage> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 9),
+              _buildRatingRow(),
+              const SizedBox(height: 12),
               TextField(
                 controller: _commentController,
                 minLines: 2,
@@ -229,6 +248,68 @@ class _SuggestionPageState extends State<SuggestionPage> {
 
   String _label(Enum value) {
     return value.name[0].toUpperCase() + value.name.substring(1);
+  }
+
+  /// Optional 1–5 rating, used only to show the user their own ratings later.
+  ///
+  /// Tapping the selected value again clears it: not rating must stay a real
+  /// option, so the app never records a score the user did not choose.
+  Widget _buildRatingRow() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Optional. This only ever feeds your own list.',
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: AppColors.mutedInk,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            for (var value = 1; value <= 5; value++) ...[
+              if (value > 1) const SizedBox(width: 8),
+              GestureDetector(
+                key: ValueKey('rating-$value'),
+                onTap: () => setState(
+                  () => _rating = _rating == value ? null : value,
+                ),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: (_rating ?? 0) >= value
+                        ? AppColors.amber
+                        : Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: (_rating ?? 0) >= value
+                          ? AppColors.amber
+                          : const Color(0xFFE2D6C0),
+                    ),
+                  ),
+                  child: Text(
+                    '$value',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: (_rating ?? 0) >= value
+                          ? AppColors.deepAmber
+                          : AppColors.mutedInk,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
   }
 }
 

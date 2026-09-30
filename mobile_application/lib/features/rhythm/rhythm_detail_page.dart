@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../core/day_key.dart';
+import '../../core/models/activity.dart';
 import '../../core/models/session_record.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../data/contracts/activity_library_repository.dart';
+import '../../data/repositories/asset_activity_library_repository.dart';
 import '../../domain/rhythm/rhythm_summary.dart';
+import '../../domain/rhythm/what_has_helped.dart';
 import '../journal/session_detail_page.dart';
 import '../profile/profile_controller.dart';
 import '../sessions/session_controller.dart';
@@ -19,6 +23,7 @@ class RhythmDetailPage extends StatefulWidget {
     required this.sessionController,
     required this.profileController,
     required this.suggestionController,
+    this.libraryRepository,
     super.key,
   });
 
@@ -26,12 +31,17 @@ class RhythmDetailPage extends StatefulWidget {
   final ProfileController profileController;
   final SuggestionController suggestionController;
 
+  /// Supplies activity titles for the ratings list.
+  final ActivityLibraryRepository? libraryRepository;
+
   @override
   State<RhythmDetailPage> createState() => _RhythmDetailPageState();
 }
 
 class _RhythmDetailPageState extends State<RhythmDetailPage> {
   bool _showUsual = false;
+  late final Future<List<Activity>> _library =
+      (widget.libraryRepository ?? AssetActivityLibraryRepository()).load();
 
   RhythmSummary get _summary => summariseRhythm(
         sessions: widget.sessionController.sessions,
@@ -135,6 +145,8 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
                     _buildUsual(summary),
                     const SizedBox(height: 14),
                     _buildRestToday(restingToday),
+                    const SizedBox(height: 22),
+                    _buildWhatHasHelped(),
                   ],
                 );
               },
@@ -306,6 +318,88 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  /// The user's own ratings, laid out as history rather than advice.
+  ///
+  /// Nothing appears below the outcome threshold, the copy always attributes
+  /// the numbers to the user, and there are no verbs of effect — this is not a
+  /// recommendation and must not read like one.
+  Widget _buildWhatHasHelped() {
+    final entries = whatHasHelped(widget.suggestionController.history);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'WHAT YOU RATED',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.3,
+            color: Color(0xFFBCAC8E),
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (entries.isEmpty)
+          const Text(
+            'Nothing to show yet. Try a couple of things first.',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              height: 1.45,
+              color: Color(0xFF7B6A55),
+            ),
+          )
+        else
+          FutureBuilder<List<Activity>>(
+            future: _library,
+            builder: (context, snapshot) {
+              final titles = <String, String>{
+                for (final activity in snapshot.data ?? const <Activity>[])
+                  activity.id: activity.title,
+              };
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final entry in entries)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${titles[entry.activityId] ?? 'An activity'}: '
+                            'you rated ${entry.meanRating.round()} of 5 '
+                            'as helpful.',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              height: 1.4,
+                              color: Color(0xFF3A3125),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Based on ${entry.ratedCount} '
+                            '${entry.ratedCount == 1 ? 'try' : 'tries'}. '
+                            'Your ratings only.',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF93887A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
       ],
     );
   }

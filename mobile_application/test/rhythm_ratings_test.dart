@@ -1,0 +1,266 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/models/activity.dart';
+import 'package:solace_mobile/core/models/suggestion_record.dart';
+import 'package:solace_mobile/core/theme/app_theme.dart';
+import 'package:solace_mobile/data/contracts/activity_library_repository.dart';
+import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
+import 'package:solace_mobile/data/repositories/in_memory_safety_event_repository.dart';
+import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
+import 'package:solace_mobile/data/repositories/in_memory_suggestion_repository.dart';
+import 'package:solace_mobile/features/profile/profile_controller.dart';
+import 'package:solace_mobile/features/rhythm/rhythm_detail_page.dart';
+import 'package:solace_mobile/features/safety/safety_controller.dart';
+import 'package:solace_mobile/features/sessions/session_controller.dart';
+import 'package:solace_mobile/features/suggestions/suggestion_controller.dart';
+import 'package:solace_mobile/features/suggestions/suggestion_page.dart';
+import 'package:solace_mobile/providers/mock/mock_providers.dart';
+import 'package:solace_mobile/providers/safety/keyword_safety_screener.dart';
+
+/// Serves a fixed library so these tests never wait on an asset read.
+class _FixedLibrary implements ActivityLibraryRepository {
+  const _FixedLibrary(this.activities);
+
+  final List<Activity> activities;
+
+  @override
+  Future<List<Activity>> load() async => activities;
+}
+
+final _library = _FixedLibrary([
+  Activity(
+    id: 'breathing-space',
+    title: 'Three quiet breaths',
+    description: 'A short pause to notice your breathing.',
+    type: ActivityType.mindfulness,
+    effort: ActivityEffort.low,
+    durationMinutes: 5,
+    contexts: const [],
+    targetStates: const [],
+    review: ActivityReviewMetadata(
+      status: ActivityReviewStatus.approved,
+      evidenceTier: ActivityEvidenceTier.lifestyle,
+      reviewerRole: 'test',
+      reviewedAt: DateTime(2026, 1, 1),
+    ),
+  ),
+]);
+
+SuggestionRecord _rated({
+  required int? rating,
+  String activityId = 'breathing-space',
+}) {
+  return SuggestionRecord(
+    id: 'seed-$activityId-$rating-${DateTime.now().microsecondsSinceEpoch}',
+    activityId: activityId,
+    shownAt: DateTime(2026, 9, 20),
+    contextTags: const [],
+    status: SuggestionStatus.completed,
+    rating: rating,
+  );
+}
+
+void main() {
+  group('Suggestion rating capture', () {
+    late SuggestionController suggestionController;
+    late ProfileController profileController;
+
+    setUp(() {
+      suggestionController = SuggestionController(
+        libraryRepository: _library,
+        suggestionRepository: InMemorySuggestionRepository(),
+      );
+      profileController = ProfileController(
+        repository: InMemoryProfileRepository(),
+      );
+    });
+
+    Future<void> pumpPage(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: SuggestionPage(
+            suggestionController: suggestionController,
+            profileController: profileController,
+            safetyController: SafetyController(
+              screener: const KeywordSafetyScreener(),
+              repository: InMemorySafetyEventRepository(),
+            ),
+          ),
+        ),
+      );
+      // The page loads its suggestion asynchronously and shows a spinner while
+      // it does, so settle by pumping rather than waiting for stillness.
+      for (var frame = 0; frame < 12; frame++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    testWidgets('never invents a rating the user did not choose', (
+      tester,
+    ) async {
+      await pumpPage(tester);
+
+      final tryIt = find.text('I tried it');
+      await tester.ensureVisible(tryIt);
+      await tester.pumpAndSettle();
+      await tester.tap(tryIt);
+      await tester.pumpAndSettle();
+
+      final completed = suggestionController.history
+          .where((record) => record.status == SuggestionStatus.completed);
+      expect(completed, hasLength(1));
+      // Previously every completion was silently stored as a 5.
+      expect(completed.single.rating, isNull);
+    });
+
+    testWidgets('records a rating the user does choose', (tester) async {
+      await pumpPage(tester);
+
+      final rating = find.byKey(const ValueKey('rating-4'));
+      await tester.ensureVisible(rating);
+      await tester.pumpAndSettle();
+      await tester.tap(rating);
+      await tester.pumpAndSettle();
+
+      final tryIt = find.text('I tried it');
+      await tester.ensureVisible(tryIt);
+      await tester.pumpAndSettle();
+      await tester.tap(tryIt);
+      await tester.pumpAndSettle();
+
+      final completed = suggestionController.history
+          .where((record) => record.status == SuggestionStatus.completed);
+      expect(completed.single.rating, 4);
+    });
+
+    testWidgets('tapping the chosen rating again clears it', (tester) async {
+      await pumpPage(tester);
+
+      final rating = find.byKey(const ValueKey('rating-3'));
+      await tester.ensureVisible(rating);
+      await tester.pumpAndSettle();
+      await tester.tap(rating);
+      await tester.pumpAndSettle();
+      await tester.tap(rating);
+      await tester.pumpAndSettle();
+
+      final tryIt = find.text('I tried it');
+      await tester.ensureVisible(tryIt);
+      await tester.pumpAndSettle();
+      await tester.tap(tryIt);
+      await tester.pumpAndSettle();
+
+      final completed = suggestionController.history
+          .where((record) => record.status == SuggestionStatus.completed);
+      expect(completed.single.rating, isNull);
+    });
+  });
+
+  group('What you rated', () {
+    late SuggestionController suggestionController;
+
+    setUp(() {
+      suggestionController = SuggestionController(
+        libraryRepository: _library,
+        suggestionRepository: InMemorySuggestionRepository(),
+      );
+    });
+
+    Future<void> pumpDetail(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 3000);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: RhythmDetailPage(
+            sessionController: SessionController(
+              repository: InMemorySessionRepository(),
+              emotionAnalyzer: const MockEmotionAnalyzer(),
+            ),
+            profileController: ProfileController(
+              repository: InMemoryProfileRepository(),
+            ),
+            suggestionController: suggestionController,
+            libraryRepository: _library,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('stays empty when the user has not rated anything', (
+      tester,
+    ) async {
+      await suggestionController.load();
+      await pumpDetail(tester);
+
+      await tester.scrollUntilVisible(
+        find.text('WHAT YOU RATED'),
+        300,
+      );
+      expect(
+        find.text('Nothing to show yet. Try a couple of things first.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('shows the user their own ratings with the sample count', (
+      tester,
+    ) async {
+      final repository = InMemorySuggestionRepository();
+      await repository.saveRecord(_rated(rating: 4));
+      await repository.saveRecord(_rated(rating: 5));
+      await repository.saveRecord(_rated(rating: 3));
+
+      suggestionController = SuggestionController(
+        libraryRepository: _library,
+        suggestionRepository: repository,
+      );
+      await suggestionController.load();
+
+      await pumpDetail(tester);
+      await tester.scrollUntilVisible(find.text('WHAT YOU RATED'), 300);
+
+      expect(
+        find.textContaining('Three quiet breaths: you rated 4 of 5 as helpful'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Based on 3 tries. Your ratings only.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('hides thin data rather than implying a pattern', (
+      tester,
+    ) async {
+      final repository = InMemorySuggestionRepository();
+      await repository.saveRecord(_rated(rating: 5));
+      await repository.saveRecord(_rated(rating: 5));
+
+      suggestionController = SuggestionController(
+        libraryRepository: _library,
+        suggestionRepository: repository,
+      );
+      await suggestionController.load();
+
+      await pumpDetail(tester);
+      await tester.scrollUntilVisible(find.text('WHAT YOU RATED'), 300);
+
+      expect(find.textContaining('you rated'), findsNothing);
+    });
+  });
+}
