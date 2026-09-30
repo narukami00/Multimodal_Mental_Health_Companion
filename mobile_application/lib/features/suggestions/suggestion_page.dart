@@ -385,15 +385,6 @@ class _SuggestionPageState extends State<SuggestionPage> {
                       height: 1.45,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '${activity.durationMinutes} minutes · ${_label(activity.effort)} effort',
-                    style: const TextStyle(
-                      color: AppColors.deepAmber,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
                 ],
               ),
             ),

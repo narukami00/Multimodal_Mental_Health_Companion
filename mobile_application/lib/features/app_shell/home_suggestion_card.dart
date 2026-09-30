@@ -141,41 +141,83 @@ class _CardShell extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(20, 20, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ActivityTypeGlyph(type: activity.type, size: 58),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 320),
-                    child: Text(
-                      sayingGoodbye
-                          ? 'Okay, have a nice day.'
-                          : activity.title,
-                      key: ValueKey(sayingGoodbye),
-                      style: const TextStyle(
-                        color: Color(0xFF4A3728),
-                        fontSize: 17,
-                        height: 1.35,
-                        fontWeight: FontWeight.w700,
+                // Glyph and text on their own row. Sharing one row with both
+                // buttons left the text about 140dp wide on a normal phone,
+                // which a full-sentence subtitle cannot fit into.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ActivityTypeGlyph(type: activity.type, size: 52),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 320),
+                        child: sayingGoodbye
+                            ? const Padding(
+                                key: ValueKey('goodbye'),
+                                padding: EdgeInsets.only(top: 10),
+                                child: Text(
+                                  'Okay, have a nice day.',
+                                  style: TextStyle(
+                                    color: Color(0xFF4A3728),
+                                    fontSize: 17,
+                                    height: 1.35,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              )
+                            : Column(
+                                key: const ValueKey('suggestion'),
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    activity.title,
+                                    style: const TextStyle(
+                                      color: Color(0xFF4A3728),
+                                      fontSize: 16.5,
+                                      height: 1.3,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  // What doing it actually means. Naming a task
+                                  // without this leaves the user to guess.
+                                  Text(
+                                    activity.description,
+                                    style: const TextStyle(
+                                      color: Color(0xFF6B5540),
+                                      fontSize: 13.5,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _AnswerButton(
-                  key: const ValueKey('suggestion-accept'),
-                  icon: Icons.check_rounded,
-                  tooltip: 'I did it',
-                  onPressed: onAccept,
-                ),
-                const SizedBox(width: 6),
-                _AnswerButton(
-                  key: const ValueKey('suggestion-decline'),
-                  icon: Icons.close_rounded,
-                  tooltip: 'Not today',
-                  onPressed: onDecline,
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _AnswerButton(
+                      key: const ValueKey('suggestion-decline'),
+                      icon: Icons.close_rounded,
+                      tooltip: 'Not today',
+                      onPressed: onDecline,
+                    ),
+                    const SizedBox(width: 10),
+                    _AnswerButton(
+                      key: const ValueKey('suggestion-accept'),
+                      icon: Icons.check_rounded,
+                      tooltip: 'I did it',
+                      onPressed: onAccept,
+                    ),
+                  ],
                 ),
               ],
             ),
