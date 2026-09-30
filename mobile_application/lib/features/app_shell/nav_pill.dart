@@ -46,20 +46,9 @@ class SolaceNavPill extends StatelessWidget {
       child: Container(
         height: height,
         padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          // Near-opaque rather than blurred: a backdrop blur is expensive on
-          // the low-end Android phones this is built for.
-          color: colors.surface.withValues(alpha: 0.97),
-          border: Border.all(color: colors.ink.withValues(alpha: 0.08)),
-          boxShadow: [
-            BoxShadow(
-              color: colors.ink.withValues(alpha: 0.14),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
+        // No surface at all: the page behind is the background. A filled or
+        // bordered container on top of the page made the navigation look like
+        // one more card stacked on the screen.
         child: Row(
           children: [
             for (final tab in AppTab.values)
@@ -93,7 +82,14 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Reachable without a label: the semantics still carry the name.
+    // Selected is expressed by colour alone: the icon and the label take the
+    // accent, nothing gets a nested capsule behind it. A filled chip inside a
+    // container inside the page was three surfaces to say one word.
+    // Amber stays constant across palettes for brand contrast; only the
+    // inactive ink follows the palette neutrals.
+    final colour = isSelected
+        ? const Color(0xFFC87F10)
+        : colors.mutedInk;
     return Semantics(
       label: tab.label,
       selected: isSelected,
@@ -103,44 +99,33 @@ class _NavItem extends StatelessWidget {
         child: InkWell(
           customBorder: const StadiumBorder(),
           onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              color: isSelected ? colors.amber : Colors.transparent,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CustomPaint(
-                    painter: _NavIconPainter(
-                      tab: tab,
-                      color: isSelected ? colors.ink : colors.mutedInk,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CustomPaint(
+                  painter: _NavIconPainter(tab: tab, color: colour),
+                ),
+              ),
+              // The label appears only for the selected destination, so the
+              // active item is identifiable without a background shape.
+              if (isSelected) ...[
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    tab.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: colour,
                     ),
                   ),
                 ),
-                // The label appears only for the selected tab, so the active
-                // item is a different shape rather than just a different colour.
-                if (isSelected) ...[
-                  const SizedBox(width: 7),
-                  Flexible(
-                    child: Text(
-                      tab.label,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                        color: colors.ink,
-                      ),
-                    ),
-                  ),
-                ],
               ],
-            ),
+            ],
           ),
         ),
       ),
