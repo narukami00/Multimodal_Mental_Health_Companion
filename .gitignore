@@ -32,7 +32,9 @@ firebase_options.dart
 
 # Test and tool output
 *.log
-screenshots/
+# Anchored: unanchored, this also matched mobile_application/test/screenshots,
+# which is source (the render harness), not output.
+/screenshots/
 debug_recordings/
 *.wav
 /models/
