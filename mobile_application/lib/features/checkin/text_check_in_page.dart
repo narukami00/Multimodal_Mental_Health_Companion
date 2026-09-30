@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/moods.dart';
 import '../../core/models/session_input.dart';
 import '../../core/models/safety_assessment.dart';
 import '../journal/session_detail_page.dart';
@@ -25,7 +26,6 @@ class TextCheckInPage extends StatefulWidget {
 }
 
 class _TextCheckInPageState extends State<TextCheckInPage> {
-  static const _moods = ['Steady', 'Bright', 'Tender', 'Wobbly', 'Quiet'];
   static const _ink = Color(0xFF3A3125);
   static const _softInk = Color(0xFF6E6252);
   static const _cream = Color(0xFFFFFDF6);
@@ -41,6 +41,28 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
   void dispose() {
     _textController.dispose();
     super.dispose();
+  }
+
+  /// Records today as rest and leaves. One tap, no reason, nothing saved.
+  ///
+  /// Rest is a legitimate choice, not a lesser check-in, so it is offered here
+  /// beside the check-in rather than buried in settings.
+  Future<void> _declareRest() async {
+    final controller = widget.profileController;
+    if (controller == null) return;
+
+    await controller.declareRestDay(DateTime.now());
+    if (!mounted) return;
+    Navigator.of(context).maybePop();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Rest noted. That counts.'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
   }
 
   bool get _canSave =>
@@ -208,7 +230,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
                         spacing: 9,
                         runSpacing: 9,
                         children: [
-                          for (final mood in _moods)
+                          for (final mood in Moods.values)
                             _MoodPill(
                               label: mood,
                               selected: _selectedMood == mood,
@@ -277,6 +299,23 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
                           contentPadding: const EdgeInsets.all(18),
                         ),
                       ),
+                      if (widget.profileController != null) ...[
+                        const SizedBox(height: 14),
+                        TextButton(
+                          key: const ValueKey('rest-today-checkin'),
+                          onPressed: _declareRest,
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF96620C),
+                          ),
+                          child: const Text(
+                            'Rest today instead',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   ),

@@ -107,8 +107,9 @@ class CheckInReminderService {
     try {
       await _plugin.zonedSchedule(
         id: reminderNotificationId,
-        title: 'A gentle check-in',
-        body: 'Whenever you are ready, there is a quiet space here for you.',
+        title: 'Solace',
+        // One word is a complete check-in, so the nudge asks for one word.
+        body: 'How are you, in one word?',
         scheduledDate: next,
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(

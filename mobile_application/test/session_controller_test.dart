@@ -39,6 +39,41 @@ void main() {
     expect(saved.emotionResults.single.labels?.single.label, 'steady');
   });
 
+  test('a mood-only check-in stores no inferred emotion', () async {
+    final controller = SessionController(
+      repository: InMemorySessionRepository(),
+      emotionAnalyzer: _FakeEmotionAnalyzer(),
+    );
+    await controller.load();
+
+    final saved = await controller.saveSession(
+      mode: CaptureMode.text,
+      mood: 'Steady',
+    );
+
+    // One word is a complete check-in, and there is nothing to analyse in it.
+    // Inferring emotion from an empty input would be inventing data.
+    expect(saved.mood, 'Steady');
+    expect(saved.text, isNull);
+    expect(saved.emotionResults, isEmpty);
+  });
+
+  test('whitespace alone does not trigger analysis', () async {
+    final controller = SessionController(
+      repository: InMemorySessionRepository(),
+      emotionAnalyzer: _FakeEmotionAnalyzer(),
+    );
+    await controller.load();
+
+    final saved = await controller.saveSession(
+      mode: CaptureMode.text,
+      text: '   ',
+      mood: 'Tender',
+    );
+
+    expect(saved.emotionResults, isEmpty);
+  });
+
   test('seedInitialSessions fills three demo sessions only when empty', () async {
     final repository = InMemorySessionRepository();
     final controller = SessionController(

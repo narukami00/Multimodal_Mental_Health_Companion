@@ -35,7 +35,13 @@ class SessionController extends ChangeNotifier {
       mode: mode,
       text: text,
     );
-    final emotionResults = await _emotionAnalyzer.analyze(input);
+    // Only analyse content the user actually gave us. A one-word mood, or a
+    // check-in with no text, carries nothing to analyse — inferring emotion
+    // from an empty input would be inventing data.
+    final hasText = text != null && text.trim().isNotEmpty;
+    final emotionResults = hasText
+        ? await _emotionAnalyzer.analyze(input)
+        : const <EmotionResult>[];
     final session = SessionRecord(
       id: sessionId,
       createdAt: DateTime.now(),
