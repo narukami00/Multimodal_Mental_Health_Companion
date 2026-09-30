@@ -20,7 +20,6 @@ import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
-import '../suggestions/suggestion_page.dart';
 import 'baseline_quiz_page.dart';
 import 'permissions_page.dart';
 import 'profile_controller.dart';
@@ -646,29 +645,10 @@ class ProfilePage extends StatelessWidget {
                             color: Color(0xFFF2ECDD),
                           ),
 
-                          // Gentle ideas
-                          _menuRow(
-                            icon: Icons.auto_awesome_rounded,
-                            iconBg: const Color(0xFFFFF3DC),
-                            iconColor: const Color(0xFFC08A1E),
-                            title: 'Try a gentle idea',
-                            subtitle: 'Personalized practices & quick suggestions',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => SuggestionPage(
-                                  suggestionController: suggestionController,
-                                  profileController: profileController,
-                                  safetyController: safetyController,
-                                  sessionController: sessionController,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: Color(0xFFF2ECDD),
-                          ),
+                          // The "Try a gentle idea" row was here. Ideas now
+                          // arrive on Home under their own card, so a button
+                          // that opened a second copy of the same flow from the
+                          // You tab was a dead end.
 
                           // App Settings row
                           _menuRow(

@@ -1,9 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/models/activity.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/recommendations/recommendation_engine.dart';
+import '../app_shell/activity_scene.dart';
+import '../app_shell/home_suggestion_card.dart';
 import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
@@ -211,9 +215,16 @@ class _SuggestionPageState extends State<SuggestionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // No title. "A gentle idea" told the user nothing, and every step here
+      // already has its own heading.
       appBar: AppBar(
-        title: const Text('A gentle idea'),
         backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          tooltip: 'Close',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
       ),
       body: AnimatedBuilder(
         animation: widget.suggestionController,
@@ -356,64 +367,102 @@ class _SuggestionPageState extends State<SuggestionPage> {
 
   /// How it went, asked only after the user says they did it.
   ///
-  /// The activity is shown again here, in full. Rating a bare row of stars with
-  /// no reminder of what the idea was gives the user nothing to answer against.
+  /// The activity appears once, as a quiet line with its scene — not repeated
+  /// in a second full card. Repeating what the user just read was noise.
   Widget _buildRate() {
     final activity = _ratingActivity;
+    final palette = activity == null
+        ? null
+        : ActivitySuggestionCard.paletteFor(activity.type);
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
+      padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
       children: [
-        if (activity != null) ...[
-          Card(
-            color: AppColors.amber,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    activity.title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: AppColors.deepAmber,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    activity.description,
-                    style: const TextStyle(
-                      color: AppColors.deepAmber,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 22),
-        ],
         Text(
           'How did it go?',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Entirely optional. Nothing here is required to keep using Solace.',
-          style: TextStyle(color: AppColors.mutedInk, height: 1.4),
-        ),
-        const SizedBox(height: 18),
-        _buildRatingRow(),
-        const SizedBox(height: 18),
-        TextField(
-          controller: _commentController,
-          minLines: 2,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            hintText: 'Optional note for next time',
-            filled: true,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.6,
           ),
         ),
-        const SizedBox(height: 18),
-        OutlinedButton(onPressed: _skipRating, child: const Text('Skip')),
+        const SizedBox(height: 10),
+        const Text(
+          'Entirely optional. Nothing here is required to keep using Solace.',
+          style: TextStyle(color: AppColors.mutedInk, height: 1.45),
+        ),
+        if (activity != null && palette != null) ...[
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              SizedBox(
+                width: 68,
+                height: 68,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: palette.wash,
+                    border: Border.all(
+                      color: palette.ink.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(7),
+                    child: ActivityScene(
+                      type: activity.type,
+                      color: palette.ink,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  activity.title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    height: 1.3,
+                    fontWeight: FontWeight.w700,
+                    color: palette.ink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 26),
+        _StarRow(value: _rating, onRate: _rate),
+        const SizedBox(height: 22),
+        TextField(
+          controller: _commentController,
+          minLines: 3,
+          maxLines: 5,
+          decoration: InputDecoration(
+            hintText: 'Anything worth remembering?',
+            hintStyle: const TextStyle(color: AppColors.mutedInk),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.all(16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide(color: AppColors.mutedInk.withValues(alpha: 0.25)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide(color: AppColors.mutedInk.withValues(alpha: 0.25)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: const BorderSide(color: AppColors.coral, width: 1.6),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Center(
+          child: TextButton(
+            onPressed: _skipRating,
+            child: const Text('Skip this'),
+          ),
+        ),
       ],
     );
   }
@@ -428,65 +477,100 @@ class _SuggestionPageState extends State<SuggestionPage> {
   String _label(Enum value) {
     return value.name[0].toUpperCase() + value.name.substring(1);
   }
+}
 
-  /// Optional 1–5 rating, asked only once the user has said they did it.
-  ///
-  /// Tapping saves straight away: a rating that costs an extra confirmation is
-  /// a rating most people will not give.
-  Widget _buildRatingRow() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+/// Five stars, drawn so their weight can be tuned and so they do not depend on
+/// an icon font being present.
+class _StarRow extends StatelessWidget {
+  const _StarRow({required this.value, required this.onRate});
+
+  final int? value;
+  final void Function(int) onRate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text(
-          'Not at all helpful to very helpful.',
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: AppColors.mutedInk,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            for (var value = 1; value <= 5; value++) ...[
-              if (value > 1) const SizedBox(width: 8),
-              GestureDetector(
-                key: ValueKey('rating-$value'),
-                onTap: () => _rate(value),
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: (_rating ?? 0) >= value
-                        ? AppColors.amber
-                        : Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: (_rating ?? 0) >= value
-                          ? AppColors.amber
-                          : const Color(0xFFE2D6C0),
-                    ),
-                  ),
-                  child: Text(
-                    '$value',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: (_rating ?? 0) >= value
-                          ? AppColors.deepAmber
-                          : AppColors.mutedInk,
-                    ),
+        for (var star = 1; star <= 5; star++)
+          GestureDetector(
+            key: ValueKey('rating-$star'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onRate(star),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 9),
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 160),
+                scale: (value ?? 0) >= star ? 1.0 : 0.9,
+                child: CustomPaint(
+                  size: const Size(40, 40),
+                  painter: _StarPainter(
+                    filled: (value ?? 0) >= star,
+                    active: AppColors.amber,
+                    idle: AppColors.mutedInk.withValues(alpha: 0.32),
                   ),
                 ),
               ),
-            ],
-          ],
-        ),
+            ),
+          ),
       ],
     );
+  }
+}
+
+class _StarPainter extends CustomPainter {
+  _StarPainter({
+    required this.filled,
+    required this.active,
+    required this.idle,
+  });
+
+  final bool filled;
+  final Color active;
+  final Color idle;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centre = Offset(size.width / 2, size.height / 2);
+    final outer = size.width * 0.46;
+    final inner = outer * 0.46;
+
+    final path = Path();
+    for (var i = 0; i < 10; i++) {
+      final radius = i.isEven ? outer : inner;
+      // Start at the top point rather than the right.
+      final angle = (math.pi / 5) * i - math.pi / 2;
+      final point = Offset(
+        centre.dx + radius * math.cos(angle),
+        centre.dy + radius * math.sin(angle),
+      );
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    path.close();
+
+    if (filled) {
+      canvas.drawPath(path, Paint()..color = active);
+    } else {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..strokeJoin = StrokeJoin.round
+          ..color = idle,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _StarPainter oldDelegate) {
+    return oldDelegate.filled != filled ||
+        oldDelegate.active != active ||
+        oldDelegate.idle != idle;
   }
 }
 
@@ -511,6 +595,18 @@ enum _Outcome {
     _ => null,
   };
 
+  /// A short heading for the closing screen, so it is not one line on a blank
+  /// page.
+  String get headline => switch (this) {
+    _Outcome.completedUnrated => 'Good to know you did it',
+    _Outcome.ratedUp => 'Noted, thank you',
+    _Outcome.ratedDown => 'Thanks for being honest',
+    _Outcome.notNow => 'No rush at all',
+    _Outcome.notForMe => 'Understood',
+    _Outcome.tooHard => 'Thanks for saying',
+    _ => 'All set',
+  };
+
   /// What actually changes, described plainly.
   ///
   /// Each line matches a real rule in the engine rather than encouragement:
@@ -518,14 +614,13 @@ enum _Outcome {
   /// the effort ceiling for a fortnight.
   String get impact => switch (this) {
     _Outcome.completedUnrated =>
-      'Good to know you did it. A rating is always optional.',
-    _Outcome.ratedUp => 'Noted. That shapes what comes next.',
+      'A rating is always optional. Nothing else is needed from you.',
+    _Outcome.ratedUp => 'That shapes what comes next.',
     _Outcome.ratedDown =>
-      'Thanks for being straight with us. We will look for a better fit.',
-    _Outcome.notNow => 'No rush. This one can come back around.',
-    _Outcome.notForMe => 'Understood. We will leave this one out for a while.',
-    _Outcome.tooHard =>
-      'Thanks for saying. We will keep things gentler for a bit.',
+      'We will look for something that fits you better.',
+    _Outcome.notNow => 'This one can come back around another time.',
+    _Outcome.notForMe => 'We will leave this one out for a while.',
+    _Outcome.tooHard => 'We will keep things gentler for a bit.',
     _ => 'Nothing was recorded.',
   };
 
@@ -639,36 +734,76 @@ class _FeedbackThanks extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final upbeat = outcome.offersAnother;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.favorite_rounded,
-              color: AppColors.coral,
-              size: 48,
+            // A drawn mark rather than a lone heart on an otherwise empty page.
+            SizedBox(
+              width: 96,
+              height: 96,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFFFF0E8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: CustomPaint(
+                    painter: _StarPainter(
+                      filled: true,
+                      active: AppColors.coral,
+                      idle: AppColors.coral,
+                    ),
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Text(
-              'Thanks for telling us',
-              style: Theme.of(context).textTheme.headlineSmall,
+              outcome.headline,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
               outcome.impact,
               textAlign: TextAlign.center,
-              style: const TextStyle(height: 1.45),
+              style: const TextStyle(
+                color: AppColors.mutedInk,
+                height: 1.5,
+                fontSize: 14,
+              ),
             ),
-            const SizedBox(height: 20),
-            if (outcome.offersAnother)
+            const SizedBox(height: 28),
+            if (upbeat)
               FilledButton(
                 onPressed: onNext,
-                child: const Text('Try another idea'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 16,
+                  ),
+                ),
+                child: const Text('Another idea'),
               )
             else
-              FilledButton(onPressed: onDone, child: const Text('Okay')),
+              FilledButton(
+                onPressed: onDone,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 16,
+                  ),
+                ),
+                child: const Text('Done'),
+              ),
           ],
         ),
       ),

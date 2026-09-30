@@ -203,7 +203,7 @@ void main() {
       await pumpPage(tester);
       await _didIt(tester);
 
-      await tester.tap(find.text('Skip'));
+      await tester.tap(find.text('Skip this'));
       await tester.pumpAndSettle();
 
       final completed = suggestionController.history.single;
@@ -270,8 +270,8 @@ void main() {
         suggestionController.history.single.skipReason,
         SuggestionSkipReason.notNow,
       );
-      expect(find.text('Try another idea'), findsNothing);
-      expect(find.text('Okay'), findsOneWidget);
+      expect(find.text('Another idea'), findsNothing);
+      expect(find.text('Done'), findsOneWidget);
     });
   });
 
