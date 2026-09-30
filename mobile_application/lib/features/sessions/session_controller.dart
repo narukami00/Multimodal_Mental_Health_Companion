@@ -156,4 +156,17 @@ class SessionController extends ChangeNotifier {
     }
     return null;
   }
+
+  /// Whether a check-in was recorded on this calendar day.
+  ///
+  /// Home needs this to stop asking someone to check in after they already
+  /// have, and the suggestion slot keys off it too.
+  bool hasCheckedInOn(DateTime day) {
+    return _sessions.any(
+      (session) =>
+          session.createdAt.year == day.year &&
+          session.createdAt.month == day.month &&
+          session.createdAt.day == day.day,
+    );
+  }
 }

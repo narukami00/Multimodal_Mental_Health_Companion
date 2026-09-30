@@ -21,6 +21,8 @@ bool get _isTestEnvironment {
 class TodayPage extends StatelessWidget {
   const TodayPage({
     this.primaryCard = HomeCardType.checkIn,
+    this.showSuggestion = false,
+    this.suggestionCard,
     this.currentTime,
     this.chatController,
     this.ambientAudioEnabled = true,
@@ -35,6 +37,14 @@ class TodayPage extends StatelessWidget {
   });
 
   final HomeCardType primaryCard;
+
+  /// Whether the standing suggestion card should appear below the primary one.
+  final bool showSuggestion;
+
+  /// The suggestion card itself, built by the shell so it can peek at the
+  /// engine without the page needing to know about suggestions at all.
+  final Widget? suggestionCard;
+
   final DateTime? currentTime;
   final ChatController? chatController;
 
@@ -106,6 +116,9 @@ class TodayPage extends StatelessWidget {
             const SizedBox(height: 18),
             if (welcomeBackNotice != null) welcomeBackNotice!,
             _buildPrimaryCard(card),
+            // Sits directly under whichever card is on top, so an idea arrives
+            // as a follow-on rather than as another separate ask.
+            if (showSuggestion && suggestionCard != null) suggestionCard!,
             if (rhythmCard != null) ...[
               const SizedBox(height: 14),
               rhythmCard!,
@@ -991,13 +1004,6 @@ class _PrimaryCardContent {
           title: 'Make Solace\nfeel more like you',
           subtitle: 'A few gentle choices help shape what you see here.',
           action: 'Continue setup',
-          icon: Icons.arrow_forward_rounded,
-        ),
-      HomeCardType.suggestion => const _PrimaryCardContent(
-          eyebrow: 'GENTLE SUGGESTION',
-          title: 'A gentle idea\nfor today',
-          subtitle: 'Something small, offered without pressure.',
-          action: 'See the idea',
           icon: Icons.arrow_forward_rounded,
         ),
       HomeCardType.defaultAction => const _PrimaryCardContent(

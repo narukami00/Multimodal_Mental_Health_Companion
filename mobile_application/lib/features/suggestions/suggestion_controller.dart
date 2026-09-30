@@ -47,6 +47,66 @@ class SuggestionController extends ChangeNotifier {
       )
       .length;
 
+  /// Whether a suggestion would be offered, without recording one.
+  ///
+  /// Home asks this on every rebuild, so it must leave history and the current
+  /// suggestion untouched. The engine is pure, which is what makes it safe.
+  /// A peek is never written down; [commit] does that, and only once the user
+  /// actually responds to what they were shown.
+  Recommendation? peek({
+    required UserProfile profile,
+    required RecommendationContext context,
+    DateTime? now,
+  }) {
+    if (_library.isEmpty) return null;
+    return _engine.choose(
+      activities: _library,
+      profile: profile,
+      context: context,
+      history: _history,
+      now: now,
+    );
+  }
+
+  /// Records a suggestion the user has just responded to.
+  ///
+  /// Takes the recommendation that was peeked at, rather than looking one up
+  /// again, so the record always matches what the user actually saw.
+  Future<SuggestionRecord> commit(
+    Recommendation recommendation, {
+    required RecommendationContext context,
+    DateTime? now,
+  }) async {
+    final shownAt = now ?? DateTime.now();
+    final record = SuggestionRecord(
+      id: shownAt.microsecondsSinceEpoch.toString(),
+      activityId: recommendation.activity.id,
+      shownAt: shownAt,
+      contextTags: [
+        ...context.eventTags,
+        if (context.currentState != null) context.currentState!,
+      ],
+      source: recommendation.source,
+    );
+    await _suggestionRepository.saveRecord(record);
+    _history = [..._history, record];
+    _current = recommendation;
+    _currentRecord = record;
+    notifyListeners();
+    return record;
+  }
+
+  /// Loads the activity library ahead of the first peek.
+  ///
+  /// Home peeks synchronously so that a rebuild never waits on I/O, which is
+  /// what this makes possible. It is called once at app start rather than from
+  /// [load], because [load] runs in widget tests and an asset read never
+  /// completes under fake async.
+  Future<void> warmUp() async {
+    _library = await _libraryRepository.load();
+    notifyListeners();
+  }
+
   Future<void> load() async {
     _history = await _suggestionRepository.listRecords();
     _isLoaded = true;
@@ -165,6 +225,22 @@ class SuggestionController extends ChangeNotifier {
         rating: rating,
         comment: comment,
       ),
+    );
+  }
+
+  /// Records that the user declined a specific suggestion.
+  ///
+  /// Separate from [submitFeedback] because the Home card declines a record it
+  /// already committed, rather than one currently on screen. Declining stays
+  /// free: the engine counts "not now" as no verdict at all.
+  Future<void> dismissRecord(
+    String recordId, {
+    required SuggestionSkipReason reason,
+  }) async {
+    final record = _recordById(recordId);
+    if (record == null) return;
+    await _write(
+      record.copyWith(status: SuggestionStatus.skipped, skipReason: reason),
     );
   }
 

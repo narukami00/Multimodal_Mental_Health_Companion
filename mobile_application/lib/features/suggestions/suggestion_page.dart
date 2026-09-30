@@ -16,6 +16,7 @@ class SuggestionPage extends StatefulWidget {
     required this.profileController,
     required this.safetyController,
     this.sessionController,
+    this.seededRecordId,
     super.key,
   });
 
@@ -26,6 +27,13 @@ class SuggestionPage extends StatefulWidget {
   /// Supplies the most recent check-in, which is what the suggestion is
   /// actually chosen from. Optional so the page still works without it.
   final SessionController? sessionController;
+
+  /// A suggestion Home already offered, whose record is already written.
+  ///
+  /// When set, the page opens straight on the rating step instead of asking for
+  /// a suggestion, because asking again would write a second record for the
+  /// same thing the user is looking at.
+  final String? seededRecordId;
 
   @override
   State<SuggestionPage> createState() => _SuggestionPageState();
@@ -51,6 +59,14 @@ class _SuggestionPageState extends State<SuggestionPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.seededRecordId != null) {
+      // Opened from Home for something already offered: the record exists, so
+      // go straight to rating it.
+      _isLoading = false;
+      _outcome = _Outcome.completed;
+      _step = _Step.rate;
+      return;
+    }
     _requestSuggestion();
   }
 

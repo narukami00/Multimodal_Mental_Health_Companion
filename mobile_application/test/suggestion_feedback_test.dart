@@ -196,6 +196,85 @@ void main() {
     });
   });
 
+  group('peek', () {
+    test('never writes a record, however many times it is asked', () async {
+      final controller = _controller([_activity(id: 'only')]);
+      await controller.load();
+      await controller.warmUp();
+
+      // Home asks this on every rebuild. If it recorded anything, the counts
+      // the confidence gate depends on would inflate with every frame.
+      for (var i = 0; i < 25; i++) {
+        controller.peek(
+          profile: const UserProfile(),
+          context: _context,
+        );
+      }
+
+      expect(controller.history, isEmpty);
+    });
+
+    test('offers nothing until the library has been loaded', () async {
+      final controller = _controller([_activity(id: 'only')]);
+      await controller.load();
+
+      expect(
+        controller.peek(profile: const UserProfile(), context: _context),
+        isNull,
+      );
+
+      await controller.warmUp();
+      expect(
+        controller.peek(profile: const UserProfile(), context: _context),
+        isNotNull,
+      );
+    });
+  });
+
+  group('commit', () {
+    test('writes exactly one record for what was peeked', () async {
+      final controller = _controller([_activity(id: 'only')]);
+      await controller.load();
+      await controller.warmUp();
+      final peeked = controller.peek(
+        profile: const UserProfile(),
+        context: _context,
+      )!;
+
+      await controller.commit(peeked, context: _context);
+
+      expect(controller.history, hasLength(1));
+      expect(controller.history.single.activityId, 'only');
+      expect(controller.history.single.source, peeked.source);
+    });
+  });
+
+  group('dismissRecord', () {
+    test('declining suppresses the activity without counting against it', () async {
+      final controller = _controller([_activity(id: 'only')]);
+      await controller.load();
+      await controller.warmUp();
+      final peeked = controller.peek(
+        profile: const UserProfile(),
+        context: _context,
+      )!;
+      final record = await controller.commit(peeked, context: _context);
+
+      await controller.dismissRecord(
+        record.id,
+        reason: SuggestionSkipReason.notNow,
+      );
+
+      final saved = controller.history.single;
+      expect(saved.status, SuggestionStatus.skipped);
+      expect(saved.skipReason, SuggestionSkipReason.notNow);
+      // Declining is free: it is not a completion, and it is not a verdict on
+      // whether the activity helps.
+      expect(saved.done, isNull);
+      expect(saved.useful, isNull);
+    });
+  });
+
   group('impact', () {
     test('"not for me" takes the activity out of future picks', () async {
       final controller = _controller([_activity(id: 'only')]);

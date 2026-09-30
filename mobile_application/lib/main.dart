@@ -75,6 +75,9 @@ Future<void> main() async {
     suggestionRepository: SharedPreferencesSuggestionRepository(preferences),
   );
   await suggestionController.load();
+  // Loaded at startup so Home can ask whether a suggestion is due without
+  // waiting on an asset read during a rebuild.
+  await suggestionController.warmUp();
 
   final navigatorKey = GlobalKey<NavigatorState>();
 

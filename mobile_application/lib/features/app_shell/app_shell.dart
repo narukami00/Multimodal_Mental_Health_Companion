@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/models/safety_assessment.dart';
+import '../../core/models/suggestion_record.dart';
 import '../../core/navigation/app_tab.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../domain/home/home_card_priority.dart';
+import '../../domain/suggestions/suggestion_schedule.dart';
 import '../call/call_page.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_page.dart';
@@ -20,7 +22,11 @@ import '../rhythm/welcome_back_notice.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
+import '../suggestions/suggestion_card_surface.dart';
 import '../suggestions/suggestion_controller.dart';
+import '../suggestions/suggestion_context.dart';
+import '../suggestions/suggestion_page.dart';
+import 'home_suggestion_card.dart';
 import 'today_page.dart';
 
 class AppShell extends StatefulWidget {
@@ -87,12 +93,87 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// Builds the context a suggestion would be chosen in, and asks the engine
+  /// whether there is one — without recording anything.
+  ///
+  /// This runs on every rebuild, so it must stay read-only. Recording here
+  /// would inflate the very counts the confidence gate depends on.
+  SuggestionCardChoice? _peekSuggestion() {
+    final profile = widget.profileController.profile;
+    final context = buildRecommendationContext(
+      profile: profile,
+      sessions: widget.sessionController.sessions,
+    );
+    final recommendation = widget.suggestionController.peek(
+      profile: profile,
+      context: context,
+    );
+    if (recommendation == null) return null;
+    return SuggestionCardChoice(
+      recommendation: recommendation,
+      context: context,
+    );
+  }
+
+  /// The user did it. The record is written now, at the moment they responded,
+  /// and they land straight on the rating step.
+  Future<void> _acceptSuggestion(SuggestionCardChoice choice) async {
+    final record = await widget.suggestionController.commit(
+      choice.recommendation,
+      context: choice.context,
+    );
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SuggestionPage(
+          suggestionController: widget.suggestionController,
+          profileController: widget.profileController,
+          safetyController: widget.safetyController,
+          sessionController: widget.sessionController,
+          seededRecordId: record.id,
+        ),
+      ),
+    );
+  }
+
+  /// "Not today", recorded so the card does not simply return on the next
+  /// rebuild. Declining is still free: it never counts against the activity.
+  Future<void> _declineSuggestion() async {
+    final choice = _peekSuggestion();
+    if (choice == null) return;
+    final record = await widget.suggestionController.commit(
+      choice.recommendation,
+      context: choice.context,
+    );
+    await widget.suggestionController.dismissRecord(
+      record.id,
+      reason: SuggestionSkipReason.notNow,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: widget.safetyController,
       builder: (context, _) {
         final safetyActive = widget.safetyController.hasActiveFlag;
+        final now = DateTime.now();
+        final checkInCompletedToday = widget.sessionController.hasCheckedInOn(
+          now,
+        );
+        final suggestionDue = const SuggestionSchedule().isDue(
+          history: widget.suggestionController.history,
+          profileAgeDays: profileAgeInDays(widget.profileController.profile),
+          checkInCompletedToday: checkInCompletedToday,
+          now: now,
+        );
+        final homeState = HomeState(
+          safetyFlagActive: safetyActive,
+          checkInCompletedToday: checkInCompletedToday,
+          suggestionDue: suggestionDue,
+        );
+        final showSuggestion = HomeCardPriority.showSuggestion(homeState);
+        final suggestionChoice = showSuggestion ? _peekSuggestion() : null;
         return Scaffold(
           body: IndexedStack(
             index: _selectedTab.index,
@@ -110,8 +191,15 @@ class _AppShellState extends State<AppShell> {
                   sessionController: widget.sessionController,
                   profileController: widget.profileController,
                 ),
-                primaryCard: HomeCardPriority.select(
-                  HomeState(safetyFlagActive: safetyActive),
+                primaryCard: HomeCardPriority.select(homeState),
+                showSuggestion: showSuggestion,
+                suggestionCard: HomeSuggestionCard(
+                  // Keyed by the activity so a genuinely new suggestion does not
+                  // reuse the previous card's goodbye state.
+                  key: ValueKey(suggestionChoice?.activity.id),
+                  choice: suggestionChoice,
+                  onAccept: _acceptSuggestion,
+                  onDecline: _declineSuggestion,
                 ),
                 onStartCheckIn: safetyActive
                     ? () => _openSupport(context)
