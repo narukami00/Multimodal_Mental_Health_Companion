@@ -60,6 +60,46 @@ SuggestionRecord _rated({
   );
 }
 
+/// Says "I did it" and lands on the rating step.
+Future<void> _didIt(WidgetTester tester) async {
+  final didIt = find.text('I did it');
+  await tester.ensureVisible(didIt);
+  await tester.pumpAndSettle();
+  await tester.tap(didIt);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pumpNotTodayPage(
+  WidgetTester tester,
+  SuggestionController suggestionController,
+) async {
+  tester.view.physicalSize = const Size(1080, 2400);
+  tester.view.devicePixelRatio = 2.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.light(),
+      home: SuggestionPage(
+        suggestionController: suggestionController,
+        profileController: ProfileController(
+          repository: InMemoryProfileRepository(),
+        ),
+        safetyController: SafetyController(
+          screener: const KeywordSafetyScreener(),
+          repository: InMemorySafetyEventRepository(),
+        ),
+      ),
+    ),
+  );
+  for (var frame = 0; frame < 12; frame++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
 void main() {
   group('Suggestion rating capture', () {
     late SuggestionController suggestionController;
@@ -108,59 +148,130 @@ void main() {
     ) async {
       await pumpPage(tester);
 
-      final tryIt = find.text('I tried it');
-      await tester.ensureVisible(tryIt);
-      await tester.pumpAndSettle();
-      await tester.tap(tryIt);
-      await tester.pumpAndSettle();
+      await _didIt(tester);
 
       final completed = suggestionController.history
           .where((record) => record.status == SuggestionStatus.completed);
       expect(completed, hasLength(1));
       // Previously every completion was silently stored as a 5.
       expect(completed.single.rating, isNull);
+      expect(completed.single.useful, isNull);
+    });
+
+    testWidgets('completion is recorded before the rating is asked for', (
+      tester,
+    ) async {
+      await pumpPage(tester);
+
+      // Saying "I did it" counts straight away, so walking away from the
+      // rating step still leaves the completion recorded.
+      await _didIt(tester);
+
+      expect(find.text('How did it go?'), findsOneWidget);
+      final completed = suggestionController.history.single;
+      expect(completed.status, SuggestionStatus.completed);
+      expect(completed.done, isTrue);
     });
 
     testWidgets('records a rating the user does choose', (tester) async {
       await pumpPage(tester);
+      await _didIt(tester);
 
-      final rating = find.byKey(const ValueKey('rating-4'));
-      await tester.ensureVisible(rating);
-      await tester.pumpAndSettle();
-      await tester.tap(rating);
+      await tester.tap(find.byKey(const ValueKey('rating-4')));
       await tester.pumpAndSettle();
 
-      final tryIt = find.text('I tried it');
-      await tester.ensureVisible(tryIt);
-      await tester.pumpAndSettle();
-      await tester.tap(tryIt);
-      await tester.pumpAndSettle();
-
-      final completed = suggestionController.history
-          .where((record) => record.status == SuggestionStatus.completed);
-      expect(completed.single.rating, 4);
+      final completed = suggestionController.history.single;
+      expect(completed.rating, 4);
+      // Four stars and above is a positive verdict, not just a number.
+      expect(completed.useful, SuggestionUsefulness.up);
+      expect(completed.done, isTrue);
     });
 
-    testWidgets('tapping the chosen rating again clears it', (tester) async {
+    testWidgets('a low rating counts as not helpful', (tester) async {
       await pumpPage(tester);
+      await _didIt(tester);
 
-      final rating = find.byKey(const ValueKey('rating-3'));
-      await tester.ensureVisible(rating);
-      await tester.pumpAndSettle();
-      await tester.tap(rating);
-      await tester.pumpAndSettle();
-      await tester.tap(rating);
+      await tester.tap(find.byKey(const ValueKey('rating-2')));
       await tester.pumpAndSettle();
 
-      final tryIt = find.text('I tried it');
-      await tester.ensureVisible(tryIt);
-      await tester.pumpAndSettle();
-      await tester.tap(tryIt);
+      expect(suggestionController.history.single.useful, SuggestionUsefulness.down);
+    });
+
+    testWidgets('skipping the rating leaves the completion intact', (
+      tester,
+    ) async {
+      await pumpPage(tester);
+      await _didIt(tester);
+
+      await tester.tap(find.text('Skip'));
       await tester.pumpAndSettle();
 
-      final completed = suggestionController.history
-          .where((record) => record.status == SuggestionStatus.completed);
-      expect(completed.single.rating, isNull);
+      final completed = suggestionController.history.single;
+      // Not rating is a real answer, and it does not undo having done it.
+      expect(completed.rating, isNull);
+      expect(completed.useful, isNull);
+      expect(completed.done, isTrue);
+      expect(completed.status, SuggestionStatus.completed);
+    });
+  });
+
+  group('Not today', () {
+    late SuggestionController suggestionController;
+
+    setUp(() {
+      suggestionController = SuggestionController(
+        libraryRepository: _library,
+        suggestionRepository: InMemorySuggestionRepository(),
+      );
+    });
+
+    testWidgets('"not for me" is recorded with its reason', (tester) async {
+      await _pumpNotTodayPage(tester, suggestionController);
+
+      await tester.tap(find.text('Not today'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not for me'));
+      await tester.pumpAndSettle();
+
+      final record = suggestionController.history.single;
+      expect(record.status, SuggestionStatus.skipped);
+      expect(record.skipReason, SuggestionSkipReason.notForMe);
+      // Refusing is not a completion.
+      expect(record.done, isNull);
+      // And the closing screen says what it actually changed.
+      expect(find.textContaining('leave this one out'), findsOneWidget);
+    });
+
+    testWidgets('"too much right now" is recorded with its reason', (
+      tester,
+    ) async {
+      await _pumpNotTodayPage(tester, suggestionController);
+
+      await tester.tap(find.text('Not today'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Too much right now'));
+      await tester.pumpAndSettle();
+
+      expect(
+        suggestionController.history.single.skipReason,
+        SuggestionSkipReason.tooHard,
+      );
+    });
+
+    testWidgets('a refusal does not push another idea', (tester) async {
+      await _pumpNotTodayPage(tester, suggestionController);
+
+      await tester.tap(find.text('Not today'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not right now'));
+      await tester.pumpAndSettle();
+
+      expect(
+        suggestionController.history.single.skipReason,
+        SuggestionSkipReason.notNow,
+      );
+      expect(find.text('Try another idea'), findsNothing);
+      expect(find.text('Okay'), findsOneWidget);
     });
   });
 

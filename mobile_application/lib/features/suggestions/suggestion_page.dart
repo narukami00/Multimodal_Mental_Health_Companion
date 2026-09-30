@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/suggestion_record.dart';
 import '../../core/theme/app_theme.dart';
+import '../../domain/recommendations/recommendation_engine.dart';
 import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
@@ -33,10 +34,19 @@ class SuggestionPage extends StatefulWidget {
 class _SuggestionPageState extends State<SuggestionPage> {
   final _commentController = TextEditingController();
   bool _isLoading = true;
-  bool _hasFeedback = false;
+  _Step _step = _Step.decide;
 
   /// Left unset unless the user chooses. A rating is never assumed.
   int? _rating;
+
+  /// What the user just did, so the closing screen can say what changes.
+  _Outcome _outcome = _Outcome.none;
+
+  /// The completion being rated when it is not the one on screen.
+  SuggestionRecord? _ratingTarget;
+
+  /// Session-only, so declining to rate is not asked again right away.
+  bool _ratingPromptDismissed = false;
 
   @override
   void initState() {
@@ -54,6 +64,9 @@ class _SuggestionPageState extends State<SuggestionPage> {
     setState(() {
       _isLoading = true;
       _rating = null;
+      _outcome = _Outcome.none;
+      _step = _Step.decide;
+      _ratingTarget = null;
     });
     try {
       await widget.suggestionController.suggest(
@@ -69,35 +82,113 @@ class _SuggestionPageState extends State<SuggestionPage> {
     } finally {
       // Always clear the spinner: a failed lookup must fall through to the
       // empty state rather than leaving the page loading forever.
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _hasFeedback = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _submit(
-    SuggestionStatus status, {
-    SuggestionSkipReason? reason,
-  }) async {
-    await widget.suggestionController.submitFeedback(
-      status: status,
-      skipReason: reason,
-      // Only a completed suggestion can carry a rating, and only if the user
-      // gave one. Anything else stays null rather than inventing a score.
-      rating: status == SuggestionStatus.completed ? _rating : null,
-      comment: _commentController.text.trim().isEmpty
-          ? null
-          : _commentController.text.trim(),
-    );
+  /// The user did it. Completion is recorded first so that walking away from
+  /// the rating step still counts.
+  Future<void> _didIt() async {
+    await widget.suggestionController.recordCompletion();
     if (!mounted) return;
     setState(() {
-      _hasFeedback = true;
-      _rating = null;
+      _outcome = _Outcome.completed;
+      _step = _Step.rate;
     });
-    _commentController.clear();
+  }
+
+  Future<void> _rate(int stars) async {
+    // Four and above helped, two and below did not. Three is neutral and is
+    // not recorded as either, because the model has no middle verdict.
+    final usefulness = stars >= 4
+        ? SuggestionUsefulness.up
+        : stars <= 2
+        ? SuggestionUsefulness.down
+        : null;
+    setState(() => _rating = stars);
+
+    final recordId = _ratingTarget?.id ?? _currentRecordId;
+    if (recordId != null) {
+      await widget.suggestionController.recordRating(
+        recordId: recordId,
+        usefulness: usefulness,
+        rating: stars,
+        comment: _commentController.text.trim().isEmpty
+            ? null
+            : _commentController.text.trim(),
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _outcome = usefulness == SuggestionUsefulness.down
+          ? _Outcome.ratedDown
+          : _Outcome.ratedUp;
+      _step = _Step.thanks;
+    });
+  }
+
+  Future<void> _skipRating() async {
+    if (!mounted) return;
+    setState(() {
+      _commentController.clear();
+      _outcome = _Outcome.completedUnrated;
+      _step = _Step.thanks;
+    });
+  }
+
+  Future<void> _dismiss(_Outcome outcome) async {
+    setState(() => _outcome = outcome);
+    await widget.suggestionController.submitFeedback(
+      status: SuggestionStatus.skipped,
+      skipReason: outcome.skipReason,
+    );
+    if (!mounted) return;
+    setState(() => _step = _Step.thanks);
+  }
+
+  String? get _currentRecordId =>
+      widget.suggestionController.currentRecord?.id;
+
+  Future<void> _openNotToday() async {
+    final choice = await showModalBottomSheet<SuggestionSkipReason>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.schedule_rounded),
+              title: const Text('Not right now'),
+              subtitle: const Text('It can come back around. Nothing is lost.'),
+              onTap: () =>
+                  Navigator.of(context).pop(SuggestionSkipReason.notNow),
+            ),
+            ListTile(
+              leading: const Icon(Icons.do_not_disturb_alt_rounded),
+              title: const Text('Not for me'),
+              subtitle: const Text("We'll leave this one out for a while."),
+              onTap: () =>
+                  Navigator.of(context).pop(SuggestionSkipReason.notForMe),
+            ),
+            ListTile(
+              leading: const Icon(Icons.battery_2_bar_rounded),
+              title: const Text('Too much right now'),
+              subtitle: const Text("We'll keep things gentler for a bit."),
+              onTap: () =>
+                  Navigator.of(context).pop(SuggestionSkipReason.tooHard),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    await _dismiss(switch (choice) {
+      SuggestionSkipReason.notNow => _Outcome.notNow,
+      SuggestionSkipReason.notForMe => _Outcome.notForMe,
+      SuggestionSkipReason.tooHard => _Outcome.tooHard,
+    });
   }
 
   @override
@@ -127,133 +218,157 @@ class _SuggestionPageState extends State<SuggestionPage> {
             );
           }
           if (recommendation == null) return const _EmptyState();
-          if (_hasFeedback) {
-            return _FeedbackThanks(onNext: _requestSuggestion);
-          }
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
-            children: [
-              Card(
-                color: AppColors.amber,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        Icons.auto_awesome_rounded,
-                        color: AppColors.deepAmber,
-                        size: 30,
-                      ),
-                      const SizedBox(height: 15),
-                      Text(
-                        recommendation.activity.title,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(color: AppColors.deepAmber),
-                      ),
-                      const SizedBox(height: 9),
-                      Text(
-                        recommendation.activity.description,
-                        style: const TextStyle(
-                          color: AppColors.deepAmber,
-                          height: 1.45,
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Text(
-                        '${recommendation.activity.durationMinutes} minutes · ${_label(recommendation.activity.effort)} effort',
-                        style: const TextStyle(
-                          color: AppColors.deepAmber,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Card(
-                child: ExpansionTile(
-                  leading: const Icon(
-                    Icons.help_outline_rounded,
-                    color: AppColors.coral,
-                  ),
-                  title: const Text('Why this?'),
-                  childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-                  children: [Text(recommendation.explanation)],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'How does this idea feel?',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 9),
-              _buildRatingRow(),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _commentController,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: 'Optional note for next time',
-                  filled: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => _submit(SuggestionStatus.completed),
-                icon: const Icon(Icons.check_rounded),
-                label: const Text('I tried it'),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: () => _submit(
-                  SuggestionStatus.skipped,
-                  reason: SuggestionSkipReason.notNow,
-                ),
-                child: const Text('Not now'),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _submit(
-                        SuggestionStatus.skipped,
-                        reason: SuggestionSkipReason.notForMe,
-                      ),
-                      child: const Text('Not for me'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _submit(
-                        SuggestionStatus.skipped,
-                        reason: SuggestionSkipReason.tooHard,
-                      ),
-                      child: const Text('Too hard'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'Suggestions are optional lifestyle ideas, not treatment or medical advice.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.mutedInk,
-                  fontSize: 11,
-                  height: 1.4,
-                ),
-              ),
-            ],
-          );
+          return switch (_step) {
+            _Step.decide => _buildDecide(context, recommendation),
+            _Step.rate => _buildRate(),
+            _Step.thanks => _FeedbackThanks(
+              outcome: _outcome,
+              onNext: _requestSuggestion,
+              onDone: () => Navigator.of(context).maybePop(),
+            ),
+          };
         },
       ),
+    );
+  }
+
+  /// The two real choices: do it, or not today.
+  ///
+  /// The reasons behind "not today" live in a menu rather than sitting on
+  /// screen, because four visible buttons make a small offer feel like a form.
+  Widget _buildDecide(BuildContext context, Recommendation recommendation) {
+    final pending = _ratingPromptDismissed
+        ? null
+        : widget.suggestionController.pendingRating();
+    final pendingActivity = pending == null
+        ? null
+        : widget.suggestionController.activityFor(pending.activityId);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
+      children: [
+        if (pending != null && pendingActivity != null) ...[
+          _PendingRatingCard(
+            title: pendingActivity.title,
+            onRate: () => setState(() {
+              _ratingTarget = pending;
+              _rating = null;
+              _step = _Step.rate;
+            }),
+            onDismiss: () => setState(() => _ratingPromptDismissed = true),
+          ),
+          const SizedBox(height: 14),
+        ],
+        Card(
+          color: AppColors.amber,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: AppColors.deepAmber,
+                  size: 30,
+                ),
+                const SizedBox(height: 15),
+                Text(
+                  recommendation.activity.title,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: AppColors.deepAmber,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  recommendation.activity.description,
+                  style: const TextStyle(
+                    color: AppColors.deepAmber,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                Text(
+                  '${recommendation.activity.durationMinutes} minutes · ${_label(recommendation.activity.effort)} effort',
+                  style: const TextStyle(
+                    color: AppColors.deepAmber,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Card(
+          child: ExpansionTile(
+            leading: const Icon(
+              Icons.help_outline_rounded,
+              color: AppColors.coral,
+            ),
+            title: const Text('Why this?'),
+            childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+            children: [Text(recommendation.explanation)],
+          ),
+        ),
+        const SizedBox(height: 18),
+        FilledButton.icon(
+          onPressed: _didIt,
+          icon: const Icon(Icons.check_rounded),
+          label: const Text('I did it'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: _openNotToday,
+          child: const Text('Not today'),
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'Suggestions are optional lifestyle ideas, not treatment or medical advice.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.mutedInk,
+            fontSize: 11,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// How it went, asked only after the user says they did it.
+  ///
+  /// Rating and doing are separate questions, so this never appears first —
+  /// and skipping it is a first-class answer, not a failure to answer.
+  Widget _buildRate() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
+      children: [
+        Text(
+          'How did it go?',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Entirely optional. Nothing here is required to keep using Solace.',
+          style: TextStyle(color: AppColors.mutedInk, height: 1.4),
+        ),
+        const SizedBox(height: 18),
+        _buildRatingRow(),
+        const SizedBox(height: 18),
+        TextField(
+          controller: _commentController,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Optional note for next time',
+            filled: true,
+          ),
+        ),
+        const SizedBox(height: 18),
+        OutlinedButton(onPressed: _skipRating, child: const Text('Skip')),
+      ],
     );
   }
 
@@ -261,16 +376,16 @@ class _SuggestionPageState extends State<SuggestionPage> {
     return value.name[0].toUpperCase() + value.name.substring(1);
   }
 
-  /// Optional 1–5 rating, used only to show the user their own ratings later.
+  /// Optional 1–5 rating, asked only once the user has said they did it.
   ///
-  /// Tapping the selected value again clears it: not rating must stay a real
-  /// option, so the app never records a score the user did not choose.
+  /// Tapping saves straight away: a rating that costs an extra confirmation is
+  /// a rating most people will not give.
   Widget _buildRatingRow() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Optional. This only ever feeds your own list.',
+          'Not at all helpful to very helpful.',
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
@@ -285,9 +400,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
               if (value > 1) const SizedBox(width: 8),
               GestureDetector(
                 key: ValueKey('rating-$value'),
-                onTap: () => setState(
-                  () => _rating = _rating == value ? null : value,
-                ),
+                onTap: () => _rate(value),
                 behavior: HitTestBehavior.opaque,
                 child: Container(
                   width: 38,
@@ -320,6 +433,89 @@ class _SuggestionPageState extends State<SuggestionPage> {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Where the user is in the flow.
+enum _Step { decide, rate, thanks }
+
+/// What they chose, so the closing screen can state what it changed.
+enum _Outcome {
+  none,
+  completed,
+  completedUnrated,
+  ratedUp,
+  ratedDown,
+  notNow,
+  notForMe,
+  tooHard;
+
+  SuggestionSkipReason? get skipReason => switch (this) {
+    _Outcome.notNow => SuggestionSkipReason.notNow,
+    _Outcome.notForMe => SuggestionSkipReason.notForMe,
+    _Outcome.tooHard => SuggestionSkipReason.tooHard,
+    _ => null,
+  };
+
+  /// What actually changes, described plainly.
+  ///
+  /// Each line matches a real rule in the engine rather than encouragement:
+  /// "not for me" hides the activity for a month, "too much right now" lowers
+  /// the effort ceiling for a fortnight.
+  String get impact => switch (this) {
+    _Outcome.completedUnrated =>
+      'Good to know you did it. A rating is always optional.',
+    _Outcome.ratedUp => 'Noted. That shapes what comes next.',
+    _Outcome.ratedDown =>
+      'Thanks for being straight with us. We will look for a better fit.',
+    _Outcome.notNow => 'No rush. This one can come back around.',
+    _Outcome.notForMe => 'Understood. We will leave this one out for a while.',
+    _Outcome.tooHard =>
+      'Thanks for saying. We will keep things gentler for a bit.',
+    _ => 'Nothing was recorded.',
+  };
+
+  /// Whether offering another idea is welcome here. After a refusal it would
+  /// read as not having listened.
+  bool get offersAnother =>
+      this == _Outcome.completedUnrated || this == _Outcome.ratedUp;
+}
+
+/// A quiet offer to rate something done earlier, never pushed.
+class _PendingRatingCard extends StatelessWidget {
+  const _PendingRatingCard({
+    required this.title,
+    required this.onRate,
+    required this.onDismiss,
+  });
+
+  final String title;
+  final VoidCallback onRate;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 10, 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'You did “$title”. Want to say how it went?',
+                style: const TextStyle(height: 1.4),
+              ),
+            ),
+            TextButton(onPressed: onRate, child: const Text('Rate')),
+            IconButton(
+              onPressed: onDismiss,
+              icon: const Icon(Icons.close_rounded, size: 18),
+              tooltip: 'Not now',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -378,9 +574,15 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _FeedbackThanks extends StatelessWidget {
-  const _FeedbackThanks({required this.onNext});
+  const _FeedbackThanks({
+    required this.outcome,
+    required this.onNext,
+    required this.onDone,
+  });
 
+  final _Outcome outcome;
   final VoidCallback onNext;
+  final VoidCallback onDone;
 
   @override
   Widget build(BuildContext context) {
@@ -401,15 +603,19 @@ class _FeedbackThanks extends StatelessWidget {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Your response helps keep future ideas aligned with you. Nothing is required next.',
+            Text(
+              outcome.impact,
               textAlign: TextAlign.center,
+              style: const TextStyle(height: 1.45),
             ),
             const SizedBox(height: 20),
-            FilledButton(
-              onPressed: onNext,
-              child: const Text('Try another idea'),
-            ),
+            if (outcome.offersAnother)
+              FilledButton(
+                onPressed: onNext,
+                child: const Text('Try another idea'),
+              )
+            else
+              FilledButton(onPressed: onDone, child: const Text('Okay')),
           ],
         ),
       ),

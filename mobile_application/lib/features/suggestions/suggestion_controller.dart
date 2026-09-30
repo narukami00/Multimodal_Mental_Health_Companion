@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/models/activity.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/models/user_profile.dart';
 import '../../data/contracts/activity_library_repository.dart';
@@ -19,12 +20,16 @@ class SuggestionController extends ChangeNotifier {
   final SuggestionRepository _suggestionRepository;
   final RecommendationEngine _engine;
   List<SuggestionRecord> _history = const [];
+  List<Activity> _library = const [];
   bool _isLoaded = false;
   Recommendation? _current;
   SuggestionRecord? _currentRecord;
 
   bool get isLoaded => _isLoaded;
   Recommendation? get current => _current;
+
+  /// The record behind the suggestion currently on screen.
+  SuggestionRecord? get currentRecord => _currentRecord;
 
   /// Every suggestion record, including ones that were only shown.
   ///
@@ -48,6 +53,19 @@ class SuggestionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The activity behind a record, if it is still in the library.
+  ///
+  /// Needed to name an earlier suggestion that is being rated later, since the
+  /// record itself only stores an id. The library is the one cached by the most
+  /// recent [suggest], so this is only populated once a suggestion has been
+  /// looked up — which is always the case before anything can be rated.
+  Activity? activityFor(String activityId) {
+    for (final activity in _library) {
+      if (activity.id == activityId) return activity;
+    }
+    return null;
+  }
+
   Future<Recommendation?> suggest({
     required UserProfile profile,
     required RecommendationContext context,
@@ -56,6 +74,7 @@ class SuggestionController extends ChangeNotifier {
   }) async {
     if (!_isLoaded) await load();
     final activities = await _libraryRepository.load();
+    _library = activities;
     final recommendation = _engine.choose(
       activities: activities,
       profile: profile,
@@ -104,19 +123,86 @@ class SuggestionController extends ChangeNotifier {
     if (record == null) return;
     // copyWith rather than a fresh record: rebuilding it dropped the source,
     // and would drop the completion once a rating arrived separately.
-    final updated = record.copyWith(
-      status: status,
-      rating: rating,
-      skipReason: skipReason,
-      comment: comment,
-      done: done,
-      useful: useful,
+    await _write(
+      record.copyWith(
+        status: status,
+        rating: rating,
+        skipReason: skipReason,
+        comment: comment,
+        done: done,
+        useful: useful,
+      ),
     );
+  }
+
+  /// Records that the user did the activity.
+  ///
+  /// Written the moment they say so, before any rating. Someone who did the
+  /// activity and then ignored the rating step has still done it, and leaving
+  /// `done` unset until a rating arrives would be inferring it later.
+  Future<void> recordCompletion() {
+    return submitFeedback(status: SuggestionStatus.completed, done: true);
+  }
+
+  /// Records how a suggestion went, for one specific record.
+  ///
+  /// Separate from completion on purpose: usefulness is about whether the
+  /// activity helped, which is a different question from whether it happened.
+  Future<void> recordRating({
+    required String recordId,
+    SuggestionUsefulness? usefulness,
+    int? rating,
+    String? comment,
+  }) async {
+    final record = _recordById(recordId);
+    if (record == null) return;
+    await _write(
+      record.copyWith(
+        // A rating can arrive for something already marked done, so the
+        // completion is preserved rather than assumed.
+        done: record.done,
+        useful: usefulness,
+        rating: rating,
+        comment: comment,
+      ),
+    );
+  }
+
+  /// A completion from the last 48 hours that was never rated.
+  ///
+  /// Offered quietly so a rating can still be given later. This is never
+  /// pushed at the user, and it expires on its own.
+  SuggestionRecord? pendingRating({DateTime? now}) {
+    final current = now ?? DateTime.now();
+    final cutoff = current.subtract(ratingWindow);
+    final candidates = _history
+        .where(
+          (record) =>
+              record.done == true &&
+              record.useful == null &&
+              !record.shownAt.isBefore(cutoff),
+        )
+        .toList()
+      ..sort((a, b) => b.shownAt.compareTo(a.shownAt));
+    return candidates.isEmpty ? null : candidates.first;
+  }
+
+  /// How long an unrated completion stays available to rate.
+  static const ratingWindow = Duration(hours: 48);
+
+  SuggestionRecord? _recordById(String id) {
+    for (final record in _history) {
+      if (record.id == id) return record;
+    }
+    return null;
+  }
+
+  Future<void> _write(SuggestionRecord updated) async {
     await _suggestionRepository.saveRecord(updated);
     _history = [
       for (final item in _history) item.id == updated.id ? updated : item,
     ];
-    _currentRecord = updated;
+    if (_currentRecord?.id == updated.id) _currentRecord = updated;
     notifyListeners();
   }
 }
