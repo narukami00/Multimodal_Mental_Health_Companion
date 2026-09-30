@@ -2,6 +2,7 @@ package com.sysmentalhealth.solace_mobile
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -10,9 +11,11 @@ import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AudioEffect
 import android.media.audiofx.NoiseSuppressor
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -25,6 +28,7 @@ import kotlin.concurrent.thread
 class MainActivity : FlutterActivity() {
     private val CONTROL_CHANNEL = "com.sysmentalhealth.solace_mobile/audio_control"
     private val STREAM_CHANNEL = "com.sysmentalhealth.solace_mobile/audio_stream"
+    private val PERMISSIONS_CHANNEL = "com.sysmentalhealth.solace_mobile/app_permissions"
     private val PERMISSION_REQUEST_CODE = 1002
 
     private companion object {
@@ -111,6 +115,34 @@ class MainActivity : FlutterActivity() {
                 }
             }
         )
+
+        // Backs the permissions page. Android owns these permissions, so the app
+        // can only report their real state and send the user to the system
+        // screen; it cannot flip them itself.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PERMISSIONS_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "microphoneGranted" -> {
+                    val granted = ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.RECORD_AUDIO
+                    ) == PackageManager.PERMISSION_GRANTED
+                    result.success(granted)
+                }
+                "openAppSettings" -> {
+                    try {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", packageName, null)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "could not open app settings: $e")
+                        result.success(false)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     override fun onRequestPermissionsResult(

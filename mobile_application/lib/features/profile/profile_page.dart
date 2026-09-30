@@ -22,6 +22,7 @@ import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
 import '../suggestions/suggestion_page.dart';
 import 'baseline_quiz_page.dart';
+import 'permissions_page.dart';
 import 'profile_controller.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -350,12 +351,14 @@ class ProfilePage extends StatelessWidget {
                             icon: Icons.verified_user_outlined,
                             iconBg: const Color(0xFFFFF3DC),
                             iconColor: const Color(0xFFC08A1E),
-                            title: 'Privacy & data architecture',
-                            subtitle: 'On-device first · zero telemetry',
-                            badgeText: 'Active',
-                            badgeColor: const Color(0xFFEBF7EB),
-                            badgeTextColor: const Color(0xFF3F823B),
-                            onTap: () => _showPrivacySheet(context),
+                            title: 'Permissions & data',
+                            subtitle: 'What Solace can access, and what it '
+                                'does not collect',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const PermissionsPage(),
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -1355,149 +1358,8 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  // 4. Privacy & Data Architecture Sheet
-  static void _showPrivacySheet(BuildContext context) {
-    _showModalSheet(
-      context: context,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3DC),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.verified_user_outlined,
-                  size: 20,
-                  color: Color(0xFFB57A12),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Privacy & data architecture',
-                      style: TextStyle(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF3B3327),
-                      ),
-                    ),
-                    Text(
-                      'Local-first by design · Zero external trackers',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF93887A),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          _privacyPillar(
-            title: 'AES-256 Local Enclave Encryption',
-            desc: 'Reflections and audio metadata are encrypted locally. Keys never leave this hardware.',
-            icon: Icons.lock_rounded,
-          ),
-          const SizedBox(height: 10),
-          _privacyPillar(
-            title: 'Zero Third-Party Telemetry',
-            desc: 'No Google Analytics, advertising identifiers, or cloud tracking scripts.',
-            icon: Icons.shield_rounded,
-          ),
-          const SizedBox(height: 10),
-          _privacyPillar(
-            title: 'Local Heuristics & Speech Models',
-            desc: 'Safety classification and prompts are processed on-device whenever supported.',
-            icon: Icons.memory_rounded,
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF4A4133),
-                side: const BorderSide(color: Color(0xFFE2D6C0)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Close',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _privacyPillar({
-    required String title,
-    required String desc,
-    required IconData icon,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF2ECDD)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEBF7EB),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 16, color: const Color(0xFF3F823B)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF3B3327),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  desc,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF93887A),
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // 4. Permissions & data now lives on its own page, because it reports real
+  // platform state rather than decoration. See PermissionsPage.
 
   // 5. App Settings Sheet
   static void _showAppSettingsSheet(
