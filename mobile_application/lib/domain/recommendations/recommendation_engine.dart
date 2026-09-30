@@ -95,7 +95,9 @@ class RecommendationEngine {
   static const _firstRejectionHide = Duration(days: 30);
   static const _secondRejectionHide = Duration(days: 90);
   static const _effortCeilingWindow = Duration(days: 14);
-  static const _starterDurationCeiling = 6;
+
+  /// The longest an activity may be to count as a gentle starter.
+  static const starterDurationCeiling = 6;
 
   Recommendation? choose({
     required Iterable<Activity> activities,
@@ -214,7 +216,7 @@ class RecommendationEngine {
     Map<String, ActivityType> typeOf,
   ) {
     final starterCandidates = eligible
-        .where((activity) => _isStarterCandidate(activity))
+        .where(isStarterCandidate)
         .toList(growable: false);
     // If nothing in the library is short and gentle enough, offer the gentlest
     // eligible option rather than going silent for the whole tour.
@@ -230,15 +232,6 @@ class RecommendationEngine {
       varied.isEmpty ? starterCandidates : varied,
       records,
     );
-  }
-
-  /// The gentlest, shortest already-approved entries.
-  ///
-  /// Derived from fields the library already carries rather than from a second
-  /// hand-maintained list, so it cannot drift out of sync with the content.
-  bool _isStarterCandidate(Activity activity) {
-    return activity.effort == ActivityEffort.low &&
-        activity.durationMinutes <= _starterDurationCeiling;
   }
 
   Activity? _explorePick(List<Activity> eligible, List<SuggestionRecord> records) {
@@ -621,3 +614,14 @@ class _ScoredActivity {
 }
 
 String _normalize(String value) => value.trim().toLowerCase();
+
+/// Whether an activity is gentle and short enough for the starter tour.
+///
+/// Public, because the content check is written against this rather than a copy
+/// of it. The pool is derived from effort and duration rather than a
+/// hand-maintained list, so it cannot fall out of step with the library — and
+/// neither can the check that guards it.
+bool isStarterCandidate(Activity activity) {
+  return activity.effort == ActivityEffort.low &&
+      activity.durationMinutes <= RecommendationEngine.starterDurationCeiling;
+}
