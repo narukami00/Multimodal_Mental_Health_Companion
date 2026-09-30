@@ -93,6 +93,16 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// Everything Home's state is derived from.
+  ///
+  /// Built once so the subscriptions are not re-made on every rebuild.
+  late final Listenable _homeInputs = Listenable.merge([
+    widget.safetyController,
+    widget.sessionController,
+    widget.profileController,
+    widget.suggestionController,
+  ]);
+
   /// Builds the context a suggestion would be chosen in, and asks the engine
   /// whether there is one — without recording anything.
   ///
@@ -121,6 +131,7 @@ class _AppShellState extends State<AppShell> {
     final record = await widget.suggestionController.commit(
       choice.recommendation,
       context: choice.context,
+      proactive: true,
     );
     if (!mounted) return;
     await Navigator.of(context).push(
@@ -144,6 +155,7 @@ class _AppShellState extends State<AppShell> {
     final record = await widget.suggestionController.commit(
       choice.recommendation,
       context: choice.context,
+      proactive: true,
     );
     await widget.suggestionController.dismissRecord(
       record.id,
@@ -154,7 +166,10 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: widget.safetyController,
+      // Home reads from all of these. Listening only to the safety controller
+      // meant a check-in, a completed setup, or an accepted suggestion left the
+      // card showing whatever it had at first build.
+      animation: _homeInputs,
       builder: (context, _) {
         final safetyActive = widget.safetyController.hasActiveFlag;
         final now = DateTime.now();

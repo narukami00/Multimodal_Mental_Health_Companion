@@ -5,12 +5,17 @@ import 'package:solace_mobile/domain/suggestions/suggestion_schedule.dart';
 const _schedule = SuggestionSchedule();
 final _now = DateTime(2026, 9, 22, 14);
 
-SuggestionRecord _shown({required DateTime at, String id = 'r'}) {
+SuggestionRecord _shown({
+  required DateTime at,
+  String id = 'r',
+  bool proactive = true,
+}) {
   return SuggestionRecord(
     id: id,
     activityId: 'a',
     shownAt: at,
     contextTags: const [],
+    proactive: proactive,
   );
 }
 
@@ -28,10 +33,16 @@ void main() {
     );
   });
 
-  test('one is due once the check-in is done', () {
+  test('a suggestion the user asked for themselves is not a nudge', () {
+    // The bug this guards: asking for an idea on the You page used to consume
+    // the Home card's slot, so Home stayed empty for the rest of the day.
+    final history = [
+      _shown(at: DateTime(2026, 9, 22, 9), proactive: false),
+    ];
+
     expect(
       _schedule.isDue(
-        history: const [],
+        history: history,
         profileAgeDays: 30,
         checkInCompletedToday: true,
         now: _now,
@@ -40,7 +51,7 @@ void main() {
     );
   });
 
-  test('the first fortnight caps at one a day', () {
+  test('a nudge already offered today does count', () {
     final history = [_shown(at: DateTime(2026, 9, 22, 9))];
 
     expect(
@@ -51,6 +62,18 @@ void main() {
         now: _now,
       ),
       isFalse,
+    );
+  });
+
+  test('one is due once the check-in is done', () {
+    expect(
+      _schedule.isDue(
+        history: const [],
+        profileAgeDays: 30,
+        checkInCompletedToday: true,
+        now: _now,
+      ),
+      isTrue,
     );
   });
 

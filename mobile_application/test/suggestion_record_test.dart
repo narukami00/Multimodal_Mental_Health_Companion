@@ -75,4 +75,29 @@ void main() {
     expect(restored.source, isNull);
     expect(restored.useful, isNull);
   });
+
+  test('the proactive flag survives a round trip', () {
+    final record = SuggestionRecord(
+      id: 'a',
+      activityId: 'movement-001',
+      shownAt: DateTime(2026, 9, 22, 10),
+      contextTags: const [],
+      proactive: true,
+    );
+
+    expect(SuggestionRecord.fromMap(record.toMap()).proactive, isTrue);
+  });
+
+  test('a record with no proactive flag is not treated as a nudge', () {
+    // An older record must never silently consume today's nudge budget.
+    final restored = SuggestionRecord.fromMap({
+      'id': 'legacy',
+      'activityId': 'movement-001',
+      'shownAt': '2026-09-22T10:00:00.000',
+      'contextTags': <String>[],
+      'status': 'shown',
+    });
+
+    expect(restored.proactive, isFalse);
+  });
 }

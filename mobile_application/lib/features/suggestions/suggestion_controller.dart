@@ -71,11 +71,14 @@ class SuggestionController extends ChangeNotifier {
   /// Records a suggestion the user has just responded to.
   ///
   /// Takes the recommendation that was peeked at, rather than looking one up
-  /// again, so the record always matches what the user actually saw.
+  /// again, so the record always matches what the user actually saw. Proactive
+  /// marks it as something the app offered unasked, which is what the daily
+  /// budget counts.
   Future<SuggestionRecord> commit(
     Recommendation recommendation, {
     required RecommendationContext context,
     DateTime? now,
+    bool proactive = false,
   }) async {
     final shownAt = now ?? DateTime.now();
     final record = SuggestionRecord(
@@ -87,6 +90,7 @@ class SuggestionController extends ChangeNotifier {
         if (context.currentState != null) context.currentState!,
       ],
       source: recommendation.source,
+      proactive: proactive,
     );
     await _suggestionRepository.saveRecord(record);
     _history = [..._history, record];

@@ -25,6 +25,7 @@ class SuggestionRecord {
     this.source,
     this.done,
     this.useful,
+    this.proactive = false,
   });
 
   final String id;
@@ -49,6 +50,13 @@ class SuggestionRecord {
   /// Whether it helped, independent of whether they did it.
   final SuggestionUsefulness? useful;
 
+  /// Whether the app offered this unasked, as opposed to the user asking.
+  ///
+  /// Only proactive suggestions count against the daily budget. A suggestion
+  /// someone went and requested themselves is not a nudge and must never
+  /// consume the slot for one.
+  final bool proactive;
+
   SuggestionRecord copyWith({
     SuggestionStatus? status,
     int? rating,
@@ -57,6 +65,7 @@ class SuggestionRecord {
     SuggestionSource? source,
     bool? done,
     SuggestionUsefulness? useful,
+    bool? proactive,
   }) {
     return SuggestionRecord(
       id: id,
@@ -70,6 +79,7 @@ class SuggestionRecord {
       source: source ?? this.source,
       done: done ?? this.done,
       useful: useful ?? this.useful,
+      proactive: proactive ?? this.proactive,
     );
   }
 
@@ -86,6 +96,7 @@ class SuggestionRecord {
       'source': source?.name,
       'done': done,
       'useful': useful?.name,
+      'proactive': proactive,
     };
   }
 
@@ -116,6 +127,10 @@ class SuggestionRecord {
       source: _sourceFrom(map['source'] as String?),
       done: map['done'] as bool?,
       useful: _usefulnessFrom(map['useful'] as String?),
+      // Absent on records written before this existed. Reading them as
+      // user-initiated is the safer default: it means an old record can never
+      // silently consume today's nudge budget.
+      proactive: map['proactive'] as bool? ?? false,
     );
   }
 

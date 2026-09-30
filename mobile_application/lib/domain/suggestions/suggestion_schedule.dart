@@ -24,14 +24,21 @@ class SuggestionSchedule {
     // as a follow-on from reflecting rather than as a separate demand.
     if (!checkInCompletedToday) return false;
 
-    final shownToday = history
+    // Only what the app offered unasked counts. A suggestion the user went and
+    // requested themselves is not a nudge, and must never use up the slot for
+    // one — otherwise asking for an idea once would silence Home for the day.
+    final nudges = history.where((record) => record.proactive).toList(
+      growable: false,
+    );
+
+    final shownToday = nudges
         .where((record) => _sameDate(record.shownAt, now))
         .length;
     final cap = (profileAgeDays ?? earlyDays) < earlyDays ? 1 : 2;
     if (shownToday >= cap) return false;
 
-    if (history.isEmpty) return true;
-    final last = history.reduce(
+    if (nudges.isEmpty) return true;
+    final last = nudges.reduce(
       (a, b) => a.shownAt.isAfter(b.shownAt) ? a : b,
     );
     return now.difference(last.shownAt) >= minimumGap;
