@@ -309,7 +309,9 @@ class _AnswerButton extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: filled ? const Color(0xFFFFFDF8) : ink,
+              // Dark ink on the pale card fill rather than a wash of the
+              // palette colour, which was measuring about 2.5:1.
+              color: filled ? const Color(0xFFFFFDF8) : ink.withValues(alpha: 1),
             ),
           ),
         ),

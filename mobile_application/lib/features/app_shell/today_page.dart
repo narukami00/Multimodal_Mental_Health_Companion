@@ -131,7 +131,15 @@ class TodayPage extends StatelessWidget {
             // Gaps vary deliberately (18 / 30 / 26 / 22) so the page has
             // accents instead of one even tempo.
             const SizedBox(height: 30),
-            if (rhythmCard != null) rhythmCard!,
+            // Inset like every other card. It was briefly left full-bleed while
+            // keeping its 16px corner radii, which sliced the corners off
+            // against the screen edge and looked like a mistake rather than a
+            // deliberate band.
+            if (rhythmCard != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: rhythmCard!,
+              ),
             const SizedBox(height: 30),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -1509,7 +1517,10 @@ class _SolPillButtonState extends State<_SolPillButton> {
                 style: const TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  // Dark ink, not white. White on this amber measures about
+                  // 2:1, which fails at any size, and on a low-end panel in
+                  // daylight it is unreadable. This is 6.8:1.
+                  color: Color(0xFF3F2A0E),
                   letterSpacing: 0.1,
                 ),
               ),
@@ -1517,7 +1528,7 @@ class _SolPillButtonState extends State<_SolPillButton> {
               Icon(
                 widget.icon,
                 size: 13,
-                color: Colors.white,
+                color: const Color(0xFF3F2A0E),
               ),
             ],
           ),
