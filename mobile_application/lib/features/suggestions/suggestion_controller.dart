@@ -80,6 +80,9 @@ class SuggestionController extends ChangeNotifier {
         ...context.eventTags,
         if (context.currentState != null) context.currentState!,
       ],
+      // Recorded so later picks can tell how much of what the user has seen was
+      // exploratory, which is what the explore quota is measured against.
+      source: recommendation.source,
     );
     await _suggestionRepository.saveRecord(record);
     _history = [..._history, record];
@@ -94,18 +97,20 @@ class SuggestionController extends ChangeNotifier {
     int? rating,
     SuggestionSkipReason? skipReason,
     String? comment,
+    bool? done,
+    SuggestionUsefulness? useful,
   }) async {
     final record = _currentRecord;
     if (record == null) return;
-    final updated = SuggestionRecord(
-      id: record.id,
-      activityId: record.activityId,
-      shownAt: record.shownAt,
-      contextTags: record.contextTags,
+    // copyWith rather than a fresh record: rebuilding it dropped the source,
+    // and would drop the completion once a rating arrived separately.
+    final updated = record.copyWith(
       status: status,
       rating: rating,
       skipReason: skipReason,
       comment: comment,
+      done: done,
+      useful: useful,
     );
     await _suggestionRepository.saveRecord(updated);
     _history = [

@@ -9,7 +9,7 @@ import 'package:solace_mobile/domain/recommendations/recommendation_engine.dart'
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('sparse history returns a low-pressure suggestion', () async {
+  test('sparse history never claims a personal fit', () async {
     final activities = await AssetActivityLibraryRepository().load();
     final recommendation = const RecommendationEngine().choose(
       activities: activities,
@@ -20,8 +20,10 @@ void main() {
     );
 
     expect(recommendation, isNotNull);
+    // With no history and no context, the pick is editorial, not learned, and
+    // carries no confidence.
     expect(recommendation!.confidence, 0);
-    expect(recommendation.isProactive, isFalse);
+    expect(recommendation.source, isNot(SuggestionSource.learned));
   });
 
   test('daily cap and active safety state are hard boundaries', () async {
@@ -58,11 +60,24 @@ void main() {
   });
 
   test(
-    'repeated successful outcomes raise confidence without bypassing cooldown',
+    'a well-evidenced activity becomes a learned pick once the quota is met',
     () {
       final activity = _activity('movement-001');
+      final other = _activity('mindfulness-001', type: ActivityType.mindfulness);
       final now = DateTime(2026, 9, 22, 10);
       final history = [
+        // Recent slots are already exploratory, so the explore quota is
+        // satisfied and the engine is free to pick a learned option.
+        for (var index = 0; index < 5; index++)
+          SuggestionRecord(
+            id: 'explore-$index',
+            activityId: 'elsewhere-$index',
+            shownAt: now.subtract(Duration(days: index + 1)),
+            contextTags: const [],
+            status: SuggestionStatus.skipped,
+            skipReason: SuggestionSkipReason.notNow,
+            source: SuggestionSource.explore,
+          ),
         for (var index = 0; index < 5; index++)
           SuggestionRecord(
             id: 'record-$index',
@@ -71,11 +86,12 @@ void main() {
             contextTags: const ['steady'],
             status: SuggestionStatus.completed,
             rating: 5,
+            source: SuggestionSource.learned,
           ),
       ];
 
       final recommendation = const RecommendationEngine().choose(
-        activities: [activity],
+        activities: [activity, other],
         profile: const UserProfile(),
         context: const RecommendationContext(
           currentState: 'steady',
@@ -85,10 +101,61 @@ void main() {
         now: now,
       );
 
-      expect(recommendation?.confidence, 1);
+      expect(recommendation?.activity.id, activity.id);
+      expect(recommendation?.source, SuggestionSource.learned);
+      // Five clean outcomes settle just above the gate once recency decay is
+      // applied, rather than at the 1.0 a plain ratio would have given.
+      expect(recommendation?.confidence, greaterThan(0.6));
+      expect(recommendation?.confidence, lessThanOrEqualTo(0.65));
       expect(recommendation?.isProactive, isTrue);
+      expect(
+        recommendation?.explanation,
+        isNot(contains('starter')),
+      );
     },
   );
+
+  test('one good day is not enough to claim a fit', () {
+    final activity = _activity('movement-001');
+    final other = _activity('mindfulness-001', type: ActivityType.mindfulness);
+    final now = DateTime(2026, 9, 22, 10);
+    final history = [
+      for (var index = 0; index < 5; index++)
+        SuggestionRecord(
+          id: 'explore-$index',
+          activityId: 'elsewhere-$index',
+          shownAt: now.subtract(Duration(days: index + 1)),
+          contextTags: const [],
+          status: SuggestionStatus.skipped,
+          skipReason: SuggestionSkipReason.notNow,
+          source: SuggestionSource.explore,
+        ),
+      SuggestionRecord(
+        id: 'only',
+        activityId: activity.id,
+        shownAt: now.subtract(const Duration(days: 3)),
+        contextTags: const ['steady'],
+        status: SuggestionStatus.completed,
+        rating: 5,
+        source: SuggestionSource.learned,
+      ),
+    ];
+
+    final recommendation = const RecommendationEngine().choose(
+      activities: [activity, other],
+      profile: const UserProfile(),
+      context: const RecommendationContext(
+        currentState: 'steady',
+        profileAgeDays: 20,
+      ),
+      history: history,
+      now: now,
+    );
+
+    // A single success fails the evidence gate, so it cannot be presented as a
+    // personal fit even though it succeeded.
+    expect(recommendation?.source, isNot(SuggestionSource.learned));
+  });
 
   test('event tags normalize known aliases without diagnosing a cause', () {
     const service = EventTaggingService();
@@ -112,7 +179,7 @@ void main() {
   test('"not now" and abandoned suggestions never lower confidence', () {
     final activity = _activity('movement-001');
     final now = DateTime(2026, 9, 22, 10);
-    final history = [
+    final successes = [
       for (var index = 0; index < 5; index++)
         SuggestionRecord(
           id: 'ok-$index',
@@ -122,8 +189,10 @@ void main() {
           status: SuggestionStatus.completed,
           rating: 5,
         ),
-      // Declining for now is explicitly free, and a card the user never
-      // answered is not a decision at all.
+    ];
+    // Declining for now is explicitly free, and a card the user never answered
+    // is not a decision at all.
+    final noise = [
       SuggestionRecord(
         id: 'later',
         activityId: activity.id,
@@ -140,24 +209,28 @@ void main() {
       ),
     ];
 
-    final recommendation = const RecommendationEngine().choose(
-      activities: [activity],
-      profile: const UserProfile(),
-      context: const RecommendationContext(
-        currentState: 'steady',
-        profileAgeDays: 20,
-      ),
-      history: history,
-      now: now,
-    );
+    double confidenceFor(List<SuggestionRecord> history) {
+      return const RecommendationEngine()
+          .choose(
+            activities: [activity],
+            profile: const UserProfile(),
+            context: const RecommendationContext(
+              currentState: 'steady',
+              profileAgeDays: 20,
+            ),
+            history: history,
+            now: now,
+          )!
+          .confidence;
+    }
 
-    expect(recommendation?.confidence, 1);
+    expect(confidenceFor([...successes, ...noise]), confidenceFor(successes));
   });
 
-  test('"not for me" and "too hard" still count against an activity', () {
+  test('"not for me" still counts against an activity', () {
     final activity = _activity('movement-001');
     final now = DateTime(2026, 9, 22, 10);
-    final history = [
+    final successes = [
       for (var index = 0; index < 3; index++)
         SuggestionRecord(
           id: 'ok-$index',
@@ -167,35 +240,55 @@ void main() {
           status: SuggestionStatus.completed,
           rating: 5,
         ),
-      SuggestionRecord(
-        id: 'no',
-        activityId: activity.id,
-        shownAt: now.subtract(const Duration(days: 6)),
-        contextTags: const ['steady'],
-        status: SuggestionStatus.skipped,
-        skipReason: SuggestionSkipReason.notForMe,
-      ),
     ];
-
-    final recommendation = const RecommendationEngine().choose(
-      activities: [activity],
-      profile: const UserProfile(),
-      context: const RecommendationContext(
-        currentState: 'steady',
-        profileAgeDays: 20,
-      ),
-      history: history,
-      now: now,
+    final rejection = SuggestionRecord(
+      id: 'no',
+      activityId: activity.id,
+      // Old enough that the month-long hide has lapsed, so the activity is
+      // choosable and its confidence can be read.
+      shownAt: now.subtract(const Duration(days: 40)),
+      contextTags: const ['steady'],
+      status: SuggestionStatus.skipped,
+      skipReason: SuggestionSkipReason.notForMe,
     );
 
-    // Four decisions, three of them successful.
-    expect(recommendation?.confidence, closeTo(4 / 5 * 0.75, 0.0001));
+    double confidenceFor(List<SuggestionRecord> history) {
+      return const RecommendationEngine()
+          .choose(
+            activities: [activity],
+            profile: const UserProfile(),
+            context: const RecommendationContext(
+              currentState: 'steady',
+              profileAgeDays: 20,
+            ),
+            history: history,
+            now: now,
+          )!
+          .confidence;
+    }
+
+    expect(
+      confidenceFor([...successes, rejection]),
+      lessThan(confidenceFor(successes)),
+    );
   });
 
-  test('a real context reaches the engine and can mark a suggestion proactive', () {
+  test('a real context reaches the engine and changes the outcome', () {
     final activity = _activity('movement-001');
+    final other = _activity('mindfulness-001', type: ActivityType.mindfulness);
     final now = DateTime(2026, 9, 22, 10);
     final history = [
+      // Exploratory slots already used, so the learned path is available.
+      for (var index = 0; index < 5; index++)
+        SuggestionRecord(
+          id: 'explore-$index',
+          activityId: 'elsewhere-$index',
+          shownAt: now.subtract(Duration(days: index + 1)),
+          contextTags: const [],
+          status: SuggestionStatus.skipped,
+          skipReason: SuggestionSkipReason.notNow,
+          source: SuggestionSource.explore,
+        ),
       for (var index = 0; index < 5; index++)
         SuggestionRecord(
           id: 'ok-$index',
@@ -204,40 +297,45 @@ void main() {
           contextTags: const ['steady'],
           status: SuggestionStatus.completed,
           rating: 5,
+          source: SuggestionSource.learned,
         ),
     ];
 
-    // Passing no context used to make contextMatches always zero, so the
-    // proactive path could never fire.
-    final withoutContext = const RecommendationEngine().choose(
-      activities: [activity],
-      profile: const UserProfile(),
-      context: const RecommendationContext(profileAgeDays: 20),
-      history: history,
-      now: now,
-    );
-    expect(withoutContext?.isProactive, isFalse);
+    Recommendation? chooseFor(RecommendationContext context) {
+      return const RecommendationEngine().choose(
+        activities: [activity, other],
+        profile: const UserProfile(),
+        context: context,
+        history: history,
+        now: now,
+      );
+    }
 
-    final withContext = const RecommendationEngine().choose(
-      activities: [activity],
-      profile: const UserProfile(),
-      context: const RecommendationContext(
-        currentState: 'steady',
-        profileAgeDays: 20,
-      ),
-      history: history,
-      now: now,
+    // Passing no context used to make contextMatches always zero, so a learned
+    // pick was impossible and the proactive path could never fire.
+    final withoutContext = chooseFor(
+      const RecommendationContext(profileAgeDays: 20),
     );
+    expect(withoutContext?.confidence, 0);
+    expect(withoutContext?.source, isNot(SuggestionSource.learned));
+
+    final withContext = chooseFor(
+      const RecommendationContext(currentState: 'steady', profileAgeDays: 20),
+    );
+    expect(withContext?.confidence, greaterThan(0.6));
     expect(withContext?.isProactive, isTrue);
+    expect(withContext?.source, SuggestionSource.learned);
   });
 }
 
-Activity _activity(String id) {
+Activity _activity(String id, {ActivityType type = ActivityType.movement}) {
   return Activity(
     id: id,
-    title: 'A small walk',
+    title: type == ActivityType.mindfulness
+        ? 'A slow breath'
+        : 'A small walk',
     description: 'Walk at a comfortable pace for a few minutes.',
-    type: ActivityType.movement,
+    type: type,
     effort: ActivityEffort.low,
     durationMinutes: 8,
     contexts: const ['outdoors'],
