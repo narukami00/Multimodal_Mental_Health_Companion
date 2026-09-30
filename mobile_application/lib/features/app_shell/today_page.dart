@@ -102,48 +102,112 @@ class TodayPage extends StatelessWidget {
         ),
       ),
       child: SafeArea(
+        // No horizontal padding here: several sections below are deliberately
+        // full-bleed, and a single padded column is what made the page read as
+        // one stack of identical slabs.
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
+          padding: EdgeInsets.zero,
           children: [
-            Text(
-              greeting,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF4A3728),
-                    letterSpacing: -0.5,
-                  ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
+              child: _buildMasthead(context, greeting, date),
             ),
-            const SizedBox(height: 5),
-            Text(
-              date,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF7B6A55),
-                  ),
+            // A full-bleed hairline: the one separator on the page, used once.
+            Container(
+              height: 1,
+              margin: const EdgeInsets.only(top: 18),
+              color: const Color(0xFF4A3728).withValues(alpha: 0.08),
             ),
             const SizedBox(height: 18),
-            if (welcomeBackNotice != null) welcomeBackNotice!,
-            _buildPrimaryCard(card),
-            // Sits directly under whichever card is on top, so an idea arrives
-            // as a follow-on rather than as another separate ask.
-            if (showSuggestion && suggestionCard != null) suggestionCard!,
-            if (rhythmCard != null) ...[
-              const SizedBox(height: 14),
-              rhythmCard!,
-            ],
-            const SizedBox(height: 14),
-            _buildSolCompanionHub(context),
-            if (setupCard != null) ...[
-              const SizedBox(height: 14),
-              setupCard!,
-            ],
-            const SizedBox(height: 18),
-            LivingAtmosphereCard(ambientAudioEnabled: ambientAudioEnabled),
-            const SizedBox(height: 24),
-            _buildFooter(context),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Column(
+                children: [
+                  if (welcomeBackNotice != null) welcomeBackNotice!,
+                  _buildPrimaryCard(card),
+                ],
+              ),
+            ),
+            // Gaps vary deliberately (18 / 30 / 26 / 22) so the page has
+            // accents instead of one even tempo.
+            const SizedBox(height: 30),
+            if (rhythmCard != null) rhythmCard!,
+            const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Column(
+                children: [
+                  // The companion is the reason someone opens this app, so it
+                  // is the largest thing on the page rather than the smallest.
+                  _buildSolCompanionHub(context),
+                  if (showSuggestion && suggestionCard != null) ...[
+                    const SizedBox(height: 26),
+                    suggestionCard!,
+                  ],
+                  if (setupCard != null) ...[
+                    const SizedBox(height: 22),
+                    setupCard!,
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Column(
+                children: [
+                  LivingAtmosphereCard(ambientAudioEnabled: ambientAudioEnabled),
+                  const SizedBox(height: 24),
+                  _buildFooter(context),
+                ],
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  /// The greeting and the date, with no container around them.
+  ///
+  /// The greeting used to be the largest type on the screen at roughly 33px,
+  /// which told the user that the most important fact available was that it was
+  /// evening. It is orientation, so it is now set at a size that says so, with
+  /// the date as a chip on the same baseline.
+  Widget _buildMasthead(BuildContext context, String greeting, String date) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Text(
+            greeting,
+            style: const TextStyle(
+              fontSize: 21,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
+              color: Color(0xFF4A3728),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: const Color(0xFF4A3728).withValues(alpha: 0.14),
+            ),
+          ),
+          child: Text(
+            date,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF7B6A55),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -165,22 +229,26 @@ class TodayPage extends StatelessWidget {
   Widget _buildPrimaryCard(_PrimaryCardContent card) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
+        // 24 rather than 32: the corner geometry now says something, since the
+        // companion card and the idea card use different radii.
+        borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(
           begin: const Alignment(-0.6, -1.0),
           end: const Alignment(0.8, 1.0),
           colors: card.gradientColors,
         ),
+        // A soft lift, not the hard offset band that used to sit under every
+        // card and read as a second slab peeking out from behind.
         boxShadow: [
           BoxShadow(
-            color: card.shadowColor,
-            blurRadius: 26,
-            offset: const Offset(0, 14),
+            color: card.shadowColor.withValues(alpha: 0.30),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(24),
         child: Stack(
           children: [
             const Positioned.fill(
@@ -209,7 +277,9 @@ class TodayPage extends StatelessWidget {
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.8,
-                          color: card.foregroundColor.withValues(alpha: 0.7),
+                          // Full strength, not 0.7: the eyebrow was sitting at
+                          // roughly 1.8:1 against this card's own fill.
+                          color: card.foregroundColor,
                         ),
                       ),
                     ],
@@ -232,7 +302,7 @@ class TodayPage extends StatelessWidget {
                       fontSize: 13.5,
                       height: 1.45,
                       fontWeight: FontWeight.w600,
-                      color: card.foregroundColor.withValues(alpha: 0.78),
+                      color: card.foregroundColor.withValues(alpha: 0.90),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -1026,12 +1096,24 @@ class _PrimaryCardContent {
           action: 'Check in now',
           icon: Icons.arrow_forward_rounded,
         ),
+      // Setup is a utility, so it is the least saturated card on the page
+      // rather than the loudest. It used to be a saturated orange slab whose
+      // white button out-shouted the companion, for the least valuable action
+      // on the screen.
       HomeCardType.onboarding => const _PrimaryCardContent(
           eyebrow: 'GETTING STARTED',
           title: 'Make Solace\nfeel more like you',
           subtitle: 'A few gentle choices help shape what you see here.',
           action: 'Continue setup',
           icon: Icons.arrow_forward_rounded,
+          gradientColors: [
+            Color(0xFFFFF3DE),
+            Color(0xFFFBE4C0),
+            Color(0xFFF6D5A5),
+          ],
+          shadowColor: Color(0x33B0793A),
+          foregroundColor: Color(0xFF4A3213),
+          ctaTextColor: Color(0xFF8A5A16),
         ),
       HomeCardType.defaultAction => const _PrimaryCardContent(
           eyebrow: 'SPACE TO REFLECT',

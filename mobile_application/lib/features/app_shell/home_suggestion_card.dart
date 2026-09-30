@@ -235,20 +235,24 @@ class ActivitySuggestionCard extends StatelessWidget {
                   const SizedBox(height: 18),
                   Row(
                     children: [
-                      _AnswerButton(
-                        key: const ValueKey('suggestion-decline'),
-                        kind: _AnswerKind.no,
-                        ink: palette.ink,
-                        tooltip: 'Not today',
-                        onPressed: onDecline,
+                      Expanded(
+                        child: _AnswerButton(
+                          key: const ValueKey('suggestion-decline'),
+                          label: 'Not now',
+                          ink: palette.ink,
+                          filled: false,
+                          onPressed: onDecline,
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      _AnswerButton(
-                        key: const ValueKey('suggestion-accept'),
-                        kind: _AnswerKind.yes,
-                        ink: palette.ink,
-                        tooltip: 'I did it',
-                        onPressed: onAccept,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _AnswerButton(
+                          key: const ValueKey('suggestion-accept'),
+                          label: "I'll try it",
+                          ink: palette.ink,
+                          filled: true,
+                          onPressed: onAccept,
+                        ),
                       ),
                     ],
                   ),
@@ -262,100 +266,55 @@ class ActivitySuggestionCard extends StatelessWidget {
   }
 }
 
-enum _AnswerKind { yes, no }
-
-/// The two answers, drawn rather than using icon glyphs so their weight matches
-/// the card and they never depend on a font being present.
+/// The two answers.
+///
+/// Labelled text rather than a tick and a cross. An unlabelled cross is the
+/// universal vocabulary for "reject", and a tick is the universal vocabulary for
+/// "success" — on an app that refuses to score anyone, that framing was wrong.
+/// Both answers also get the same size and weight, because neither is the
+/// better thing to do.
 class _AnswerButton extends StatelessWidget {
   const _AnswerButton({
-    required this.kind,
+    required this.label,
     required this.ink,
-    required this.tooltip,
+    required this.filled,
     required this.onPressed,
     super.key,
   });
 
-  final _AnswerKind kind;
+  final String label;
   final Color ink;
-  final String tooltip;
+  final bool filled;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final isYes = kind == _AnswerKind.yes;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: isYes ? ink : Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: isYes
-                  ? null
-                  : Border.all(color: ink.withValues(alpha: 0.35), width: 1.5),
-            ),
-            child: CustomPaint(
-              painter: _AnswerPainter(
-                kind: kind,
-                color: isYes ? const Color(0xFFFFFDF8) : ink,
-              ),
+    return Material(
+      color: filled ? ink : Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onPressed,
+        child: Container(
+          height: 46,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: filled
+                ? null
+                : Border.all(color: ink.withValues(alpha: 0.30), width: 1.5),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: filled ? const Color(0xFFFFFDF8) : ink,
             ),
           ),
         ),
       ),
     );
-  }
+   }
 }
 
-class _AnswerPainter extends CustomPainter {
-  _AnswerPainter({required this.kind, required this.color});
-
-  final _AnswerKind kind;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.6
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..color = color;
-
-    final centre = Offset(size.width / 2, size.height / 2);
-    final unit = size.width;
-
-    if (kind == _AnswerKind.yes) {
-      canvas.drawPath(
-        Path()
-          ..moveTo(centre.dx - unit * 0.16, centre.dy + unit * 0.01)
-          ..lineTo(centre.dx - unit * 0.05, centre.dy + unit * 0.12)
-          ..lineTo(centre.dx + unit * 0.17, centre.dy - unit * 0.13),
-        stroke,
-      );
-      return;
-    }
-
-    canvas.drawLine(
-      Offset(centre.dx - unit * 0.11, centre.dy - unit * 0.11),
-      Offset(centre.dx + unit * 0.11, centre.dy + unit * 0.11),
-      stroke,
-    );
-    canvas.drawLine(
-      Offset(centre.dx + unit * 0.11, centre.dy - unit * 0.11),
-      Offset(centre.dx - unit * 0.11, centre.dy + unit * 0.11),
-      stroke,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _AnswerPainter oldDelegate) {
-    return oldDelegate.kind != kind || oldDelegate.color != color;
-  }
-}
