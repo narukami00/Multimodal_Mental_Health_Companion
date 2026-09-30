@@ -5,6 +5,7 @@ import 'package:solace_mobile/core/models/user_profile.dart';
 import 'package:solace_mobile/data/contracts/activity_library_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_suggestion_repository.dart';
 import 'package:solace_mobile/domain/recommendations/recommendation_engine.dart';
+import 'package:solace_mobile/domain/suggestions/suggestion_schedule.dart';
 import 'package:solace_mobile/features/suggestions/suggestion_controller.dart';
 
 class _FixedLibrary implements ActivityLibraryRepository {
@@ -272,6 +273,75 @@ void main() {
       // whether the activity helps.
       expect(saved.done, isNull);
       expect(saved.useful, isNull);
+    });
+  });
+
+  group('the Home card after using the You page', () {
+    test('asking for an idea does not silence the Home card', () async {
+      final controller = _controller([
+        _activity(id: 'a'),
+        _activity(id: 'b'),
+        _activity(id: 'c'),
+      ]);
+      await controller.load();
+      await controller.warmUp();
+      final profile = const UserProfile();
+
+      // Exactly what testing the You page does: a user-initiated suggestion.
+      final requested = await controller.suggest(
+        profile: profile,
+        context: _context,
+        userInitiated: true,
+      );
+      expect(requested, isNotNull);
+
+      // The peek Home uses must still find something. This was returning null,
+      // so the card rendered nothing at all.
+      final peeked = controller.peek(profile: profile, context: _context);
+      expect(peeked, isNotNull);
+    });
+
+    test('a proactive nudge does use up the day', () async {
+      final controller = _controller([_activity(id: 'a'), _activity(id: 'b')]);
+      await controller.load();
+      await controller.warmUp();
+      final profile = const UserProfile();
+      // Early days: one a day, so a single nudge exhausts the budget.
+      const earlyContext = RecommendationContext(profileAgeDays: 5);
+
+      final peeked = controller.peek(
+        profile: profile,
+        context: earlyContext,
+      )!;
+      await controller.commit(peeked, context: earlyContext, proactive: true);
+
+      expect(
+        controller.peek(profile: profile, context: earlyContext),
+        isNull,
+      );
+    });
+
+    test('the schedule and the engine agree on what is due', () async {
+      final controller = _controller([_activity(id: 'a'), _activity(id: 'b')]);
+      await controller.load();
+      await controller.warmUp();
+      final profile = const UserProfile();
+      final now = DateTime.now();
+
+      // If these two ever disagree, the card is shown with nothing in it.
+      final due = const SuggestionSchedule().isDue(
+        history: controller.history,
+        profileAgeDays: null,
+        checkInCompletedToday: true,
+        now: now,
+      );
+      final peeked = controller.peek(
+        profile: profile,
+        context: _context,
+        now: now,
+      );
+
+      expect(due, peeked != null);
     });
   });
 

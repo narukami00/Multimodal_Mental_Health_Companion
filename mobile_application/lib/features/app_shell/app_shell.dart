@@ -103,20 +103,34 @@ class _AppShellState extends State<AppShell> {
     widget.suggestionController,
   ]);
 
-  /// Builds the context a suggestion would be chosen in, and asks the engine
-  /// whether there is one — without recording anything.
+  /// The suggestion to offer, or null if there is nothing to show.
   ///
-  /// This runs on every rebuild, so it must stay read-only. Recording here
-  /// would inflate the very counts the confidence gate depends on.
-  SuggestionCardChoice? _peekSuggestion() {
+  /// Both gates live here so the card can never be shown empty. Asking the
+  /// schedule for a verdict and the engine for content separately is what let
+  /// them disagree: the schedule said a nudge was due, the engine's own cap
+  /// said no, and the card silently rendered nothing.
+  SuggestionCardChoice? _peekSuggestion({required bool allowed}) {
+    if (!allowed) return null;
+
+    final now = DateTime.now();
     final profile = widget.profileController.profile;
+    final due = const SuggestionSchedule().isDue(
+      history: widget.suggestionController.history,
+      profileAgeDays: profileAgeInDays(profile),
+      checkInCompletedToday: widget.sessionController.hasCheckedInOn(now),
+      now: now,
+    );
+    if (!due) return null;
+
     final context = buildRecommendationContext(
       profile: profile,
       sessions: widget.sessionController.sessions,
+      now: now,
     );
     final recommendation = widget.suggestionController.peek(
       profile: profile,
       context: context,
+      now: now,
     );
     if (recommendation == null) return null;
     return SuggestionCardChoice(
@@ -150,7 +164,9 @@ class _AppShellState extends State<AppShell> {
   /// "Not today", recorded so the card does not simply return on the next
   /// rebuild. Declining is still free: it never counts against the activity.
   Future<void> _declineSuggestion() async {
-    final choice = _peekSuggestion();
+    // The card was on screen, so a suggestion is available regardless of where
+    // the schedule now stands.
+    final choice = _peekSuggestion(allowed: true);
     if (choice == null) return;
     final record = await widget.suggestionController.commit(
       choice.recommendation,
@@ -188,7 +204,7 @@ class _AppShellState extends State<AppShell> {
           suggestionDue: suggestionDue,
         );
         final showSuggestion = HomeCardPriority.showSuggestion(homeState);
-        final suggestionChoice = showSuggestion ? _peekSuggestion() : null;
+        final suggestionChoice = _peekSuggestion(allowed: showSuggestion);
         return Scaffold(
           body: IndexedStack(
             index: _selectedTab.index,
@@ -207,7 +223,9 @@ class _AppShellState extends State<AppShell> {
                   profileController: widget.profileController,
                 ),
                 primaryCard: HomeCardPriority.select(homeState),
-                showSuggestion: showSuggestion,
+                // Derived from what will actually be drawn, so Home can never
+                // reserve space for a card that has nothing in it.
+                showSuggestion: suggestionChoice != null,
                 suggestionCard: HomeSuggestionCard(
                   // Keyed by the activity so a genuinely new suggestion does not
                   // reuse the previous card's goodbye state.

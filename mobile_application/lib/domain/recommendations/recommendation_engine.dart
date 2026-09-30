@@ -327,7 +327,14 @@ class RecommendationEngine {
   }
 
   int _shownToday(List<SuggestionRecord> records, DateTime now) {
-    return records.where((record) => _sameDate(record.shownAt, now)).length;
+    // Only proactive nudges count against the daily cap. A suggestion the user
+    // went and asked for themselves is not a nudge and must never use up the
+    // slot for one — otherwise viewing an idea on the You page would silence
+    // the Home card for the rest of the day.
+    return records
+        .where((record) => record.proactive)
+        .where((record) => _sameDate(record.shownAt, now))
+        .length;
   }
 
   /// Whether this activity was shown too recently to show again.
