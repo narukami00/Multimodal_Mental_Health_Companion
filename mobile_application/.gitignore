@@ -46,3 +46,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Rendered screenshots for reviewing the UI by eye. Regenerate with:
+#   flutter test test/screenshots/render_ui.dart --update-goldens
+# Not versioned: they depend on the fonts installed on the machine that drew
+# them, so they are a review aid rather than a regression test.
+/test/screenshots/goldens/

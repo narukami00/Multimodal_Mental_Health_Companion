@@ -1,24 +1,14 @@
-import 'dart:io';
-import 'dart:math' as math;
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/models/activity.dart';
 import '../suggestions/suggestion_card_surface.dart';
-
-bool get _isTestEnvironment {
-  try {
-    return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
-  } catch (_) {
-    return false;
-  }
-}
+import 'activity_scene.dart';
 
 /// The gentle idea, sitting on Home below whichever card is on top.
 ///
-/// One sentence and two answers. Declining is instant and warm, and the space
-/// it occupied closes up behind it.
+/// One sentence, what it means, and two answers. The background carries a drawn
+/// scene for the kind of activity, so the card shows its subject rather than
+/// naming it beside a symbol.
 class HomeSuggestionCard extends StatefulWidget {
   const HomeSuggestionCard({
     required this.choice,
@@ -89,7 +79,7 @@ class _HomeSuggestionCardState extends State<HomeSuggestionCard> {
         child: AnimatedOpacity(
           duration: const Duration(milliseconds: 300),
           opacity: _sayingGoodbye ? 0.0 : 1.0,
-          child: _CardShell(
+          child: ActivitySuggestionCard(
             activity: choice.activity,
             sayingGoodbye: _sayingGoodbye,
             onAccept: _sayingGoodbye ? null : () => widget.onAccept(choice),
@@ -101,173 +91,221 @@ class _HomeSuggestionCardState extends State<HomeSuggestionCard> {
   }
 }
 
-class _CardShell extends StatelessWidget {
-  const _CardShell({
+/// The card face, split out so it can be rendered and reviewed on its own.
+class ActivitySuggestionCard extends StatelessWidget {
+  const ActivitySuggestionCard({
     required this.activity,
-    required this.sayingGoodbye,
     required this.onAccept,
-    required this.onDecline,
+    this.onDecline,
+    this.sayingGoodbye = false,
+    super.key,
   });
 
   final Activity activity;
-  final bool sayingGoodbye;
   final VoidCallback? onAccept;
   final VoidCallback? onDecline;
+  final bool sayingGoodbye;
+
+  /// The palette each kind of activity is painted in.
+  ///
+  /// Two stops: a pale wash that the text sits on, and a deeper ink for the
+  /// scene and the accents.
+  static ({Color wash, Color ink}) paletteFor(ActivityType type) {
+    return switch (type) {
+      ActivityType.movement => (
+        wash: const Color(0xFFFFF4E0),
+        ink: const Color(0xFFB4793A),
+      ),
+      ActivityType.social => (
+        wash: const Color(0xFFFFEDE6),
+        ink: const Color(0xFFC2694A),
+      ),
+      ActivityType.creative => (
+        wash: const Color(0xFFF6ECFF),
+        ink: const Color(0xFF8A5FBF),
+      ),
+      ActivityType.nature => (
+        wash: const Color(0xFFE9F5E6),
+        ink: const Color(0xFF4F8A52),
+      ),
+      ActivityType.mindfulness => (
+        wash: const Color(0xFFE7F2F7),
+        ink: const Color(0xFF3F7C93),
+      ),
+      ActivityType.learning => (
+        wash: const Color(0xFFFFF2DC),
+        ink: const Color(0xFFA97B2E),
+      ),
+      ActivityType.productivity => (
+        wash: const Color(0xFFEDEBF8),
+        ink: const Color(0xFF6A63A8),
+      ),
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
+    final palette = paletteFor(activity.type);
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: _gradientFor(activity.type),
+          colors: [
+            palette.wash,
+            Color.lerp(palette.wash, palette.ink, 0.14)!,
+          ],
         ),
-        boxShadow: const [
+        border: Border.all(color: palette.ink.withValues(alpha: 0.16)),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x1A5A4030),
-            blurRadius: 18,
-            offset: Offset(0, 6),
+            color: palette.ink.withValues(alpha: 0.16),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          const Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.all(Radius.circular(26)),
-              child: _CardBackdrop(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Stack(
+          children: [
+            // The scene is the background, not a badge beside the words. It gets
+            // its own column on the right so the figure stands whole, and stops
+            // short of the bottom so it never sits under the buttons.
+            Positioned(
+              right: 6,
+              top: 8,
+              bottom: 54,
+              width: 132,
+              child: ActivityScene(type: activity.type, color: palette.ink),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Glyph and text on their own row. Sharing one row with both
-                // buttons left the text about 140dp wide on a normal phone,
-                // which a full-sentence subtitle cannot fit into.
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ActivityTypeGlyph(type: activity.type, size: 52),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 320),
-                        child: sayingGoodbye
-                            ? const Padding(
-                                key: ValueKey('goodbye'),
-                                padding: EdgeInsets.only(top: 10),
-                                child: Text(
-                                  'Okay, have a nice day.',
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ConstrainedBox(
+                    // Keeps the words in their own column, clear of the art.
+                    constraints: const BoxConstraints(maxWidth: 196),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 320),
+                      child: sayingGoodbye
+                          ? Text(
+                              'Okay, have a nice day.',
+                              key: const ValueKey('goodbye'),
+                              style: TextStyle(
+                                color: palette.ink,
+                                fontSize: 21,
+                                height: 1.25,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.3,
+                              ),
+                            )
+                          : Column(
+                              key: const ValueKey('suggestion'),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  activity.title,
                                   style: TextStyle(
-                                    color: Color(0xFF4A3728),
-                                    fontSize: 17,
-                                    height: 1.35,
-                                    fontWeight: FontWeight.w700,
+                                    color: palette.ink,
+                                    fontSize: 20,
+                                    height: 1.22,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.4,
                                   ),
                                 ),
-                              )
-                            : Column(
-                                key: const ValueKey('suggestion'),
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    activity.title,
-                                    style: const TextStyle(
-                                      color: Color(0xFF4A3728),
-                                      fontSize: 16.5,
-                                      height: 1.3,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  activity.description,
+                                  style: TextStyle(
+                                    color: palette.ink.withValues(alpha: 0.68),
+                                    fontSize: 12.5,
+                                    height: 1.42,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                  const SizedBox(height: 5),
-                                  // What doing it actually means. Naming a task
-                                  // without this leaves the user to guess.
-                                  Text(
-                                    activity.description,
-                                    style: const TextStyle(
-                                      color: Color(0xFF6B5540),
-                                      fontSize: 13.5,
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      _AnswerButton(
+                        key: const ValueKey('suggestion-decline'),
+                        kind: _AnswerKind.no,
+                        ink: palette.ink,
+                        tooltip: 'Not today',
+                        onPressed: onDecline,
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _AnswerButton(
-                      key: const ValueKey('suggestion-decline'),
-                      icon: Icons.close_rounded,
-                      tooltip: 'Not today',
-                      onPressed: onDecline,
-                    ),
-                    const SizedBox(width: 10),
-                    _AnswerButton(
-                      key: const ValueKey('suggestion-accept'),
-                      icon: Icons.check_rounded,
-                      tooltip: 'I did it',
-                      onPressed: onAccept,
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 12),
+                      _AnswerButton(
+                        key: const ValueKey('suggestion-accept'),
+                        kind: _AnswerKind.yes,
+                        ink: palette.ink,
+                        tooltip: 'I did it',
+                        onPressed: onAccept,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
-
-  List<Color> _gradientFor(ActivityType type) {
-    return switch (type) {
-      ActivityType.movement => const [Color(0xFFFFF3DC), Color(0xFFFFE3B8)],
-      ActivityType.social => const [Color(0xFFFFE9E2), Color(0xFFFFD6C6)],
-      ActivityType.creative => const [Color(0xFFF6E9FF), Color(0xFFE8D4FA)],
-      ActivityType.nature => const [Color(0xFFE6F4E4), Color(0xFFCFE9CC)],
-      ActivityType.mindfulness => const [Color(0xFFE4F1F6), Color(0xFFCCE3EE)],
-      ActivityType.learning => const [Color(0xFFFFF1D9), Color(0xFFF6DFAE)],
-      ActivityType.productivity => const [Color(0xFFEDEBF7), Color(0xFFD9D5EE)],
-    };
-  }
 }
 
-/// Two answers, and nothing else. Each is a plain circle, so neither reads as
-/// the "right" one.
+enum _AnswerKind { yes, no }
+
+/// The two answers, drawn rather than using icon glyphs so their weight matches
+/// the card and they never depend on a font being present.
 class _AnswerButton extends StatelessWidget {
   const _AnswerButton({
-    required this.icon,
+    required this.kind,
+    required this.ink,
     required this.tooltip,
     required this.onPressed,
     super.key,
   });
 
-  final IconData icon;
+  final _AnswerKind kind;
+  final Color ink;
   final String tooltip;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final isYes = kind == _AnswerKind.yes;
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: Colors.white.withValues(alpha: 0.72),
+        color: isYes ? ink : Colors.transparent,
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onPressed,
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icon, size: 20, color: const Color(0xFF4A3728)),
+          child: Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: isYes
+                  ? null
+                  : Border.all(color: ink.withValues(alpha: 0.35), width: 1.5),
+            ),
+            child: CustomPaint(
+              painter: _AnswerPainter(
+                kind: kind,
+                color: isYes ? const Color(0xFFFFFDF8) : ink,
+              ),
+            ),
           ),
         ),
       ),
@@ -275,227 +313,49 @@ class _AnswerButton extends StatelessWidget {
   }
 }
 
-/// A very quiet backdrop, so the card reads as considered rather than plain.
-class _CardBackdrop extends StatelessWidget {
-  const _CardBackdrop();
+class _AnswerPainter extends CustomPainter {
+  _AnswerPainter({required this.kind, required this.color});
 
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(painter: _BackdropPainter());
-  }
-}
-
-class _BackdropPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = const Color(0x14FFFFFF);
-    canvas.drawCircle(
-      Offset(size.width * 0.92, size.height * 0.1),
-      size.height * 0.9,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(size.width * 0.06, size.height * 0.95),
-      size.height * 0.5,
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _BackdropPainter oldDelegate) => false;
-}
-
-/// A vector glyph per activity type.
-///
-/// Drawn rather than shipped as image assets: the app has no SVG dependency,
-/// and a painter scales cleanly and can be animated without adding one.
-class ActivityTypeGlyph extends StatefulWidget {
-  const ActivityTypeGlyph({required this.type, this.size = 52, super.key});
-
-  final ActivityType type;
-  final double size;
-
-  @override
-  State<ActivityTypeGlyph> createState() => _ActivityTypeGlyphState();
-}
-
-class _ActivityTypeGlyphState extends State<ActivityTypeGlyph>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 5200),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    // Never left running under test: an endless animation hangs pumpAndSettle.
-    if (!_isTestEnvironment) _controller.repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget.size,
-      height: widget.size,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) => CustomPaint(
-          painter: _GlyphPainter(
-            type: widget.type,
-            progress: _controller.value,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlyphPainter extends CustomPainter {
-  _GlyphPainter({required this.type, required this.progress});
-
-  final ActivityType type;
-  final double progress;
-
-  /// A slow drift and sway, so the glyph feels alive without demanding
-  /// attention. Deliberately more movement than a static icon would need: a
-  /// still glyph at this size reads as decoration, and the point is that it is
-  /// a living card.
-  double get _scale => 1 + math.sin(progress * 2 * math.pi) * 0.09;
-
-  double get _tilt => math.sin(progress * 2 * math.pi) * 0.07;
+  final _AnswerKind kind;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.translate(size.width / 2, size.height / 2);
-
-    // A filled disc, so the glyph reads as an icon rather than a stray line.
-    canvas.drawCircle(
-      Offset.zero,
-      size.width * 0.46,
-      Paint()..color = const Color(0x33FFFFFF),
-    );
-
-    canvas.scale(_scale);
-    canvas.rotate(_tilt);
-
     final stroke = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.095
+      ..strokeWidth = 2.6
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..color = const Color(0xFF6B4A2C);
+      ..color = color;
 
-    switch (type) {
-      case ActivityType.movement:
-        _footsteps(canvas, size, stroke);
-      case ActivityType.social:
-        _twoCircles(canvas, size, stroke);
-      case ActivityType.creative:
-        _brush(canvas, size, stroke);
-      case ActivityType.nature:
-        _leaf(canvas, size, stroke);
-      case ActivityType.mindfulness:
-        _ripples(canvas, size, stroke);
-      case ActivityType.learning:
-        _book(canvas, size, stroke);
-      case ActivityType.productivity:
-        _check(canvas, size, stroke);
-    }
-    canvas.restore();
-  }
+    final centre = Offset(size.width / 2, size.height / 2);
+    final unit = size.width;
 
-  void _footsteps(Canvas canvas, Size size, Paint stroke) {
-    final r = size.width;
-    canvas.drawCircle(Offset(-r * 0.10, -r * 0.14), r * 0.10, stroke);
-    canvas.drawCircle(Offset(r * 0.06, r * 0.06), r * 0.10, stroke);
-    canvas.drawLine(
-      Offset(-r * 0.10, -r * 0.02),
-      Offset(-r * 0.10, -r * 0.04),
-      stroke,
-    );
-  }
-
-  void _twoCircles(Canvas canvas, Size size, Paint stroke) {
-    final r = size.width;
-    canvas.drawCircle(Offset(-r * 0.13, -r * 0.05), r * 0.11, stroke);
-    canvas.drawCircle(Offset(r * 0.14, -r * 0.02), r * 0.09, stroke);
-  }
-
-  void _brush(Canvas canvas, Size size, Paint stroke) {
-    final r = size.width;
-    canvas.drawLine(
-      Offset(-r * 0.18, r * 0.18),
-      Offset(r * 0.18, -r * 0.18),
-      stroke,
-    );
-    canvas.drawCircle(Offset(-r * 0.18, r * 0.18), r * 0.07, stroke);
-  }
-
-  void _leaf(Canvas canvas, Size size, Paint stroke) {
-    final r = size.width;
-    final path = Path()
-      ..moveTo(0, -r * 0.22)
-      ..quadraticBezierTo(r * 0.24, -r * 0.02, 0, r * 0.22)
-      ..quadraticBezierTo(-r * 0.24, -r * 0.02, 0, -r * 0.22);
-    canvas.drawPath(path, stroke);
-    canvas.drawLine(Offset(0, -r * 0.18), Offset(0, r * 0.18), stroke);
-  }
-
-  void _ripples(Canvas canvas, Size size, Paint stroke) {
-    final r = size.width;
-    for (final scale in [0.10, 0.19, 0.28]) {
-      canvas.drawArc(
-        Rect.fromCircle(center: Offset.zero, radius: r * scale),
-        math.pi * 0.15,
-        math.pi * 0.7,
-        false,
+    if (kind == _AnswerKind.yes) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(centre.dx - unit * 0.16, centre.dy + unit * 0.01)
+          ..lineTo(centre.dx - unit * 0.05, centre.dy + unit * 0.12)
+          ..lineTo(centre.dx + unit * 0.17, centre.dy - unit * 0.13),
         stroke,
       );
+      return;
     }
-  }
 
-  void _book(Canvas canvas, Size size, Paint stroke) {
-    final r = size.width;
-    canvas.drawLine(Offset(0, -r * 0.16), Offset(0, r * 0.16), stroke);
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, -r * 0.16)
-        ..quadraticBezierTo(-r * 0.14, -r * 0.22, -r * 0.22, -r * 0.16)
-        ..lineTo(-r * 0.22, r * 0.14)
-        ..quadraticBezierTo(-r * 0.14, r * 0.10, 0, r * 0.16),
+    canvas.drawLine(
+      Offset(centre.dx - unit * 0.11, centre.dy - unit * 0.11),
+      Offset(centre.dx + unit * 0.11, centre.dy + unit * 0.11),
       stroke,
     );
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, -r * 0.16)
-        ..quadraticBezierTo(r * 0.14, -r * 0.22, r * 0.22, -r * 0.16)
-        ..lineTo(r * 0.22, r * 0.14)
-        ..quadraticBezierTo(r * 0.14, r * 0.10, 0, r * 0.16),
-      stroke,
-    );
-  }
-
-  void _check(Canvas canvas, Size size, Paint stroke) {
-    final r = size.width;
-    canvas.drawPath(
-      Path()
-        ..moveTo(-r * 0.19, 0)
-        ..lineTo(-r * 0.05, r * 0.15)
-        ..lineTo(r * 0.20, -r * 0.16),
+    canvas.drawLine(
+      Offset(centre.dx + unit * 0.11, centre.dy - unit * 0.11),
+      Offset(centre.dx - unit * 0.11, centre.dy + unit * 0.11),
       stroke,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _GlyphPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.type != type;
+  bool shouldRepaint(covariant _AnswerPainter oldDelegate) {
+    return oldDelegate.kind != kind || oldDelegate.color != color;
   }
 }
