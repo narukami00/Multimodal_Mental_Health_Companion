@@ -86,5 +86,29 @@ void main() {
       expect(updated.ambientAudioEnabled, isTrue);
       expect(base.ambientAudioEnabled, isFalse);
     });
+
+    test('idea pushes and quiet hours are off for anyone who never chose them', () {
+      // An older stored profile has none of these keys.
+      final profile = UserProfile.fromMap(const {});
+
+      expect(profile.ideaPushEnabled, isFalse);
+      expect(profile.quietHoursEnabled, isFalse);
+    });
+
+    test('quiet hours survive a round trip, including one that crosses midnight', () {
+      final saved = const UserProfile().copyWith(
+        quietHoursEnabled: true,
+        quietStartMinutes: 23 * 60,
+        quietEndMinutes: 6 * 60 + 30,
+        ideaPushEnabled: true,
+      );
+
+      final loaded = UserProfile.fromMap(saved.toMap());
+
+      expect(loaded.quietHoursEnabled, isTrue);
+      expect(loaded.quietStartMinutes, 23 * 60);
+      expect(loaded.quietEndMinutes, 6 * 60 + 30);
+      expect(loaded.ideaPushEnabled, isTrue);
+    });
   });
 }

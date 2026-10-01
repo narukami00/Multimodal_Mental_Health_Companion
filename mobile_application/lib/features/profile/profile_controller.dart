@@ -129,6 +129,26 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
+  Future<void> setIdeaPushEnabled(bool enabled) async {
+    _profile = _profile.copyWith(ideaPushEnabled: enabled);
+    await _persist();
+  }
+
+  /// Sets the sleep window idea pushes are held back in. Minutes past midnight;
+  /// the window may cross midnight.
+  Future<void> setQuietHours({
+    bool? enabled,
+    int? startMinutes,
+    int? endMinutes,
+  }) async {
+    _profile = _profile.copyWith(
+      quietHoursEnabled: enabled,
+      quietStartMinutes: startMinutes?.clamp(0, 24 * 60 - 1),
+      quietEndMinutes: endMinutes?.clamp(0, 24 * 60 - 1),
+    );
+    await _persist();
+  }
+
   /// The contact the user has marked as the person to call first, if any.
   EmergencyContact? get iceContact {
     for (final contact in _profile.emergencyContacts) {

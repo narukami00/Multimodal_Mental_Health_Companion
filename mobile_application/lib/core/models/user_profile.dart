@@ -22,6 +22,10 @@ class UserProfile {
     this.firstRunAt,
     this.reminderEnabled = false,
     this.reminderMinutes = defaultReminderMinutes,
+    this.ideaPushEnabled = false,
+    this.quietHoursEnabled = false,
+    this.quietStartMinutes = defaultQuietStartMinutes,
+    this.quietEndMinutes = defaultQuietEndMinutes,
     this.emergencyContacts = const [],
     this.restDays = const [],
     this.welcomeBackShownAt,
@@ -32,6 +36,12 @@ class UserProfile {
 
   /// Default daily reminder time, 8:30 PM, as minutes past midnight.
   static const defaultReminderMinutes = 20 * 60 + 30;
+
+  /// Where the quiet-hours pickers start when first switched on. Quiet hours
+  /// themselves are off until chosen: any default is a guess about someone's
+  /// sleep, and guessing too early wakes them.
+  static const defaultQuietStartMinutes = 22 * 60;
+  static const defaultQuietEndMinutes = 7 * 60;
 
   final List<String> preferredActivities;
   final List<String> constraints;
@@ -67,6 +77,17 @@ class UserProfile {
 
   /// Reminder time as minutes past midnight.
   final int reminderMinutes;
+
+  /// Whether a gentle idea may be pushed as a notification. Off until chosen.
+  final bool ideaPushEnabled;
+
+  /// A sleep window during which idea pushes are held back. It never affects
+  /// the check-in reminder: a time the user picked is always honoured. The
+  /// window may cross midnight, so [quietStartMinutes] can exceed
+  /// [quietEndMinutes].
+  final bool quietHoursEnabled;
+  final int quietStartMinutes;
+  final int quietEndMinutes;
 
   /// Support contacts the user has chosen to keep. At most one is the ICE
   /// (in-case-of-emergency) contact.
@@ -113,6 +134,10 @@ class UserProfile {
     DateTime? firstRunAt,
     bool? reminderEnabled,
     int? reminderMinutes,
+    bool? ideaPushEnabled,
+    bool? quietHoursEnabled,
+    int? quietStartMinutes,
+    int? quietEndMinutes,
     List<EmergencyContact>? emergencyContacts,
     List<String>? restDays,
     DateTime? welcomeBackShownAt,
@@ -137,6 +162,10 @@ class UserProfile {
       firstRunAt: firstRunAt ?? this.firstRunAt,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       reminderMinutes: reminderMinutes ?? this.reminderMinutes,
+      ideaPushEnabled: ideaPushEnabled ?? this.ideaPushEnabled,
+      quietHoursEnabled: quietHoursEnabled ?? this.quietHoursEnabled,
+      quietStartMinutes: quietStartMinutes ?? this.quietStartMinutes,
+      quietEndMinutes: quietEndMinutes ?? this.quietEndMinutes,
       emergencyContacts: emergencyContacts ?? this.emergencyContacts,
       restDays: restDays ?? this.restDays,
       welcomeBackShownAt: welcomeBackShownAt ?? this.welcomeBackShownAt,
@@ -163,6 +192,10 @@ class UserProfile {
       'firstRunAt': firstRunAt?.toIso8601String(),
       'reminderEnabled': reminderEnabled,
       'reminderMinutes': reminderMinutes,
+      'ideaPushEnabled': ideaPushEnabled,
+      'quietHoursEnabled': quietHoursEnabled,
+      'quietStartMinutes': quietStartMinutes,
+      'quietEndMinutes': quietEndMinutes,
       'emergencyContacts': emergencyContacts
           .map((contact) => contact.toMap())
           .toList(),
@@ -194,6 +227,13 @@ class UserProfile {
       reminderEnabled: map['reminderEnabled'] as bool? ?? false,
       reminderMinutes:
           (map['reminderMinutes'] as num?)?.toInt() ?? defaultReminderMinutes,
+      ideaPushEnabled: map['ideaPushEnabled'] as bool? ?? false,
+      quietHoursEnabled: map['quietHoursEnabled'] as bool? ?? false,
+      quietStartMinutes:
+          (map['quietStartMinutes'] as num?)?.toInt() ??
+          defaultQuietStartMinutes,
+      quietEndMinutes:
+          (map['quietEndMinutes'] as num?)?.toInt() ?? defaultQuietEndMinutes,
       emergencyContacts: _contacts(map['emergencyContacts']),
       restDays: _strings(map['restDays']),
       welcomeBackShownAt: DateTime.tryParse(
