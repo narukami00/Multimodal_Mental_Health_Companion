@@ -318,10 +318,40 @@ class _AppShellState extends State<AppShell> {
                   ],
                   onTap: () => _openRhythm(context),
                 ),
-                homeRail: HomeRail(
-                  journalCount: widget.sessionController.sessions.length,
-                  onJournal: () => _selectTab(AppTab.journal),
-                  onConversations: () => _openChat(context),
+                homeRail: AnimatedBuilder(
+                  animation: _chatController,
+                  builder: (context, _) {
+                    final last = _chatController.conversations.firstOrNull;
+                    final lastMsg = last?.messages
+                        .where((m) => (m.isVoice
+                                ? (m.transcription ?? '')
+                                : m.text)
+                            .trim()
+                            .isNotEmpty)
+                        .lastOrNull;
+                    return HomeRail(
+                      journalCount: widget.sessionController.sessions.length,
+                      lastMessage: last == null || lastMsg == null
+                          ? null
+                          : RailLastMessage(
+                              text: (lastMsg.isVoice
+                                      ? lastMsg.transcription!
+                                      : lastMsg.text)
+                                  .trim(),
+                              fromUser: lastMsg.isUser,
+                              when: last.dateStr,
+                            ),
+                      onJournal: () => _selectTab(AppTab.journal),
+                      onConversations: () {
+                        // Resume that exact thread, not whichever one happens
+                        // to be active.
+                        if (last != null) {
+                          _chatController.switchConversation(last.id);
+                        }
+                        _openChat(context);
+                      },
+                    );
+                  },
                 ),
                 onTaskOpen: () => _openSuggestionDetails(suggestionChoice),
                 onTaskAccept: () => _acceptSuggestion(suggestionChoice!),
