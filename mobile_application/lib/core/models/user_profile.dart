@@ -1,4 +1,5 @@
 import 'emergency_contact.dart';
+import 'sleep_window.dart';
 
 enum QuizBlock { erqS, gad7, phq9 }
 
@@ -29,7 +30,17 @@ class UserProfile {
     this.emergencyContacts = const [],
     this.restDays = const [],
     this.welcomeBackShownAt,
+    this.sleepStartMinutes,
+    this.sleepEndMinutes,
+    this.sleepHoursSkipped = false,
+    this.weekendSleepDiffers = false,
+    this.weekendSleepStartMinutes,
+    this.weekendSleepEndMinutes,
+    this.featureRetentionDays = defaultFeatureRetentionDays,
   });
+
+  /// How long derived daily features are kept, unless the user changes it.
+  static const defaultFeatureRetentionDays = 180;
 
   /// Identifier of the default colour palette.
   static const defaultPaletteId = 'warmCream';
@@ -102,6 +113,54 @@ class UserProfile {
   /// When the welcome-back line was last shown, so a lapse surfaces it once.
   final DateTime? welcomeBackShownAt;
 
+  /// The user's usual sleep hours, as minutes past midnight. Null until chosen:
+  /// any default is a guess about someone's sleep, so none is offered. The pair
+  /// may cross midnight.
+  final int? sleepStartMinutes;
+  final int? sleepEndMinutes;
+
+  /// The user chose not to say. Counts as an answer, never as a gap.
+  final bool sleepHoursSkipped;
+
+  /// Whether weekend sleep differs from the usual hours. The weekend pair is
+  /// kept even while this is off, so switching it back on restores it.
+  final bool weekendSleepDiffers;
+  final int? weekendSleepStartMinutes;
+  final int? weekendSleepEndMinutes;
+
+  /// Days of derived daily features kept before they are pruned.
+  final int featureRetentionDays;
+
+  /// Whether the user has given usual sleep hours.
+  bool get sleepHoursSet => sleepStartMinutes != null && sleepEndMinutes != null;
+
+  /// Whether the sleep question has been answered, by choosing hours or by
+  /// skipping.
+  bool get sleepHoursAnswered => sleepHoursSet || sleepHoursSkipped;
+
+  /// The sleep window for a night that starts on a weekend when [weekend] is
+  /// true. Falls back to the usual hours when weekends do not differ or the
+  /// weekend pair is incomplete, and is null when no hours were given.
+  ///
+  /// Which nights are "weekend" is the caller's call: it depends on the
+  /// person's own week, not on a fixed calendar rule.
+  SleepWindow? sleepWindowFor({required bool weekend}) {
+    if (weekend &&
+        weekendSleepDiffers &&
+        weekendSleepStartMinutes != null &&
+        weekendSleepEndMinutes != null) {
+      return SleepWindow(
+        startMinutes: weekendSleepStartMinutes!,
+        endMinutes: weekendSleepEndMinutes!,
+      );
+    }
+    if (!sleepHoursSet) return null;
+    return SleepWindow(
+      startMinutes: sleepStartMinutes!,
+      endMinutes: sleepEndMinutes!,
+    );
+  }
+
   bool get hasPreferences => preferredActivities.isNotEmpty;
   bool get erqSComplete => erqSAnswers.length == 6;
   bool get gad7Complete => gad7Answers.length == 7;
@@ -141,6 +200,13 @@ class UserProfile {
     List<EmergencyContact>? emergencyContacts,
     List<String>? restDays,
     DateTime? welcomeBackShownAt,
+    int? sleepStartMinutes,
+    int? sleepEndMinutes,
+    bool? sleepHoursSkipped,
+    bool? weekendSleepDiffers,
+    int? weekendSleepStartMinutes,
+    int? weekendSleepEndMinutes,
+    int? featureRetentionDays,
   }) {
     return UserProfile(
       preferredActivities: preferredActivities ?? this.preferredActivities,
@@ -169,6 +235,15 @@ class UserProfile {
       emergencyContacts: emergencyContacts ?? this.emergencyContacts,
       restDays: restDays ?? this.restDays,
       welcomeBackShownAt: welcomeBackShownAt ?? this.welcomeBackShownAt,
+      sleepStartMinutes: sleepStartMinutes ?? this.sleepStartMinutes,
+      sleepEndMinutes: sleepEndMinutes ?? this.sleepEndMinutes,
+      sleepHoursSkipped: sleepHoursSkipped ?? this.sleepHoursSkipped,
+      weekendSleepDiffers: weekendSleepDiffers ?? this.weekendSleepDiffers,
+      weekendSleepStartMinutes:
+          weekendSleepStartMinutes ?? this.weekendSleepStartMinutes,
+      weekendSleepEndMinutes:
+          weekendSleepEndMinutes ?? this.weekendSleepEndMinutes,
+      featureRetentionDays: featureRetentionDays ?? this.featureRetentionDays,
     );
   }
 
@@ -201,6 +276,13 @@ class UserProfile {
           .toList(),
       'restDays': restDays,
       'welcomeBackShownAt': welcomeBackShownAt?.toIso8601String(),
+      'sleepStartMinutes': sleepStartMinutes,
+      'sleepEndMinutes': sleepEndMinutes,
+      'sleepHoursSkipped': sleepHoursSkipped,
+      'weekendSleepDiffers': weekendSleepDiffers,
+      'weekendSleepStartMinutes': weekendSleepStartMinutes,
+      'weekendSleepEndMinutes': weekendSleepEndMinutes,
+      'featureRetentionDays': featureRetentionDays,
     };
   }
 
@@ -239,7 +321,27 @@ class UserProfile {
       welcomeBackShownAt: DateTime.tryParse(
         map['welcomeBackShownAt'] as String? ?? '',
       ),
+      sleepStartMinutes: _minuteOfDay(map['sleepStartMinutes']),
+      sleepEndMinutes: _minuteOfDay(map['sleepEndMinutes']),
+      sleepHoursSkipped: map['sleepHoursSkipped'] as bool? ?? false,
+      weekendSleepDiffers: map['weekendSleepDiffers'] as bool? ?? false,
+      weekendSleepStartMinutes: _minuteOfDay(map['weekendSleepStartMinutes']),
+      weekendSleepEndMinutes: _minuteOfDay(map['weekendSleepEndMinutes']),
+      featureRetentionDays: _retentionDays(map['featureRetentionDays']),
     );
+  }
+
+  /// A stored minute-of-day, or null when absent or out of range.
+  static int? _minuteOfDay(Object? value) {
+    if (value is! num) return null;
+    final minute = value.toInt();
+    return minute >= 0 && minute < SleepWindow.minutesPerDay ? minute : null;
+  }
+
+  static int _retentionDays(Object? value) {
+    if (value is! num) return defaultFeatureRetentionDays;
+    final days = value.toInt();
+    return days > 0 ? days : defaultFeatureRetentionDays;
   }
 
   /// Reads stored contacts, skipping malformed or incomplete entries.
