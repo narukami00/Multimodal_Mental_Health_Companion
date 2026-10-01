@@ -27,6 +27,7 @@ import 'baseline_quiz_page.dart';
 import 'permissions_page.dart';
 import 'profile_controller.dart';
 import 'profile_insights_page.dart';
+import 'sleep_hours_settings.dart';
 
 /// The baseline reflections entry, which carries its own progress and button.
 ///
@@ -1932,6 +1933,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
               ],
             ),
         ],
+        SleepHoursSettings(controller: _controller),
         const SizedBox(height: 14),
         const Text(
           'COLOR PALETTE',
