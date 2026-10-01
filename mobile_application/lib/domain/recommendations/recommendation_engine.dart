@@ -105,8 +105,6 @@ class RecommendationEngine {
     required RecommendationContext context,
     required Iterable<SuggestionRecord> history,
     DateTime? now,
-    bool userInitiated = false,
-    bool ignoreBudget = false,
   }) {
     if (context.safetyActive) return null;
 
@@ -116,13 +114,6 @@ class RecommendationEngine {
     if (library.isEmpty) return null;
 
     final ageDays = context.profileAgeDays;
-    final dailyCap = ageDays != null && ageDays < starterTourDays ? 1 : 2;
-    if (!userInitiated &&
-        !ignoreBudget &&
-        _shownToday(records, currentTime) >= dailyCap) {
-      return null;
-    }
-
     final tags = context.normalizedTags;
     final typeOf = {for (final activity in library) activity.id: activity.type};
     final effortCeiling = _effortCeiling(records, context, currentTime);
@@ -320,17 +311,6 @@ class RecommendationEngine {
       (a, b) => a.shownAt.isAfter(b.shownAt) ? a : b,
     );
     return typeOf[latest.activityId];
-  }
-
-  int _shownToday(List<SuggestionRecord> records, DateTime now) {
-    // Only proactive nudges count against the daily cap. A suggestion the user
-    // went and asked for themselves is not a nudge and must never use up the
-    // slot for one — otherwise viewing an idea on the You page would silence
-    // the Home card for the rest of the day.
-    return records
-        .where((record) => record.proactive)
-        .where((record) => _sameDate(record.shownAt, now))
-        .length;
   }
 
   /// Whether this activity was shown too recently to show again.
@@ -594,9 +574,6 @@ class RecommendationEngine {
     }
   }
 
-  bool _sameDate(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
 }
 
 class _ScoredActivity {

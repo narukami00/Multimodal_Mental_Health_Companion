@@ -145,7 +145,6 @@ class _AppShellState extends State<AppShell> {
       profile: profile,
       context: context,
       now: now,
-      ignoreBudget: ignoreBudget,
     );
     if (recommendation == null) return null;
     return SuggestionCardChoice(

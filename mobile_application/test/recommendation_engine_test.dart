@@ -26,30 +26,11 @@ void main() {
     expect(recommendation.source, isNot(SuggestionSource.learned));
   });
 
-  test('daily cap and active safety state are hard boundaries', () async {
+  test('active safety state is a hard boundary', () async {
     final activities = await AssetActivityLibraryRepository().load();
     final now = DateTime(2026, 9, 22, 10);
-    // Marked proactive, because only unasked nudges count against the cap. A
-    // suggestion the user requested themselves never uses up the slot.
-    final shown = SuggestionRecord(
-      id: 'shown',
-      activityId: activities.first.id,
-      shownAt: now,
-      contextTags: const [],
-      proactive: true,
-    );
     const engine = RecommendationEngine();
 
-    expect(
-      engine.choose(
-        activities: activities,
-        profile: const UserProfile(),
-        context: const RecommendationContext(profileAgeDays: 3),
-        history: [shown],
-        now: now,
-      ),
-      isNull,
-    );
     expect(
       engine.choose(
         activities: activities,

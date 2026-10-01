@@ -131,7 +131,6 @@ class _SuggestionPageState extends State<SuggestionPage> {
           profile: widget.profileController.profile,
           sessions: widget.sessionController?.sessions ?? const [],
         ),
-        userInitiated: true,
       );
     } finally {
       // Always clear the spinner: a failed lookup must fall through to the

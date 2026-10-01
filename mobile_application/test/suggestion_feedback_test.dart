@@ -56,7 +56,6 @@ void main() {
       await controller.suggest(
         profile: const UserProfile(),
         context: _context,
-        userInitiated: true,
       );
 
       await controller.recordCompletion();
@@ -77,7 +76,6 @@ void main() {
       await controller.suggest(
         profile: const UserProfile(),
         context: _context,
-        userInitiated: true,
       );
       await controller.recordCompletion();
       final id = controller.currentRecord!.id;
@@ -102,7 +100,6 @@ void main() {
       await controller.suggest(
         profile: const UserProfile(),
         context: _context,
-        userInitiated: true,
       );
 
       await controller.recordRating(
@@ -138,7 +135,6 @@ void main() {
       await controller.suggest(
         profile: const UserProfile(),
         context: _context,
-        userInitiated: true,
       );
       await controller.recordCompletion();
 
@@ -151,7 +147,6 @@ void main() {
       await controller.suggest(
         profile: const UserProfile(),
         context: _context,
-        userInitiated: true,
       );
       await controller.recordCompletion();
       await controller.recordRating(
@@ -170,7 +165,6 @@ void main() {
         profile: const UserProfile(),
         context: _context,
         now: DateTime(2026, 9, 20, 10),
-        userInitiated: true,
       );
       await controller.recordCompletion();
 
@@ -190,7 +184,6 @@ void main() {
       await controller.suggest(
         profile: const UserProfile(),
         context: _context,
-        userInitiated: true,
       );
 
       expect(controller.pendingRating(), isNull);
@@ -291,7 +284,6 @@ void main() {
       final requested = await controller.suggest(
         profile: profile,
         context: _context,
-        userInitiated: true,
       );
       expect(requested, isNotNull);
 
@@ -366,7 +358,6 @@ void main() {
         controller.peek(
           profile: profile,
           context: earlyContext,
-          ignoreBudget: true,
         ),
         isNotNull,
       );
@@ -382,7 +373,6 @@ void main() {
       final first = await controller.suggest(
         profile: profile,
         context: _context,
-        userInitiated: true,
       );
       expect(first?.activity.id, 'only');
 
@@ -395,7 +385,6 @@ void main() {
       final second = await controller.suggest(
         profile: profile,
         context: _context,
-        userInitiated: true,
       );
       expect(second, isNull);
     });
@@ -412,7 +401,6 @@ void main() {
       final first = await controller.suggest(
         profile: profile,
         context: _context,
-        userInitiated: true,
       );
       await controller.submitFeedback(
         status: SuggestionStatus.skipped,
@@ -422,7 +410,6 @@ void main() {
       final second = await controller.suggest(
         profile: profile,
         context: _context,
-        userInitiated: true,
       );
 
       // The demanding option is now above the ceiling, so only the other
@@ -441,7 +428,6 @@ void main() {
       await controller.suggest(
         profile: profile,
         context: _context,
-        userInitiated: true,
       );
       await controller.submitFeedback(
         status: SuggestionStatus.skipped,
@@ -454,7 +440,6 @@ void main() {
         profile: profile,
         context: _context,
         now: DateTime.now().add(const Duration(hours: 13)),
-        userInitiated: true,
       );
       expect(later?.activity.id, 'only');
     });
