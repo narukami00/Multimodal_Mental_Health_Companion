@@ -16,16 +16,149 @@ import '../../services/ambient_audio_service.dart';
 import '../../services/check_in_reminder_service.dart';
 import '../../services/dialer_service.dart';
 import '../library/activity_library_page.dart';
-import 'profile_insights_page.dart';
 import '../safety/care_contacts_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_context.dart';
 import '../suggestions/suggestion_controller.dart';
+import 'about_pages.dart';
 import 'baseline_quiz_page.dart';
 import 'permissions_page.dart';
 import 'profile_controller.dart';
+import 'profile_insights_page.dart';
+
+/// The baseline reflections entry, which carries its own progress and button.
+///
+/// Split out rather than inlined because it is the one row that is not a row.
+/// It has a progress bar, a count and a full-width action, so forcing it into
+/// the same one-line shape as its neighbours is what made the old card look
+/// like two screens stitched together. It leads its own group instead, where
+/// being different is the point.
+class _BaselineRow extends StatelessWidget {
+  const _BaselineRow({
+    required this.completeCount,
+    required this.isComplete,
+    required this.onTap,
+  });
+
+  final int completeCount;
+  final bool isComplete;
+  final VoidCallback onTap;
+
+  static const _total = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 29,
+                height: 29,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3DC),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.assignment_outlined,
+                  size: 17,
+                  color: Color(0xFFC08A1E),
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Text(
+                  'Baseline reflections',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14.8,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.1,
+                    color: Color(0xFF3B3327),
+                  ),
+                ),
+              ),
+              if (isComplete)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEBF7EB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF3F823B),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          // Four discrete segments rather than a progress bar.
+          //
+          // A continuous bar asks the reader to estimate a fraction; four
+          // segments say "two of four, two to go" without reading a number. It
+          // also stops the bar from being the only thing on the card that is not
+          // the same shape as the rows around it.
+          Row(
+            children: [
+              for (var i = 0; i < _total; i++) ...[
+                Expanded(
+                  child: Container(
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: i < completeCount
+                          ? const Color(0xFFFFB534)
+                          : const Color(0xFFF3E7CE),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+                if (i < _total - 1) const SizedBox(width: 5),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFF6E2),
+                foregroundColor: const Color(0xFFB57A12),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(color: Color(0xFFF6E2BC)),
+                ),
+              ),
+              onPressed: onTap,
+              child: Text(
+                isComplete ? 'Review baseline' : 'Continue baseline',
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({
@@ -62,45 +195,18 @@ class ProfilePage extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: 360),
                 child: ListView(
                   // Room for the floating pill, which overlays the page.
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 120),
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
                   children: [
-                    // Top header: Brandmark + subtle settings button
+                    // Only the settings control. The brandmark and the SOLACE
+                    // wordmark that used to sit opposite it are gone: they named
+                    // the app three inches above a name that was already on
+                    // screen, so they were decoration repeating what the page
+                    // said anyway. The gear stays, because it is the one thing
+                    // the header exists for — and it is the only route to app
+                    // settings now that the duplicate row is gone.
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 20,
-                              height: 20,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [Color(0xFFFFB534), Color(0xFFFF7F50)],
-                                ),
-                                borderRadius: BorderRadius.circular(7),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Color(0x66FF7F50),
-                                    blurRadius: 8,
-                                    offset: Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 9),
-                            const Text(
-                              'SOLACE',
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.4,
-                                color: Color(0xFFB9A98C),
-                              ),
-                            ),
-                          ],
-                        ),
                         InkWell(
                           onTap: () => _showAppSettingsSheet(
                             context,
@@ -254,453 +360,298 @@ class ProfilePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
 
-                    // SECTION: YOUR CARE (Matching HTML Reference)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 4, bottom: 8),
-                      child: Text(
-                        'YOUR CARE',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.3,
-                          color: Color(0xFFBCAC8E),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(26),
-                        border: Border.all(color: const Color(0xFFF7F2E6)),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x18785C28),
-                            blurRadius: 22,
-                            offset: Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          _menuRow(
-                            icon: Icons.people_outline_rounded,
-                            iconBg: const Color(0xFFFFF3DC),
-                            iconColor: const Color(0xFFC08A1E),
-                            title: 'Your people & emergency numbers',
-                            subtitle: emergencyContacts.isEmpty
-                                ? 'Add someone you trust, kept on this device'
-                                : '${emergencyContacts.length} saved on this device',
-                            badgeText: emergencyContacts.isEmpty
-                                ? null
-                                : '${emergencyContacts.length}',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => CareContactsPage(
-                                  profileController: profileController,
-                                ),
+// SECTION: SUPPORT.
+                    //
+                    // First, not third. It used to sit below a five-row block of
+                    // care settings, which meant the one row on this page that
+                    // someone might need urgently was the hardest to reach.
+                    _group(
+                      label: 'Support',
+                      rows: [
+                        InkWell(
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => SupportResourcesPage(
+                                safetyController: safetyController,
+                                profileController: profileController,
+                                assessment:
+                                    safetyController.activeAssessment ??
+                                    const SafetyAssessment.clear(),
                               ),
                             ),
                           ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: Color(0xFFF2ECDD),
-                          ),
-                          _menuRow(
-                            icon: Icons.checklist_rounded,
-                            iconBg: const Color(0xFFFFF3DC),
-                            iconColor: const Color(0xFFC08A1E),
-                            title: 'Habit & medication tracking',
-                            subtitle: 'Morning routine · 2 reminders',
-                            badgeText: '3 of 4',
-                            onTap: () => _showHabitsSheet(context),
-                          ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: Color(0xFFF2ECDD),
-                          ),
-                          _menuRow(
-                            icon: Icons.file_download_outlined,
-                            iconBg: const Color(0xFFFFF3DC),
-                            iconColor: const Color(0xFFC08A1E),
-                            title: 'Export reflections & data',
-                            subtitle: 'Journal, moods & tracking as PDF / JSON',
-                            badgeText: 'Export',
-                            onTap: () => _showExportSheet(context),
-                          ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: Color(0xFFF2ECDD),
-                          ),
-                          _menuRow(
-                            icon: Icons.groups_outlined,
-                            iconBg: const Color(0xFFFFF3DC),
-                            iconColor: const Color(0xFFC08A1E),
-                            title: 'Therapist collaboration',
-                            subtitle: 'Shared with Dr. Amara Reid',
-                            badgeText: 'On',
-                            badgeColor: const Color(0xFFF4F1E7),
-                            badgeTextColor: const Color(0xFF7A6E5D),
-                            onTap: () => _showTherapistSheet(context),
-                          ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: Color(0xFFF2ECDD),
-                          ),
-                          _menuRow(
-                            icon: Icons.verified_user_outlined,
-                            iconBg: const Color(0xFFFFF3DC),
-                            iconColor: const Color(0xFFC08A1E),
-                            title: 'Permissions & data',
-                            subtitle: 'What Solace can access, and what it '
-                                'does not collect',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const PermissionsPage(),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-
-                    // SECTION: CRISIS SUPPORT (Warm coral card)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 4, bottom: 8),
-                      child: Text(
-                        'SUPPORT',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.3,
-                          color: Color(0xFFBCAC8E),
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => SupportResourcesPage(
-                            safetyController: safetyController,
-                            profileController: profileController,
-                            assessment:
-                                safetyController.activeAssessment ??
-                                const SafetyAssessment.clear(),
-                          ),
-                        ),
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0xFFFFF4EE), Color(0xFFFFEEE5)],
-                          ),
-                          borderRadius: BorderRadius.circular(26),
-                          border: Border.all(color: const Color(0xFFFFDAC8)),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x33FF7F50),
-                              blurRadius: 20,
-                              offset: Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFE4D6),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Icon(
-                                Icons.support_agent_rounded,
-                                size: 22,
-                                color: Color(0xFFD2603A),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Need human care right now?',
-                                    style: TextStyle(
-                                      fontSize: 15.2,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFFB4522C),
-                                      letterSpacing: -0.15,
-                                    ),
-                                  ),
-                                  SizedBox(height: 3),
-                                  Text(
-                                    'Free, confidential crisis lines available 24/7.',
-                                    style: TextStyle(
-                                      fontSize: 12.2,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFFC08060),
-                                      height: 1.3,
-                                    ),
-                                  ),
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(15, 15, 15, 15),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Color(0xFFFFF4EE),
+                                  Color(0xFFFFEEE5),
                                 ],
                               ),
+                              borderRadius: BorderRadius.circular(21),
+                              border: Border.all(color: const Color(0xFFFFDAC8)),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x2BFF7F50),
+                                  blurRadius: 18,
+                                  offset: Offset(0, 5),
+                                ),
+                              ],
                             ),
-                            if (iceContact != null) ...[
-                              const SizedBox(width: 8),
-                              _IceCallButton(
-                                contact: iceContact,
-                                onCall: () =>
-                                    _callIceContact(context, iceContact),
-                              ),
-                            ],
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 14,
-                              color: Color(0xFFE8A98C),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-
-                    // SECTION: YOUR SPACE & PRACTICES
-                    const Padding(
-                      padding: EdgeInsets.only(left: 4, bottom: 8),
-                      child: Text(
-                        'YOUR SPACE & PRACTICES',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.3,
-                          color: Color(0xFFBCAC8E),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(26),
-                        border: Border.all(color: const Color(0xFFF7F2E6)),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x18785C28),
-                            blurRadius: 22,
-                            offset: Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          // Baseline reflections row & progress
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Row(
                               children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFFF3DC),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: const Icon(
-                                        Icons.assignment_outlined,
-                                        size: 20,
-                                        color: Color(0xFFC08A1E),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'Baseline reflections',
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w800,
-                                              color: Color(0xFF3B3327),
-                                              letterSpacing: -0.15,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 3),
-                                          Text(
-                                            profile.baselineComplete
-                                                ? 'Starting point complete · Revisit anytime'
-                                                : '$completeCount of 4 sections complete',
-                                            style: const TextStyle(
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF93887A),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (profile.baselineComplete)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 9,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEBF7EB),
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                        child: const Text(
-                                          'Done',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w800,
-                                            color: Color(0xFF3F823B),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(99),
-                                  child: LinearProgressIndicator(
-                                    value: completeCount / 4,
-                                    minHeight: 6,
-                                    backgroundColor: const Color(0xFFFFF0D4),
-                                    valueColor: const AlwaysStoppedAnimation(
-                                      Color(0xFFFFB534),
-                                    ),
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFE4D6),
+                                    borderRadius: BorderRadius.circular(13),
+                                  ),
+                                  child: const Icon(
+                                    Icons.support_agent_rounded,
+                                    size: 21,
+                                    color: Color(0xFFD2603A),
                                   ),
                                 ),
-                                const SizedBox(height: 14),
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 42,
-                                  child: ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFFFF6E2),
-                                      foregroundColor: const Color(0xFFB57A12),
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        side: const BorderSide(
-                                          color: Color(0xFFF6E2BC),
+                                const SizedBox(width: 13),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Crisis support',
+                                        style: TextStyle(
+                                          fontSize: 15.2,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFFB4522C),
+                                          letterSpacing: -0.15,
                                         ),
                                       ),
-                                    ),
-                                    onPressed: () => Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => BaselineQuizPage(
-                                          profileController: profileController,
-                                          safetyController: safetyController,
+                                      SizedBox(height: 3),
+                                      Text(
+                                        'Free, confidential lines · 24/7',
+                                        style: TextStyle(
+                                          fontSize: 12.2,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFFC08060),
                                         ),
                                       ),
-                                    ),
-                                    child: Text(
-                                      profile.baselineComplete
-                                          ? 'Review baseline'
-                                          : 'Continue baseline',
-                                      style: const TextStyle(
-                                        fontSize: 13.5,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
+                                    ],
                                   ),
+                                ),
+                                if (iceContact != null) ...[
+                                  _IceCallButton(
+                                    contact: iceContact,
+                                    onCall: () =>
+                                        _callIceContact(context, iceContact),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                const Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  size: 13,
+                                  color: Color(0xFFE8A98C),
                                 ),
                               ],
                             ),
                           ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: Color(0xFFF2ECDD),
-                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
 
-                          // How the app's decisions currently reflect the
-                          // user's own choices and behavior.
-                          _menuRow(
-                            icon: Icons.insights_outlined,
-                            iconBg: const Color(0xFFFFF3DC),
-                            iconColor: const Color(0xFFC08A1E),
-                            title: 'How Solace decides',
-                            subtitle: 'What your choices change about your '
-                                'suggestions',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => ProfileInsightsPage(
-                                  profile: BehavioralProfile.compute(
+                    // SECTION: CARE CIRCLE.
+                    //
+                    // Not "Your care". The old name sat above a list that also
+                    // contained permissions, data export and a therapist, so it
+                    // described none of them. This group holds only people.
+                    _group(
+                      label: 'Care circle',
+                      trailingLabel: emergencyContacts.isEmpty
+                          ? null
+                          : '${emergencyContacts.length} saved',
+                      rows: [
+                        _row(
+                          icon: Icons.people_outline_rounded,
+                          title: 'Emergency contacts',
+                          value: emergencyContacts.isEmpty
+                              ? 'None yet'
+                              : '${emergencyContacts.length}',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => CareContactsPage(
+                                profileController: profileController,
+                              ),
+                            ),
+                          ),
+                        ),
+                        _row(
+                          icon: Icons.groups_outlined,
+                          title: 'Therapist collaboration',
+                          value: 'On',
+                          onTap: () => _showTherapistSheet(context),
+                        ),
+                        _row(
+                          icon: Icons.checklist_rounded,
+                          title: 'Habit & medication',
+                          value: '3 of 4',
+                          onTap: () => _showHabitsSheet(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // SECTION: YOUR DATA.
+                    _group(
+                      label: 'Your data',
+                      trailingLabel: 'on this device',
+                      rows: [
+                        _row(
+                          icon: Icons.verified_user_outlined,
+                          title: 'Permissions & privacy',
+                          tint: const Color(0xFFE4F2E9),
+                          onTint: const Color(0xFF3F823B),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const PermissionsPage(),
+                            ),
+                          ),
+                        ),
+                        _row(
+                          icon: Icons.file_download_outlined,
+                          title: 'Export reflections & data',
+                          tint: const Color(0xFFE4F2E9),
+                          onTint: const Color(0xFF3F823B),
+                          onTap: () => _showExportSheet(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // SECTION: PRACTICE.
+                    //
+                    // The baseline block keeps its progress and its button. Both
+                    // used to live inside a card of plain rows, and the
+                    // full-width button inside a list is what made that card read
+                    // as a different app bolted on. Here it leads its own group,
+                    // so being different is what the group is for.
+                    _group(
+                      label: 'Practice',
+                      trailingLabel: profile.baselineComplete
+                          ? 'Baseline complete'
+                          : '$completeCount of 4',
+                      rows: [
+                        _BaselineRow(
+                          completeCount: completeCount,
+                          isComplete: profile.baselineComplete,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => BaselineQuizPage(
+                                profileController: profileController,
+                                safetyController: safetyController,
+                              ),
+                            ),
+                          ),
+                        ),
+                        _row(
+                          icon: Icons.local_library_outlined,
+                          title: 'Activity library',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const ActivityLibraryPage(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // SECTION: HOW IT WORKS.
+                    //
+                    // Its own group rather than another row. "How Solace decides"
+                    // is the thing that makes this app different from a mood
+                    // tracker with a checklist, and it explains why a particular
+                    // suggestion is on screen right now — which is a question
+                    // people bring to this page. Buried between the baseline and
+                    // the activity library it read as one more entry.
+                    _group(
+                      label: 'How it works',
+                      rows: [
+                        _row(
+                          icon: Icons.insights_outlined,
+                          title: 'How Solace decides',
+                          value:
+                              '${suggestionController.history.length} shown',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ProfileInsightsPage(
+                                profile: BehavioralProfile.compute(
+                                  profile: profileController.profile,
+                                  sessions: sessionController.sessions,
+                                  suggestionHistory:
+                                      suggestionController.history,
+                                  library: suggestionController.library,
+                                  context: buildRecommendationContext(
                                     profile: profileController.profile,
                                     sessions: sessionController.sessions,
-                                    suggestionHistory:
-                                        suggestionController.history,
-                                    library: suggestionController.library,
-                                    context: buildRecommendationContext(
-                                      profile: profileController.profile,
-                                      sessions: sessionController.sessions,
-                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: Color(0xFFF2ECDD),
-                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
 
-                          // Activity library
-                          _menuRow(
-                            icon: Icons.local_library_outlined,
-                            iconBg: const Color(0xFFFFF3DC),
-                            iconColor: const Color(0xFFC08A1E),
-                            title: 'Activity library',
-                            subtitle: 'Browse reviewed lifestyle starter set',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const ActivityLibraryPage(),
-                              ),
+                    // SECTION: ABOUT.
+                    //
+                    // Separate from the groups above and visually quieter, on
+                    // purpose. A legal page wearing the same card as "Permissions
+                    // & privacy" would make both feel like neither. No tinted
+                    // icons, no trailing values: nothing here is state.
+                    _group(
+                      label: 'About',
+                      rows: [
+                        _row(
+                          icon: Icons.info_outline_rounded,
+                          title: 'About Solace',
+                          value: AboutSolacePage.version,
+                          tint: Colors.transparent,
+                          onTint: const Color(0xFFA2988A),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const AboutSolacePage(),
                             ),
                           ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: Color(0xFFF2ECDD),
-                          ),
-
-                          // The "Try a gentle idea" row was here. Ideas now
-                          // arrive on Home under their own card, so a button
-                          // that opened a second copy of the same flow from the
-                          // You tab was a dead end.
-
-                          // App Settings row
-                          _menuRow(
-                            icon: Icons.settings_outlined,
-                            iconBg: const Color(0xFFFFF3DC),
-                            iconColor: const Color(0xFFC08A1E),
-                            title: 'App settings',
-                            subtitle: 'Theme, sounds, notifications & language',
-                            onTap: () => _showAppSettingsSheet(
-                              context,
-                              profileController,
+                        ),
+                        _row(
+                          icon: Icons.description_outlined,
+                          title: 'Terms & privacy',
+                          tint: Colors.transparent,
+                          onTint: const Color(0xFFA2988A),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const TermsAndPrivacyPage(),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        _row(
+                          icon: Icons.help_outline_rounded,
+                          title: 'Frequently asked',
+                          tint: Colors.transparent,
+                          onTint: const Color(0xFFA2988A),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const FaqPage(),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 24),
 
@@ -725,83 +676,153 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  static Widget _menuRow({
+  /// A section heading: small, tracked-out, and deliberately quiet.
+  ///
+  /// The group beneath it carries the meaning, so this only has to say what kind
+  /// of group it is.
+  static const _sectionLabelStyle = TextStyle(
+    fontSize: 11.5,
+    fontWeight: FontWeight.w800,
+    letterSpacing: 1.3,
+    color: Color(0xFFBCAC8E),
+  );
+
+  /// A grouped list of rows: one quiet surface, dividers inset to the label.
+  ///
+  /// Replaces the old arrangement of large rounded cards each holding its own
+  /// stack of rows. Three identical cards told the reader nothing about what was
+  /// in them, and every card's shadow had to compete with every other card's
+  /// shadow. One surface per group, and the heading above it does the labelling,
+  /// is both calmer and shorter.
+  static Widget _group({
+    required String label,
+    required List<Widget> rows,
+    String? trailingLabel,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8, right: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(label.toUpperCase(), style: _sectionLabelStyle),
+              if (trailingLabel != null)
+                Text(
+                  trailingLabel,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFA79B87),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFF5EFE1)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0D785C28),
+                blurRadius: 14,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0)
+                  // Inset past the icon, so the rule groups the labels instead
+                  // of slicing the surface into bands.
+                  const Padding(
+                    padding: EdgeInsets.only(left: 59),
+                    child: SizedBox(
+                      height: 1,
+                      child: ColoredBox(color: Color(0xFFF4EEE1)),
+                    ),
+                  ),
+                rows[i],
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// A single row in a [_group].
+  ///
+  /// Takes a [value] rather than a subtitle. A subtitle is only worth its height
+  /// when it says something the title does not, and most of the old ones did
+  /// not: "Activity library" followed by "Browse reviewed lifestyle starter
+  /// set" is the same sentence twice. A trailing value — "2 saved", "3 of 4" —
+  /// reads unambiguously as state, which is what most of them were trying to be.
+  static Widget _row({
     required IconData icon,
-    required Color iconBg,
-    required Color iconColor,
     required String title,
-    required String subtitle,
+    String? value,
     VoidCallback? onTap,
-    String? badgeText,
-    Color? badgeColor,
-    Color? badgeTextColor,
+    Color tint = const Color(0xFFFFF3DC),
+    Color onTint = const Color(0xFFC08A1E),
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         child: Row(
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 29,
+              height: 29,
               decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(14),
+                color: tint,
+                borderRadius: BorderRadius.circular(9),
               ),
-              child: Icon(icon, size: 20, color: iconColor),
+              child: Icon(icon, size: 17, color: onTint),
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF3B3327),
-                      letterSpacing: -0.15,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12.2,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF93887A),
-                    ),
-                  ),
-                ],
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14.8,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                  color: Color(0xFF3B3327),
+                ),
               ),
             ),
-            if (badgeText != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: badgeColor ?? const Color(0xFFFFF3DC),
-                  borderRadius: BorderRadius.circular(999),
-                ),
+            if (value != null) ...[
+              const SizedBox(width: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 132),
                 child: Text(
-                  badgeText,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: badgeTextColor ?? const Color(0xFFB57A12),
+                  value,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF9C9083),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
             ],
+            const SizedBox(width: 8),
             const Icon(
               Icons.arrow_forward_ios_rounded,
-              size: 13,
+              size: 12,
               color: Color(0xFFD3C8B2),
             ),
           ],

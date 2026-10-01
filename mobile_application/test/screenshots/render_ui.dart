@@ -20,6 +20,7 @@ import 'package:solace_mobile/features/app_shell/today_page.dart';
 import 'package:solace_mobile/features/companion/blob_simulation.dart';
 import 'package:solace_mobile/features/companion/companion_blob.dart';
 import 'package:solace_mobile/features/profile/profile_controller.dart';
+import 'package:solace_mobile/features/profile/profile_page.dart';
 import 'package:solace_mobile/features/rhythm/rhythm_detail_page.dart';
 import 'package:solace_mobile/features/safety/safety_controller.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
@@ -513,6 +514,76 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
     await _capture(tester, 'home_with_blob');
+  });
+
+  testWidgets('render the You tab', (tester) async {
+    // The whole screen, at the phone size the shell uses.
+    //
+    // This page is nothing but grouping and hierarchy, so a picture of it is
+    // worth more than any assertion about it: a list can pass every "the row is
+    // present" check and still be arranged so the eye cannot find anything.
+    final profileController = ProfileController(
+      repository: InMemoryProfileRepository(),
+    );
+    await profileController.load();
+    await profileController.saveIdentity(
+      displayName: 'Maya',
+      avatarPath: null,
+    );
+
+    final sessions = SessionController(
+      repository: InMemorySessionRepository(),
+      emotionAnalyzer: const MockEmotionAnalyzer(),
+    );
+    await sessions.load();
+    await sessions.seedInitialSessions();
+
+    final suggestions = SuggestionController(
+      libraryRepository: _FixedLibrary([_activity()]),
+      suggestionRepository: InMemorySuggestionRepository(),
+    );
+    await suggestions.load();
+    await suggestions.warmUp();
+
+    tester.view.physicalSize = Size(_phone.width * 3, _phone.height * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        home: RepaintBoundary(
+          key: const ValueKey('shot'),
+          child: ProfilePage(
+            profileController: profileController,
+            safetyController: SafetyController(
+              screener: const KeywordSafetyScreener(),
+              repository: InMemorySafetyEventRepository(),
+            ),
+            suggestionController: suggestions,
+            sessionController: sessions,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    await _capture(tester, 'you_tab');
+
+    // And the bottom of it. The About group sits entirely below the fold, which
+    // is the point of putting it last — and also the reason it would otherwise
+    // never be looked at.
+    await tester.drag(
+      find.byType(ListView).first,
+      const Offset(0, -600),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    await _capture(tester, 'you_tab_bottom');
   });
 
   testWidgets('render the suggestion card', (tester) async {
