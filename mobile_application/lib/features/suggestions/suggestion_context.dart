@@ -1,15 +1,18 @@
 import '../../core/models/session_record.dart';
 import '../../core/models/user_profile.dart';
+import '../../domain/capacity/capacity_estimator.dart';
+import '../../domain/capacity/mood_trend.dart';
 import '../../domain/recommendations/event_tagging.dart';
 import '../../domain/profile/quiz_bank.dart';
+import '../../domain/recommendations/mood_change.dart';
 import '../../domain/recommendations/recommendation_engine.dart';
 
 /// Builds the context a suggestion is chosen in, from what the app already
 /// knows.
 ///
 /// Everything here is derived on-device from data the user chose to give —
-/// their most recent check-in, and the baseline they filled in. No new
-/// collection, no permission, no server.
+/// their most recent check-in, the baseline they filled in, and the sleep hours
+/// they told us. No new collection, no permission, no server.
 RecommendationContext buildRecommendationContext({
   required UserProfile profile,
   required List<SessionRecord> sessions,
@@ -32,6 +35,13 @@ RecommendationContext buildRecommendationContext({
     eventTags: tags,
     profileAgeDays: profileAgeInDays(profile, now: current),
     preferGentle: prefersGentleStart(profile),
+    capacity: estimateCapacity(
+      now: current,
+      sleepWindow: resolveSleepWindow(profile: profile, now: current),
+      // Only a check-in close enough to mean something about right now.
+      latestMood: moodBeforeFor(shownAt: current, sessions: sessions),
+      recentMoodScores: dailyMoodScores(sessions: sessions, now: current),
+    ),
   );
 }
 

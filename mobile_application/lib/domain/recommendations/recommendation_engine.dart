@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../../core/models/activity.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/models/user_profile.dart';
+import '../capacity/capacity_estimator.dart';
 import 'activity_safety_policy.dart';
 import 'mood_change.dart';
 
@@ -13,6 +14,7 @@ class RecommendationContext {
     this.safetyActive = false,
     this.profileAgeDays,
     this.preferGentle = false,
+    this.capacity,
   });
 
   final String? currentState;
@@ -23,6 +25,12 @@ class RecommendationContext {
   /// True when the user's own baseline screening suggests offering gentler
   /// options first. Deliberately never surfaced as reasoning.
   final bool preferGentle;
+
+  /// How much the person probably has to give right now, if it could be
+  /// estimated. It shapes how much an idea asks for (effort, length, and a lean
+  /// towards gentle kinds), never *which* idea is believed to fit, and it is
+  /// never surfaced as reasoning beyond a plain "kept small".
+  final Capacity? capacity;
 
   Set<String> get normalizedTags => {
     ...eventTags.map(_normalize),
@@ -68,18 +76,21 @@ String explainRecommendation(
   SuggestionSource source, {
   String? state,
   int contextMatches = 0,
+  bool slowMoment = false,
 }) {
-  switch (source) {
-    case SuggestionSource.starter:
-      return "A gentle starter idea, since we're just getting to know what fits you.";
-    case SuggestionSource.explore:
-      return "Something we haven't tried together yet.";
-    case SuggestionSource.learned:
-      if (contextMatches > 0 && state != null) {
-        return 'A small option that fits your $state moment.';
-      }
-      return 'A small option that has been worth trying before.';
-  }
+  final reason = switch (source) {
+    SuggestionSource.starter =>
+      "A gentle starter idea, since we're just getting to know what fits you.",
+    SuggestionSource.explore => "Something we haven't tried together yet.",
+    SuggestionSource.learned =>
+      contextMatches > 0 && state != null
+          ? 'A small option that fits your $state moment.'
+          : 'A small option that has been worth trying before.',
+  };
+  // Says only that it was kept small. It never says why: the reason may be the
+  // time of day, how they felt, or how they slept, and none of that is the
+  // card's business to repeat back.
+  return slowMoment ? '$reason Kept small for a slower moment.' : reason;
 }
 
 /// The lower bound of the Wilson score interval at z = 1.645 (one-sided 95%).
@@ -165,6 +176,28 @@ class RecommendationEngine {
   /// The longest an activity may be to count as a gentle starter.
   static const starterDurationCeiling = 6;
 
+  /// The longest an idea may run when capacity is low or medium. Soft: if
+  /// applying it would leave nothing to offer, it is dropped rather than
+  /// letting the engine go quiet.
+  static const lowCapacityMaxMinutes = 8;
+  static const mediumCapacityMaxMinutes = 15;
+
+  /// Kinds that ask the least of someone, leaned towards at low capacity.
+  static const gentleTypes = {
+    ActivityType.mindfulness,
+    ActivityType.nature,
+    ActivityType.creative,
+  };
+
+  /// Added to a learned pick's score for a gentle kind at low capacity.
+  ///
+  /// A nudge, so a well-evidenced favourite of another kind can still win. A
+  /// pick that clears the gate has a confidence between 0.6 and roughly 0.9 and
+  /// confidence is weighted 4, so the whole spread is about 1.2 points: a bonus
+  /// anywhere near that would decide the pick by itself. 0.5 is a gap of about
+  /// 0.12 in confidence, enough to settle a near-tie and no more.
+  static const gentleTypeBonus = 0.5;
+
   Recommendation? choose({
     required Iterable<Activity> activities,
     required UserProfile profile,
@@ -193,12 +226,19 @@ class RecommendationEngine {
         .toList(growable: false);
     if (eligible.isEmpty) return null;
 
+    // How much the person has to give right now trims what is on offer. Both
+    // trims are soft, so neither can leave the engine with nothing to say.
+    final pool = _withinCapacity(eligible, context.capacity);
+
     final source = _selectSource(records, ageDays);
     final pick = switch (source) {
-      SuggestionSource.starter => _starterPick(eligible, records, typeOf),
-      SuggestionSource.explore => _explorePick(eligible, records),
+      SuggestionSource.starter => _starterPick(pool, records, typeOf),
+      SuggestionSource.explore => _explorePick(
+        _leanGentle(pool, context.capacity),
+        records,
+      ),
       SuggestionSource.learned => _learnedPick(
-        eligible,
+        pool,
         profile,
         context,
         tags,
@@ -212,7 +252,7 @@ class RecommendationEngine {
     // to protect the gate would be worse than offering something unproven, and
     // lowering the gate to fill the slot would make it meaningless.
     final chosen = pick ?? (source == SuggestionSource.learned
-        ? _explorePick(eligible, records)
+        ? _explorePick(_leanGentle(pool, context.capacity), records)
         : null);
     if (chosen == null) return null;
 
@@ -231,6 +271,7 @@ class RecommendationEngine {
         resolvedSource,
         state: context.currentState,
         contextMatches: matches,
+        slowMoment: context.capacity?.isLow ?? false,
       ),
       source: resolvedSource,
     );
@@ -462,8 +503,36 @@ class RecommendationEngine {
           record.skipReason == SuggestionSkipReason.tooHard &&
           now.difference(record.shownAt) < _effortCeilingWindow,
     );
-    if (tooHardRecently || context.preferGentle) return ActivityEffort.low;
+    if (tooHardRecently ||
+        context.preferGentle ||
+        context.capacity?.isLow == true) {
+      return ActivityEffort.low;
+    }
     return ActivityEffort.high;
+  }
+
+  /// Drops ideas longer than the capacity allows, unless that would drop all of
+  /// them.
+  List<Activity> _withinCapacity(List<Activity> pool, Capacity? capacity) {
+    final cap = switch (capacity?.level) {
+      CapacityLevel.low => lowCapacityMaxMinutes,
+      CapacityLevel.medium => mediumCapacityMaxMinutes,
+      _ => null,
+    };
+    if (cap == null) return pool;
+    final fitting = pool
+        .where((activity) => activity.durationMinutes <= cap)
+        .toList(growable: false);
+    return fitting.isEmpty ? pool : fitting;
+  }
+
+  /// At low capacity, prefers the kinds that ask least, unless there are none.
+  List<Activity> _leanGentle(List<Activity> pool, Capacity? capacity) {
+    if (capacity?.isLow != true) return pool;
+    final gentle = pool
+        .where((activity) => gentleTypes.contains(activity.type))
+        .toList(growable: false);
+    return gentle.isEmpty ? pool : gentle;
   }
 
   bool _withinEffort(Activity activity, ActivityEffort ceiling) {
@@ -619,6 +688,10 @@ class RecommendationEngine {
     double confidence,
   ) {
     var score = _contextMatches(activity, contextTags) * 2 + confidence * 4;
+    if (context.capacity?.isLow == true &&
+        gentleTypes.contains(activity.type)) {
+      score += gentleTypeBonus;
+    }
 
     final preferred = profile.preferredActivities
         .map(_normalize)

@@ -3,6 +3,7 @@ import '../../core/models/activity.dart';
 import '../../core/models/session_record.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/models/user_profile.dart';
+import '../capacity/capacity_estimator.dart';
 import '../recommendations/recommendation_engine.dart';
 import 'quiz_bank.dart';
 
@@ -56,6 +57,7 @@ class BehavioralProfile {
         profile: profile,
         history: suggestionHistory,
         standings: standings,
+        capacity: context.capacity?.level,
         now: currentTime,
       ),
       momentum: MomentumSnapshot.of(
@@ -330,6 +332,7 @@ class EngineState {
     required this.exploreShare,
     required this.exploreTargetShare,
     required this.effortCapped,
+    required this.capacityLevel,
     required this.typesClearingGate,
     required this.hiddenCount,
   });
@@ -339,6 +342,7 @@ class EngineState {
     required List<SuggestionRecord> history,
     required List<ActivityStanding> standings,
     required DateTime now,
+    CapacityLevel? capacity,
   }) {
     final started = profile.firstRunAt;
     final ageDays = started == null ? 0 : now.difference(started).inDays;
@@ -371,6 +375,7 @@ class EngineState {
       exploreShare: share,
       exploreTargetShare: target,
       effortCapped: effortCapped,
+      capacityLevel: capacity,
       typesClearingGate: ({
         for (final standing in standings)
           if (standing.clearsLearnedGate &&
@@ -395,6 +400,13 @@ class EngineState {
 
   /// Whether a recent "too hard" has capped offers at gentle options.
   final bool effortCapped;
+
+  /// How much the person is estimated to have to give right now, as the engine
+  /// is being fed it. Only the level is kept: what it was worked out from stays
+  /// out of anything that can be shown. Null when it could not be estimated.
+  ///
+  /// Low means offers are kept short and gentle; medium trims the longest ones.
+  final CapacityLevel? capacityLevel;
 
   /// Types with an idea trusted enough to be picked as a personal fit.
   final List<String> typesClearingGate;
