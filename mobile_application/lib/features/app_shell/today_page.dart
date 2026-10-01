@@ -26,6 +26,8 @@ class TodayPage extends StatelessWidget {
     this.showSuggestion = false,
     this.suggestionCard,
     this.taskOffer,
+    this.weekDots,
+    this.onOpenRhythm,
     this.onTaskAccept,
     this.onTaskDecline,
     this.onBlobTap,
@@ -59,6 +61,10 @@ class TodayPage extends StatelessWidget {
 
   /// Opens the baseline reflection quiz.
   final VoidCallback? onContinueSetup;
+
+  /// The last seven days, under the greeting. Null if there is nothing to show.
+  final Widget? weekDots;
+  final VoidCallback? onOpenRhythm;
 
   /// The day's task, offered inside the check-in card rather than as a second
   /// card below it. Null once it has been declined or nothing is due.
@@ -131,6 +137,16 @@ class TodayPage extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
               child: _buildMasthead(context, greeting, date),
             ),
+            // The week sits directly under the greeting, with no label of its
+            // own: the marks say enough, and the row taps through to rest.
+            if (weekDots != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: weekDots,
+                ),
+              ),
             // A full-bleed hairline: the one separator on the page, used once.
             Container(
               height: 1,

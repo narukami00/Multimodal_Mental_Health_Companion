@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/navigation/app_tab.dart';
+import '../../core/day_key.dart';
 import '../../domain/home/baseline_progress.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../../domain/suggestions/suggestion_schedule.dart';
@@ -20,6 +21,8 @@ import '../profile/profile_controller.dart';
 import '../profile/profile_page.dart';
 import '../profile/baseline_quiz_page.dart';
 import '../rhythm/rhythm_card.dart';
+import '../rhythm/rhythm_detail_page.dart';
+import '../rhythm/week_dots.dart';
 import '../rhythm/welcome_back_notice.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -172,6 +175,19 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// Opens the rhythm page, where a rest day can be declared.
+  void _openRhythm(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RhythmDetailPage(
+          sessionController: widget.sessionController,
+          profileController: widget.profileController,
+          suggestionController: widget.suggestionController,
+        ),
+      ),
+    );
+  }
+
   /// Opens the full details for the suggestion Home is showing.
   ///
   /// Nothing is recorded by opening it: seeing an idea in full is not the same
@@ -286,6 +302,21 @@ class _AppShellState extends State<AppShell> {
                         title: suggestionChoice.activity.title,
                         description: suggestionChoice.activity.description,
                       ),
+                weekDots: WeekDots(
+                  checkedIn: [
+                    for (var i = 6; i >= 0; i--)
+                      widget.sessionController.hasCheckedInOn(
+                        now.subtract(Duration(days: i)),
+                      ),
+                  ],
+                  rested: [
+                    for (var i = 6; i >= 0; i--)
+                      widget.profileController.profile.restDays.contains(
+                        dayKey(now.subtract(Duration(days: i))),
+                      ),
+                  ],
+                  onTap: () => _openRhythm(context),
+                ),
                 onTaskAccept: () => _acceptSuggestion(suggestionChoice!),
                 onTaskDecline: _declineSuggestion,
                 onBlobTap: () => _openChat(context, startNew: true),

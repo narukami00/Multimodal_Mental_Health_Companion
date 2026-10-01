@@ -55,6 +55,17 @@ class CheckInTaskCard extends StatefulWidget {
 class _CheckInTaskCardState extends State<CheckInTaskCard> {
   bool _taskLeaving = false;
 
+  @override
+  void didUpdateWidget(CheckInTaskCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A replacement task has to arrive visible. Without this reset it inherited
+    // the previous one's faded-out state, so declining left the card looking
+    // blank even though a new task had already been chosen for it.
+    if (widget.task?.title != oldWidget.task?.title) {
+      _taskLeaving = false;
+    }
+  }
+
   Future<void> _declineTask() async {
     if (_taskLeaving) return;
     setState(() => _taskLeaving = true);
