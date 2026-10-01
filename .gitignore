@@ -41,6 +41,10 @@ debug_recordings/
 companion_server/models/
 dataset_samples/
 *.png
+# App icon assets are source, not generated output
+!mobile_application/android/app/src/main/res/mipmap*/**
+!mobile_application/web/icons/**
+!mobile_application/web/favicon.png
 
 # Feature specifications
 docs/specifications/
@@ -50,3 +54,26 @@ docs/specifications/
 # preceded it.
 docs/research/
 docs/design/companion_blob_overhaul.md
+
+# Repo hygiene: local-only working files that must not be pushed
+# Any dot-file or dot-directory (agent configs, caches, local metadata).
+# Exceptions: keep every .gitignore tracked, keep .env.example available.
+.*
+!.gitignore
+!.env.example
+
+# Design scratch, research notes, generated reports (root and mobile_application)
+docs/
+
+# HTML design references captured for UI work
+html_ref/
+html_refs/
+
+# Working notes: no markdown in the repo except README files
+*.md
+!README.md
+
+# Literature-review working corpus and the local spec document
+/data/
+*.docx
+
