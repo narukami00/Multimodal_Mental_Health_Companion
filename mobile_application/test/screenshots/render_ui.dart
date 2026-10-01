@@ -13,6 +13,7 @@ import 'package:solace_mobile/data/repositories/in_memory_safety_event_repositor
 import 'package:solace_mobile/data/repositories/in_memory_suggestion_repository.dart';
 import 'package:solace_mobile/domain/recommendations/recommendation_engine.dart';
 import 'package:solace_mobile/features/app_shell/home_suggestion_card.dart';
+import 'package:solace_mobile/features/companion/companion_blob.dart';
 import 'package:solace_mobile/features/profile/profile_controller.dart';
 import 'package:solace_mobile/features/rhythm/rhythm_detail_page.dart';
 import 'package:solace_mobile/features/safety/safety_controller.dart';
@@ -195,6 +196,22 @@ Future<void> _pump(
 
 void main() {
   setUpAll(_loadFonts);
+
+  testWidgets('render the companion blob', (tester) async {
+    await _pump(
+      tester,
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 30),
+          const CompanionBlob(diameter: 92, animate: false),
+          const SizedBox(height: 30),
+          const CompanionBlob(diameter: 140, animate: false),
+        ],
+      ),
+    );
+    await _capture(tester, 'companion_blob');
+  });
 
   testWidgets('render the suggestion card', (tester) async {
     await _pump(
