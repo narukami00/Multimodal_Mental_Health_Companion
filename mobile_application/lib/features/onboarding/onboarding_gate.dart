@@ -128,6 +128,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
 
     return OnboardingFlow(
       repository: widget.repository,
+      profileController: widget.profileController,
       onComplete: () => setState(() => _isComplete = true),
     );
   }

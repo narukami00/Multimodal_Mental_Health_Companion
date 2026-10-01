@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/data/repositories/in_memory_onboarding_repository.dart';
+import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
+import 'package:solace_mobile/features/profile/profile_controller.dart';
 import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
 import 'package:solace_mobile/features/app_shell/today_page.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
@@ -27,8 +29,12 @@ void main() {
 
     await tester.tap(find.text("I'll use text"));
     await tester.pumpAndSettle();
-    expect(find.text('Support is always nearby.'), findsOneWidget);
+    expect(find.textContaining('When do you usually'), findsOneWidget);
     expect(repository.usesMedia, isFalse);
+
+    await tester.tap(find.text('Skip for now'));
+    await tester.pumpAndSettle();
+    expect(find.text('Support is always nearby.'), findsOneWidget);
 
     await tester.tap(find.text('Start checking in'));
     await tester.pumpAndSettle();
@@ -51,6 +57,94 @@ void main() {
     expect(find.textContaining('Camera & mic are'), findsOneWidget);
     expect(find.text('Allow access'), findsOneWidget);
     expect(find.text("I'll use text"), findsOneWidget);
+  });
+
+  _sleepPageTests();
+}
+
+Future<ProfileController> _reachSleepPage(
+  WidgetTester tester,
+  InMemoryOnboardingRepository repository,
+) async {
+  final profileController = ProfileController(
+    repository: InMemoryProfileRepository(),
+  );
+  await profileController.load();
+  await repository.setCurrentPage(3);
+
+  await tester.pumpWidget(
+    SolaceApp(
+      onboardingRepository: repository,
+      sessionController: _testSessionController(),
+      profileController: profileController,
+    ),
+  );
+  await tester.pumpAndSettle();
+  return profileController;
+}
+
+void _sleepPageTests() {
+  testWidgets('sleep question can be skipped and counts as an answer', (
+    tester,
+  ) async {
+    final repository = InMemoryOnboardingRepository();
+    final profile = await _reachSleepPage(tester, repository);
+
+    expect(find.textContaining('When do you usually'), findsOneWidget);
+    expect(profile.profile.sleepHoursAnswered, isFalse);
+
+    await tester.tap(find.text('Skip for now'));
+    await tester.pumpAndSettle();
+
+    expect(profile.profile.sleepHoursSkipped, isTrue);
+    expect(profile.profile.sleepHoursSet, isFalse);
+    expect(find.text('Support is always nearby.'), findsOneWidget);
+  });
+
+  testWidgets('the top Skip on the sleep page is the same honest skip', (
+    tester,
+  ) async {
+    final repository = InMemoryOnboardingRepository();
+    final profile = await _reachSleepPage(tester, repository);
+
+    await tester.tap(find.text('Skip'));
+    await tester.pumpAndSettle();
+
+    expect(profile.profile.sleepHoursSkipped, isTrue);
+    expect(find.text('Support is always nearby.'), findsOneWidget);
+  });
+
+  testWidgets('choosing hours saves them and moves on', (tester) async {
+    final repository = InMemoryOnboardingRepository();
+    final profile = await _reachSleepPage(tester, repository);
+
+    await tester.tap(find.text('Set my sleep hours'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK')); // bedtime
+    await tester.pumpAndSettle();
+    expect(profile.profile.sleepHoursSet, isFalse);
+    await tester.tap(find.text('OK')); // wake time
+    await tester.pumpAndSettle();
+
+    expect(profile.profile.sleepStartMinutes, 23 * 60);
+    expect(profile.profile.sleepEndMinutes, 7 * 60);
+    expect(profile.profile.sleepHoursSkipped, isFalse);
+    expect(find.text('Support is always nearby.'), findsOneWidget);
+  });
+
+  testWidgets('dismissing a picker saves nothing and stays on the page', (
+    tester,
+  ) async {
+    final repository = InMemoryOnboardingRepository();
+    final profile = await _reachSleepPage(tester, repository);
+
+    await tester.tap(find.text('Set my sleep hours'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(profile.profile.sleepHoursAnswered, isFalse);
+    expect(find.textContaining('When do you usually'), findsOneWidget);
   });
 }
 

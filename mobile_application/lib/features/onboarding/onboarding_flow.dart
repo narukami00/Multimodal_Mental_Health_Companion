@@ -4,15 +4,19 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/contracts/onboarding_repository.dart';
+import '../profile/profile_controller.dart';
+import '../profile/sleep_hours_settings.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({
     required this.repository,
+    required this.profileController,
     required this.onComplete,
     super.key,
   });
 
   final OnboardingRepository repository;
+  final ProfileController profileController;
   final VoidCallback onComplete;
 
   @override
@@ -20,7 +24,11 @@ class OnboardingFlow extends StatefulWidget {
 }
 
 class _OnboardingFlowState extends State<OnboardingFlow> {
-  static const _pageCount = 4;
+  static const _pageCount = 5;
+
+  /// Where the sleep question sits. Pages before it keep their old indices, so
+  /// a half-finished onboarding resumes where it left off.
+  static const _sleepPage = 3;
 
   late final PageController _pageController;
   late int _currentPage;
@@ -56,6 +64,24 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     if (mounted) await _next();
   }
 
+  /// Asks for sleep hours. Dismissing either picker saves nothing and stays on
+  /// the page, so the person can still choose or skip.
+  Future<void> _chooseSleep() async {
+    final window = await pickSleepWindow(context);
+    if (window == null || !mounted) return;
+    await widget.profileController.setSleepHours(
+      startMinutes: window.startMinutes,
+      endMinutes: window.endMinutes,
+    );
+    if (mounted) await _next();
+  }
+
+  /// Declining is an answer, so it is recorded and the page moves on.
+  Future<void> _skipSleep() async {
+    await widget.profileController.skipSleepHours();
+    if (mounted) await _next();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -76,7 +102,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                 children: [
                   _TopBar(
                     currentPage: _currentPage,
-                    onSkip: _currentPage == _pageCount - 1 ? null : _next,
+                    onSkip: _currentPage == _pageCount - 1
+                        ? null
+                        : _currentPage == _sleepPage
+                            ? _skipSleep
+                            : _next,
                   ),
                   Expanded(
                     child: PageView(
@@ -86,18 +116,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                         setState(() => _currentPage = page);
                         unawaited(widget.repository.setCurrentPage(page));
                       },
-                      children: const [
-                        _WelcomePage(),
-                        _WaysToCheckInPage(),
-                        _PermissionPage(),
-                        _SupportPage(),
+                      children: [
+                        const _WelcomePage(),
+                        const _WaysToCheckInPage(),
+                        const _PermissionPage(),
+                        _SleepPage(controller: widget.profileController),
+                        const _SupportPage(),
                       ],
                     ),
                   ),
                   _BottomControls(
                     currentPage: _currentPage,
+                    pageCount: _pageCount,
+                    sleepPage: _sleepPage,
                     onNext: _next,
                     onChooseMedia: _chooseMedia,
+                    onChooseSleep: _chooseSleep,
+                    onSkipSleep: _skipSleep,
                   ),
                 ],
               ),
@@ -315,13 +350,21 @@ class _ChoiceButton extends StatelessWidget {
 class _BottomControls extends StatelessWidget {
   const _BottomControls({
     required this.currentPage,
+    required this.pageCount,
+    required this.sleepPage,
     required this.onNext,
     required this.onChooseMedia,
+    required this.onChooseSleep,
+    required this.onSkipSleep,
   });
 
   final int currentPage;
+  final int pageCount;
+  final int sleepPage;
   final VoidCallback onNext;
   final ValueChanged<bool> onChooseMedia;
+  final VoidCallback onChooseSleep;
+  final VoidCallback onSkipSleep;
 
   @override
   Widget build(BuildContext context) {
@@ -333,7 +376,7 @@ class _BottomControls extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(
-              4,
+              pageCount,
               (index) => AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -381,14 +424,38 @@ class _BottomControls extends StatelessWidget {
                 ),
               ],
             )
+          else if (currentPage == sleepPage)
+            Column(
+              children: [
+                _PrimaryCtaButton(
+                  label: 'Set my sleep hours',
+                  icon: Icons.bedtime_rounded,
+                  onPressed: onChooseSleep,
+                ),
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: onSkipSleep,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.mutedInk,
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  child: const Text('Skip for now'),
+                ),
+              ],
+            )
           else
             _PrimaryCtaButton(
               label: currentPage == 0
                   ? 'Get started'
-                  : currentPage == 3
+                  : currentPage == pageCount - 1
                       ? 'Start checking in'
                       : 'Continue',
-              icon: currentPage == 3 ? Icons.check_rounded : Icons.arrow_forward_rounded,
+              icon: currentPage == pageCount - 1
+                  ? Icons.check_rounded
+                  : Icons.arrow_forward_rounded,
               onPressed: onNext,
             ),
         ],
@@ -587,6 +654,52 @@ class _PermissionPage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SleepPage extends StatelessWidget {
+  const _SleepPage({required this.controller});
+
+  final ProfileController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _OnboardingPage(
+      illustration: const _OnboardingIllustration(
+        icon: Icons.bedtime_rounded,
+        secondaryIcon: Icons.wb_twilight_rounded,
+        accent: AppColors.amber,
+      ),
+      eyebrow: 'Your own rhythm',
+      title: 'When do you usually\nsleep?',
+      body:
+          'So ideas can fit how much energy you probably have. It stays on '
+          'this phone, and you can change or remove it anytime in Settings.',
+      extra: ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) {
+          final window = controller.profile.sleepWindowFor(weekend: false);
+          if (window == null) {
+            return const _PromiseRow(
+              icon: Icons.lock_outline_rounded,
+              text: 'Optional. Skipping changes nothing about how Solace works.',
+            );
+          }
+          final start = TimeOfDay(
+            hour: window.startMinutes ~/ 60,
+            minute: window.startMinutes % 60,
+          ).format(context);
+          final end = TimeOfDay(
+            hour: window.endMinutes ~/ 60,
+            minute: window.endMinutes % 60,
+          ).format(context);
+          return _PromiseRow(
+            icon: Icons.check_circle_outline_rounded,
+            text: 'Saved: $start to $end.',
+          );
+        },
       ),
     );
   }
