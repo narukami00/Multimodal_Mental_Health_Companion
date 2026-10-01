@@ -149,6 +149,75 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
+  /// Saves the user's usual sleep hours, as minutes past midnight. The window
+  /// may cross midnight. Giving hours supersedes an earlier skip.
+  Future<void> setSleepHours({
+    required int startMinutes,
+    required int endMinutes,
+  }) async {
+    _profile = _profile.copyWith(
+      sleepStartMinutes: _minuteOfDay(startMinutes),
+      sleepEndMinutes: _minuteOfDay(endMinutes),
+      sleepHoursSkipped: false,
+    );
+    await _persist();
+  }
+
+  /// Records that the user chose not to give sleep hours. That is an answer,
+  /// not a gap, so the setup meter counts it as done.
+  Future<void> skipSleepHours() async {
+    _profile = _profile.copyWith(sleepHoursSkipped: true);
+    await _persist();
+  }
+
+  /// Turns the separate weekend sleep hours on or off. The weekend pair is kept
+  /// while off, so switching back on restores what was chosen.
+  Future<void> setWeekendsDiffer(bool differ) async {
+    _profile = _profile.copyWith(weekendSleepDiffers: differ);
+    await _persist();
+  }
+
+  /// Saves the weekend sleep hours, as minutes past midnight.
+  Future<void> setWeekendSleepHours({
+    required int startMinutes,
+    required int endMinutes,
+  }) async {
+    _profile = _profile.copyWith(
+      weekendSleepStartMinutes: _minuteOfDay(startMinutes),
+      weekendSleepEndMinutes: _minuteOfDay(endMinutes),
+    );
+    await _persist();
+  }
+
+  /// Copies the usual sleep hours into quiet hours and switches them on.
+  ///
+  /// A one-off copy the user asks for: the two settings stay independent
+  /// afterwards. Returns false, changing nothing, when there are no sleep hours
+  /// to copy.
+  Future<bool> useSleepHoursAsQuietHours() async {
+    if (!_profile.sleepHoursSet) return false;
+    _profile = _profile.copyWith(
+      quietHoursEnabled: true,
+      quietStartMinutes: _profile.sleepStartMinutes,
+      quietEndMinutes: _profile.sleepEndMinutes,
+    );
+    await _persist();
+    return true;
+  }
+
+  /// How many days of derived daily features are kept before pruning.
+  Future<void> setFeatureRetentionDays(int days) async {
+    _profile = _profile.copyWith(
+      featureRetentionDays: days.clamp(minRetentionDays, maxRetentionDays),
+    );
+    await _persist();
+  }
+
+  static const minRetentionDays = 30;
+  static const maxRetentionDays = 365;
+
+  static int _minuteOfDay(int minutes) => minutes.clamp(0, 24 * 60 - 1);
+
   /// The contact the user has marked as the person to call first, if any.
   EmergencyContact? get iceContact {
     for (final contact in _profile.emergencyContacts) {

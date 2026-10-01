@@ -130,4 +130,102 @@ void main() {
       expect(controller.profile.welcomeBackShownAt, isNull);
     });
   });
+
+  sleepHoursControllerTests();
+}
+
+void sleepHoursControllerTests() {
+  group('ProfileController sleep hours', () {
+    late InMemoryProfileRepository repository;
+    late ProfileController controller;
+
+    setUp(() async {
+      repository = InMemoryProfileRepository();
+      controller = ProfileController(repository: repository);
+      await controller.load();
+    });
+
+    test('setting hours persists them and clamps to a valid day', () async {
+      await controller.setSleepHours(startMinutes: 23 * 60, endMinutes: 9999);
+
+      final stored = await repository.load();
+      expect(stored.sleepStartMinutes, 23 * 60);
+      expect(stored.sleepEndMinutes, 24 * 60 - 1);
+      expect(stored.sleepHoursSet, isTrue);
+    });
+
+    test('skipping is an answer and giving hours supersedes it', () async {
+      await controller.skipSleepHours();
+      expect(controller.profile.sleepHoursSkipped, isTrue);
+      expect(controller.profile.sleepHoursAnswered, isTrue);
+      expect(controller.profile.sleepHoursSet, isFalse);
+
+      await controller.setSleepHours(startMinutes: 22 * 60, endMinutes: 6 * 60);
+      expect(controller.profile.sleepHoursSkipped, isFalse);
+      expect(controller.profile.sleepHoursSet, isTrue);
+    });
+
+    test('weekend hours are kept while the toggle is off', () async {
+      await controller.setSleepHours(startMinutes: 23 * 60, endMinutes: 7 * 60);
+      await controller.setWeekendsDiffer(true);
+      await controller.setWeekendSleepHours(
+        startMinutes: 60,
+        endMinutes: 9 * 60,
+      );
+      await controller.setWeekendsDiffer(false);
+
+      expect(controller.profile.weekendSleepStartMinutes, 60);
+      expect(controller.profile.weekendSleepEndMinutes, 9 * 60);
+      expect(controller.profile.weekendSleepDiffers, isFalse);
+    });
+
+    test('using sleep hours as quiet hours copies and enables them', () async {
+      await controller.setSleepHours(startMinutes: 23 * 60, endMinutes: 7 * 60);
+
+      final copied = await controller.useSleepHoursAsQuietHours();
+
+      expect(copied, isTrue);
+      expect(controller.profile.quietHoursEnabled, isTrue);
+      expect(controller.profile.quietStartMinutes, 23 * 60);
+      expect(controller.profile.quietEndMinutes, 7 * 60);
+
+      // Independent afterwards: changing sleep hours leaves quiet hours alone.
+      await controller.setSleepHours(startMinutes: 1 * 60, endMinutes: 9 * 60);
+      expect(controller.profile.quietStartMinutes, 23 * 60);
+    });
+
+    test('there is nothing to copy without sleep hours', () async {
+      final copied = await controller.useSleepHoursAsQuietHours();
+
+      expect(copied, isFalse);
+      expect(controller.profile.quietHoursEnabled, isFalse);
+    });
+
+    test('retention is adjustable within sensible bounds', () async {
+      await controller.setFeatureRetentionDays(90);
+      expect(controller.profile.featureRetentionDays, 90);
+
+      await controller.setFeatureRetentionDays(1);
+      expect(
+        controller.profile.featureRetentionDays,
+        ProfileController.minRetentionDays,
+      );
+
+      await controller.setFeatureRetentionDays(100000);
+      expect(
+        controller.profile.featureRetentionDays,
+        ProfileController.maxRetentionDays,
+      );
+    });
+
+    test('changes notify listeners', () async {
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      await controller.setSleepHours(startMinutes: 23 * 60, endMinutes: 7 * 60);
+      await controller.setWeekendsDiffer(true);
+
+      expect(notifications, 2);
+    });
+  });
 }
