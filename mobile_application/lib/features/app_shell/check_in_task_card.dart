@@ -485,7 +485,13 @@ class _OrangeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final solid = prominent || light;
-    final ink = solid ? _ink : const Color(0xFF5F4E3A);
+    // The ink pill is the one place white text earns its keep: it sits on a
+    // near-black fill, so it measures well past 12:1.
+    final ink = light
+        ? Colors.white
+        : solid
+        ? _ink
+        : const Color(0xFF5F4E3A);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -500,30 +506,27 @@ class _OrangeButton extends StatelessWidget {
             ? const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0xFFFFFFFF), Color(0xFFFFF4E4)],
+                colors: [Color(0xFF4A3319), Color(0xFF2C1D0C)],
               )
             : null,
         border: prominent
             ? null
-            : Border.all(
-                color: light
-                    ? const Color(0x1F8A5008)
-                    : const Color(0x2E4A3728),
-                width: 1.2,
-              ),
-        // Two shadows on the pale pill: a tight one for contact and a wider one
-        // for lift. A single shadow over orange reads flat.
+            : light
+            ? Border.all(color: const Color(0x33FFFFFF), width: 1)
+            : Border.all(color: const Color(0x2E4A3728), width: 1.2),
+        // Two shadows on the ink pill: a tight one for contact and a wider one
+        // for lift. A single shadow reads flat at this size.
         boxShadow: light
             ? const [
                 BoxShadow(
-                  color: Color(0x2E8A5008),
-                  blurRadius: 4,
+                  color: Color(0x38120A02),
+                  blurRadius: 3,
                   offset: Offset(0, 2),
                 ),
                 BoxShadow(
-                  color: Color(0x388A5008),
-                  blurRadius: 18,
-                  offset: Offset(0, 8),
+                  color: Color(0x4D2E1D08),
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
                 ),
               ]
             : prominent
