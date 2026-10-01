@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Check-in CTA — button options</title>
+<style>
+  :root{
+    --ink:#2E1D08;
+    --ink-soft:#3F2A0E;
+    --cream:#FFF8EE;
+    --panel-a:#FFC24F;
+    --panel-b:#EE8B0C;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    padding:48px 24px 96px;
+    background:#F6EFE6;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:26px;font-weight:800;letter-spacing:-0.4px;margin:0 0 6px}
+  .lede{font-size:15px;color:#6B5A45;margin:0 0 40px;max-width:760px;line-height:1.5}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:40px 32px}
+
+  .opt{}
+  .tag{display:flex;align-items:baseline;gap:10px;margin:0 0 12px}
+  .letter{font-size:13px;font-weight:800;letter-spacing:1px;background:var(--ink);color:#fff;border-radius:6px;padding:3px 8px}
+  .name{font-size:15px;font-weight:700}
+  .why{font-size:13px;line-height:1.5;color:#6B5A45;margin:12px 0 0}
+
+  /* the card, faithful to the app */
+  .card{
+    position:relative;
+    border-radius:22px;
+    padding:22px 22px 24px;
+    background:linear-gradient(150deg,var(--panel-a) 0%,var(--panel-b) 100%);
+    box-shadow:0 18px 40px -22px rgba(150,90,10,.55);
+    overflow:hidden;
+    min-height:262px;
+  }
+  .sun{
+    position:absolute;top:-42px;right:-10px;width:180px;height:180px;border-radius:50%;
+    background:radial-gradient(circle at 50% 50%, rgba(255,255,255,.55), rgba(255,255,255,.05) 62%, transparent 70%);
+  }
+  .eyebrow{
+    position:relative;font-size:10.5px;font-weight:800;letter-spacing:1.4px;
+    color:rgba(62,40,10,.62);margin:0 0 14px;
+  }
+  .head{
+    position:relative;font-size:23px;line-height:1.16;font-weight:800;letter-spacing:-0.4px;
+    color:var(--ink);margin:0 0 10px;max-width:82%;
+  }
+  .sub{
+    position:relative;font-size:13px;line-height:1.45;color:rgba(62,40,10,.78);
+    margin:0 0 22px;max-width:88%;
+  }
+
+  /* ---- shared button metrics ---- */
+  .btn{
+    position:relative;
+    display:inline-flex;align-items:center;justify-content:center;
+    height:50px;padding:0 26px;border-radius:999px;
+    font-size:15.5px;font-weight:800;letter-spacing:-0.1px;
+    border:0;cursor:pointer;
+    transition:transform .12s ease;
+  }
+  .btn:active{transform:scale(.97)}
+
+  /* A — lofted cream */
+  .a{
+    background:linear-gradient(180deg,#FFFFFF 0%,#FFF4E2 100%);
+    color:var(--ink);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,.9) inset,
+      0 -1px 0 rgba(190,140,60,.16) inset,
+      0 2px 4px rgba(112,64,4,.20),
+      0 12px 22px -6px rgba(112,64,4,.34);
+  }
+
+  /* B — cream with arrow */
+  .b{
+    gap:10px;
+    background:linear-gradient(180deg,#FFFFFF 0%,#FFF4E2 100%);
+    color:var(--ink);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,.9) inset,
+      0 2px 4px rgba(112,64,4,.20),
+      0 12px 22px -6px rgba(112,64,4,.34);
+  }
+  .b .arw{font-size:17px;font-weight:700;color:#D97C05;line-height:1;transform:translateY(1px)}
+
+  /* C — glass outline */
+  .c{
+    background:rgba(255,255,255,.20);
+    color:#FFFDF9;
+    border:1.5px solid rgba(255,255,255,.72);
+    box-shadow:0 6px 18px -8px rgba(112,64,4,.45);
+  }
+
+  /* D — leading disc */
+  .d{
+    gap:11px;padding:0 26px 0 8px;
+    background:linear-gradient(180deg,#FFFFFF 0%,#FFF4E2 100%);
+    color:var(--ink);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,.9) inset,
+      0 2px 4px rgba(112,64,4,.20),
+      0 12px 22px -6px rgba(112,64,4,.34);
+  }
+  .d .disc{
+    width:36px;height:36px;border-radius:999px;display:grid;place-items:center;
+    background:linear-gradient(160deg,#FFC24F,#EE8B0C);
+    box-shadow:0 2px 6px rgba(180,105,10,.45), 0 1px 0 rgba(255,255,255,.5) inset;
+    flex:none;
+  }
+  .d .disc svg{display:block}
+
+  /* E — ink (current) */
+  .e{
+    background:linear-gradient(180deg,#4A3319 0%,#2C1D0C 100%);
+    color:#FFFFFF;
+    border:1px solid rgba(255,255,255,.20);
+    box-shadow:0 2px 3px rgba(18,10,2,.22), 0 10px 20px -6px rgba(46,29,8,.55);
+  }
+
+  /* F — gloss key */
+  .f{
+    background:linear-gradient(180deg,#FFFFFF 0%,#FFF7EA 55%,#FFEFD8 100%);
+    color:var(--ink);
+    box-shadow:
+      0 2px 0 rgba(214,166,88,.55) inset,
+      0 2px 5px rgba(112,64,4,.22),
+      0 14px 24px -8px rgba(112,64,4,.38);
+  }
+  .f .gloss{
+    position:absolute;left:8px;right:8px;top:3px;height:45%;
+    border-radius:999px;
+    background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,0));
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Check-in CTA — six treatments</h1>
+  <p class="lede">
+    Same card, same type, same metrics (50px tall, fully rounded, hugging its label).
+    Only the button's surface changes. A is the safe product default; D is the most
+    distinctive; C is the most "on top of the surface". E is what's in the build now,
+    for comparison. Tell me a letter and I'll build it.
+  </p>
+
+  <div class="grid">
+
+    <div class="opt">
+      <p class="tag"><span class="letter">A</span><span class="name">Lofted cream</span></p>
+      <div class="card">
+        <div class="sun"></div>
+        <p class="eyebrow">GETTING STARTED</p>
+        <p class="head">Make Solace feel more like you</p>
+        <p class="sub">A few gentle choices help shape what you see here.</p>
+        <button class="btn a">Continue setup</button>
+      </div>
+      <p class="why">Warm off-white fill, a hairline highlight along the top and a warm inner
+      shade along the bottom, sitting on a two-part shadow (tight contact + soft lift).
+      Reads as a physical object rather than a flat shape.</p>
+    </div>
+
+    <div class="opt">
+      <p class="tag"><span class="letter">B</span><span class="name">Cream with arrow</span></p>
+      <div class="card">
+        <div class="sun"></div>
+        <p class="eyebrow">GETTING STARTED</p>
+        <p class="head">Make Solace feel more like you</p>
+        <p class="sub">A few gentle choices help shape what you see here.</p>
+        <button class="btn b">Continue setup <span class="arw">&#8594;</span></button>
+      </div>
+      <p class="why">Same as A, plus a trailing arrow in the app's orange. Gives the button a
+      direction of travel, which is the cheapest way to make a CTA look like a real product
+      button instead of a label in a box.</p>
+    </div>
+
+    <div class="opt">
+      <p class="tag"><span class="letter">C</span><span class="name">Glass outline</span></p>
+      <div class="card">
+        <div class="sun"></div>
+        <p class="eyebrow">GETTING STARTED</p>
+        <p class="head">Make Solace feel more like you</p>
+        <p class="sub">A few gentle choices help shape what you see here.</p>
+        <button class="btn c">Continue setup</button>
+      </div>
+      <p class="why">Translucent white fill with a bright 1.5px rim and white text. Very current
+      on gradient panels — the button reads as glass sitting on the surface. Lowest contrast
+      of the set, so it's the riskiest in daylight.</p>
+    </div>
+
+    <div class="opt">
+      <p class="tag"><span class="letter">D</span><span class="name">Leading disc</span></p>
+      <div class="card">
+        <div class="sun"></div>
+        <p class="eyebrow">GETTING STARTED</p>
+        <p class="head">Make Solace feel more like you</p>
+        <p class="sub">A few gentle choices help shape what you see here.</p>
+        <button class="btn d">
+          <span class="disc">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12.5l4.2 4.2L19 7" stroke="#fff" stroke-width="2.6"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          Continue setup
+        </button>
+      </div>
+      <p class="why">Cream pill with a small orange disc carrying a tick. The disc echoes the sun
+      already on the card and gives the button an ownable shape. Most distinctive of the six;
+      also the busiest.</p>
+    </div>
+
+    <div class="opt">
+      <p class="tag"><span class="letter">E</span><span class="name">Ink — in the build now</span></p>
+      <div class="card">
+        <div class="sun"></div>
+        <p class="eyebrow">GETTING STARTED</p>
+        <p class="head">Make Solace feel more like you</p>
+        <p class="sub">A few gentle choices help shape what you see here.</p>
+        <button class="btn e">Continue setup</button>
+      </div>
+      <p class="why">What you just saw. Strong contrast, but on a warm orange card it reads as a
+      generic black button and pulls the eye off the sun and headline.</p>
+    </div>
+
+    <div class="opt">
+      <p class="tag"><span class="letter">F</span><span class="name">Gloss key</span></p>
+      <div class="card">
+        <div class="sun"></div>
+        <p class="eyebrow">GETTING STARTED</p>
+        <p class="head">Make Solace feel more like you</p>
+        <p class="sub">A few gentle choices help shape what you see here.</p>
+        <button class="btn f">
+          <span class="gloss"></span>
+          Continue setup
+        </button>
+      </div>
+      <p class="why">Cream pill with an explicit gloss band across the top third and a defined
+      bottom edge. The most "pressable" of the light options — it looks moulded. Slightly more
+      decorative than the app's flatter language.</p>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
