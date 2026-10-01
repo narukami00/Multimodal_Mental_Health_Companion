@@ -267,13 +267,15 @@ class TodayPage extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // The card's top edge cuts across the lower third of the shape, which is what
-        // makes the two read as one object. Sized against the resting radius
-        // (122 / 2 = 61) rather than the layout box: the box is now wider than
-        // the shape, because it has to hold the inflated swell, and measuring
-        // the overlap against the box would push the card too far down.
+        // The card's top edge cuts across the lower third of the shape, which is
+        // what makes the two read as one object. Measured against the resting
+        // radius (118 / 2 = 59): a third of that is 20, so the shape's bottom
+        // sits 20 px below the card's top edge. Measured against the layout box
+        // instead — which is nearly four times the resting shape now, to hold the
+        // swell and the glow — and the overlap became negligible, so the card
+        // visibly detached from the shape it is supposed to be tucked under.
         Padding(
-          padding: const EdgeInsets.only(top: 38),
+          padding: const EdgeInsets.only(top: 40),
           child: CheckInTaskCard(
             eyebrow: card.eyebrow,
             headline: card.title,
@@ -287,11 +289,24 @@ class TodayPage extends StatelessWidget {
           ),
         ),
         Positioned(
-          // Lifts the box so the *shape's* crown lands where it did before. The
-          // box is now several times the resting shape's width, because it has to
-          // hold the inflated swell and the glow, so anchoring the box itself
-          // would drop the visible crown a long way down the page.
-          top: -104,
+          // Lifts the box so the *shape's* crown lands level with the greeting,
+          // which is where it was before. Anchoring the box rather than the shape
+          // would drop the visible crown by the difference between the two, and
+          // that difference is now large: the box is several times the resting
+          // shape's width so that the swell and the glow have somewhere to go.
+          // The arithmetic: the box is 118 x 1.6 x 1.15 = 217 across, so its
+          // centre sits 108.5 px below its own top edge, and the resting shape's
+          // crown is a further 59 px above that. So the crown lands 49.5 px below
+          // the box's top edge, and -58 puts that crown at -8.5 — just above the
+          // card's top edge, which is what makes it read as tucked under rather
+          // than sitting on top.
+          //
+          // Measured by rendering it, not by arithmetic. The box is nearly twice
+          // the resting shape's width now, so anchoring the box instead of the
+          // shape drops the visible crown by over 100 px; and the crown has to
+          // clear the masthead and the week marks above it, which is why it
+          // cannot simply be raised to wherever looks right relative to the card.
+          top: -58,
           left: 0,
           right: 0,
           child: Center(

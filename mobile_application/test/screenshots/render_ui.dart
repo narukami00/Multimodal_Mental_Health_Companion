@@ -14,7 +14,9 @@ import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dar
 import 'package:solace_mobile/data/repositories/in_memory_safety_event_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_suggestion_repository.dart';
 import 'package:solace_mobile/domain/recommendations/recommendation_engine.dart';
+import 'package:solace_mobile/domain/home/home_card_priority.dart';
 import 'package:solace_mobile/features/app_shell/home_suggestion_card.dart';
+import 'package:solace_mobile/features/app_shell/today_page.dart';
 import 'package:solace_mobile/features/companion/blob_simulation.dart';
 import 'package:solace_mobile/features/companion/companion_blob.dart';
 import 'package:solace_mobile/features/profile/profile_controller.dart';
@@ -472,6 +474,44 @@ void main() {
     await capture(BlobState.charged, 'blob_state_inflated');
     await capture(BlobState.bursting, 'blob_state_bursting');
     await capture(BlobState.regrowing, 'blob_state_regrowing');
+  });
+
+  testWidgets('render the Home page around the blob', (tester) async {
+    // TodayPage on its own rather than through SolaceApp.
+    //
+    // The whole-app capture cannot run here: the shell's ChatController reaches
+    // for shared_preferences on startup, and that plugin has no implementation in
+    // a test environment, so the frame throws before anything is drawn. This is
+    // the one way to actually look at where the blob sits relative to the card,
+    // which is the thing the layout arithmetic in today_page.dart is guessing at.
+    tester.view.physicalSize = Size(_phone.width * 3, _phone.height * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: RepaintBoundary(
+            key: const ValueKey('shot'),
+            child: TodayPage(
+              primaryCard: HomeCardType.checkIn,
+              // Fixed, so the greeting and the date chip are stable across runs.
+              currentTime: DateTime(2026, 10, 1, 19, 12),
+            ),
+          ),
+        ),
+      ),
+    );
+    // Fixed pumps rather than pumpAndSettle: the blob simulates continuously and
+    // never settles, so waiting for stillness here would hang.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    await _capture(tester, 'home_with_blob');
   });
 
   testWidgets('render the suggestion card', (tester) async {
