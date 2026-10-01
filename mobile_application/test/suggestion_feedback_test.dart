@@ -324,6 +324,63 @@ void main() {
     });
   });
 
+  group('an idea that has been shown', () {
+    const context = RecommendationContext(profileAgeDays: 5);
+    final now = DateTime(2026, 9, 22, 10);
+
+    Future<SuggestionController> shownController() async {
+      final controller = _controller([_activity(id: 'a'), _activity(id: 'b')]);
+      await controller.load();
+      await controller.warmUp();
+      final pick = controller.peek(
+        profile: const UserProfile(),
+        context: context,
+        now: now,
+      )!;
+      await controller.commit(pick, context: context, now: now, proactive: true);
+      return controller;
+    }
+
+    test('is recorded once, however often it is asked', () async {
+      final controller = await shownController();
+      final again = controller.pendingProactive(now: now)!;
+
+      await controller.commit(
+        again.recommendation,
+        context: context,
+        now: now.add(const Duration(hours: 1)),
+        proactive: true,
+      );
+
+      expect(controller.history, hasLength(1));
+      expect(controller.history.single.status, SuggestionStatus.shown);
+    });
+
+    test('stays pending until answered, then goes', () async {
+      final controller = await shownController();
+      final later = now.add(const Duration(hours: 5));
+      expect(controller.pendingProactive(now: later), isNotNull);
+
+      await controller.dismissRecord(
+        controller.history.single.id,
+        reason: SuggestionSkipReason.notNow,
+      );
+
+      expect(controller.pendingProactive(now: later), isNull);
+    });
+
+    test('expires after a day, writing nothing', () async {
+      final controller = await shownController();
+
+      expect(
+        controller.pendingProactive(now: now.add(const Duration(hours: 25))),
+        isNull,
+      );
+      expect(controller.history.single.status, SuggestionStatus.shown);
+      expect(controller.history.single.done, isNull);
+    });
+  });
+
   group('impact', () {
     test('"not for me" takes the activity out of future picks', () async {
       final controller = _controller([_activity(id: 'only')]);

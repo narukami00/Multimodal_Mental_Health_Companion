@@ -68,12 +68,14 @@ class SuggestionController extends ChangeNotifier {
     );
   }
 
-  /// Records a suggestion the user has just responded to.
+  /// Records that an idea was put in front of the user, or finds the record
+  /// that already says so.
   ///
-  /// Takes the recommendation that was peeked at, rather than looking one up
-  /// again, so the record always matches what the user actually saw. Proactive
-  /// marks it as something the app offered unasked, which is what the daily
-  /// budget counts.
+  /// Idempotent per activity and day, because Home asks again on every rebuild
+  /// and the same idea must never be counted twice. It is the only write Home
+  /// makes: a `shown` record carries no verdict, so it cannot move the
+  /// confidence gate, but it is a real impression and counts against the budget.
+  /// Proactive marks it as offered unasked, which is what the budget counts.
   Future<SuggestionRecord> commit(
     Recommendation recommendation, {
     required RecommendationContext context,
@@ -81,6 +83,15 @@ class SuggestionController extends ChangeNotifier {
     bool proactive = false,
   }) async {
     final shownAt = now ?? DateTime.now();
+    for (final existing in _history) {
+      if (existing.activityId == recommendation.activity.id &&
+          existing.proactive == proactive &&
+          _sameDay(existing.shownAt, shownAt)) {
+        _current = recommendation;
+        _currentRecord = existing;
+        return existing;
+      }
+    }
     final record = SuggestionRecord(
       id: shownAt.microsecondsSinceEpoch.toString(),
       activityId: recommendation.activity.id,
@@ -92,13 +103,46 @@ class SuggestionController extends ChangeNotifier {
       source: recommendation.source,
       proactive: proactive,
     );
-    await _suggestionRepository.saveRecord(record);
+    // In memory first: a second rebuild before the save returns must find this
+    // record rather than write its own.
     _history = [..._history, record];
     _current = recommendation;
     _currentRecord = record;
+    await _suggestionRepository.saveRecord(record);
     notifyListeners();
     return record;
   }
+
+  /// An idea Home showed that the user has neither answered nor outlived.
+  ///
+  /// It keeps being offered, rather than a fresh pick, until it is answered or
+  /// [expiry] passes. Expiring writes nothing: an ignored idea records no
+  /// outcome, and its record has already counted against the day.
+  ({SuggestionRecord record, Recommendation recommendation})? pendingProactive({
+    DateTime? now,
+  }) {
+    final current = now ?? DateTime.now();
+    for (final record in _history.reversed) {
+      if (!record.proactive ||
+          record.status != SuggestionStatus.shown ||
+          current.difference(record.shownAt) >= expiry) {
+        continue;
+      }
+      final activity = activityFor(record.activityId);
+      if (activity == null) continue;
+      return (
+        record: record,
+        recommendation: Recommendation.restored(activity, record.source),
+      );
+    }
+    return null;
+  }
+
+  /// How long an unanswered idea stays on Home before it quietly goes.
+  static const expiry = Duration(hours: 24);
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   /// Loads the activity library ahead of the first peek.
   ///

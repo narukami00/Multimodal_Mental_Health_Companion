@@ -118,10 +118,25 @@ class _AppShellState extends State<AppShell> {
   /// them disagree: the schedule said a nudge was due, the engine's own cap
   /// said no, and the card silently rendered nothing.
   SuggestionCardChoice? _peekSuggestion({required bool allowed}) {
-    if (!allowed) return null;
-
     final now = DateTime.now();
     final profile = widget.profileController.profile;
+
+    // An idea already on show stays until it is answered or expires, whatever
+    // the budget now says: showing it is what used the budget up.
+    final pending = widget.suggestionController.pendingProactive(now: now);
+    if (pending != null &&
+        !widget.safetyController.hasActiveFlag &&
+        widget.sessionController.hasCheckedInOn(now)) {
+      return SuggestionCardChoice(
+        recommendation: pending.recommendation,
+        context: buildRecommendationContext(
+          profile: profile,
+          sessions: widget.sessionController.sessions,
+          now: now,
+        ),
+      );
+    }
+    if (!allowed) return null;
 
     final due = const SuggestionSchedule().isDue(
       history: widget.suggestionController.history,
@@ -146,6 +161,26 @@ class _AppShellState extends State<AppShell> {
       recommendation: recommendation,
       context: context,
     );
+  }
+
+  /// Writes down that an idea has been put on screen, once it actually is.
+  ///
+  /// Deferred to after the frame so building Home never writes, and safe to ask
+  /// on every rebuild because the write is idempotent. A pending idea already
+  /// has its record, so only a fresh pick reaches the controller.
+  void _rememberShown(SuggestionCardChoice? choice) {
+    if (choice == null ||
+        widget.suggestionController.pendingProactive() != null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.suggestionController.commit(
+        choice.recommendation,
+        context: choice.context,
+        proactive: true,
+      );
+    });
   }
 
   /// The user did it. The record is written now, at the moment they responded,
@@ -252,6 +287,7 @@ class _AppShellState extends State<AppShell> {
         );
         final showSuggestion = HomeCardPriority.showSuggestion(homeState);
         final suggestionChoice = _peekSuggestion(allowed: showSuggestion);
+        _rememberShown(suggestionChoice);
         return Scaffold(
           // The capsule is an overlay, not a bottom bar. It is a child of the
           // body rather than bottomNavigationBar, so the Scaffold reserves no

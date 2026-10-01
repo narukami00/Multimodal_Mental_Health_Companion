@@ -46,6 +46,39 @@ class Recommendation {
   /// Why this was chosen. Only [SuggestionSource.learned] means the app thinks
   /// it fits; the other two are offered because it does not know yet.
   final SuggestionSource source;
+
+  /// Rebuilds the recommendation behind a record that was already shown, so the
+  /// same idea can keep being offered without asking the engine again (its
+  /// answer changes the moment the shown record is counted).
+  factory Recommendation.restored(Activity activity, SuggestionSource? source) {
+    final resolved = source ?? SuggestionSource.explore;
+    return Recommendation(
+      activity: activity,
+      confidence: 0,
+      isProactive: true,
+      explanation: explainRecommendation(resolved),
+      source: resolved,
+    );
+  }
+}
+
+/// The honest one-line reason for a pick, phrased by where it came from.
+String explainRecommendation(
+  SuggestionSource source, {
+  String? state,
+  int contextMatches = 0,
+}) {
+  switch (source) {
+    case SuggestionSource.starter:
+      return "A gentle starter idea, since we're just getting to know what fits you.";
+    case SuggestionSource.explore:
+      return "Something we haven't tried together yet.";
+    case SuggestionSource.learned:
+      if (contextMatches > 0 && state != null) {
+        return 'A small option that fits your $state moment.';
+      }
+      return 'A small option that has been worth trying before.';
+  }
 }
 
 /// The lower bound of the Wilson score interval at z = 1.645 (one-sided 95%).
@@ -161,7 +194,11 @@ class RecommendationEngine {
       // unasked. A learned pick has to clear the gate first.
       isProactive: resolvedSource != SuggestionSource.learned ||
           (confidence >= _confidenceGate && matches > 0),
-      explanation: _explanation(chosen, context, matches, resolvedSource),
+      explanation: explainRecommendation(
+        resolvedSource,
+        state: context.currentState,
+        contextMatches: matches,
+      ),
       source: resolvedSource,
     );
   }
@@ -554,26 +591,6 @@ class RecommendationEngine {
     };
     return aliases.any(never.contains);
   }
-
-  String _explanation(
-    Activity activity,
-    RecommendationContext context,
-    int contextMatches,
-    SuggestionSource source,
-  ) {
-    switch (source) {
-      case SuggestionSource.starter:
-        return "A gentle starter idea, since we're just getting to know what fits you.";
-      case SuggestionSource.explore:
-        return "Something we haven't tried together yet.";
-      case SuggestionSource.learned:
-        if (contextMatches > 0 && context.currentState != null) {
-          return 'A small option that fits your ${context.currentState} moment.';
-        }
-        return 'A small option that has been worth trying before.';
-    }
-  }
-
 }
 
 class _ScoredActivity {

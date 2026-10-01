@@ -176,7 +176,7 @@ void main() {
     expect(find.byKey(const ValueKey('task-accept')), findsNothing);
   });
 
-  testWidgets('the peek on a Home rebuild records nothing', (tester) async {
+  testWidgets('rebuilding Home records the impression once', (tester) async {
     final controller = SuggestionController(
       libraryRepository: _library,
       suggestionRepository: InMemorySuggestionRepository(),
@@ -187,15 +187,16 @@ void main() {
     await _pumpShell(tester, controller);
     expect(find.byKey(const ValueKey('task-accept')), findsOneWidget);
 
-    // Home rebuilds often. If the peek wrote anything, these counts are the
-    // ones the confidence gate depends on.
+    // Home rebuilds often. The impression is written once, and the idea stays
+    // on screen even though showing it used up the day's budget.
     controller.notifyListeners();
     await tester.pump();
     await tester.pump();
     controller.notifyListeners();
     await tester.pump();
 
-    expect(controller.history, isEmpty);
+    expect(controller.history.single.status, SuggestionStatus.shown);
+    expect(find.byKey(const ValueKey('task-accept')), findsOneWidget);
   });
 
   group('setup card', () {
