@@ -48,6 +48,14 @@ class CheckInReminderService {
   /// Identifier used for the on-demand test notification.
   static const testNotificationId = 1002;
 
+  /// One-off idea pushes for the next few days, one id per day ahead.
+  static const ideaNotificationIds = [2001, 2002, 2003];
+
+  static const ideaChannelId = 'solace_idea';
+  static const ideaChannelName = 'Ideas for today';
+  static const ideaChannelDescription =
+      'An occasional nudge that a gentle idea is waiting.';
+
   /// Dedicated channel so check-in reminders carry their own visual weight.
   static const channelId = 'solace_check_in_reminder';
   static const channelName = 'Check-in reminders';
@@ -111,6 +119,14 @@ class CheckInReminderService {
           channelId,
           channelName,
           description: channelDescription,
+        ),
+      );
+      await _android?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          ideaChannelId,
+          ideaChannelName,
+          description: ideaChannelDescription,
+          importance: Importance.low,
         ),
       );
     } catch (error) {
@@ -262,5 +278,57 @@ class CheckInReminderService {
       debugPrint('CheckInReminderService test notification failed: $error');
       return false;
     }
+  }
+
+  /// Idea push copy. Local scheduling happens before the engine picks anything,
+  /// so this cannot name the idea; it only says one is waiting.
+  static const _ideaBody = 'A gentle idea is waiting for you today.';
+
+  /// Replaces every scheduled idea push with exactly [times].
+  ///
+  /// Always cancels first, so a plan that has shrunk (the user came back, turned
+  /// the setting off, or already saw today's idea) never leaves a stale push
+  /// behind. `private` visibility means a locked, secure screen shows Android's
+  /// redacted placeholder instead of the text, which matters once a later
+  /// version carries the idea's own title. Returns false if nothing could be
+  /// scheduled for a reason the caller might want to know about.
+  Future<bool> syncIdeaPushes(List<DateTime> times) async {
+    if (!await initialize()) return false;
+    for (final id in ideaNotificationIds) {
+      try {
+        await _plugin.cancel(id: id);
+      } catch (error) {
+        debugPrint('CheckInReminderService idea cancel warning: $error');
+      }
+    }
+    if (times.isEmpty) return true;
+    if (!_timezoneResolved || !await notificationsEnabled()) return false;
+
+    var ok = true;
+    for (var i = 0; i < times.length && i < ideaNotificationIds.length; i++) {
+      try {
+        await _plugin.zonedSchedule(
+          id: ideaNotificationIds[i],
+          title: _title,
+          body: _ideaBody,
+          scheduledDate: tz.TZDateTime.from(times[i], tz.local),
+          notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+              ideaChannelId,
+              ideaChannelName,
+              channelDescription: ideaChannelDescription,
+              importance: Importance.low,
+              priority: Priority.low,
+              visibility: NotificationVisibility.private,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      } catch (error) {
+        debugPrint('CheckInReminderService idea schedule failed: $error');
+        ok = false;
+      }
+    }
+    return ok;
   }
 }
