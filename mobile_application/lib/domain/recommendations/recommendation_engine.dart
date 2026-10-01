@@ -106,10 +106,17 @@ class RecommendationEngine {
   /// Beyond this the explore share settles at its long-run value.
   static const exploreShareSettlesAfterDays = 57;
 
-  static const _exploreShareEarly = 0.5;
-  static const _exploreShareLater = 0.3;
-  static const _exploreFloor = 0.2;
-  static const _exploreWindow = 10;
+  /// Explore-share tuning, public so the behavioral profile page can report
+  /// the quota in the same terms the engine uses it.
+  static const exploreShareEarly = 0.5;
+  static const exploreShareLater = 0.3;
+  static const exploreFloor = 0.2;
+  static const exploreWindow = 10;
+
+  static const _exploreShareEarly = exploreShareEarly;
+  static const _exploreShareLater = exploreShareLater;
+  static const _exploreFloor = exploreFloor;
+  static const _exploreWindow = exploreWindow;
 
   /// Below this much evidence, an activity borrows from its own type.
   static const _poolingThreshold = 5.0;
@@ -120,8 +127,12 @@ class RecommendationEngine {
   /// Honest limit: at prototype volume this gate is not provably better than
   /// editorial ordering. It stops thin evidence from being presented as a
   /// personal fit, and it is deliberately the only claim the app makes.
-  static const _confidenceGate = 0.60;
-  static const _evidenceGate = 4.0;
+  static const confidenceGate = 0.60;
+  static const evidenceGate = 4.0;
+
+  // Aliases kept so the private uses below still read as one vocabulary.
+  static const _confidenceGate = confidenceGate;
+  static const _evidenceGate = evidenceGate;
 
   static const _dismissalSuppression = Duration(hours: 12);
   static const _completionCooldown = Duration(days: 2);
@@ -591,7 +602,84 @@ class RecommendationEngine {
     };
     return aliases.any(never.contains);
   }
+
+  /// The standing of every activity in the library, in the given context.
+  ///
+  /// Runs the same filters, confidence and suppression arithmetic as
+  /// [choose], but reports instead of picking. Records the user never really
+  /// saw ("not now" skips) are counted where [choose] counts them -- in the
+  /// exposure and quota paths, never as an outcome.
+  List<ActivityStanding> standingOf({
+    required Iterable<Activity> activities,
+    required UserProfile profile,
+    required RecommendationContext context,
+    required Iterable<SuggestionRecord> history,
+    DateTime? now,
+  }) {
+    final currentTime = now ?? DateTime.now();
+    final records = history.toList(growable: false);
+    final tags = context.normalizedTags;
+    final typeOf = {
+      for (final activity in activities) activity.id: activity.type,
+    };
+
+    return [
+      for (final activity in activities)
+        () {
+          final own = records
+              .where((record) => record.activityId == activity.id)
+              .toList(growable: false);
+          final evidence = _evidence(
+            activity,
+            tags,
+            records,
+            typeOf,
+            currentTime,
+          );
+          return ActivityStanding(
+            activity: activity,
+            shownCount: _exposureCount(activity, records),
+            completedCount: own
+                .where((record) => _didIt(record) == true)
+                .length,
+            rejectionCount: _rejections(activity, records).length,
+            tooHardCount: own
+                .where(
+                  (record) =>
+                      record.status == SuggestionStatus.skipped &&
+                      record.skipReason == SuggestionSkipReason.tooHard,
+                )
+                .length,
+            notNowCount: own
+                .where(
+                  (record) =>
+                      record.status == SuggestionStatus.skipped &&
+                      record.skipReason == SuggestionSkipReason.notNow,
+                )
+                .length,
+            usefulUpCount: own
+                .where((record) => record.useful == SuggestionUsefulness.up)
+                .length,
+            usefulDownCount: own
+                .where((record) => record.useful == SuggestionUsefulness.down)
+                .length,
+            confidence: _confidence(
+              activity,
+              tags,
+              records,
+              typeOf,
+              currentTime,
+            ),
+            evidenceN: evidence.n,
+            shelved: _isShelved(activity, records),
+            suppressedUntil: _suppressionUntil(activity, records, currentTime),
+            hiddenByPreference: _isNeverSuggested(activity, profile),
+          );
+        }(),
+    ];
+  }
 }
+
 
 class _ScoredActivity {
   const _ScoredActivity({
@@ -618,4 +706,58 @@ String _normalize(String value) => value.trim().toLowerCase();
 bool isStarterCandidate(Activity activity) {
   return activity.effort == ActivityEffort.low &&
       activity.durationMinutes <= RecommendationEngine.starterDurationCeiling;
+}
+
+/// Read-only standing of one activity, as the engine currently sees it.
+///
+/// This is the same arithmetic [RecommendationEngine.choose] runs, exposed for
+/// the behavioral profile page rather than recomputed there: two copies of the
+/// decision logic would eventually disagree, and the page's whole point is to
+/// show the decision logic truthfully.
+class ActivityStanding {
+  const ActivityStanding({
+    required this.activity,
+    required this.shownCount,
+    required this.completedCount,
+    required this.rejectionCount,
+    required this.tooHardCount,
+    required this.notNowCount,
+    required this.usefulUpCount,
+    required this.usefulDownCount,
+    required this.confidence,
+    required this.evidenceN,
+    required this.shelved,
+    required this.suppressedUntil,
+    required this.hiddenByPreference,
+  });
+
+  final Activity activity;
+
+  /// How often the user genuinely saw it ("not now" dismissals do not count).
+  final int shownCount;
+  final int completedCount;
+  final int rejectionCount;
+  final int tooHardCount;
+  final int notNowCount;
+  final int usefulUpCount;
+  final int usefulDownCount;
+
+  /// Wilson lower-bound confidence in the engine's current context.
+  final double confidence;
+  final double evidenceN;
+
+  /// Turned down three times: out of rotation for good.
+  final bool shelved;
+  /// When it may be offered again, if it is cooling off; null when not.
+  final DateTime? suppressedUntil;
+  /// The user asked never to see this kind of idea.
+  final bool hiddenByPreference;
+
+  /// Whether the engine would offer it as a learned pick if the explore quota
+  /// allowed, on evidence alone.
+  bool get clearsLearnedGate =>
+      confidence >= RecommendationEngine.confidenceGate &&
+      evidenceN >= RecommendationEngine.evidenceGate;
+
+  bool get isHidden => shelved || hiddenByPreference;
 }

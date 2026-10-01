@@ -10,15 +10,18 @@ import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../domain/home/baseline_progress.dart';
+import '../../domain/profile/behavioral_profile.dart';
 import '../../domain/rhythm/reminder_schedule.dart';
 import '../../services/ambient_audio_service.dart';
 import '../../services/check_in_reminder_service.dart';
 import '../../services/dialer_service.dart';
 import '../library/activity_library_page.dart';
+import 'profile_insights_page.dart';
 import '../safety/care_contacts_page.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
+import '../suggestions/suggestion_context.dart';
 import '../suggestions/suggestion_controller.dart';
 import 'baseline_quiz_page.dart';
 import 'permissions_page.dart';
@@ -619,6 +622,39 @@ class ProfilePage extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                          const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFF2ECDD),
+                          ),
+
+                          // How the app's decisions currently reflect the
+                          // user's own choices and behavior.
+                          _menuRow(
+                            icon: Icons.insights_outlined,
+                            iconBg: const Color(0xFFFFF3DC),
+                            iconColor: const Color(0xFFC08A1E),
+                            title: 'How Solace decides',
+                            subtitle: 'What your choices change about your '
+                                'suggestions',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ProfileInsightsPage(
+                                  profile: BehavioralProfile.compute(
+                                    profile: profileController.profile,
+                                    sessions: sessionController.sessions,
+                                    suggestionHistory:
+                                        suggestionController.history,
+                                    library: suggestionController.library,
+                                    context: buildRecommendationContext(
+                                      profile: profileController.profile,
+                                      sessions: sessionController.sessions,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                           const Divider(

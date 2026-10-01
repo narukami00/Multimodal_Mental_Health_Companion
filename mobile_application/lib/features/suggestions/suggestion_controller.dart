@@ -28,6 +28,13 @@ class SuggestionController extends ChangeNotifier {
   bool get isLoaded => _isLoaded;
   Recommendation? get current => _current;
 
+  /// The activity library as most recently cached by a peek or suggest.
+  ///
+  /// Read-only exposure for the behavioral profile page, which needs types
+  /// and titles to describe the engine's standing. Empty only before the
+  /// first load, which main.dart performs at startup.
+  List<Activity> get library => List.unmodifiable(_library);
+
   /// The record behind the suggestion currently on screen.
   SuggestionRecord? get currentRecord => _currentRecord;
 

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/models/session_input.dart';
 import 'package:solace_mobile/core/models/session_record.dart';
 import 'package:solace_mobile/core/models/user_profile.dart';
+import 'package:solace_mobile/domain/profile/quiz_bank.dart';
 import 'package:solace_mobile/features/suggestions/suggestion_context.dart';
 
 final _now = DateTime(2026, 9, 22, 10);
