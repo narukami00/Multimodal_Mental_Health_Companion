@@ -249,9 +249,15 @@ class _AppShellState extends State<AppShell> {
         final showSuggestion = HomeCardPriority.showSuggestion(homeState);
         final suggestionChoice = _peekSuggestion(allowed: showSuggestion);
         return Scaffold(
-          body: IndexedStack(
-            index: _selectedTab.index,
+          // The capsule is an overlay, not a bottom bar. It is a child of the
+          // body rather than bottomNavigationBar, so the Scaffold reserves no
+          // strip for it and paints none of its own background behind it. The
+          // page runs edge to edge underneath.
+          body: Stack(
             children: [
+              IndexedStack(
+                index: _selectedTab.index,
+                children: [
               TodayPage(
                 chatController: _chatController,
                 ambientAudioEnabled:
@@ -308,14 +314,17 @@ class _AppShellState extends State<AppShell> {
               ),
             ],
           ),
-          // extendBody is what removes the white band: without it the Scaffold
-          // paints its own background in the navigation's strip, so the capsule
-          // sat on a pale rectangle instead of on the page. Pages reserve the
-          // capsule's height at the end of their scroll so nothing hides.
-          extendBody: true,
-          bottomNavigationBar: SolaceNavCapsule(
-            selected: _selectedTab,
-            onSelect: _selectTab,
+              // Sits on top of the view stack, above the pages.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: SolaceNavCapsule(
+                  selected: _selectedTab,
+                  onSelect: _selectTab,
+                ),
+              ),
+            ],
           ),
         );
       },

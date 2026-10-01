@@ -93,7 +93,8 @@ class JournalPage extends StatelessWidget {
                       )
                     else
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(12, 14, 20, 30),
+                        // Room for the floating pill, which overlays the page.
+                        padding: const EdgeInsets.fromLTRB(12, 14, 20, 120),
                         sliver: SliverList.builder(
                           itemCount: _groupSessions(sessions).length,
                           itemBuilder: (context, index) {

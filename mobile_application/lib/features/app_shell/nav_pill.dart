@@ -5,13 +5,12 @@ import 'package:flutter/material.dart';
 import '../../core/navigation/app_tab.dart';
 import '../../core/theme/solace_palette.dart';
 
-/// A floating capsule of destinations, hugging its own content rather than
-/// spanning the screen.
+/// A floating pill of destinations that overlays the view stack.
 ///
-/// The selected destination grows to show its name; the rest stay icon-only.
-/// Selection is carried by colour, not by a second capsule nested inside the
-/// first. There is no ink splash: a capsule-shaped highlight appearing under a
-/// tap was reading as an unintended outline.
+/// It is not a bottom navigation bar: nothing reserves space for it and the
+/// page runs edge to edge underneath. The selected destination grows to show
+/// its name; the rest stay icon-only, and selection is carried by colour rather
+/// than by a second capsule nested inside the first.
 class SolaceNavCapsule extends StatelessWidget {
   const SolaceNavCapsule({
     required this.selected,
@@ -22,15 +21,11 @@ class SolaceNavCapsule extends StatelessWidget {
   final AppTab selected;
   final ValueChanged<AppTab> onSelect;
 
-  /// How far the capsule floats above the bottom safe area.
+  /// How far the pill floats above the bottom safe area.
   static const bottomInset = 14.0;
 
-  /// Total band the capsule occupies, so the page can end above it.
+  /// Height of the pill itself.
   static const height = 62.0;
-
-  static double reservedSpace(BuildContext context) {
-    return height + bottomInset + MediaQuery.paddingOf(context).bottom;
-  }
 
   /// Amber stays constant across palettes for brand contrast.
   static const _active = Color(0xFFC87F10);
@@ -42,17 +37,19 @@ class SolaceNavCapsule extends StatelessWidget {
       padding: EdgeInsets.only(
         bottom: bottomInset + MediaQuery.paddingOf(context).bottom,
       ),
-      // A Row, not a Center: Center inside bottomNavigationBar expands to fill
-      // whatever it is given, which squeezed the page body down to nothing.
-      // A Row reports the height of its tallest child instead.
+      // A Row, not a Center: Center expands to fill whatever it is given, which
+      // squeezed the page content out of the way entirely.
       child: SizedBox(
         height: height,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // Clip.none matters: the default clipping squared the shadow off
+            // into a rectangular artifact behind the pill on Android.
             AnimatedSize(
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutCubic,
+              clipBehavior: Clip.none,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8,
@@ -61,13 +58,10 @@ class SolaceNavCapsule extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
                   color: colors.surface,
-                  border: Border.all(
-                    color: colors.ink.withValues(alpha: 0.07),
-                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: colors.ink.withValues(alpha: 0.10),
-                      blurRadius: 18,
+                      color: colors.ink.withValues(alpha: 0.12),
+                      blurRadius: 20,
                       offset: const Offset(0, 6),
                     ),
                   ],
@@ -124,6 +118,7 @@ class _NavItem extends StatelessWidget {
         child: AnimatedSize(
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
+          clipBehavior: Clip.none,
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: isSelected ? 12 : 11,

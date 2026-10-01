@@ -9,7 +9,6 @@ import '../../domain/home/home_card_priority.dart';
 import '../chat/chat_controller.dart';
 import '../chat/conversation_history.dart';
 import 'living_atmosphere_card.dart';
-import 'nav_pill.dart';
 
 bool get _isTestEnvironment {
   try {
@@ -107,11 +106,9 @@ class TodayPage extends StatelessWidget {
         // full-bleed, and a single padded column is what made the page read as
         // one stack of identical slabs.
         child: ListView(
-          // Bottom padding reserves the floating capsule's height, since the
-          // page now extends behind it.
-          padding: EdgeInsets.only(
-            bottom: SolaceNavCapsule.reservedSpace(context) + 8,
-          ),
+          // Room for the floating pill, which overlays the page rather than
+          // occupying a reserved strip.
+          padding: const EdgeInsets.only(bottom: 120),
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
@@ -127,6 +124,9 @@ class TodayPage extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Column(
+                // stretch, or the cards inside take loose width constraints and
+                // shrink to their own content instead of filling the page.
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (welcomeBackNotice != null) welcomeBackNotice!,
                   _buildPrimaryCard(card),
@@ -149,6 +149,7 @@ class TodayPage extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // The companion is the reason someone opens this app, so it
                   // is the largest thing on the page rather than the smallest.
@@ -168,6 +169,7 @@ class TodayPage extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   LivingAtmosphereCard(ambientAudioEnabled: ambientAudioEnabled),
                   const SizedBox(height: 24),

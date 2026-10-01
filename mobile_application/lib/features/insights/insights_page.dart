@@ -48,7 +48,8 @@ class _InsightsPageState extends State<InsightsPage> {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 360),
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                      // Room for the floating pill, which overlays the page.
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -595,7 +596,8 @@ class _InsightsPageState extends State<InsightsPage> {
       ),
       builder: (context) => SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(22, 12, 22, 30),
+          // Room for the floating pill, which overlays the page.
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 120),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,

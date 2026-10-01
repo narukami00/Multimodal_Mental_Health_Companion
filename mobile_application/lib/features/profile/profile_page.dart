@@ -58,7 +58,8 @@ class ProfilePage extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 360),
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+                  // Room for the floating pill, which overlays the page.
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 120),
                   children: [
                     // Top header: Brandmark + subtle settings button
                     Row(
