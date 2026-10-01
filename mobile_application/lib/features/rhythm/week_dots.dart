@@ -20,8 +20,9 @@ class WeekDots extends StatelessWidget {
 
   final VoidCallback? onTap;
 
-  static const _accent = Color(0xFF8A5600);
-  static const _idle = Color(0x334A3728);
+  static const _accent = Color(0xFFC87F10);
+  static const _rest = Color(0xFFE8604C);
+  static const _idle = Color(0x2E4A3728);
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +34,7 @@ class WeekDots extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: SizedBox(
-          // A 44px tall target even though the marks are 10px: the row is the
+          // A 44px tall target even though the marks are small: the row is the
           // control, not the dots.
           height: 44,
           child: Row(
@@ -68,27 +69,31 @@ class _Dot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final filled = isCheckedIn;
+    // A check-in is the accent orange, filled. A rest day is a red wash rather
+    // than a solid fill, so it reads as something the user chose rather than as
+    // an alarm. Neither uses the dark brown that was there before.
+    final Color fill;
+    if (isCheckedIn) {
+      fill = WeekDots._accent;
+    } else if (isRest) {
+      fill = WeekDots._rest.withValues(alpha: 0.28);
+    } else {
+      fill = WeekDots._idle;
+    }
+
     return Container(
-      width: 12,
-      height: 12,
+      width: 9,
+      height: 9,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: filled ? WeekDots._accent : Colors.transparent,
-        border: filled
-            ? null
-            : Border.all(
-                color: isRest
-                    ? WeekDots._idle.withValues(alpha: 0.75)
-                    : WeekDots._idle,
-                width: 1.6,
-              ),
+        color: fill,
+        border: isRest && !isCheckedIn
+            ? Border.all(color: WeekDots._rest.withValues(alpha: 0.75), width: 1.2)
+            : null,
         // Today is a ring rather than a colour, so the most alert-like hue in
         // the app is never spent on "the most recent day".
         boxShadow: isToday
-            ? const [
-                BoxShadow(color: WeekDots._accent, spreadRadius: 2.6),
-              ]
+            ? const [BoxShadow(color: WeekDots._accent, spreadRadius: 2)]
             : null,
       ),
     );

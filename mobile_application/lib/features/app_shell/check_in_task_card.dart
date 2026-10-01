@@ -32,6 +32,7 @@ class CheckInTaskCard extends StatefulWidget {
     this.onCta,
     this.task,
     this.onTaskAccept,
+    this.onTaskOpen,
     this.onTaskDecline,
     super.key,
   });
@@ -44,6 +45,7 @@ class CheckInTaskCard extends StatefulWidget {
 
   final TaskOffer? task;
   final VoidCallback? onTaskAccept;
+  final VoidCallback? onTaskOpen;
 
   /// Called once the task has finished wiping away, so the parent can drop it.
   final VoidCallback? onTaskDecline;
@@ -113,7 +115,14 @@ class _CheckInTaskCardState extends State<CheckInTaskCard> {
                   child: AnimatedOpacity(
                     duration: const Duration(milliseconds: 300),
                     opacity: _taskLeaving ? 0 : 1,
-                    child: _buildTask(context, task),
+                    // The whole task is a tap target, not just its buttons:
+                    // tapping the idea itself is the obvious thing to try, and
+                    // it opens the full details.
+                    child: GestureDetector(
+                      onTap: widget.onTaskOpen,
+                      behavior: HitTestBehavior.opaque,
+                      child: _buildTask(context, task),
+                    ),
                   ),
                 ),
             ],
@@ -168,27 +177,17 @@ class _CheckInTaskCardState extends State<CheckInTaskCard> {
             ),
           ),
           const SizedBox(height: 15),
-          FilledButton(
+          // A bright orange gradient, not the dark brown that was here before.
+          // That colour was never part of the app's palette, and dark ink on
+          // bright orange is both on-brand and readable, where white on the
+          // previous amber measured about 2:1.
+          _OrangeButton(
+            label: widget.ctaLabel,
             onPressed: widget.onCta,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF8A5600),
-              foregroundColor: const Color(0xFFFFFDF8),
-              minimumSize: const Size(0, 46),
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            // The style lives on the Text, not in styleFrom(textStyle:). An
-            // explicit textStyle there drops the themed font family and the
-            // label falls back to the default face.
-            child: Text(
-              widget.ctaLabel,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+            height: 46,
+            radius: 999,
+            horizontalPadding: 26,
+            prominent: true,
           ),
         ],
       ),
@@ -277,30 +276,86 @@ class _TaskButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton(
+    return _OrangeButton(
+      label: label,
       onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        backgroundColor: filled
-            ? const Color(0xFF8A5600)
-            : Colors.transparent,
-        foregroundColor: filled
-            ? const Color(0xFFFFFDF8)
-            : const Color(0xFF5F4E3A),
-        // Sized to its own label. A pill spanning the screen around three words
-        // is mostly empty space and reads as a slab rather than a button.
-        minimumSize: const Size(0, 44),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(13),
-          side: filled
-              ? BorderSide.none
-              : const BorderSide(color: Color(0x294A3728), width: 1.4),
-        ),
+      height: 44,
+      radius: 13,
+      horizontalPadding: 20,
+      prominent: filled,
+    );
+  }
+}
+
+/// The app's own orange, as a button.
+///
+/// Dark ink on a bright orange gradient: the brown fill this replaces was never
+/// in the palette, and white on amber measured around 2:1, which is unreadable
+/// on a low-end panel in daylight.
+class _OrangeButton extends StatelessWidget {
+  const _OrangeButton({
+    required this.label,
+    required this.onPressed,
+    required this.height,
+    required this.radius,
+    required this.horizontalPadding,
+    required this.prominent,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final double height;
+  final double radius;
+  final double horizontalPadding;
+  final bool prominent;
+
+  static const _ink = Color(0xFF3F2A0E);
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        gradient: prominent
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFFC24F), Color(0xFFF09A18)],
+              )
+            : null,
+        border: prominent
+            ? null
+            : Border.all(color: const Color(0x2E4A3728), width: 1.4),
+        boxShadow: prominent
+            ? const [
+                BoxShadow(
+                  color: Color(0x33E08A10),
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(radius),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(radius),
+          child: Container(
+            height: height,
+            alignment: Alignment.center,
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: prominent ? _ink : const Color(0xFF5F4E3A),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -33,6 +33,7 @@ import '../suggestions/suggestion_context.dart';
 import '../suggestions/suggestion_page.dart';
 import 'baseline_setup_card.dart';
 import 'check_in_task_card.dart';
+import 'home_rail.dart';
 import 'home_suggestion_card.dart';
 import 'nav_pill.dart';
 import 'today_page.dart';
@@ -317,6 +318,12 @@ class _AppShellState extends State<AppShell> {
                   ],
                   onTap: () => _openRhythm(context),
                 ),
+                homeRail: HomeRail(
+                  journalCount: widget.sessionController.sessions.length,
+                  onJournal: () => _selectTab(AppTab.journal),
+                  onConversations: () => _openChat(context),
+                ),
+                onTaskOpen: () => _openSuggestionDetails(suggestionChoice),
                 onTaskAccept: () => _acceptSuggestion(suggestionChoice!),
                 onTaskDecline: _declineSuggestion,
                 onBlobTap: () => _openChat(context, startNew: true),

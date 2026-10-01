@@ -28,6 +28,8 @@ class TodayPage extends StatelessWidget {
     this.taskOffer,
     this.weekDots,
     this.onOpenRhythm,
+    this.homeRail,
+    this.onTaskOpen,
     this.onTaskAccept,
     this.onTaskDecline,
     this.onBlobTap,
@@ -65,6 +67,10 @@ class TodayPage extends StatelessWidget {
   /// The last seven days, under the greeting. Null if there is nothing to show.
   final Widget? weekDots;
   final VoidCallback? onOpenRhythm;
+
+  /// Journal and the most recent conversation, side by side.
+  final Widget? homeRail;
+  final VoidCallback? onTaskOpen;
 
   /// The day's task, offered inside the check-in card rather than as a second
   /// card below it. Null once it has been declined or nothing is due.
@@ -172,31 +178,22 @@ class TodayPage extends StatelessWidget {
                 ],
               ),
             ),
-            // Gaps vary deliberately (18 / 30 / 26 / 22) so the page has
-            // accents instead of one even tempo.
-            const SizedBox(height: 30),
-            // Inset like every other card. It was briefly left full-bleed while
-            // keeping its 16px corner radii, which sliced the corners off
-            // against the screen edge and looked like a mistake rather than a
-            // deliberate band.
-            if (rhythmCard != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
-                child: rhythmCard!,
-              ),
-            const SizedBox(height: 30),
+            // The "last four weeks" strip and the "talk it through" card used to
+            // live here. Both are gone: the week is now the marks under the
+            // greeting, and the companion is the shape above the card, so both
+            // were saying the same thing a second time.
+            const SizedBox(height: 26),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: homeRail ??
+                  _buildSolCompanionHub(context),
+            ),
+            const SizedBox(height: 26),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // The companion is the reason someone opens this app, so it
-                  // is the largest thing on the page rather than the smallest.
-                  _buildSolCompanionHub(context),
-                  if (showSuggestion && suggestionCard != null) ...[
-                    const SizedBox(height: 26),
-                    suggestionCard!,
-                  ],
                   if (setupCard != null) ...[
                     const SizedBox(height: 22),
                     setupCard!,
@@ -302,6 +299,7 @@ class TodayPage extends StatelessWidget {
             onCta: _primaryAction(primaryCard),
             task: taskOffer,
             onTaskAccept: onTaskAccept,
+            onTaskOpen: onTaskOpen,
             onTaskDecline: onTaskDecline,
           ),
         ),
