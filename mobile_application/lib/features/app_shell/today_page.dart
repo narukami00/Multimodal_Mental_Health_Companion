@@ -147,12 +147,19 @@ class TodayPage extends StatelessWidget {
             ),
             // The week sits directly under the greeting, with no label of its
             // own: the marks say enough, and the row taps through to rest.
-            if (weekDots != null)
+            // The setup meter shares the week's row, so the greeting lines up with
+            // the date and the week lines up with the meter, whether or not the
+            // meter is there.
+            if (weekDots != null || setupProgressBadge != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: weekDots,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (weekDots != null) weekDots!,
+                    const Spacer(),
+                    if (setupProgressBadge != null) setupProgressBadge!,
+                  ],
                 ),
               ),
             // No divider and no gap here. The shape rises into the greeting, and
@@ -226,33 +233,22 @@ class TodayPage extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: const Color(0xFF4A3728).withValues(alpha: 0.14),
-                ),
-              ),
-              child: Text(
-                date,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF7B6A55),
-                ),
-              ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: const Color(0xFF4A3728).withValues(alpha: 0.14),
             ),
-            if (setupProgressBadge != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 5),
-                child: setupProgressBadge!,
-              ),
-          ],
+          ),
+          child: Text(
+            date,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF7B6A55),
+            ),
+          ),
         ),
       ],
     );

@@ -6,6 +6,7 @@ import 'package:solace_mobile/data/repositories/in_memory_session_repository.dar
 import 'package:solace_mobile/domain/home/baseline_progress.dart';
 import 'package:solace_mobile/features/app_shell/setup_progress_badge.dart';
 import 'package:solace_mobile/features/app_shell/today_page.dart';
+import 'package:solace_mobile/features/rhythm/week_dots.dart';
 import 'package:solace_mobile/main.dart';
 import 'package:solace_mobile/providers/mock/mock_providers.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
@@ -41,7 +42,9 @@ void main() {
     expect(continued, isTrue);
   });
 
-  testWidgets('the meter sits under the date chip, on the right', (tester) async {
+  testWidgets('greeting lines up with the date, week with the meter', (
+    tester,
+  ) async {
     await _pumpBadge(tester, const BaselineProgress(completed: 2, total: 4));
 
     final date = find.text(
@@ -49,17 +52,19 @@ void main() {
         tester.element(find.byType(SetupProgressBadge)),
       ).formatMediumDate(DateTime(2026, 10, 1)),
     );
-    final badge = find.byType(SetupProgressBadge);
-
-    expect(date, findsOneWidget);
-    expect(badge, findsOneWidget);
-    // Below the chip, and hugging the same right edge rather than drifting.
-    // The chip itself is the text's closest Container ancestor.
     final chip = tester.getRect(
       find.ancestor(of: date, matching: find.byType(Container)).first,
     );
-    expect(tester.getRect(badge).top, greaterThan(chip.bottom));
-    expect(tester.getRect(badge).right, closeTo(chip.right, 0.5));
+    final greeting = tester.getRect(find.text('Still awake'));
+    final badge = tester.getRect(find.byType(SetupProgressBadge));
+    final week = tester.getRect(find.byType(WeekDots));
+
+    // First row: greeting and date share a centre line, meter or no meter.
+    expect(greeting.center.dy, closeTo(chip.center.dy, 1));
+    // Second row: the week and the meter share one, below the first.
+    expect(week.center.dy, closeTo(badge.center.dy, 1));
+    expect(badge.top, greaterThan(chip.bottom));
+    expect(badge.right, closeTo(chip.right, 0.5));
   });
 
   testWidgets('TodayPage without the slot shows no setup meter', (tester) async {
@@ -119,6 +124,10 @@ Future<void> _pumpBadge(
       home: Scaffold(
         body: TodayPage(
           currentTime: DateTime(2026, 10, 1),
+          weekDots: WeekDots(
+            checkedIn: List.filled(7, false),
+            rested: List.filled(7, false),
+          ),
           setupProgressBadge: SetupProgressBadge(
             progress: progress,
             onContinue: onContinue ?? () {},
