@@ -9,13 +9,16 @@ import 'data/repositories/asset_activity_library_repository.dart';
 import 'data/repositories/in_memory_profile_repository.dart';
 import 'data/repositories/in_memory_safety_event_repository.dart';
 import 'data/repositories/in_memory_suggestion_repository.dart';
+import 'data/repositories/shared_preferences_daily_features_repository.dart';
 import 'data/repositories/shared_preferences_onboarding_repository.dart';
 import 'data/repositories/shared_preferences_profile_repository.dart';
 import 'data/repositories/shared_preferences_safety_event_repository.dart';
 import 'data/repositories/shared_preferences_session_repository.dart';
 import 'data/repositories/shared_preferences_suggestion_repository.dart';
 import 'domain/rhythm/reminder_lapse_policy.dart';
+import 'features/chat/chat_controller.dart';
 import 'features/checkin/check_in_mode_page.dart';
+import 'features/footprint/in_app_feature_recorder.dart';
 import 'features/onboarding/onboarding_gate.dart';
 import 'features/profile/profile_controller.dart';
 import 'features/safety/safety_controller.dart';
@@ -76,6 +79,25 @@ Future<void> main() async {
   // waiting on an asset read during a rebuild.
   await suggestionController.warmUp();
 
+  // Owned here so the daily-features recorder and the shell read one chat
+  // history. The shell leaves a controller it was handed alone.
+  final chatController = ChatController(preferences: preferences);
+  await chatController.load();
+
+  // Keeps the in-app part of each day's behavior row current, and drops rows
+  // older than the retention the user chose. Reads only what the app already
+  // holds; nothing here touches the device's usage data.
+  final featureRecorder = InAppFeatureRecorder(
+    repository: SharedPreferencesDailyFeaturesRepository(preferences),
+    sessions: () => sessionController.sessions,
+    conversations: () => chatController.conversations,
+    profile: () => profileController.profile,
+  );
+  await featureRecorder.recordRecent();
+  await featureRecorder.prune();
+  sessionController.addListener(featureRecorder.scheduleToday);
+  chatController.addListener(featureRecorder.scheduleToday);
+
   final navigatorKey = GlobalKey<NavigatorState>();
 
   void openCheckInFromWidget(Uri? uri) {
@@ -130,6 +152,7 @@ Future<void> main() async {
       safetyController: safetyController,
       profileController: profileController,
       suggestionController: suggestionController,
+      chatController: chatController,
       navigatorKey: navigatorKey,
     ),
   );
@@ -142,6 +165,7 @@ class SolaceApp extends StatelessWidget {
     SafetyController? safetyController,
     ProfileController? profileController,
     SuggestionController? suggestionController,
+    this.chatController,
     this.navigatorKey,
     super.key,
   }) : safetyController =
@@ -164,6 +188,10 @@ class SolaceApp extends StatelessWidget {
   final SafetyController safetyController;
   final ProfileController profileController;
   final SuggestionController suggestionController;
+
+  /// Shared with whatever else needs the chat history. When null the shell
+  /// creates its own, as it always did.
+  final ChatController? chatController;
 
   /// Lets the home-screen widget push the check-in flow from outside the tree.
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -188,6 +216,7 @@ class SolaceApp extends StatelessWidget {
             safetyController: safetyController,
             profileController: profileController,
             suggestionController: suggestionController,
+            chatController: chatController,
           ),
         );
       },
