@@ -453,6 +453,64 @@ class _SunPainter extends CustomPainter {
   bool shouldRepaint(covariant _SunPainter oldDelegate) => false;
 }
 
+/// The small orange disc at the head of the check-in button, carrying a tick.
+///
+/// It echoes the sun already painted on the panel, which gives the button a
+/// shape of its own instead of being a label in a box. The tick is drawn rather
+/// than set in an icon font, because the Material icon font is not present in
+/// this build and every glyph from it renders as a tofu box.
+class _TickDisc extends StatelessWidget {
+  const _TickDisc();
+
+  static const _diameter = 36.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _diameter,
+      height: _diameter,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFC24F), Color(0xFFEE8B0C)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x73106904),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: CustomPaint(painter: _TickPainter()),
+    );
+  }
+}
+
+class _TickPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.6
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final path = Path()
+      ..moveTo(size.width * 0.29, size.height * 0.52)
+      ..lineTo(size.width * 0.44, size.height * 0.67)
+      ..lineTo(size.width * 0.72, size.height * 0.36);
+
+    canvas.drawPath(path, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TickPainter oldDelegate) => false;
+}
+
 /// The app's own orange, as a button.
 ///
 /// Dark ink on a bright orange gradient. The brown fill this replaces was never
@@ -485,13 +543,7 @@ class _OrangeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final solid = prominent || light;
-    // The ink pill is the one place white text earns its keep: it sits on a
-    // near-black fill, so it measures well past 12:1.
-    final ink = light
-        ? Colors.white
-        : solid
-        ? _ink
-        : const Color(0xFF5F4E3A);
+    final ink = solid ? _ink : const Color(0xFF5F4E3A);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -506,26 +558,27 @@ class _OrangeButton extends StatelessWidget {
             ? const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0xFF4A3319), Color(0xFF2C1D0C)],
+                colors: [Color(0xFFFFFFFF), Color(0xFFFFF4E2)],
               )
             : null,
         border: prominent
             ? null
             : light
-            ? Border.all(color: const Color(0x33FFFFFF), width: 1)
+            ? null
             : Border.all(color: const Color(0x2E4A3728), width: 1.2),
-        // Two shadows on the ink pill: a tight one for contact and a wider one
-        // for lift. A single shadow reads flat at this size.
+        // Two shadows on the cream pill: a tight one for contact and a wider,
+        // slightly spread-negative one for lift. A single shadow reads flat.
         boxShadow: light
             ? const [
                 BoxShadow(
-                  color: Color(0x38120A02),
+                  color: Color(0x33704004),
                   blurRadius: 3,
                   offset: Offset(0, 2),
                 ),
                 BoxShadow(
-                  color: Color(0x4D2E1D08),
-                  blurRadius: 20,
+                  color: Color(0x57704004),
+                  blurRadius: 22,
+                  spreadRadius: -4,
                   offset: Offset(0, 10),
                 ),
               ]
@@ -547,21 +600,40 @@ class _OrangeButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(radius),
           child: Container(
             height: height,
-            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-            // widthFactor 1 makes the button hug its own label. Without it a
+            padding: light
+                ? const EdgeInsets.only(left: 7, right: 26)
+                : EdgeInsets.symmetric(horizontal: horizontalPadding),
+            // widthFactor 1 makes the button hug its own content. Without it a
             // Container carrying an alignment expands to whatever width its
             // parent offers, turning a capsule into a full-width bar.
             child: Center(
               widthFactor: 1,
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: light ? 15.5 : 14.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.1,
-                  color: ink,
-                ),
-              ),
+              child: light
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const _TickDisc(),
+                        const SizedBox(width: 11),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.1,
+                            color: ink,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.1,
+                        color: ink,
+                      ),
+                    ),
             ),
           ),
         ),
