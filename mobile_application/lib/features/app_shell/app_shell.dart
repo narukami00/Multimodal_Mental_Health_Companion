@@ -193,6 +193,10 @@ class _AppShellState extends State<AppShell> {
       context: choice.context,
       proactive: true,
     );
+    // Accepting lands on the rating step, which treats the idea as done, so the
+    // completion is written now. Without it the record stayed `shown`: the idea
+    // came back after a restart and the card was left faded out until then.
+    await widget.suggestionController.recordCompletion();
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(

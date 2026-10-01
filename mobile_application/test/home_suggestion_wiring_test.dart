@@ -172,6 +172,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.history.single.proactive, isTrue);
+    // Done is written at once, so the idea cannot come back after a restart.
+    expect(controller.history.single.status, SuggestionStatus.completed);
+    expect(controller.history.single.done, isTrue);
+    expect(controller.pendingProactive(), isNull);
     // The card faded out first, and the page that opened has taken its place.
     expect(find.byKey(const ValueKey('task-accept')), findsNothing);
   });
