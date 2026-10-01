@@ -52,6 +52,15 @@ class CompanionBlob extends StatefulWidget {
 
   final String semanticLabel;
 
+  /// The layout box a blob of [diameter] is drawn into.
+  ///
+  /// Public because the Home page positions the shape by where the *shape* should
+  /// land, and to do that it has to know how much bigger the box is than the
+  /// shape. That relationship used to be private to this file, so callers had to
+  /// guess it — and guessed wrong, moving the bubble the wrong way twice.
+  static double boxExtentFor(double diameter) =>
+      diameter * BlobSimulation.inflateRadius * 1.15;
+
   @override
   State<CompanionBlob> createState() => _CompanionBlobState();
 }
@@ -68,8 +77,7 @@ class _CompanionBlobState extends State<CompanionBlob>
   /// inflates to, so the box and the physics cannot disagree about how big the
   /// blob gets. Anything less and the swell is clipped at the moment it is most
   /// visible.
-  double get _boxExtent =>
-      widget.diameter * BlobSimulation.inflateRadius * 1.15;
+  double get _boxExtent => CompanionBlob.boxExtentFor(widget.diameter);
 
   late final BlobSimulation _simulation =
       BlobSimulation(restRadius: _restRadius);

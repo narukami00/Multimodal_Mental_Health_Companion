@@ -258,6 +258,48 @@ class TodayPage extends StatelessWidget {
     };
   }
 
+  /// The resting diameter of the shape on Home.
+  ///
+  /// Exposed only so the measurement test can check the rendered result against
+  /// the intent. Nothing outside this file should position the blob by it.
+  @visibleForTesting
+  static const double blobDiameterOnHome = 118;
+
+  static const double _blobDiameter = blobDiameterOnHome;
+
+  /// How the card is inset below the shape.
+  static const double _cardInset = 40;
+
+  /// Where the blob's layout box goes, so the *shape* lands where it should.
+  ///
+  /// Derived from the overlap rather than written as a bare number, because the
+  /// box is nearly twice the shape's diameter and a hardcoded offset silently
+  /// stops meaning what it says. Two earlier attempts to tune this by hand moved
+  /// it the wrong way, so the arithmetic is now the whole of the behaviour.
+  ///
+  /// The box's top plus half the box is the shape's centre; the shape's bottom
+  /// then has to land [_overlapFraction] of a diameter below the card's top
+  /// edge. Solving for the box's top gives the expression below.
+  ///
+  /// Raising the shape means *lowering* [_overlapFraction]. That inversion is
+  /// exactly why this was wrong twice by hand.
+  static double get _shapeTop =>
+      _blobDiameter * _overlapFraction +
+      _cardInset -
+      CompanionBlob.boxExtentFor(_blobDiameter) / 2 -
+      _blobDiameter / 2;
+
+  /// Fraction of the shape's diameter that hangs *below* the card's top edge.
+  ///
+  /// This is the design decision and the only number that should be changed to
+  /// move the shape. It measured around 0.51, which put the bubble sitting half
+  /// on the card and half off it. It wants to be nearer a third, so the shape
+  /// hangs mostly above the card and only breaks its top edge.
+  @visibleForTesting
+  static const double blobOverlapFraction = 0.32;
+
+  static const double _overlapFraction = blobOverlapFraction;
+
   /// The companion shape, with the check-in card tucked underneath it.
   ///
   /// The blob breaks the card's silhouette rather than sitting above it on a
@@ -267,15 +309,13 @@ class TodayPage extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // The card's top edge cuts across the lower third of the shape, which is
-        // what makes the two read as one object. Measured against the resting
-        // radius (118 / 2 = 59): a third of that is 20, so the shape's bottom
-        // sits 20 px below the card's top edge. Measured against the layout box
-        // instead — which is nearly four times the resting shape now, to hold the
-        // swell and the glow — and the overlap became negligible, so the card
-        // visibly detached from the shape it is supposed to be tucked under.
+        // Sits below the shape by [_cardInset], which combined with
+        // [_overlapFraction] is what puts the card's top edge across the shape's
+        // lower third. Measured, not guessed: the layout box is much larger than
+        // the shape, so the offset that positions one says nothing about where
+        // the other appears.
         Padding(
-          padding: const EdgeInsets.only(top: 40),
+          padding: const EdgeInsets.only(top: _cardInset),
           child: CheckInTaskCard(
             eyebrow: card.eyebrow,
             headline: card.title,
@@ -294,19 +334,7 @@ class TodayPage extends StatelessWidget {
           // would drop the visible crown by the difference between the two, and
           // that difference is now large: the box is several times the resting
           // shape's width so that the swell and the glow have somewhere to go.
-          // The arithmetic: the box is 118 x 1.6 x 1.15 = 217 across, so its
-          // centre sits 108.5 px below its own top edge, and the resting shape's
-          // crown is a further 59 px above that. So the crown lands 49.5 px below
-          // the box's top edge, and -67 puts that crown at -17.5 — a little higher
-          // than the card's top edge, which is what makes it read as tucked under
-          // rather than as sitting on top of the card.
-          //
-          // Measured by rendering it, not by arithmetic. The box is nearly twice
-          // the resting shape's width now, so anchoring the box instead of the
-          // shape drops the visible crown by over 100 px; and the crown has to
-          // clear the masthead and the week marks above it, which is why it
-          // cannot simply be raised to wherever looks right relative to the card.
-          top: -67,
+          top: _shapeTop,
           left: 0,
           right: 0,
           child: Center(
@@ -314,7 +342,7 @@ class TodayPage extends StatelessWidget {
               // The resting shape. Smaller than the 146 the solid version used,
               // because this one is translucent and carries its own glow: at the
               // old size it outweighed the check-in card it is meant to point at.
-              diameter: 118,
+              diameter: _blobDiameter,
               onTap: onBlobTap,
             ),
           ),
