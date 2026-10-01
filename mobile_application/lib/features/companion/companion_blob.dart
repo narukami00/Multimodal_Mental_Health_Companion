@@ -163,53 +163,106 @@ class _BlobPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = _blobPath(size);
+    final centre = Offset(size.width / 2, size.height / 2);
+    final body = _blobPath(size);
+    final t = phase * 2 * math.pi;
 
-    // A blurred copy of the shape, offset down. Not canvas.drawShadow: that
-    // renders a rectangular occluder behind a non-rectangular path, which
-    // showed up as a grey box around the blob.
+    // 1. A radiant halo, so the shape sits in the page rather than on it.
     canvas.drawPath(
-      _blobPath(size, radiusScale: 0.94).shift(const Offset(0, 7)),
+      _blobPath(size, radiusScale: 1.22),
       Paint()
-        ..color = const Color(0x40C07818)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+        ..color = _core.withValues(alpha: 0.18)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15),
     );
 
-    // Two offset translucent layers under the body, so it reads as liquid with
-    // depth rather than as a flat disc. They are what let it sit over text
-    // without hiding it.
+    // 2. A cast shadow as a blurred copy of the shape. Not canvas.drawShadow:
+    //    that renders a rectangular occluder behind a non-rectangular path,
+    //    which showed up as a grey box.
     canvas.drawPath(
-      _blobPath(size, radiusScale: 0.86),
-      Paint()..color = _core.withValues(alpha: 0.30),
-    );
-    canvas.drawPath(
-      _blobPath(size, radiusScale: 0.68),
-      Paint()..color = _light.withValues(alpha: 0.26),
+      _blobPath(size, radiusScale: 0.95).shift(const Offset(0, 9)),
+      Paint()
+        ..color = const Color(0x45C07818)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 11),
     );
 
+    // 3. The body, with its light source orbiting rather than fixed, which is
+    //    what makes it read as liquid instead of a painted circle.
+    final orbit = Offset(math.cos(t) * 0.22, math.sin(t) * 0.22);
     canvas.drawPath(
-      path,
+      body,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(-0.34, -0.44),
-          radius: 0.95,
+          center: Alignment(orbit.dx - 0.18, orbit.dy - 0.26),
+          radius: 1.05,
           colors: [
-            _light.withValues(alpha: 0.82),
-            _core.withValues(alpha: 0.72),
-            _deep.withValues(alpha: 0.62),
+            _light.withValues(alpha: 0.98),
+            _core.withValues(alpha: 0.94),
+            _deep.withValues(alpha: 0.88),
           ],
-          stops: const [0.0, 0.55, 1.0],
+          stops: const [0.0, 0.5, 1.0],
         ).createShader(Offset.zero & size),
     );
 
-    // An inner rim, which is what gives the silhouette an edge against a pale
-    // background. Measured about 1.2 to 1 without it.
+    // 4. An inner counter-swirl turning the other way: two fluids inside one
+    //    skin rather than one flat fill.
+    canvas.save();
+    canvas.translate(centre.dx, centre.dy);
+    canvas.rotate(-t * 0.7);
+    canvas.translate(-centre.dx, -centre.dy);
     canvas.drawPath(
-      path,
+      _blobPath(size, radiusScale: 0.60).shift(Offset(size.width * 0.05, 0)),
+      Paint()..color = _light.withValues(alpha: 0.24),
+    );
+    canvas.restore();
+
+    // 5. Effervescence: small bubbles drifting up inside the body.
+    for (var i = 0; i < 4; i++) {
+      final drift = (phase * 1.6 + i * 0.25) % 1.0;
+      final x = centre.dx + math.sin(t * 0.9 + i * 1.9) * size.width * 0.22;
+      final y = centre.dy + size.height * (0.30 - drift * 0.62);
+      final r = size.width * (0.028 + i * 0.006);
+      canvas.drawCircle(
+        Offset(x, y),
+        r,
+        Paint()..color = Colors.white.withValues(alpha: 0.40),
+      );
+    }
+
+    // 6. A specular sheen where the light would catch glass.
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(
+          centre.dx - size.width * 0.16,
+          centre.dy - size.height * 0.20,
+        ),
+        width: size.width * 0.30,
+        height: size.height * 0.17,
+      ),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.60)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+    canvas.drawCircle(
+      Offset(centre.dx + size.width * 0.20, centre.dy + size.height * 0.14),
+      size.width * 0.035,
+      Paint()..color = Colors.white.withValues(alpha: 0.45),
+    );
+
+    // 7. Surface tension: a shimmering rim, so the skin has an edge against a
+    //    pale page. Measured about 1.2 to 1 without it.
+    canvas.drawPath(
+      body,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4
-        ..color = const Color(0x3AC07818),
+        ..strokeWidth = 1.8
+        ..color = const Color(0x66FFFFFF),
+    );
+    canvas.drawPath(
+      body,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..color = const Color(0x3AB46B0A),
     );
   }
 

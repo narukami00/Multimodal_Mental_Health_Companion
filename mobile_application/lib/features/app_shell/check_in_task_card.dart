@@ -300,17 +300,21 @@ class _CheckInPanelState extends State<_CheckInPanel>
         return Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            // The gradient drifts so the surface is alive rather than a flat
-            // block of colour.
+            // The gradient rotates through a full turn, so the end of the cycle
+            // is the same as the start. Sweeping the begin/end alignment instead
+            // reached the end of its travel and snapped back, which read as a
+            // visible pop every loop.
             gradient: LinearGradient(
-              begin: Alignment(-1.2 + t * 0.9, -1),
-              end: Alignment(0.4 + t * 0.9, 1),
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
               colors: const [
                 Color(0xFFFFC85A),
                 Color(0xFFF5A01C),
                 Color(0xFFFFB534),
+                Color(0xFFF09A18),
               ],
-              stops: const [0.0, 0.55, 1.0],
+              stops: const [0.0, 0.35, 0.7, 1.0],
+              transform: GradientRotation(t * 2 * math.pi),
             ),
           ),
           child: Stack(

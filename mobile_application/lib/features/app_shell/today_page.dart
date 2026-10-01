@@ -152,18 +152,12 @@ class TodayPage extends StatelessWidget {
                   child: weekDots,
                 ),
               ),
-            // A full-bleed hairline: the one separator on the page, used once.
-            Container(
-              height: 1,
-              margin: const EdgeInsets.only(top: 18),
-              color: const Color(0xFF4A3728).withValues(alpha: 0.08),
-            ),
-            const SizedBox(height: 18),
+            // No divider and no gap here. The shape rises into the greeting, and
+            // a rule with empty space either side just pushed the one thing worth
+            // looking at further down the page.
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Column(
-                // stretch, or the cards inside take loose width constraints and
-                // shrink to their own content instead of filling the page.
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (welcomeBackNotice != null) welcomeBackNotice!,
@@ -275,11 +269,11 @@ class TodayPage extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Padding(
-          // The shape sits over the card's top edge rather than above it. It is
-          // translucent now, so overlapping the words is fine - the copy still
-          // reads through it, and the overlap is what makes the two feel like
-          // one object.
-          padding: const EdgeInsets.only(top: 42),
+          // The card reserves room for the shape to sit over its top edge, and
+          // the shape is lifted above the card so its crown reaches roughly the
+          // greeting. The two are one object; the shape is not a decoration
+          // parked above a box.
+          padding: const EdgeInsets.only(top: 96),
           child: CheckInTaskCard(
             eyebrow: card.eyebrow,
             headline: card.title,
@@ -293,12 +287,12 @@ class TodayPage extends StatelessWidget {
           ),
         ),
         Positioned(
-          top: 0,
+          top: -74,
           left: 0,
           right: 0,
           child: Center(
             child: CompanionBlob(
-              diameter: 84,
+              diameter: 146,
               onTap: onBlobTap,
               onLongPress: onBlobLongPress,
             ),
