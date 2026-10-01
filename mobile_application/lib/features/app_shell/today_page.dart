@@ -268,12 +268,11 @@ class TodayPage extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
+        // The card's top edge sits 30% up from the bottom of the shape, which is
+        // 70% down from its crown: the shape's bottom is at 88, so 88 - (0.3 x
+        // 146) = 44. The shape itself does not move; only the card does.
         Padding(
-          // The card reserves room for the shape to sit over its top edge, and
-          // the shape is lifted above the card so its crown reaches roughly the
-          // greeting. The two are one object; the shape is not a decoration
-          // parked above a box.
-          padding: const EdgeInsets.only(top: 96),
+          padding: const EdgeInsets.only(top: 44),
           child: CheckInTaskCard(
             eyebrow: card.eyebrow,
             headline: card.title,
@@ -287,7 +286,7 @@ class TodayPage extends StatelessWidget {
           ),
         ),
         Positioned(
-          top: -74,
+          top: -58,
           left: 0,
           right: 0,
           child: Center(

@@ -207,7 +207,7 @@ class _CheckInTaskCardState extends State<CheckInTaskCard> {
                 filled: true,
                 onPressed: widget.onTaskAccept,
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 12),
               _TaskButton(
                 key: const ValueKey('task-decline'),
                 label: task.declineLabel,
@@ -327,11 +327,13 @@ class _CheckInPanelState extends State<_CheckInPanel>
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
                 child: Column(
+                  // Left-aligned, reading left to right, rather than centred:
+                  // a centred block reads as a poster, and this is a thing to do.
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (widget.eyebrow != null) ...[
                       Text(
                         widget.eyebrow!.toUpperCase(),
-                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
@@ -345,27 +347,28 @@ class _CheckInPanelState extends State<_CheckInPanel>
                     ],
                     Text(
                       widget.headline,
-                      textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 20,
-                        height: 1.2,
+                        // Larger than it was: this question is the focal point of
+                        // the page, and at 20 it sat at the same weight as
+                        // everything else around it.
+                        fontSize: 23,
+                        height: 1.18,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
+                        letterSpacing: -0.7,
                         color: Color(0xFF3F2A0E),
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 7),
                     Text(
                       widget.subtitle,
-                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 13,
                         height: 1.4,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF3F2A0E).withValues(alpha: 0.80),
+                        color: const Color(0xFF3F2A0E).withValues(alpha: 0.82),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     // Inverted from the panel: a light pill on the orange,
                     // rather than an orange pill on a pale card. It reads as the
                     // one thing to press instead of blending into the page.
@@ -452,8 +455,8 @@ class _SunPainter extends CustomPainter {
 
 /// The app's own orange, as a button.
 ///
-/// Dark ink on a bright orange gradient: the brown fill this replaces was never
-/// in the palette, and white on amber measured around 2:1, which is unreadable
+/// Dark ink on a bright orange gradient. The brown fill this replaces was never
+/// in the palette, and white on amber measures around 2:1, which is unreadable
 /// on a low-end panel in daylight.
 class _OrangeButton extends StatelessWidget {
   const _OrangeButton({
@@ -482,6 +485,8 @@ class _OrangeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final solid = prominent || light;
+    final ink = solid ? _ink : const Color(0xFF5F4E3A);
+
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -491,25 +496,42 @@ class _OrangeButton extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [Color(0xFFFFC24F), Color(0xFFF09A18)],
               )
+            : light
+            ? const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFFFFFFF), Color(0xFFFFF4E4)],
+              )
             : null,
-        color: light ? const Color(0xFFFFFBF2) : null,
-        border: solid
+        border: prominent
             ? null
-            : Border.all(color: const Color(0x2E4A3728), width: 1.4),
-        boxShadow: prominent
+            : Border.all(
+                color: light
+                    ? const Color(0x1F8A5008)
+                    : const Color(0x2E4A3728),
+                width: 1.2,
+              ),
+        // Two shadows on the pale pill: a tight one for contact and a wider one
+        // for lift. A single shadow over orange reads flat.
+        boxShadow: light
+            ? const [
+                BoxShadow(
+                  color: Color(0x2E8A5008),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+                BoxShadow(
+                  color: Color(0x388A5008),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ]
+            : prominent
             ? const [
                 BoxShadow(
                   color: Color(0x33E08A10),
                   blurRadius: 12,
                   offset: Offset(0, 4),
-                ),
-              ]
-            : light
-            ? const [
-                BoxShadow(
-                  color: Color(0x2E7A4408),
-                  blurRadius: 14,
-                  offset: Offset(0, 5),
                 ),
               ]
             : null,
@@ -522,14 +544,20 @@ class _OrangeButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(radius),
           child: Container(
             height: height,
-            alignment: Alignment.center,
             padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14.5,
-                fontWeight: FontWeight.w800,
-                color: solid ? _ink : const Color(0xFF5F4E3A),
+            // widthFactor 1 makes the button hug its own label. Without it a
+            // Container carrying an alignment expands to whatever width its
+            // parent offers, turning a capsule into a full-width bar.
+            child: Center(
+              widthFactor: 1,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: light ? 15.5 : 14.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.1,
+                  color: ink,
+                ),
               ),
             ),
           ),
