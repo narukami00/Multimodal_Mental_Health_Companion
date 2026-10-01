@@ -32,7 +32,6 @@ class TodayPage extends StatelessWidget {
     this.onTaskAccept,
     this.onTaskDecline,
     this.onBlobTap,
-    this.onBlobLongPress,
     this.setupCard,
     this.onContinueSetup,
     this.currentTime,
@@ -77,9 +76,9 @@ class TodayPage extends StatelessWidget {
   final VoidCallback? onTaskAccept;
   final VoidCallback? onTaskDecline;
 
-  /// Tap opens a new conversation; hold reveals actions.
+  /// Opens a brand-new conversation. Holding the shape now fills it with air and
+  /// eventually pops it, so there is no separate long-press action here any more.
   final VoidCallback? onBlobTap;
-  final VoidCallback? onBlobLongPress;
 
   final DateTime? currentTime;
   final ChatController? chatController;
@@ -268,11 +267,13 @@ class TodayPage extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // The card's top edge sits 30% up from the bottom of the shape, which is
-        // 70% down from its crown: the shape's bottom is at 88, so 88 - (0.3 x
-        // 146) = 44. The shape itself does not move; only the card does.
+        // The card's top edge cuts across the lower third of the shape, which is what
+        // makes the two read as one object. Sized against the resting radius
+        // (122 / 2 = 61) rather than the layout box: the box is now wider than
+        // the shape, because it has to hold the inflated swell, and measuring
+        // the overlap against the box would push the card too far down.
         Padding(
-          padding: const EdgeInsets.only(top: 44),
+          padding: const EdgeInsets.only(top: 38),
           child: CheckInTaskCard(
             eyebrow: card.eyebrow,
             headline: card.title,
@@ -286,14 +287,20 @@ class TodayPage extends StatelessWidget {
           ),
         ),
         Positioned(
-          top: -58,
+          // Lifts the box so the *shape's* crown lands where it did before. The
+          // box is now several times the resting shape's width, because it has to
+          // hold the inflated swell and the glow, so anchoring the box itself
+          // would drop the visible crown a long way down the page.
+          top: -104,
           left: 0,
           right: 0,
           child: Center(
             child: CompanionBlob(
-              diameter: 146,
+              // The resting shape. Smaller than the 146 the solid version used,
+              // because this one is translucent and carries its own glow: at the
+              // old size it outweighed the check-in card it is meant to point at.
+              diameter: 118,
               onTap: onBlobTap,
-              onLongPress: onBlobLongPress,
             ),
           ),
         ),

@@ -168,14 +168,36 @@ void main() {
       for (final p in sim.points) {
         maxRadius = mathMax(maxRadius, p.distance);
       }
-      // A fling to (100000, 100000) must still leave the shape recognisable: the
-      // teat can reach about half a radius past the edge, not across the screen.
+      // A fling to (100000, 100000) must still leave the shape recognisable. Stated as
+      // an absolute bound rather than as the clamp's own formula, so the assertion
+      // says what is actually true of the shape: even flung as hard as the finger
+      // can move, it never grows more than half again its resting size.
       expect(
         maxRadius,
-        lessThanOrEqualTo(
-          58 * (1 + BlobSimulation.grabRadiusLimit) + 1,
-        ),
+        lessThanOrEqualTo(58 * 1.5),
         reason: 'a point reached $maxRadius px from the centre',
+      );
+    });
+
+    test('a pull does not flatten it', () {
+      // Area is the property that a closed ring of fixed edges cannot protect on
+      // its own: any shape with the same perimeter satisfies the edge constraints,
+      // including a flat oval or a crumpled one. It took treating the enclosed
+      // area as a constraint to stop a hard pull dragging the bubble into a thin
+      // sliver, so the invariant is asserted directly.
+      final sim = BlobSimulation(restRadius: 58);
+      _advance(sim, 2.0);
+      final resting = _area(sim);
+
+      sim.grab(const Offset(58, 0));
+      _advance(sim, 0.6);
+      sim.dragTo(const Offset(58 + 46, 0));
+      _advance(sim, 1.2);
+
+      expect(
+        _area(sim) / resting,
+        inInclusiveRange(0.85, 1.15),
+        reason: 'the pull changed the enclosed area, so the shape is not a bubble',
       );
     });
 
@@ -334,20 +356,42 @@ void main() {
       );
     });
 
+    test('the bubble is genuinely absent for a moment after a pop', () {
+      final sim = BlobSimulation(restRadius: 58);
+      sim.grab(const Offset(58, 0));
+      sim.beginInflate();
+      _advanceUntil(sim, () => sim.state == BlobState.bursting);
+
+      // The pop frame. The point of the gap is that the eye registers absence;
+      // if the ring were still drawn the event would read as a wobble rather than
+      // as a burst. The ring is withheld for [BlobSimulation.burstGap] seconds.
+      expect(sim.droplets, isNotEmpty);
+
+      // It stays gone: still bursting, not yet reopening, several frames later.
+      _advance(sim, BlobSimulation.burstGap * 0.6);
+      expect(sim.state, BlobState.bursting);
+
+      _advanceUntil(sim, () => sim.state == BlobState.regrowing);
+    });
+
     test('the re-seeded ring starts small', () {
       final sim = BlobSimulation(restRadius: 58);
       sim.grab(const Offset(58, 0));
       sim.beginInflate();
       _advanceUntil(sim, () => sim.state == BlobState.regrowing);
 
-      // Sampled on the burst frame itself: the ring should already be the small
-      // one, not the inflated one it was a step earlier.
-      final rightAfter = _meanRadius(sim);
+      // Sampled the first frame after the gap, when the ring starts to open. It
+      // should be the small one, not the inflated shape it was a moment ago.
+      final opening = _meanRadius(sim);
       expect(
-        rightAfter,
+        opening,
         lessThan(58 * 1.1),
         reason: 'the new ring did not start small',
       );
+
+      // And it grows from there, rather than appearing at full size.
+      _advance(sim, 0.25);
+      expect(_meanRadius(sim), greaterThan(opening));
     });
 
     test('it is interactive again after regrowing', () {

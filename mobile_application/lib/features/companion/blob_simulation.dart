@@ -94,15 +94,34 @@ class BlobSimulation extends ChangeNotifier {
 
   /// How hard the skin resists being stretched, per constraint iteration.
   /// Low is very jelly. This is the main character control.
-  static const double edgeStiffness = 0.55;
+  ///
+  /// Raised from 0.55 because four solver passes at that value let a strong pull
+  /// pull the ring out of shape: the drawn outline came out dented and pinched
+  /// where the skin had been dragged, rather than as a smoothly drawn teat.
+  static const double edgeStiffness = 0.72;
 
   /// Second-neighbour constraint. Stops the skin creasing into corners when it
   /// is pulled hard, without making it rigid.
-  static const double bendStiffness = 0.18;
+  ///
+  /// Raised alongside [edgeStiffness] for the same reason: a smooth blob needs
+  /// the skin to hold its curvature under a pull, not just its edge lengths.
+  static const double bendStiffness = 0.30;
 
-  /// Internal pressure. The defence against the ring folding flat, and the
-  /// force that drives both inflation and regrowth.
-  static const double pressureStiffness = 0.06;
+  /// How strongly the ring is pushed to enclose its target area, per solver
+  /// iteration.
+  ///
+  /// This started life as an internal *force*, which was the wrong instrument
+  /// entirely. Under Verlet a force is applied as `a * dt * dt`, and at a 120 Hz
+  /// step that is about 7e-5 of the value — so the term contributed roughly
+  /// three millionths of a pixel per step and did nothing at all. Inflation looked
+  /// like it worked only because the skin's rest lengths rescale with the target,
+  /// and nothing was protecting the enclosed area at all. A pull duly collapsed
+  /// the ring to about 60% of its area instead of drawing it out into a teat.
+  ///
+  /// Enclosed volume is not a force. It is a constraint, so it is now corrected
+  /// positionally in [_preserveArea] alongside the edges, and it is what makes the
+  /// shape behave like a bubble rather than like a loose hoop of beads.
+  static const double areaStiffness = 0.16;
 
   /// Centroid spring, per step.
   ///
@@ -144,10 +163,13 @@ class BlobSimulation extends ChangeNotifier {
   /// fraction of [restRadius]. A clamp rather than a spring, so a hard fling
   /// cannot tear the surface and leave a permanently ragged edge.
   ///
-  /// Small on purpose. This is the reach of the teat the finger pulls out, and
-  /// at 0.85 the point could travel further than the bubble is wide, which reads
-  /// as the shape coming apart rather than as stretch.
-  static const double grabRadiusLimit = 0.55;
+  /// Modest on purpose. This is the reach of the teat the finger pulls out, and
+  /// the earlier value of 0.55 let the grabbed point travel a third of the
+  /// bubble's own radius, which stretched the skin far enough to read as a tear:
+  /// the rendered shape came out dented and pinched rather than smoothly drawn
+  /// out. A pull should look like a bubble deforming, not like one losing its
+  /// shape.
+  static const double grabRadiusLimit = 0.30;
 
 /// Seconds of sustained over-pressure needed to pop.
   ///
@@ -160,15 +182,31 @@ class BlobSimulation extends ChangeNotifier {
   // --------------------------------------------------------------- charging
 
   /// Radius, as a multiple of rest, at which the shake begins.
-  static const double chargeRadius = 1.55;
+  ///
+  /// Below [inflateRadius] with room to spare, so the bubble reaches a visibly
+  /// charged size and visibly shakes before it bursts. Equal to it, the shake
+  /// would only start at the moment there was nowhere left to grow.
+  static const double chargeRadius = 1.34;
 
   /// Radius, as a multiple of rest, that a fully pressed hold tops out at.
-  static const double inflateRadius = 1.9;
+  ///
+  /// 1.9 nearly fills the layout box the widget allocates, and at that size the
+  /// drawn outline ran outside the box and read as clipped. 1.6 still reads as
+  /// "much bigger" while leaving the aura room to fade out naturally.
+  static const double inflateRadius = 1.6;
 
   
 
   /// Wobble amplitude once charged, in pixels.
   static const double shakeAmplitude = 2.4;
+
+  /// Seconds the bubble stays absent after a pop, before the new one starts to
+  /// open. Long enough to read as gone; short enough that the page never feels
+  /// like it lost something.
+  static const double burstGap = 0.22;
+
+  /// When the current burst began, in simulation time.
+  double _burstAt = 0;
 
   /// How small a fresh ring starts after a pop, as a fraction of rest. Small
   /// enough to read as a new bubble, not a stutter.
@@ -398,6 +436,24 @@ class BlobSimulation extends ChangeNotifier {
 
     if (_state == BlobState.bursting) {
       _stepDroplets();
+      // The beat where nothing but droplets exist. Until it passes there is no
+      // bubble at all, which is what makes the pop land: the eye needs a frame or
+      // two of absence, or it just sees the shape change size and reads it as a
+      // wobble.
+      if (_time - _burstAt > burstGap) {
+        _state = BlobState.regrowing;
+        // Restored to exactly the radius the ring was frozen at, so the first
+        // frame after the gap is a continuation of what was there rather than a
+        // jump.
+        for (var i = 0; i < pointCount; i++) {
+          final a = (i / pointCount) * 2 * math.pi;
+          _points[i] = Offset(
+            math.cos(a) * _frozenRingRadius,
+            math.sin(a) * _frozenRingRadius,
+          );
+          _previous[i] = _points[i];
+        }
+      }
       notifyListeners();
       return;
     }
@@ -406,6 +462,11 @@ class BlobSimulation extends ChangeNotifier {
     for (var i = 0; i < constraintIterations; i++) {
       _solveEdges();
       _solveBending();
+      // Inside the loop, and before the grab, so the area it enforces is the one
+      // the shape had *before* the finger arrived. Applying it after the grab
+      // would scale the ring back toward a circle centred on the pulled point,
+      // which is what turns a teat into a dent.
+      _preserveArea();
     }
     _solveAnchor();
     _clampGrabbed();
@@ -467,7 +528,8 @@ class BlobSimulation extends ChangeNotifier {
     _charge = 0;
     _pressHeld = false;
     _grabbed = false;
-    _state = BlobState.regrowing;
+    _state = BlobState.bursting;
+    _burstAt = _time;
 
     // The target starts where the new ring starts, not at full size.
     //
@@ -483,7 +545,21 @@ class BlobSimulation extends ChangeNotifier {
     // still gets there by being pushed by pressure and pulled by skin tension
     // rather than by anything assigning its radius.
     _targetScale = respawnScale;
+
+    // The ring sits at full size but frozen while the burst beat plays, so the
+    // body is genuinely absent for a moment rather than sitting there at a
+    // reduced size looking like a small bubble that never went anywhere.
+    _frozenRingRadius = restRadius * respawnScale;
+    for (var i = 0; i < pointCount; i++) {
+      _points[i] = Offset(
+        math.cos((i / pointCount) * 2 * math.pi) * _frozenRingRadius,
+        math.sin((i / pointCount) * 2 * math.pi) * _frozenRingRadius,
+      );
+    }
   }
+
+  /// Held constant while bursting so the absent body stays absent.
+  double _frozenRingRadius = 0;
 
   /// Rebuilds the ring as a circle of [scale] times the resting radius, with no
   /// stored velocity so it does not inherit the old ring's motion.
@@ -518,19 +594,11 @@ class BlobSimulation extends ChangeNotifier {
   /// Guards the one-time capture of the skin's natural lengths.
   bool _sized = false;
 
-  /// Applies pressure, anchor, shake and grab, then advances the ring one step.
+  /// Advances the ring one step, carrying only stored velocity and any shake.
+  ///
+  /// Everything that shapes the bubble is a constraint, not a force. See the
+  /// comments in [_solveEdges], [_preserveArea] and [_solveAnchor].
   void _integrate() {
-    // Signed the same way as the ring's winding so an inverted ring pushes
-    // inward rather than exploding outward.
-    final signed = enclosedArea();
-    final winding = signed < 0 ? -1.0 : 1.0;
-
-    // Pressure, as the fractional shortfall against the target area. Normalising
-    // by the target rather than the measured area keeps the coefficient
-    // independent of the blob's size on screen.
-    final deficit = (_targetArea - signed.abs()) / _targetArea;
-    final pressure = pressureStiffness * deficit * winding;
-
     final shaking = _state == BlobState.charged;
     final shakeX = shaking
         ? math.sin(_time * 41.0) * shakeAmplitude
@@ -543,40 +611,29 @@ class BlobSimulation extends ChangeNotifier {
       final p = _points[i];
       final prev = _previous[i];
 
-      var vx = (p.dx - prev.dx) * damping;
-      var vy = (p.dy - prev.dy) * damping;
+      final vx = (p.dx - prev.dx) * damping;
+      final vy = (p.dy - prev.dy) * damping;
 
-      // Pressure along the outward normal of this edge, approximated by the
-      // perpendicular of the tangent to the neighbouring points.
-      final a = _points[(i - 1 + pointCount) % pointCount];
-      final b = _points[(i + 1) % pointCount];
-      final tangent = b - a;
-      final len = tangent.distance;
-      var nx = 0.0;
-      var ny = 0.0;
-      if (len > 1e-6) {
-        nx = tangent.dy / len * winding;
-        ny = -tangent.dx / len * winding;
-      }
-
-      // Pressure and shake only. Neither the anchor nor the grab belongs here.
+      // Shake only. Deliberately nothing else, because each of the three forces
+      // that used to live here had to be moved into the constraint solver:
       //
-      // The anchor is a centripetal force if applied per point, so it crushes
-      // the ring toward its own centre instead of moving the blob; it is a
-      // whole-ring translation in _solveAnchor.
+      //   anchor   toward the origin is centripetal, so it crushes the ring
+      //            toward its own centre instead of moving the blob. Now a
+      //            whole-ring translation in _solveAnchor.
+      //   grab     scaled by the finger-to-skin gap, which passes 100 px, so any
+      //            stiffness that feels responsive accelerates harder than the
+      //            solver absorbs. Now a bounded constraint in _solveAnchor.
+      //   area     applied as `a * dt * dt`, which at 120 Hz is about 7e-5 of the
+      //            value: roughly three millionths of a pixel per step, so it did
+      //            nothing at all and a pull quietly collapsed the ring to 60% of
+      //            its area. Now a positional constraint in _preserveArea.
       //
-      // The grab is worse as a force. The gap between finger and skin can be
-      // well over 100 px, and multiplying that by any stiffness large enough to
-      // feel responsive produces an acceleration the constraint solver cannot
-      // keep up with. The grabbed point rips away, drags its neighbours with
-      // it, and the whole ring contracts instead of forming a teat.
-      var ax = nx * pressure + shakeX;
-      var ay = ny * pressure + shakeY;
-
+      // Leaving only stored velocity and the shake in the integration step is
+      // what makes the shape behave identically at any frame rate.
       _previous[i] = p;
       _points[i] = Offset(
-        p.dx + vx + ax * fixedDt * fixedDt,
-        p.dy + vy + ay * fixedDt * fixedDt,
+        p.dx + vx + shakeX * fixedDt * fixedDt,
+        p.dy + vy + shakeY * fixedDt * fixedDt,
       );
     }
   }
@@ -586,6 +643,43 @@ class BlobSimulation extends ChangeNotifier {
     for (var i = 0; i < pointCount; i++) {
       final j = (i + 1) % pointCount;
       _constrain(i, j, _restEdges[i] * _targetScale, edgeStiffness);
+    }
+  }
+
+  /// Restores the enclosed area toward the target, by scaling the ring about its
+  /// own centre.
+  ///
+  /// The bubble's volume, as opposed to its skin length. A closed ring of fixed
+  /// edges has a nearly *infinitely* degenerate set of shapes at any one
+  /// circumference: it can be a wide flat oval or a tall narrow one, and it can
+  /// be dented, folded or crumpled without changing a single edge length. The
+  /// edge and bend constraints do not care which. So without this the ring has
+  /// nothing stopping a pull from dragging it into a thin shape with the same
+  /// perimeter, which is exactly what it did: a hard pull came out as a
+  /// collapsed sliver rather than as a bubble drawn out into a teat.
+  ///
+  /// Area scales with the square of the radius, so the correction is the square
+  /// root of the area ratio. Applied as a positional move toward that scale, a
+  /// fraction at a time, so it converges instead of snapping.
+  void _preserveArea() {
+    final area = enclosedArea();
+    if (area.abs() < 1e-6) return;
+    // Sign follows the ring's winding, so an inverted ring is pushed back the
+    // right way out rather than further inside out.
+    final ratio = _targetArea / area.abs();
+    if (ratio <= 0) return;
+    final scale = math.sqrt(ratio);
+
+    // Only ever partly applied, and only ever shrinking an over-inflated ring
+    // gently: a full correction on a ring that briefly overshot would snap it
+    // back and read as a hard edge.
+    final target = scale < 1.0 ? 1.0 + (scale - 1.0) * areaStiffness : scale;
+    final c = _centroid();
+    for (var i = 0; i < pointCount; i++) {
+      _points[i] = Offset(
+        c.dx + (_points[i].dx - c.dx) * target,
+        c.dy + (_points[i].dy - c.dy) * target,
+      );
     }
   }
 

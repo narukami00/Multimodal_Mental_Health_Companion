@@ -326,8 +326,11 @@ class _AppShellState extends State<AppShell> {
                 onTaskOpen: () => _openSuggestionDetails(suggestionChoice),
                 onTaskAccept: () => _acceptSuggestion(suggestionChoice!),
                 onTaskDecline: _declineSuggestion,
+                // Only a tap now. Holding the shape used to open the most recent
+                // conversation, but the rail's conversations tile already does
+                // exactly that, and holding now fills the bubble with air and
+                // pops it.
                 onBlobTap: () => _openChat(context, startNew: true),
-                onBlobLongPress: () => _openChat(context),
                 suggestionCard: HomeSuggestionCard(
                   // Keyed by the activity so a genuinely new suggestion does not
                   // reuse the previous card's goodbye state.
