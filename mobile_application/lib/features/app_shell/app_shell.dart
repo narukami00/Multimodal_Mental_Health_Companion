@@ -26,6 +26,7 @@ import '../rhythm/welcome_back_notice.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
+import '../suggestions/idea_push_sync.dart';
 import '../suggestions/suggestion_card_surface.dart';
 import '../suggestions/suggestion_controller.dart';
 import '../suggestions/suggestion_context.dart';
@@ -63,6 +64,7 @@ class _AppShellState extends State<AppShell> {
   late AppTab _selectedTab;
   late final ChatController _chatController;
   late final bool _ownsChatController;
+  final _ideaPushSync = IdeaPushSync();
 
   @override
   void initState() {
@@ -288,6 +290,15 @@ class _AppShellState extends State<AppShell> {
         final showSuggestion = HomeCardPriority.showSuggestion(homeState);
         final suggestionChoice = _peekSuggestion(allowed: showSuggestion);
         _rememberShown(suggestionChoice);
+        // After the frame, like the write above: building Home must not do I/O.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _ideaPushSync.sync(
+            profile: widget.profileController.profile,
+            history: widget.suggestionController.history,
+            lastCheckInAt: widget.sessionController.lastCheckInAt,
+          );
+        });
         return Scaffold(
           // The capsule is an overlay, not a bottom bar. It is a child of the
           // body rather than bottomNavigationBar, so the Scaffold reserves no
