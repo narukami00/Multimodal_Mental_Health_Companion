@@ -190,4 +190,33 @@ void main() {
     expect(find.text('Daily check-in reminder'), findsOneWidget);
     expect(hapticsSwitch().value, isFalse);
   });
+
+  testWidgets('quiet hours appear only once idea nudges are on', (tester) async {
+    await profileController.load();
+
+    await pumpProfile(tester);
+    await tester.tap(find.byIcon(Icons.tune_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('toggle-idea-push')), findsOneWidget);
+    expect(find.byKey(const ValueKey('toggle-quiet-hours')), findsNothing);
+
+    await profileController.setIdeaPushEnabled(true);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('toggle-quiet-hours')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quiet-start')), findsNothing);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('toggle-quiet-hours')));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('toggle-quiet-hours')),
+        matching: find.byType(Switch),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(profileController.profile.quietHoursEnabled, isTrue);
+    expect(find.byKey(const ValueKey('quiet-start')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quiet-end')), findsOneWidget);
+  });
 }

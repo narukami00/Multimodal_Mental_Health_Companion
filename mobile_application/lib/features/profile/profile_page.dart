@@ -1713,6 +1713,38 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
     );
   }
 
+  /// Turns idea nudges on, asking for notification permission first. The switch
+  /// only stays on if Android actually allows them. Scheduling follows from the
+  /// profile change, so there is nothing to schedule here.
+  Future<void> _setIdeaPush(bool enabled) async {
+    if (enabled && !await CheckInReminderService.instance.requestPermission()) {
+      await _controller.setIdeaPushEnabled(false);
+      if (!mounted) return;
+      _notify(
+        'Notifications are off for Solace. You can allow them in system '
+        'settings.',
+      );
+      return;
+    }
+    await _controller.setIdeaPushEnabled(enabled);
+  }
+
+  Future<void> _pickQuietTime({required bool start}) async {
+    final profile = _controller.profile;
+    final current = start ? profile.quietStartMinutes : profile.quietEndMinutes;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
+      helpText: start ? 'Quiet hours begin' : 'Quiet hours end',
+    );
+    if (picked == null) return;
+    final minutes = picked.hour * 60 + picked.minute;
+    await _controller.setQuietHours(
+      startMinutes: start ? minutes : null,
+      endMinutes: start ? null : minutes,
+    );
+  }
+
   /// Plays a short haptic cue, ignoring platforms that do not support it.
   ///
   /// Haptics are best effort: a missing or slow channel must never block a
@@ -1807,6 +1839,42 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
           onPickTime: _pickReminderTime,
           onSendTest: _sendTestReminder,
         ),
+        _SettingToggle(
+          key: const ValueKey('toggle-idea-push'),
+          title: 'Nudge me about ideas',
+          subtitle: 'A quiet note that a gentle idea is waiting',
+          value: profile.ideaPushEnabled,
+          onChanged: _setIdeaPush,
+        ),
+        if (profile.ideaPushEnabled) ...[
+          _SettingToggle(
+            key: const ValueKey('toggle-quiet-hours'),
+            title: 'Quiet hours',
+            subtitle: 'No idea nudges while you sleep. Your check-in reminder '
+                'still arrives when you set it.',
+            value: profile.quietHoursEnabled,
+            onChanged: (on) => _controller.setQuietHours(enabled: on),
+          ),
+          if (profile.quietHoursEnabled)
+            Row(
+              children: [
+                TextButton(
+                  key: const ValueKey('quiet-start'),
+                  onPressed: () => _pickQuietTime(start: true),
+                  child: Text(
+                    'From ${TimeOfDay(hour: profile.quietStartMinutes ~/ 60, minute: profile.quietStartMinutes % 60).format(context)}',
+                  ),
+                ),
+                TextButton(
+                  key: const ValueKey('quiet-end'),
+                  onPressed: () => _pickQuietTime(start: false),
+                  child: Text(
+                    'Until ${TimeOfDay(hour: profile.quietEndMinutes ~/ 60, minute: profile.quietEndMinutes % 60).format(context)}',
+                  ),
+                ),
+              ],
+            ),
+        ],
         const SizedBox(height: 14),
         const Text(
           'COLOR PALETTE',
