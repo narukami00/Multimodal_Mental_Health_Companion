@@ -398,15 +398,21 @@ class _JellyPainter extends CustomPainter {
   /// The droplets thrown off by a pop, fading as they spread.
   void _paintDroplets(
     Canvas canvas,
-    List<({Offset position, double opacity})> droplets,
+    List<({Offset position, double radius, double opacity})> droplets,
   ) {
     for (final d in droplets) {
+      // Radius comes from the simulation rather than being derived here from
+      // opacity, so a droplet shrinks as it fades instead of fading at a fixed
+      // size. At a fixed size its last visible frame is still a full-radius disc
+      // at low alpha, which reads as a smudge left on the page rather than as
+      // something that has gone.
+      if (d.opacity <= 0.002) continue;
       canvas.drawCircle(
         d.position,
-        simulation.restRadius * 0.07 * d.opacity + 1.2,
+        d.radius + 1.2,
         Paint()
           ..color = _cream.withValues(alpha: 0.55 * d.opacity)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 1.6),
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.6),
       );
     }
   }

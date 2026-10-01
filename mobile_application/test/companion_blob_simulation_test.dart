@@ -338,6 +338,60 @@ void main() {
       expect(sawRise, isTrue, reason: 'charge never visibly accumulated');
     });
 
+    test('the debris from a pop disperses and is gone', () {
+      final sim = BlobSimulation(restRadius: 58);
+      sim.grab(const Offset(58, 0));
+      sim.beginInflate();
+      _advanceUntil(sim, () => sim.state == BlobState.bursting);
+
+      expect(sim.dropletCount, greaterThan(0), reason: 'a pop should throw debris');
+
+      // The whole point, and the one that was broken: the debris outlives the
+      // burst beat by a wide margin, so ageing it only while bursting froze the
+      // debris on screen the moment the new bubble started to open. Nothing in
+      // the app reported a problem, because the droplets were still being drawn;
+      // they had simply stopped being updated.
+      _advanceUntil(
+        sim,
+        () => sim.dropletCount == 0,
+        limit: BlobSimulation.dropletLife * 3,
+      );
+
+      // And they are gone well before the new bubble has finished opening, so the
+      // debris cannot be mistaken for part of it.
+      _advance(sim, 1.0);
+      expect(sim.dropletCount, 0);
+      expect(sim.droplets, isEmpty);
+    });
+
+    test('droplets fade in and out rather than appearing and vanishing', () {
+      final sim = BlobSimulation(restRadius: 58);
+      sim.grab(const Offset(58, 0));
+      sim.beginInflate();
+      _advanceUntil(sim, () => sim.state == BlobState.bursting);
+
+      // On the burst frame the debris is already at full spread but should not be
+      // at full strength: material that appears instantly at full opacity reads as
+      // a rendering glitch rather than as a pop.
+      expect(sim.droplets, isNotEmpty);
+      for (final d in sim.droplets) {
+        expect(d.opacity, lessThan(1.0));
+        expect(d.opacity, greaterThanOrEqualTo(0.0));
+      }
+
+      // Somewhere in the middle it is at its strongest.
+      _advance(sim, BlobSimulation.dropletLife * 0.35);
+      final peak = sim.droplets.map((d) => d.opacity).fold(0.0, math.max);
+      expect(peak, greaterThan(0.7));
+
+      // And it shrinks as it fades, so the last visible frame is not a full-size
+      // disc at low alpha, which would read as a smudge.
+      _advance(sim, BlobSimulation.dropletLife * 0.55);
+      for (final d in sim.droplets) {
+        expect(d.opacity, lessThan(0.35));
+      }
+    });
+
     test('a new bubble forms and pushes itself back out to full size', () {
       final sim = BlobSimulation(restRadius: 58);
       sim.grab(const Offset(58, 0));

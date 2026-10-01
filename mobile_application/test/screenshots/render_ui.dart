@@ -331,9 +331,10 @@ class _FrozenBlobPainter extends CustomPainter {
     }
 
     for (final d in sim.droplets) {
+      if (d.opacity <= 0.002) continue;
       canvas.drawCircle(
         d.position,
-        sim.restRadius * 0.07 * d.opacity + 1.2,
+        d.radius + 1.2,
         Paint()
           ..color = const Color(0xFFFFF3D6).withValues(alpha: 0.55 * d.opacity)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.6),

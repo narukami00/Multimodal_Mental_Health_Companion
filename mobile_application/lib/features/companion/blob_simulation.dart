@@ -205,6 +205,27 @@ class BlobSimulation extends ChangeNotifier {
   /// like it lost something.
   static const double burstGap = 0.22;
 
+  /// Seconds a droplet survives after a pop.
+  ///
+  /// Long enough to read as debris hanging in the air after the bubble has gone,
+  /// and short enough that it is gone before anyone could call it a smudge on the
+  /// screen. Well past [burstGap], because most of the droplet's life is spent
+  /// after the new bubble has already started to open.
+  static const double dropletLife = 1.5;
+
+  /// Fraction of [dropletLife] over which a droplet fades in from nothing.
+  ///
+  /// A droplet that pops into existence fully opaque reads as a glitch. Growing
+  /// in over the first part of its life reads as matter dispersing.
+  static const double dropletFadeIn = 0.12;
+
+  /// Fraction of [dropletLife] over which a droplet shrinks away at the end.
+  ///
+  /// Fading to nothing while it is still at full size leaves a hard edge on the
+  /// last visible frame. Shrinking as it goes means it is always small by the
+  /// time it vanishes.
+  static const double dropletFadeOut = 0.55;
+
   /// When the current burst began, in simulation time.
   double _burstAt = 0;
 
@@ -277,12 +298,18 @@ class BlobSimulation extends ChangeNotifier {
 
   /// Droplets currently flying, for the painter.
   ///
-  /// Pairs of position and opacity. Opacity is carried alongside rather than
-  /// recomputed by the painter, because the fade is a function of age and the
-  /// painter should not have to know what age means.
-  List<({Offset position, double opacity})> get droplets =>
-      List<({Offset position, double opacity})>.unmodifiable(
-        _droplets.map((d) => (position: d.position, opacity: d.opacity)),
+  /// Position, radius and opacity per droplet. Carried rather than recomputed by
+  /// the painter: the fade is a function of age, and the painter should not have
+  /// to know what age means or how the life is shaped.
+  List<({Offset position, double radius, double opacity})> get droplets =>
+      List<({Offset position, double radius, double opacity})>.unmodifiable(
+        _droplets.map(
+          (d) => (
+            position: d.position,
+            radius: d.radius,
+            opacity: d.opacity,
+          ),
+        ),
       );
 
   /// Radius as a multiple of rest. The painter scales its colour layers inward by
@@ -309,6 +336,13 @@ class BlobSimulation extends ChangeNotifier {
   /// Exposed so the rim can brighten as pressure builds. Hiding this would make
   /// the pop feel arbitrary.
   double get chargeFraction => (_charge / chargeDuration).clamp(0.0, 1.0);
+
+  /// How many droplets are still alive. Zero once the debris has fully dispersed.
+  ///
+  /// Worth asserting on directly, because the failure this guards against is
+  /// silent: the debris is still *drawn*, so nothing anywhere reports a problem
+  /// when it stops being updated.
+  int get dropletCount => _droplets.length;
 
   /// Signed area of the ring, for the painter's internal density shading.
   double enclosedArea() {
@@ -434,8 +468,17 @@ class BlobSimulation extends ChangeNotifier {
       if (!_pressHeld && !_grabbed) _state = BlobState.idle;
     }
 
+    // Aged and culled on every step, in every state.
+    //
+    // Not just while bursting, which is where this used to live and where it was
+    // a bug: the burst beat is 0.22 s and the droplets live for [dropletLife], so
+    // almost all of their life was spent in *later* states. Ageing stopped the
+    // moment the state moved on, they never reached the cutoff, and the debris
+    // froze on screen for good. Whatever state the bubble happens to be in is
+    // irrelevant to a droplet's lifetime.
+    _stepDroplets();
+
     if (_state == BlobState.bursting) {
-      _stepDroplets();
       // The beat where nothing but droplets exist. Until it passes there is no
       // bubble at all, which is what makes the pop land: the eye needs a frame or
       // two of absence, or it just sees the shape change size and reads it as a
@@ -830,7 +873,7 @@ class BlobSimulation extends ChangeNotifier {
     for (var i = _droplets.length - 1; i >= 0; i--) {
       final d = _droplets[i];
       d.age += fixedDt;
-      if (d.age > 0.9) {
+      if (d.age >= dropletLife) {
         _droplets.removeAt(i);
         continue;
       }
@@ -843,6 +886,10 @@ class BlobSimulation extends ChangeNotifier {
 }
 
 /// One droplet thrown off by a pop.
+///
+/// A free-standing class rather than a nested one only because it needs the
+/// tuning constants, which belong to the simulation's public surface so the
+/// painter and the tests can read them without reaching into private state.
 class _Droplet {
   _Droplet({
     required this.position,
@@ -853,9 +900,35 @@ class _Droplet {
 
   Offset position;
   Offset velocity;
-  double size;
+  final double size;
   double age;
 
-  /// 1 at birth, 0 by the time it is culled.
-  double get opacity => (1.0 - age / 0.9).clamp(0.0, 1.0);
+  /// How far through its life this droplet is, 0 at birth and 1 when culled.
+  double get life => (age / BlobSimulation.dropletLife).clamp(0.0, 1.0);
+
+  /// Opacity, eased at both ends.
+  ///
+  /// Eased rather than linear, because the eye is far more sensitive to a change
+  /// at the ends of a fade than in the middle. A droplet that appeared at full
+  /// strength and vanished at a constant rate read as a rendering glitch; growing
+  /// in and shrinking away reads as matter dispersing.
+  double get opacity {
+    final t = life;
+    const inFraction = BlobSimulation.dropletFadeIn;
+    const outFraction = BlobSimulation.dropletFadeOut;
+    final rise = (t / inFraction).clamp(0.0, 1.0);
+    final fall =
+        (1.0 - (t - (1.0 - outFraction)) / outFraction).clamp(0.0, 1.0);
+    // Smoothstep, so each end has no perceptible onset.
+    return _ease(rise) * _ease(fall);
+  }
+
+  /// Current radius, shrinking toward nothing as it fades.
+  ///
+  /// Fading alone would leave the droplet's last visible frame at full size with
+  /// its alpha merely low, and a low-alpha disc of fixed radius still reads as a
+  /// smudge. Shrinking it means it is genuinely small by the time it goes.
+  double get radius => size * (0.35 + 0.65 * opacity);
+
+  static double _ease(double t) => t * t * (3.0 - 2.0 * t);
 }

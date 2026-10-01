@@ -297,16 +297,16 @@ class TodayPage extends StatelessWidget {
           // The arithmetic: the box is 118 x 1.6 x 1.15 = 217 across, so its
           // centre sits 108.5 px below its own top edge, and the resting shape's
           // crown is a further 59 px above that. So the crown lands 49.5 px below
-          // the box's top edge, and -58 puts that crown at -8.5 — just above the
-          // card's top edge, which is what makes it read as tucked under rather
-          // than sitting on top.
+          // the box's top edge, and -67 puts that crown at -17.5 — a little higher
+          // than the card's top edge, which is what makes it read as tucked under
+          // rather than as sitting on top of the card.
           //
           // Measured by rendering it, not by arithmetic. The box is nearly twice
           // the resting shape's width now, so anchoring the box instead of the
           // shape drops the visible crown by over 100 px; and the crown has to
           // clear the masthead and the week marks above it, which is why it
           // cannot simply be raised to wherever looks right relative to the card.
-          top: -58,
+          top: -67,
           left: 0,
           right: 0,
           child: Center(
