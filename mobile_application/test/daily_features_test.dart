@@ -41,6 +41,7 @@ void main() {
           dayKey: '2026-10-01',
           sources: {'inApp'},
           checkInCount: 2,
+          firstCheckInMinute: 9 * 60,
           checkInLatencyMinutes: -15,
           selfMoodMedian: 3.5,
           journalWordCount: 120,
@@ -59,6 +60,7 @@ void main() {
       expect(restored.estimatedSleepMinutes, 430);
       expect(restored.lastUseDelayVsStatedBedtimeMinutes, 40);
       expect(restored.categoryMinutes, {'social': 80, 'video': 60, 'other': 72});
+      expect(restored.firstCheckInMinute, 9 * 60);
       expect(restored.checkInLatencyMinutes, -15);
       expect(restored.selfMoodMedian, 3.5);
       expect(restored.topApps!.single.name, 'Chrome');

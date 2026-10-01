@@ -48,6 +48,7 @@ class DailyFeatures {
     this.categoryMinutes,
     this.topApps,
     this.checkInCount,
+    this.firstCheckInMinute,
     this.checkInLatencyMinutes,
     this.selfMoodMedian,
     this.journalWordCount,
@@ -98,7 +99,11 @@ class DailyFeatures {
   // In-app activity.
   final int? checkInCount;
 
-  /// Minutes between the reminder and the check-in, when both exist.
+  /// Minute of the local day the first check-in happened.
+  final int? firstCheckInMinute;
+
+  /// Minutes from the daily reminder to the first check-in. Negative when the
+  /// check-in came before the reminder.
   final int? checkInLatencyMinutes;
   final double? selfMoodMedian;
   final int? journalWordCount;
@@ -153,6 +158,7 @@ class DailyFeatures {
       categoryMinutes: other.categoryMinutes ?? categoryMinutes,
       topApps: other.topApps ?? topApps,
       checkInCount: other.checkInCount ?? checkInCount,
+      firstCheckInMinute: other.firstCheckInMinute ?? firstCheckInMinute,
       checkInLatencyMinutes:
           other.checkInLatencyMinutes ?? checkInLatencyMinutes,
       selfMoodMedian: other.selfMoodMedian ?? selfMoodMedian,
@@ -181,6 +187,7 @@ class DailyFeatures {
     lastUseDelayVsStatedBedtimeMinutes: lastUseDelayVsStatedBedtimeMinutes,
     categoryMinutes: categoryMinutes,
     checkInCount: checkInCount,
+    firstCheckInMinute: firstCheckInMinute,
     checkInLatencyMinutes: checkInLatencyMinutes,
     selfMoodMedian: selfMoodMedian,
     journalWordCount: journalWordCount,
@@ -218,6 +225,7 @@ class DailyFeatures {
     put('categoryMinutes', categoryMinutes);
     put('topApps', topApps?.map((app) => app.toMap()).toList());
     put('checkInCount', checkInCount);
+    put('firstCheckInMinute', firstCheckInMinute);
     put('checkInLatencyMinutes', checkInLatencyMinutes);
     put('selfMoodMedian', selfMoodMedian);
     put('journalWordCount', journalWordCount);
@@ -266,6 +274,7 @@ class DailyFeatures {
       categoryMinutes: _categories(map['categoryMinutes']),
       topApps: _topApps(map['topApps']),
       checkInCount: _count(map['checkInCount']),
+      firstCheckInMinute: _minuteOfDay(map['firstCheckInMinute']),
       checkInLatencyMinutes: _signedMinutes(map['checkInLatencyMinutes']),
       selfMoodMedian: (map['selfMoodMedian'] as num?)?.toDouble(),
       journalWordCount: _count(map['journalWordCount']),
