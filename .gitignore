@@ -44,3 +44,9 @@ dataset_samples/
 
 # Feature specifications
 docs/specifications/
+# Research briefs and design write-ups. Working documents for the agent and the
+# project owner, not source. Same reasoning as the local progress ledger: the
+# useful output is the production code that follows, not the prose that
+# preceded it.
+docs/research/
+docs/design/companion_blob_overhaul.md
