@@ -29,6 +29,7 @@ import '../suggestions/suggestion_controller.dart';
 import '../suggestions/suggestion_context.dart';
 import '../suggestions/suggestion_page.dart';
 import 'baseline_setup_card.dart';
+import 'check_in_task_card.dart';
 import 'home_suggestion_card.dart';
 import 'nav_pill.dart';
 import 'today_page.dart';
@@ -272,9 +273,23 @@ class _AppShellState extends State<AppShell> {
                   profileController: widget.profileController,
                 ),
                 primaryCard: HomeCardPriority.select(homeState),
-                // Derived from what will actually be drawn, so Home can never
-                // reserve space for a card that has nothing in it.
-                showSuggestion: suggestionChoice != null,
+                // The task now lives inside the check-in card, so the separate
+                // suggestion card is only used when there is no primary card to
+                // attach it to.
+                showSuggestion:
+                    suggestionChoice != null &&
+                    HomeCardPriority.select(homeState) == HomeCardType.support,
+                taskOffer: suggestionChoice == null
+                    ? null
+                    : TaskOffer(
+                        eyebrow: 'An idea for today',
+                        title: suggestionChoice.activity.title,
+                        description: suggestionChoice.activity.description,
+                      ),
+                onTaskAccept: () => _acceptSuggestion(suggestionChoice!),
+                onTaskDecline: _declineSuggestion,
+                onBlobTap: () => _openChat(context, startNew: true),
+                onBlobLongPress: () => _openChat(context),
                 suggestionCard: HomeSuggestionCard(
                   // Keyed by the activity so a genuinely new suggestion does not
                   // reuse the previous card's goodbye state.

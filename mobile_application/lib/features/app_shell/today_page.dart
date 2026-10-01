@@ -8,6 +8,8 @@ import '../../core/theme/solace_palette.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../chat/chat_controller.dart';
 import '../chat/conversation_history.dart';
+import '../companion/companion_blob.dart';
+import 'check_in_task_card.dart';
 import 'living_atmosphere_card.dart';
 
 bool get _isTestEnvironment {
@@ -23,6 +25,11 @@ class TodayPage extends StatelessWidget {
     this.primaryCard = HomeCardType.checkIn,
     this.showSuggestion = false,
     this.suggestionCard,
+    this.taskOffer,
+    this.onTaskAccept,
+    this.onTaskDecline,
+    this.onBlobTap,
+    this.onBlobLongPress,
     this.setupCard,
     this.onContinueSetup,
     this.currentTime,
@@ -52,6 +59,16 @@ class TodayPage extends StatelessWidget {
 
   /// Opens the baseline reflection quiz.
   final VoidCallback? onContinueSetup;
+
+  /// The day's task, offered inside the check-in card rather than as a second
+  /// card below it. Null once it has been declined or nothing is due.
+  final TaskOffer? taskOffer;
+  final VoidCallback? onTaskAccept;
+  final VoidCallback? onTaskDecline;
+
+  /// Tap opens a new conversation; hold reveals actions.
+  final VoidCallback? onBlobTap;
+  final VoidCallback? onBlobLongPress;
 
   final DateTime? currentTime;
   final ChatController? chatController;
@@ -129,7 +146,13 @@ class TodayPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (welcomeBackNotice != null) welcomeBackNotice!,
-                  _buildPrimaryCard(card),
+                  // Support resources keep their own card: when someone has
+                  // raised a safety flag, a companion shape is not what they
+                  // need on screen.
+                  if (primaryCard == HomeCardType.support)
+                    _buildPrimaryCard(card)
+                  else
+                    _buildCompanionAnchor(context, card),
                 ],
               ),
             ),
@@ -239,6 +262,47 @@ class TodayPage extends StatelessWidget {
       // "Open a journal or conversation whenever you are ready."
       HomeCardType.defaultAction => onOpenChat,
     };
+  }
+
+  /// The companion shape, with the check-in card tucked underneath it.
+  ///
+  /// The blob breaks the card's silhouette rather than sitting above it on a
+  /// separate plane, which is what makes the two read as one object and gives
+  /// the page an anchor instead of another card in a column.
+  Widget _buildCompanionAnchor(BuildContext context, _PrimaryCardContent card) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Padding(
+          // The shape's underside must land above the card's first line of
+          // text: 84px shape and 68px reservation leaves the eye clear of the
+          // eyebrow. Overlapping the words looked broken rather than deliberate.
+          padding: const EdgeInsets.only(top: 68),
+          child: CheckInTaskCard(
+            eyebrow: card.eyebrow,
+            headline: card.title,
+            subtitle: card.subtitle,
+            ctaLabel: card.action,
+            onCta: _primaryAction(primaryCard),
+            task: taskOffer,
+            onTaskAccept: onTaskAccept,
+            onTaskDecline: onTaskDecline,
+          ),
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: CompanionBlob(
+              diameter: 84,
+              onTap: onBlobTap,
+              onLongPress: onBlobLongPress,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildPrimaryCard(_PrimaryCardContent card) {

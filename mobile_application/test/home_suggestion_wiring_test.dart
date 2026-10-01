@@ -90,7 +90,7 @@ void main() {
 
     await _pumpShell(tester, controller);
 
-    expect(find.byKey(const ValueKey('suggestion-accept')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-accept')), findsOneWidget);
     expect(find.text('Take a short easy walk'), findsOneWidget);
   });
 
@@ -105,7 +105,7 @@ void main() {
 
     await _pumpShell(tester, controller);
 
-    expect(find.byKey(const ValueKey('suggestion-accept')), findsNothing);
+    expect(find.byKey(const ValueKey('task-accept')), findsNothing);
   });
 
   testWidgets('the peek on a Home rebuild records nothing', (tester) async {
@@ -117,7 +117,7 @@ void main() {
     await controller.warmUp();
 
     await _pumpShell(tester, controller);
-    expect(find.byKey(const ValueKey('suggestion-accept')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-accept')), findsOneWidget);
 
     // Home rebuilds often. If the peek wrote anything, these counts are the
     // ones the confidence gate depends on.

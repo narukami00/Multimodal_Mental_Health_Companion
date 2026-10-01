@@ -135,8 +135,15 @@ class _BlobPainter extends CustomPainter {
       Paint()..color = _core.withValues(alpha: 0.15),
     );
 
-    // A real cast shadow: without one a flat shape has no elevation cue at all.
-    canvas.drawShadow(path, const Color(0x55221000), 10, true);
+    // A blurred copy of the shape, offset down. Not canvas.drawShadow: that
+    // renders a rectangular occluder behind a non-rectangular path, which
+    // showed up as a grey box around the blob.
+    canvas.drawPath(
+      _blobPath(size, radiusScale: 0.94).shift(const Offset(0, 7)),
+      Paint()
+        ..color = const Color(0x40C07818)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+    );
 
     canvas.drawPath(
       path,
