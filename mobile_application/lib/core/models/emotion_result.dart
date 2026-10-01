@@ -1,5 +1,10 @@
 enum EmotionModality { text, voice, face }
 
+/// Where the analysed content came from. Separate from [EmotionModality]: a
+/// text result can come from a check-in, a journal entry, a chat turn, or the
+/// note on a task review, and downstream code weighs those differently.
+enum EmotionOrigin { checkIn, journal, chat, taskReview }
+
 class EmotionLabel {
   const EmotionLabel({
     required this.label,
@@ -30,6 +35,7 @@ class EmotionResult {
     required this.modality,
     required this.timestamp,
     required this.modelVersion,
+    this.origin = EmotionOrigin.checkIn,
     this.valence,
     this.arousal,
     this.labels,
@@ -38,6 +44,10 @@ class EmotionResult {
 
   final String sessionId;
   final EmotionModality modality;
+
+  /// Defaults to a check-in, which is what every result written before origins
+  /// existed was.
+  final EmotionOrigin origin;
   final DateTime timestamp;
   final double? valence;
   final double? arousal;
@@ -49,6 +59,7 @@ class EmotionResult {
     return {
       'sessionId': sessionId,
       'modality': modality.name,
+      'origin': origin.name,
       'timestamp': timestamp.toIso8601String(),
       'valence': valence,
       'arousal': arousal,
@@ -64,11 +75,17 @@ class EmotionResult {
       (item) => item.name == modalityName,
       orElse: () => EmotionModality.text,
     );
+    final originName = map['origin'] as String?;
+    final origin = EmotionOrigin.values.firstWhere(
+      (item) => item.name == originName,
+      orElse: () => EmotionOrigin.checkIn,
+    );
     final rawLabels = map['labels'] as List<dynamic>?;
 
     return EmotionResult(
       sessionId: map['sessionId'] as String? ?? '',
       modality: modality,
+      origin: origin,
       timestamp: DateTime.tryParse(map['timestamp'] as String? ?? '') ?? DateTime.now(),
       valence: (map['valence'] as num?)?.toDouble(),
       arousal: (map['arousal'] as num?)?.toDouble(),
