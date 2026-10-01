@@ -4,6 +4,7 @@ import '../../core/models/activity.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/models/user_profile.dart';
 import 'activity_safety_policy.dart';
+import 'mood_change.dart';
 
 class RecommendationContext {
   const RecommendationContext({
@@ -119,6 +120,27 @@ class RecommendationEngine {
   static const _exploreWindow = exploreWindow;
 
   /// Below this much evidence, an activity borrows from its own type.
+  /// How a change in mood after doing an idea is read.
+  ///
+  /// A deliberately small signal: a rating always decides the verdict, and the
+  /// mood change can only nudge how firmly it is believed. It is confounded
+  /// (people feel better for many reasons, and an idea can help later), so it
+  /// never turns a thumbs-down into a thumbs-up or the reverse.
+  ///
+  /// Changes smaller than [moodChangeMeaningful] on the mood-word ordering are
+  /// read as no change.
+  static const moodChangeMeaningful = 0.5;
+
+  /// Weight multipliers when the mood change agrees or disagrees with the
+  /// rating the user gave.
+  static const moodAgreesWeight = 1.15;
+  static const moodDisagreesWeight = 0.85;
+
+  /// For a completion that was never rated, the mood change is the only
+  /// outcome signal there is. It moves the value this far either side of the
+  /// neutral 0.6 at most, and leaves the weight alone.
+  static const moodUnratedSpread = 0.2;
+
   static const _poolingThreshold = 5.0;
   static const _poolingWeight = 0.5;
 
@@ -525,20 +547,51 @@ class RecommendationEngine {
   ({double value, double weight})? _outcome(SuggestionRecord record) {
     final didIt = _didIt(record);
     final useful = record.useful ?? _usefulnessFromRating(record.rating);
+    final moved = didIt == true ? _meaningfulMoodChange(record) : null;
 
     if (useful == SuggestionUsefulness.up) {
-      return (value: 1, weight: didIt == true ? 1.0 : 0.5);
+      return (
+        value: 1,
+        weight: (didIt == true ? 1.0 : 0.5) * _moodAgreement(moved, true),
+      );
     }
     if (useful == SuggestionUsefulness.down) {
-      return (value: 0, weight: didIt == true ? 1.0 : 0.5);
+      return (
+        value: 0,
+        weight: (didIt == true ? 1.0 : 0.5) * _moodAgreement(moved, false),
+      );
     }
-    // Did it, but did not say how it went: counted, at reduced weight.
-    if (didIt == true) return (value: 0.6, weight: 0.5);
+    // Did it, but did not say how it went: counted, at reduced weight. With no
+    // rating, a meaningful change in mood is the only evidence there is, so it
+    // moves the value a little either side of neutral.
+    if (didIt == true) {
+      final shift = moved == null
+          ? 0.0
+          : (moved / 2).clamp(-1.0, 1.0) * moodUnratedSpread;
+      return (value: 0.6 + shift, weight: 0.5);
+    }
     if (record.status == SuggestionStatus.skipped &&
         record.skipReason == SuggestionSkipReason.notForMe) {
       return (value: 0, weight: 1.0);
     }
     return null;
+  }
+
+  /// The mood change after this idea, or null when there is none worth
+  /// reading: no mood after, no recent mood before, or a change too small to
+  /// tell from noise.
+  double? _meaningfulMoodChange(SuggestionRecord record) {
+    final change = moodChange(record.moodBefore, record.moodAfter);
+    if (change == null || change.abs() < moodChangeMeaningful) return null;
+    return change;
+  }
+
+  /// A multiplier on a rating's weight: a bit more when the mood moved the way
+  /// the rating said, a bit less when it moved the other way, and exactly 1
+  /// when there is no meaningful mood change to read.
+  double _moodAgreement(double? moved, bool ratedUp) {
+    if (moved == null) return 1.0;
+    return (moved > 0) == ratedUp ? moodAgreesWeight : moodDisagreesWeight;
   }
 
   bool? _didIt(SuggestionRecord record) {
@@ -748,9 +801,11 @@ class ActivityStanding {
 
   /// Turned down three times: out of rotation for good.
   final bool shelved;
-  /// When it may be offered again, if it is cooling off; null when not.
+
+  /// When it may be offered again, if it is cooling off; null when not.
   final DateTime? suppressedUntil;
-  /// The user asked never to see this kind of idea.
+
+  /// The user asked never to see this kind of idea.
   final bool hiddenByPreference;
 
   /// Whether the engine would offer it as a learned pick if the explore quota
