@@ -26,6 +26,8 @@ class SuggestionRecord {
     this.done,
     this.useful,
     this.proactive = false,
+    this.moodBefore,
+    this.moodAfter,
   });
 
   final String id;
@@ -57,6 +59,14 @@ class SuggestionRecord {
   /// consume the slot for one.
   final bool proactive;
 
+  /// The mood word from the check-in nearest before the idea was offered, if
+  /// there was one close enough to mean anything.
+  final String? moodBefore;
+
+  /// The mood word the user chose when asked how they feel after doing it.
+  /// Optional: null means they did not say, never that nothing changed.
+  final String? moodAfter;
+
   SuggestionRecord copyWith({
     SuggestionStatus? status,
     int? rating,
@@ -66,6 +76,8 @@ class SuggestionRecord {
     bool? done,
     SuggestionUsefulness? useful,
     bool? proactive,
+    String? moodBefore,
+    String? moodAfter,
   }) {
     return SuggestionRecord(
       id: id,
@@ -80,6 +92,8 @@ class SuggestionRecord {
       done: done ?? this.done,
       useful: useful ?? this.useful,
       proactive: proactive ?? this.proactive,
+      moodBefore: moodBefore ?? this.moodBefore,
+      moodAfter: moodAfter ?? this.moodAfter,
     );
   }
 
@@ -97,6 +111,8 @@ class SuggestionRecord {
       'done': done,
       'useful': useful?.name,
       'proactive': proactive,
+      'moodBefore': moodBefore,
+      'moodAfter': moodAfter,
     };
   }
 
@@ -131,6 +147,9 @@ class SuggestionRecord {
       // user-initiated is the safer default: it means an old record can never
       // silently consume today's nudge budget.
       proactive: map['proactive'] as bool? ?? false,
+      // Absent on records written before these existed: nothing was asked.
+      moodBefore: map['moodBefore'] as String?,
+      moodAfter: map['moodAfter'] as String?,
     );
   }
 

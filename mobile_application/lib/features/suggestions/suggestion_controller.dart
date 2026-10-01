@@ -281,6 +281,23 @@ class SuggestionController extends ChangeNotifier {
     );
   }
 
+  /// Records how the user felt after doing an idea, for one specific record.
+  ///
+  /// Only for ideas they said they did: a mood after something that never
+  /// happened would be a reading of nothing. [moodBefore] is kept alongside so
+  /// the change can be read back without searching for the check-in again.
+  Future<void> recordMoodAfter({
+    required String recordId,
+    required String moodAfter,
+    String? moodBefore,
+  }) async {
+    final record = _recordById(recordId);
+    if (record == null || record.done != true) return;
+    await _write(
+      record.copyWith(moodAfter: moodAfter, moodBefore: moodBefore),
+    );
+  }
+
   /// Records that the user declined a specific suggestion.
   ///
   /// Separate from [submitFeedback] because the Home card declines a record it

@@ -2,9 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/constants/moods.dart';
 import '../../core/models/activity.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/theme/app_theme.dart';
+import '../../domain/recommendations/mood_change.dart';
 import '../../domain/recommendations/recommendation_engine.dart';
 import '../app_shell/activity_scene.dart';
 import '../app_shell/home_suggestion_card.dart';
@@ -70,6 +72,9 @@ class _SuggestionPageState extends State<SuggestionPage> {
   /// Session-only, so declining to rate is not asked again right away.
   bool _ratingPromptDismissed = false;
 
+  /// How they said they feel after doing it, if they said. Never assumed.
+  String? _feelNow;
+
   /// The suggestion this page is showing when Home peeked at it.
   SuggestionCardChoice? _seeded;
 
@@ -121,6 +126,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
       _outcome = _Outcome.none;
       _step = _Step.decide;
       _ratingTarget = null;
+      _feelNow = null;
     });
     try {
       await widget.suggestionController.suggest(
@@ -179,6 +185,23 @@ class _SuggestionPageState extends State<SuggestionPage> {
           : _Outcome.ratedUp;
       _step = _Step.thanks;
     });
+  }
+
+  /// Saves how they feel now against the idea they just did, together with the
+  /// mood from the check-in before it when there is one close enough.
+  Future<void> _recordFeel(String mood) async {
+    final record =
+        _ratingTarget ?? widget.suggestionController.currentRecord;
+    if (record == null) return;
+    setState(() => _feelNow = mood);
+    await widget.suggestionController.recordMoodAfter(
+      recordId: record.id,
+      moodAfter: mood,
+      moodBefore: moodBeforeFor(
+        shownAt: record.shownAt,
+        sessions: widget.sessionController?.sessions ?? const [],
+      ),
+    );
   }
 
   Future<void> _skipRating() async {
@@ -290,6 +313,8 @@ class _SuggestionPageState extends State<SuggestionPage> {
               outcome: _outcome,
               onNext: _requestSuggestion,
               onDone: () => Navigator.of(context).maybePop(),
+              feelNow: _feelNow,
+              onFeel: _outcome.wasDone ? _recordFeel : null,
             ),
           };
         },
@@ -774,6 +799,16 @@ enum _Outcome {
   notForMe,
   tooHard;
 
+  /// Whether the user said they did the idea, which is what makes "how do you
+  /// feel now?" a fair question.
+  bool get wasDone => switch (this) {
+    _Outcome.completed ||
+    _Outcome.completedUnrated ||
+    _Outcome.ratedUp ||
+    _Outcome.ratedDown => true,
+    _ => false,
+  };
+
   SuggestionSkipReason? get skipReason => switch (this) {
     _Outcome.notNow => SuggestionSkipReason.notNow,
     _Outcome.notForMe => SuggestionSkipReason.notForMe,
@@ -912,11 +947,17 @@ class _FeedbackThanks extends StatelessWidget {
     required this.outcome,
     required this.onNext,
     required this.onDone,
+    this.feelNow,
+    this.onFeel,
   });
 
   final _Outcome outcome;
   final VoidCallback onNext;
   final VoidCallback onDone;
+
+  /// Offered only after an idea that was done. Null [onFeel] hides it.
+  final String? feelNow;
+  final ValueChanged<String>? onFeel;
 
   @override
   Widget build(BuildContext context) {
@@ -967,6 +1008,10 @@ class _FeedbackThanks extends StatelessWidget {
                 fontSize: 14,
               ),
             ),
+            if (onFeel != null) ...[
+              const SizedBox(height: 22),
+              _FeelNow(selected: feelNow, onSelect: onFeel!),
+            ],
             const SizedBox(height: 28),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -989,6 +1034,48 @@ class _FeedbackThanks extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A quiet, optional "how do you feel now?" under the closing message.
+///
+/// One tap on a mood word and it is saved; ignoring it costs nothing. It sits
+/// on the screen that already follows an idea being done, so it adds no step.
+class _FeelNow extends StatelessWidget {
+  const _FeelNow({required this.selected, required this.onSelect});
+
+  final String? selected;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          selected == null ? 'How do you feel now?' : 'Noted, thank you.',
+          style: const TextStyle(
+            color: AppColors.mutedInk,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final mood in Moods.values)
+              ChoiceChip(
+                key: ValueKey('feel-$mood'),
+                label: Text(mood),
+                selected: selected == mood,
+                onSelected: (_) => onSelect(mood),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
