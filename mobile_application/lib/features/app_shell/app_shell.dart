@@ -10,7 +10,6 @@ import '../../core/day_key.dart';
 import '../../domain/home/baseline_progress.dart';
 import '../../domain/home/home_card_priority.dart';
 import '../../domain/suggestions/suggestion_schedule.dart';
-import '../../domain/suggestions/suggestion_tuning.dart';
 import '../call/call_page.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_page.dart';
@@ -123,16 +122,12 @@ class _AppShellState extends State<AppShell> {
 
     final now = DateTime.now();
     final profile = widget.profileController.profile;
-    // Temporary: while the design is being tried out, the budget is off so the
-    // card keeps coming back. See SuggestionTuning.
-    const ignoreBudget = SuggestionTuning.alwaysOfferForTesting;
 
     final due = const SuggestionSchedule().isDue(
       history: widget.suggestionController.history,
       profileAgeDays: profileAgeInDays(profile),
       checkInCompletedToday: widget.sessionController.hasCheckedInOn(now),
       now: now,
-      ignoreBudget: ignoreBudget,
     );
     if (!due) return null;
 
@@ -219,10 +214,6 @@ class _AppShellState extends State<AppShell> {
       context: choice.context,
       proactive: true,
     );
-    // While the budget is off, declining must not suppress the activity either:
-    // suppressing it made the card vanish with nothing to replace it, which is
-    // not behaviour that should be showing up during design work.
-    if (SuggestionTuning.alwaysOfferForTesting) return;
     await widget.suggestionController.dismissRecord(
       record.id,
       reason: SuggestionSkipReason.notNow,
@@ -242,9 +233,6 @@ class _AppShellState extends State<AppShell> {
         final checkInCompletedToday = widget.sessionController.hasCheckedInOn(
           now,
         );
-        // Temporary: while the design is being tried out, the budget is off so
-        // the card keeps coming back. See SuggestionTuning.
-        const ignoreBudget = SuggestionTuning.alwaysOfferForTesting;
         final suggestionDue = const SuggestionSchedule().isDue(
           history: widget.suggestionController.history,
           profileAgeDays: profileAgeInDays(widget.profileController.profile),
@@ -252,8 +240,7 @@ class _AppShellState extends State<AppShell> {
           now: now,
           // Without this the switch never reached here, and every gate below
           // stayed shut no matter what the tuning said.
-          ignoreBudget: ignoreBudget,
-        );
+            );
         final baseline = BaselineProgress.of(widget.profileController.profile);
         final homeState = HomeState(
           safetyFlagActive: safetyActive,

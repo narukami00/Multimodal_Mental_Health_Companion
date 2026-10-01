@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/models/activity.dart';
+import 'package:solace_mobile/core/models/session_input.dart';
+import 'package:solace_mobile/core/models/session_record.dart';
+import 'package:solace_mobile/core/models/suggestion_record.dart';
 import 'package:solace_mobile/core/models/user_profile.dart';
 import 'package:solace_mobile/data/contracts/activity_library_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_onboarding_repository.dart';
@@ -42,17 +45,32 @@ final _library = _FixedLibrary([
   ),
 ]);
 
-SessionController _sessionController() {
-  return SessionController(
-    repository: InMemorySessionRepository(),
+/// An idea only arrives after the day's check-in, so by default there is one.
+Future<SessionController> _sessionController({bool checkedIn = true}) async {
+  final repository = InMemorySessionRepository();
+  if (checkedIn) {
+    await repository.save(
+      SessionRecord(
+        id: 'today',
+        createdAt: DateTime.now(),
+        mode: CaptureMode.text,
+        mood: 'Steady',
+      ),
+    );
+  }
+  final controller = SessionController(
+    repository: repository,
     emotionAnalyzer: const MockEmotionAnalyzer(),
   );
+  await controller.load();
+  return controller;
 }
 
 Future<void> _pumpShell(
   WidgetTester tester,
   SuggestionController suggestionController, {
   ProfileController? profileController,
+  bool checkedIn = true,
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.0;
@@ -67,7 +85,7 @@ Future<void> _pumpShell(
   await tester.pumpWidget(
     SolaceApp(
       onboardingRepository: onboarding,
-      sessionController: _sessionController(),
+      sessionController: await _sessionController(checkedIn: checkedIn),
       suggestionController: suggestionController,
       profileController: profileController,
     ),
@@ -106,6 +124,38 @@ void main() {
     await _pumpShell(tester, controller);
 
     expect(find.byKey(const ValueKey('task-accept')), findsNothing);
+  });
+
+  testWidgets('no idea is offered before today check-in', (tester) async {
+    final controller = SuggestionController(
+      libraryRepository: _library,
+      suggestionRepository: InMemorySuggestionRepository(),
+    );
+    await controller.load();
+    await controller.warmUp();
+
+    await _pumpShell(tester, controller, checkedIn: false);
+
+    expect(find.byKey(const ValueKey('task-accept')), findsNothing);
+  });
+
+  testWidgets('declining closes the idea and it does not come back', (
+    tester,
+  ) async {
+    final controller = SuggestionController(
+      libraryRepository: _library,
+      suggestionRepository: InMemorySuggestionRepository(),
+    );
+    await controller.load();
+    await controller.warmUp();
+
+    await _pumpShell(tester, controller);
+    await tester.tap(find.byKey(const ValueKey('task-decline')));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('task-accept')), findsNothing);
+    expect(controller.history.single.skipReason, SuggestionSkipReason.notNow);
   });
 
   testWidgets('the peek on a Home rebuild records nothing', (tester) async {
