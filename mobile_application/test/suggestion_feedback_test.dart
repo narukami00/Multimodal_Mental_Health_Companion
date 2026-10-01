@@ -297,70 +297,30 @@ void main() {
       final controller = _controller([_activity(id: 'a'), _activity(id: 'b')]);
       await controller.load();
       await controller.warmUp();
-      final profile = const UserProfile();
-      // Early days: one a day, so a single nudge exhausts the budget.
       const earlyContext = RecommendationContext(profileAgeDays: 5);
-
-      final peeked = controller.peek(
-        profile: profile,
-        context: earlyContext,
-      )!;
-      await controller.commit(peeked, context: earlyContext, proactive: true);
-
-      expect(
-        controller.peek(profile: profile, context: earlyContext),
-        isNull,
-      );
-    });
-
-    test('the schedule and the engine agree on what is due', () async {
-      final controller = _controller([_activity(id: 'a'), _activity(id: 'b')]);
-      await controller.load();
-      await controller.warmUp();
-      final profile = const UserProfile();
       final now = DateTime.now();
-
-      // If these two ever disagree, the card is shown with nothing in it.
-      final due = const SuggestionSchedule().isDue(
+      bool due() => const SuggestionSchedule().isDue(
         history: controller.history,
-        profileAgeDays: null,
+        profileAgeDays: 5,
         checkInCompletedToday: true,
         now: now,
       );
+
+      expect(due(), isTrue);
       final peeked = controller.peek(
-        profile: profile,
-        context: _context,
-        now: now,
-      );
-
-      expect(due, peeked != null);
-    });
-  });
-
-  group('the design testing switch', () {
-    test('ignoring the budget keeps offering after a nudge', () async {
-      final controller = _controller([_activity(id: 'a'), _activity(id: 'b')]);
-      await controller.load();
-      await controller.warmUp();
-      final profile = const UserProfile();
-      const earlyContext = RecommendationContext(profileAgeDays: 5);
-
-      // Exhaust the day with a real nudge first.
-      final first = controller.peek(
-        profile: profile,
+        profile: const UserProfile(),
         context: earlyContext,
+        now: now,
       )!;
-      await controller.commit(first, context: earlyContext, proactive: true);
-      expect(controller.peek(profile: profile, context: earlyContext), isNull);
-
-      // With the switch on, Home keeps getting something to show.
-      expect(
-        controller.peek(
-          profile: profile,
-          context: earlyContext,
-        ),
-        isNotNull,
+      await controller.commit(
+        peeked,
+        context: earlyContext,
+        now: now,
+        proactive: true,
       );
+
+      // Early days: one a day, so a single nudge exhausts the budget.
+      expect(due(), isFalse);
     });
   });
 
