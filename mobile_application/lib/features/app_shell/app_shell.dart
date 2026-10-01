@@ -31,7 +31,7 @@ import '../suggestions/suggestion_card_surface.dart';
 import '../suggestions/suggestion_controller.dart';
 import '../suggestions/suggestion_context.dart';
 import '../suggestions/suggestion_page.dart';
-import 'baseline_setup_card.dart';
+import 'setup_progress_badge.dart';
 import 'check_in_task_card.dart';
 import 'home_rail.dart';
 import 'home_suggestion_card.dart';
@@ -406,11 +406,13 @@ class _AppShellState extends State<AppShell> {
                   // not left waiting for some unrelated rebuild.
                   onVanished: () => setState(() {}),
                 ),
-                // Hidden once setup is done, and never shown to someone in a
-                // safety state, where it would read as one more thing to do.
-                setupCard: baseline.isComplete || safetyActive
+                // The big setup card is gone: the tiny meter under the date
+                // chip is now the only standing nudge. Hidden once setup is
+                // done, and never shown to someone in a safety state, where it
+                // would read as one more thing to do.
+                setupProgressBadge: baseline.isComplete || safetyActive
                     ? null
-                    : BaselineSetupCard(
+                    : SetupProgressBadge(
                         progress: baseline,
                         onContinue: () => _openSetup(context),
                       ),

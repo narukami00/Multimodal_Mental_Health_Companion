@@ -34,6 +34,7 @@ class TodayPage extends StatelessWidget {
     this.onBlobTap,
     this.setupCard,
     this.onContinueSetup,
+    this.setupProgressBadge,
     this.currentTime,
     this.chatController,
     this.ambientAudioEnabled = true,
@@ -58,6 +59,9 @@ class TodayPage extends StatelessWidget {
 
   /// The standing setup-progress card, or null once setup is done.
   final Widget? setupCard;
+
+  /// The tiny setup meter under the date chip, or null once setup is done.
+  final Widget? setupProgressBadge;
 
   /// Opens the baseline reflection quiz.
   final VoidCallback? onContinueSetup;
@@ -222,22 +226,33 @@ class TodayPage extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: const Color(0xFF4A3728).withValues(alpha: 0.14),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: const Color(0xFF4A3728).withValues(alpha: 0.14),
+                ),
+              ),
+              child: Text(
+                date,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF7B6A55),
+                ),
+              ),
             ),
-          ),
-          child: Text(
-            date,
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF7B6A55),
-            ),
-          ),
+            if (setupProgressBadge != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: setupProgressBadge!,
+              ),
+          ],
         ),
       ],
     );
