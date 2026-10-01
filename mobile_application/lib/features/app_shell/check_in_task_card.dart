@@ -80,14 +80,14 @@ class _CheckInTaskCardState extends State<CheckInTaskCard> {
     }
   }
 
-  Future<void> _declineTask() async {
+  Future<void> _dismissTask(VoidCallback? then) async {
     if (_taskLeaving) return;
     setState(() => _taskLeaving = true);
     // Let the task wipe away before the card closes up, so the two motions read
     // as one gesture rather than as a flicker followed by a jump.
     await Future<void>.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
-    widget.onTaskDecline?.call();
+    then?.call();
   }
 
   @override
@@ -205,14 +205,14 @@ class _CheckInTaskCardState extends State<CheckInTaskCard> {
                 key: const ValueKey('task-accept'),
                 label: task.acceptLabel,
                 filled: true,
-                onPressed: widget.onTaskAccept,
+                onPressed: () => _dismissTask(widget.onTaskAccept),
               ),
               const SizedBox(width: 12),
               _TaskButton(
                 key: const ValueKey('task-decline'),
                 label: task.declineLabel,
                 filled: false,
-                onPressed: _declineTask,
+                onPressed: () => _dismissTask(widget.onTaskDecline),
               ),
             ],
           ),

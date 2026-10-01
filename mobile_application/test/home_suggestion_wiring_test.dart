@@ -158,6 +158,24 @@ void main() {
     expect(controller.history.single.skipReason, SuggestionSkipReason.notNow);
   });
 
+  testWidgets('trying it records one nudge and leaves Home', (tester) async {
+    final controller = SuggestionController(
+      libraryRepository: _library,
+      suggestionRepository: InMemorySuggestionRepository(),
+    );
+    await controller.load();
+    await controller.warmUp();
+
+    await _pumpShell(tester, controller);
+    await tester.tap(find.byKey(const ValueKey('task-accept')));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(controller.history.single.proactive, isTrue);
+    // The card faded out first, and the page that opened has taken its place.
+    expect(find.byKey(const ValueKey('task-accept')), findsNothing);
+  });
+
   testWidgets('the peek on a Home rebuild records nothing', (tester) async {
     final controller = SuggestionController(
       libraryRepository: _library,
