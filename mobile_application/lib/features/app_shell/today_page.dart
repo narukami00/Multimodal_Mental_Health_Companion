@@ -10,7 +10,6 @@ import '../chat/chat_controller.dart';
 import '../chat/conversation_history.dart';
 import '../companion/companion_blob.dart';
 import 'check_in_task_card.dart';
-import 'living_atmosphere_card.dart';
 
 bool get _isTestEnvironment {
   try {
@@ -202,17 +201,6 @@ class TodayPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 30),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  LivingAtmosphereCard(ambientAudioEnabled: ambientAudioEnabled),
-                  const SizedBox(height: 24),
-                  _buildFooter(context),
-                ],
-              ),
-            ),
           ],
         ),
       ),
@@ -287,10 +275,11 @@ class TodayPage extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Padding(
-          // The shape's underside must land above the card's first line of
-          // text: 84px shape and 68px reservation leaves the eye clear of the
-          // eyebrow. Overlapping the words looked broken rather than deliberate.
-          padding: const EdgeInsets.only(top: 68),
+          // The shape sits over the card's top edge rather than above it. It is
+          // translucent now, so overlapping the words is fine - the copy still
+          // reads through it, and the overlap is what makes the two feel like
+          // one object.
+          padding: const EdgeInsets.only(top: 42),
           child: CheckInTaskCard(
             eyebrow: card.eyebrow,
             headline: card.title,
@@ -738,68 +727,7 @@ class TodayPage extends StatelessWidget {
     );
   }
 
-  Widget _buildFooter(BuildContext context) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0x14FFB534),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.wb_sunny_rounded,
-                  size: 14,
-                  color: Color(0xFFE8961A),
-                ),
-                SizedBox(width: 6),
-                Text(
-                  '4 days present · no pressure',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF7B6A55),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Your pace is enough for today.',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFFA5937C),
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextButton.icon(
-            onPressed: onOpenSupport,
-            icon: const Icon(
-              Icons.shield_outlined,
-              size: 16,
-              color: Color(0xB87B6A55),
-            ),
-            label: const Text(
-              'Support resources',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Color(0xB87B6A55),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // The footer is gone: the page no longer ends with reassurance copy.
 }
 
 class _AnimatedSpinningSun extends StatefulWidget {

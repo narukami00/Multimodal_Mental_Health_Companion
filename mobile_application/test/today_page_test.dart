@@ -29,7 +29,6 @@ void main() {
 
   testWidgets('TodayPage renders dynamic greeting, high-fidelity cards, and footer', (tester) async {
     var checkInTapped = false;
-    var supportTapped = false;
     final fixedTime = DateTime(2026, 9, 22, 9, 30); // 9:30 AM -> Good morning
 
     tester.view.physicalSize = const Size(1080, 2400);
@@ -45,7 +44,6 @@ void main() {
           body: TodayPage(
             currentTime: fixedTime,
             onStartCheckIn: () => checkInTapped = true,
-            onOpenSupport: () => supportTapped = true,
           ),
         ),
       ),
@@ -64,15 +62,8 @@ void main() {
     );
     expect(find.text('Open chat'), findsOneWidget);
 
-    expect(find.textContaining('4 days present'), findsOneWidget);
-    expect(find.text('Your pace is enough for today.'), findsOneWidget);
-    expect(find.text('Support resources'), findsOneWidget);
-
     await tester.tap(find.text('Check in now'));
     expect(checkInTapped, isTrue);
-
-    await tester.tap(find.text('Support resources'));
-    expect(supportTapped, isTrue);
   });
 
   testWidgets('AppShell switches tabs smoothly and supports initialTab', (tester) async {

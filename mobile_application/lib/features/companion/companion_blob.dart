@@ -55,6 +55,10 @@ class _CompanionBlobState extends State<CompanionBlob>
     duration: const Duration(milliseconds: 5500),
   );
 
+  /// Where the shape has been dragged to. Dragging it plays with it, the way
+  /// you would push a drop of water around; letting go springs it home.
+  Offset _drag = Offset.zero;
+
   @override
   void initState() {
     super.initState();
@@ -83,6 +87,35 @@ class _CompanionBlobState extends State<CompanionBlob>
     super.dispose();
   }
 
+  void _onPanUpdate(DragUpdateDetails details) {
+    setState(() {
+      _drag += details.delta;
+    });
+  }
+
+  void _onPanEnd(DragEndDetails details) {
+    if (!widget.animate || _isTestEnvironment) {
+      setState(() => _drag = Offset.zero);
+      return;
+    }
+    // A spring back to the resting spot, carrying the velocity of the throw.
+    final start = _drag;
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    final curve = CurvedAnimation(parent: controller, curve: Curves.elasticOut);
+    controller.addListener(() {
+      setState(() => _drag = Offset.lerp(start, Offset.zero, curve.value)!);
+    });
+    controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        controller.dispose();
+      }
+    });
+    controller.forward();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
@@ -91,20 +124,24 @@ class _CompanionBlobState extends State<CompanionBlob>
       child: GestureDetector(
         onTap: widget.onTap,
         onLongPress: widget.onLongPress,
+        onPanUpdate: _onPanUpdate,
+        onPanEnd: _onPanEnd,
         behavior: HitTestBehavior.opaque,
         child: AnimatedBuilder(
           animation: Listenable.merge([_morph, _breathe]),
           builder: (context, _) {
-            final breath = 1 + 0.045 * Curves.easeInOut.transform(
-              _breathe.value,
-            );
-            return Transform.scale(
-              scale: breath,
-              child: SizedBox(
-                width: widget.diameter,
-                height: widget.diameter,
-                child: CustomPaint(
-                  painter: _BlobPainter(phase: _morph.value),
+            final breath = 1 +
+                0.045 * Curves.easeInOut.transform(_breathe.value);
+            return Transform.translate(
+              offset: _drag,
+              child: Transform.scale(
+                scale: breath,
+                child: SizedBox(
+                  width: widget.diameter,
+                  height: widget.diameter,
+                  child: CustomPaint(
+                    painter: _BlobPainter(phase: _morph.value),
+                  ),
                 ),
               ),
             );
@@ -123,17 +160,10 @@ class _BlobPainter extends CustomPainter {
   static const _core = Color(0xFFFFB534);
   static const _light = Color(0xFFFFE0AE);
   static const _deep = Color(0xFFFF8B3D);
-  static const _rim = Color(0x33B46B0A);
 
   @override
   void paint(Canvas canvas, Size size) {
     final path = _blobPath(size);
-
-    // A halo, so the shape sits in the page rather than on it.
-    canvas.drawPath(
-      _blobPath(size, radiusScale: 1.13),
-      Paint()..color = _core.withValues(alpha: 0.15),
-    );
 
     // A blurred copy of the shape, offset down. Not canvas.drawShadow: that
     // renders a rectangular occluder behind a non-rectangular path, which
@@ -145,25 +175,41 @@ class _BlobPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
     );
 
+    // Two offset translucent layers under the body, so it reads as liquid with
+    // depth rather than as a flat disc. They are what let it sit over text
+    // without hiding it.
+    canvas.drawPath(
+      _blobPath(size, radiusScale: 0.86),
+      Paint()..color = _core.withValues(alpha: 0.30),
+    );
+    canvas.drawPath(
+      _blobPath(size, radiusScale: 0.68),
+      Paint()..color = _light.withValues(alpha: 0.26),
+    );
+
     canvas.drawPath(
       path,
       Paint()
-        ..shader = const RadialGradient(
-          center: Alignment(-0.34, -0.44),
+        ..shader = RadialGradient(
+          center: const Alignment(-0.34, -0.44),
           radius: 0.95,
-          colors: [_light, _core, _deep],
-          stops: [0.0, 0.55, 1.0],
+          colors: [
+            _light.withValues(alpha: 0.82),
+            _core.withValues(alpha: 0.72),
+            _deep.withValues(alpha: 0.62),
+          ],
+          stops: const [0.0, 0.55, 1.0],
         ).createShader(Offset.zero & size),
     );
 
     // An inner rim, which is what gives the silhouette an edge against a pale
-    // background. Measured about 1.2:1 without it.
+    // background. Measured about 1.2 to 1 without it.
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = _rim,
+        ..strokeWidth = 1.4
+        ..color = const Color(0x3AC07818),
     );
   }
 

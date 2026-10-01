@@ -1,4 +1,16 @@
+import 'dart:io';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+bool get _isTestEnvironment {
+  try {
+    return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+  } catch (_) {
+    return false;
+  }
+}
 
 /// The day's task, as offered inside the check-in card.
 class TaskOffer {
@@ -133,64 +145,12 @@ class _CheckInTaskCardState extends State<CheckInTaskCard> {
   }
 
   Widget _buildCheckIn(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
-      color: const Color(0xFFFFF6E4),
-      child: Column(
-        children: [
-          if (widget.eyebrow != null) ...[
-            Text(
-              widget.eyebrow!.toUpperCase(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.5,
-                // Darkened amber. At the old value this sat near 2.6:1, which is
-                // unreadable on a low-end panel in daylight.
-                color: Color(0xFF8A5600),
-              ),
-            ),
-            const SizedBox(height: 9),
-          ],
-          Text(
-            widget.headline,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 19,
-              height: 1.22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-              color: Color(0xFF4A3728),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            widget.subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 12.5,
-              height: 1.4,
-              // Was 7B6A55 at this size, which measured about 3.1:1.
-              color: Color(0xFF5F4E3A),
-            ),
-          ),
-          const SizedBox(height: 15),
-          // A bright orange gradient, not the dark brown that was here before.
-          // That colour was never part of the app's palette, and dark ink on
-          // bright orange is both on-brand and readable, where white on the
-          // previous amber measured about 2:1.
-          _OrangeButton(
-            label: widget.ctaLabel,
-            onPressed: widget.onCta,
-            height: 46,
-            radius: 999,
-            horizontalPadding: 26,
-            prominent: true,
-          ),
-        ],
-      ),
+    return _CheckInPanel(
+      eyebrow: widget.eyebrow,
+      headline: widget.headline,
+      subtitle: widget.subtitle,
+      ctaLabel: widget.ctaLabel,
+      onCta: widget.onCta,
     );
   }
 
@@ -287,6 +247,205 @@ class _TaskButton extends StatelessWidget {
   }
 }
 
+/// The check-in half: a saturated orange panel with a slowly sweeping gradient
+/// and a rotating sun behind the words.
+///
+/// This is deliberately the loudest thing on the screen. It is the one action
+/// the app wants someone to take, and with everything at equal weight nobody
+/// knows where to start.
+class _CheckInPanel extends StatefulWidget {
+  const _CheckInPanel({
+    required this.headline,
+    required this.subtitle,
+    required this.ctaLabel,
+    this.eyebrow,
+    this.onCta,
+  });
+
+  final String? eyebrow;
+  final String headline;
+  final String subtitle;
+  final String ctaLabel;
+  final VoidCallback? onCta;
+
+  @override
+  State<_CheckInPanel> createState() => _CheckInPanelState();
+}
+
+class _CheckInPanelState extends State<_CheckInPanel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 14),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_isTestEnvironment) _sweep.repeat();
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _sweep,
+      builder: (context, _) {
+        final t = _sweep.value;
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            // The gradient drifts so the surface is alive rather than a flat
+            // block of colour.
+            gradient: LinearGradient(
+              begin: Alignment(-1.2 + t * 0.9, -1),
+              end: Alignment(0.4 + t * 0.9, 1),
+              colors: const [
+                Color(0xFFFFC85A),
+                Color(0xFFF5A01C),
+                Color(0xFFFFB534),
+              ],
+              stops: const [0.0, 0.55, 1.0],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -26,
+                top: -32,
+                child: _Sun(rotation: t * 2 * math.pi, size: 150),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+                child: Column(
+                  children: [
+                    if (widget.eyebrow != null) ...[
+                      Text(
+                        widget.eyebrow!.toUpperCase(),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.5,
+                          color: const Color(0xFF4A3213).withValues(
+                            alpha: 0.78,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                    ],
+                    Text(
+                      widget.headline,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        color: Color(0xFF3F2A0E),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.subtitle,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF3F2A0E).withValues(alpha: 0.80),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Inverted from the panel: a light pill on the orange,
+                    // rather than an orange pill on a pale card. It reads as the
+                    // one thing to press instead of blending into the page.
+                    _OrangeButton(
+                      label: widget.ctaLabel,
+                      onPressed: widget.onCta,
+                      height: 48,
+                      radius: 999,
+                      horizontalPadding: 30,
+                      prominent: false,
+                      light: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A slowly rotating sun, sitting behind the check-in copy.
+class _Sun extends StatelessWidget {
+  const _Sun({required this.rotation, required this.size});
+
+  final double rotation;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: rotation,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: CustomPaint(painter: _SunPainter()),
+      ),
+    );
+  }
+}
+
+class _SunPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centre = Offset(size.width / 2, size.height / 2);
+    final core = size.width * 0.22;
+
+    canvas.drawCircle(
+      centre,
+      core,
+      Paint()..color = const Color(0xFFFFF3D6).withValues(alpha: 0.34),
+    );
+
+    final ray = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = size.width * 0.028
+      ..color = const Color(0xFFFFF3D6).withValues(alpha: 0.30);
+
+    for (var i = 0; i < 12; i++) {
+      final angle = (i / 12) * 2 * math.pi;
+      final long = i.isEven;
+      final from = core * (long ? 1.5 : 1.45);
+      final to = core * (long ? 2.5 : 2.05);
+      canvas.drawLine(
+        Offset(
+          centre.dx + from * math.cos(angle),
+          centre.dy + from * math.sin(angle),
+        ),
+        Offset(
+          centre.dx + to * math.cos(angle),
+          centre.dy + to * math.sin(angle),
+        ),
+        ray,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SunPainter oldDelegate) => false;
+}
+
 /// The app's own orange, as a button.
 ///
 /// Dark ink on a bright orange gradient: the brown fill this replaces was never
@@ -300,6 +459,7 @@ class _OrangeButton extends StatelessWidget {
     required this.radius,
     required this.horizontalPadding,
     required this.prominent,
+    this.light = false,
   });
 
   final String label;
@@ -309,10 +469,15 @@ class _OrangeButton extends StatelessWidget {
   final double horizontalPadding;
   final bool prominent;
 
+  /// A pale pill for use on the orange panel, where an orange button would
+  /// disappear into its own background.
+  final bool light;
+
   static const _ink = Color(0xFF3F2A0E);
 
   @override
   Widget build(BuildContext context) {
+    final solid = prominent || light;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -323,7 +488,8 @@ class _OrangeButton extends StatelessWidget {
                 colors: [Color(0xFFFFC24F), Color(0xFFF09A18)],
               )
             : null,
-        border: prominent
+        color: light ? const Color(0xFFFFFBF2) : null,
+        border: solid
             ? null
             : Border.all(color: const Color(0x2E4A3728), width: 1.4),
         boxShadow: prominent
@@ -332,6 +498,14 @@ class _OrangeButton extends StatelessWidget {
                   color: Color(0x33E08A10),
                   blurRadius: 12,
                   offset: Offset(0, 4),
+                ),
+              ]
+            : light
+            ? const [
+                BoxShadow(
+                  color: Color(0x2E7A4408),
+                  blurRadius: 14,
+                  offset: Offset(0, 5),
                 ),
               ]
             : null,
@@ -349,9 +523,9 @@ class _OrangeButton extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 14.5,
                 fontWeight: FontWeight.w800,
-                color: prominent ? _ink : const Color(0xFF5F4E3A),
+                color: solid ? _ink : const Color(0xFF5F4E3A),
               ),
             ),
           ),

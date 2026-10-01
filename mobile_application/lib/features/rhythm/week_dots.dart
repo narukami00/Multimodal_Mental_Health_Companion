@@ -23,6 +23,9 @@ class WeekDots extends StatelessWidget {
   static const _accent = Color(0xFFC87F10);
   static const _rest = Color(0xFFE8604C);
   static const _idle = Color(0x2E4A3728);
+  /// Today is a very pale orange rather than a ring or a bright fill: the
+  /// position already says which day it is, so the mark only needs to warm it.
+  static const _today = Color(0xFFFFDCB0);
 
   @override
   Widget build(BuildContext context) {
@@ -86,14 +89,12 @@ class _Dot extends StatelessWidget {
       height: 9,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: fill,
+        color: isToday ? WeekDots._today : fill,
         border: isRest && !isCheckedIn
-            ? Border.all(color: WeekDots._rest.withValues(alpha: 0.75), width: 1.2)
-            : null,
-        // Today is a ring rather than a colour, so the most alert-like hue in
-        // the app is never spent on "the most recent day".
-        boxShadow: isToday
-            ? const [BoxShadow(color: WeekDots._accent, spreadRadius: 2)]
+            ? Border.all(
+                color: WeekDots._rest.withValues(alpha: 0.75),
+                width: 1.2,
+              )
             : null,
       ),
     );
