@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar mark: a flat white silhouette, which is all Android draws there. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <group android:translateX="-22" android:translateY="-22">
+        <group android:pivotX="54" android:pivotY="54" android:rotation="0">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M49.4,31 a4.6,8.6 0 1,0 9.2,0 a4.6,8.6 0 1,0 -9.2,0 z"/>
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="45">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M49.4,31 a4.6,8.6 0 1,0 9.2,0 a4.6,8.6 0 1,0 -9.2,0 z"/>
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="90">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M49.4,31 a4.6,8.6 0 1,0 9.2,0 a4.6,8.6 0 1,0 -9.2,0 z"/>
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="135">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M49.4,31 a4.6,8.6 0 1,0 9.2,0 a4.6,8.6 0 1,0 -9.2,0 z"/>
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="180">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M49.4,31 a4.6,8.6 0 1,0 9.2,0 a4.6,8.6 0 1,0 -9.2,0 z"/>
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="225">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M49.4,31 a4.6,8.6 0 1,0 9.2,0 a4.6,8.6 0 1,0 -9.2,0 z"/>
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="270">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M49.4,31 a4.6,8.6 0 1,0 9.2,0 a4.6,8.6 0 1,0 -9.2,0 z"/>
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="315">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M49.4,31 a4.6,8.6 0 1,0 9.2,0 a4.6,8.6 0 1,0 -9.2,0 z"/>
+        </group>
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M41,54 a13,13 0 1,0 26,0 a13,13 0 1,0 -26,0 z"/>
+    </group>
+</vector>
