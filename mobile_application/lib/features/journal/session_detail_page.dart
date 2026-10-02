@@ -5,9 +5,13 @@ import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
 
 class SessionDetailPage extends StatelessWidget {
-  const SessionDetailPage({required this.session, super.key});
+  const SessionDetailPage({required this.session, this.onDelete, super.key});
 
   final SessionRecord session;
+
+  /// When given, the entry can be deleted from here. Called once the person has
+  /// confirmed; the page closes afterwards.
+  final Future<void> Function(SessionRecord session)? onDelete;
 
   static const _ink = Color(0xFF3A3125);
   static const _softInk = Color(0xFF8A7A61);
@@ -239,6 +243,23 @@ class SessionDetailPage extends StatelessWidget {
                               ],
                             ),
                           ),
+                          if (onDelete != null) ...[
+                            const SizedBox(height: 14),
+                            Center(
+                              child: TextButton.icon(
+                                key: const ValueKey('delete-entry'),
+                                onPressed: () => _confirmDelete(context),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFFB5503C),
+                                ),
+                                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                                label: const Text(
+                                  'Delete this entry',
+                                  style: TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -250,6 +271,33 @@ class SessionDetailPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this entry?'),
+        content: const Text(
+          'It is removed from this phone, along with any moment that came from '
+          'it. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            key: const ValueKey('delete-entry-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true || !context.mounted) return;
+    await onDelete!(session);
+    if (context.mounted) Navigator.of(context).maybePop();
   }
 
   IconData _modeIcon(CaptureMode mode) {

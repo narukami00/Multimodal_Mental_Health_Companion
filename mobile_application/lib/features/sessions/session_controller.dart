@@ -19,6 +19,10 @@ class SessionController extends ChangeNotifier {
   /// callback must not throw into the save: failures there are theirs to catch.
   void Function(SessionRecord session)? onSaved;
 
+  /// Called after an entry is deleted, so what was derived from it can be
+  /// deleted too.
+  void Function(SessionRecord session)? onDeleted;
+
   List<SessionRecord> _sessions = const [];
 
   List<SessionRecord> get sessions => List.unmodifiable(_sessions);
@@ -74,6 +78,17 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
     onSaved?.call(session);
     return session;
+  }
+
+  /// Deletes an entry for good. Nothing is kept of it, and [onDeleted] lets
+  /// things made from it (such as a moment) go with it.
+  Future<void> deleteSession(String id) async {
+    final matches = _sessions.where((s) => s.id == id).toList();
+    if (matches.isEmpty) return;
+    await _repository.delete(id);
+    _sessions = [for (final s in _sessions) if (s.id != id) s];
+    notifyListeners();
+    onDeleted?.call(matches.first);
   }
 
   Future<void> seedInitialSessions() async {

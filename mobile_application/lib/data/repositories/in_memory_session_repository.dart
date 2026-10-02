@@ -18,6 +18,11 @@ class InMemorySessionRepository implements SessionRepository {
   }
 
   @override
+  Future<void> delete(String id) async {
+    _sessions.removeWhere((item) => item.id == id);
+  }
+
+  @override
   Future<void> save(SessionRecord session) async {
     final existingIndex = _sessions.indexWhere((item) => item.id == session.id);
     if (existingIndex == -1) {

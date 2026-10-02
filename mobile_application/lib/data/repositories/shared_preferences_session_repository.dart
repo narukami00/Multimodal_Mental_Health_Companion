@@ -42,6 +42,15 @@ class SharedPreferencesSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<void> delete(String id) async {
+    final sessions = (await listSessions()).where((item) => item.id != id);
+    await _preferences.setStringList(
+      _sessionsKey,
+      sessions.map((item) => jsonEncode(item.toMap())).toList(),
+    );
+  }
+
+  @override
   Future<void> save(SessionRecord session) async {
     final sessions = (await listSessions())
         .where((item) => item.id != session.id)

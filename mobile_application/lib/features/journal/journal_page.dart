@@ -121,7 +121,10 @@ class JournalPage extends StatelessWidget {
   void _openSession(BuildContext context, SessionRecord session) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => SessionDetailPage(session: session),
+        builder: (_) => SessionDetailPage(
+          session: session,
+          onDelete: (s) => sessionController.deleteSession(s.id),
+        ),
       ),
     );
   }

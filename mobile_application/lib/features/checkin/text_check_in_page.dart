@@ -111,7 +111,10 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
     if (!mounted) return;
     await Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
-        builder: (_) => SessionDetailPage(session: session),
+        builder: (_) => SessionDetailPage(
+          session: session,
+          onDelete: (s) => widget.sessionController.deleteSession(s.id),
+        ),
       ),
     );
   }

@@ -196,6 +196,9 @@ Future<void> main() async {
   chatController.onConversationDeleted = (messageIds) => unawaited(
     moments.deleteForSources([for (final id in messageIds) 'chat:$id']),
   );
+  // Deleting an entry deletes the moments that came from it.
+  sessionController.onDeleted = (session) =>
+      unawaited(moments.deleteForSource(session.id));
   chatController.onUserMessage = (message) => offerMoment(
     MomentCandidate(
       text: message.text,
