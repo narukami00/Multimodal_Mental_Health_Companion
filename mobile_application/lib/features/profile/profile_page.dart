@@ -1,3 +1,4 @@
+import '../chat/chat_controller.dart';
 import '../memory/companion_memory_context.dart';
 import '../memory/moments_controller.dart';
 import '../memory/what_sol_remembers_page.dart';
@@ -175,6 +176,7 @@ class ProfilePage extends StatelessWidget {
     this.phonePatterns,
     this.moments,
     this.memory,
+    this.chatController,
     this.extraEventTags,
     super.key,
   });
@@ -190,6 +192,7 @@ class ProfilePage extends StatelessWidget {
   /// With [memory], gives the "What Sol remembers" row.
   final MomentsController? moments;
   final CompanionMemoryContext? memory;
+  final ChatController? chatController;
 
   /// Themes the person chose recently, so the engine's described state matches
   /// what it is actually being fed.
@@ -570,6 +573,7 @@ class ProfilePage extends StatelessWidget {
                                   memory: memory!,
                                   consent: memory!.consent,
                                   profileController: profileController,
+                                  chat: chatController,
                                 ),
                               ),
                             ),

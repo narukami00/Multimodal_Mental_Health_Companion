@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:solace_mobile/core/models/chat_message_record.dart';
+import 'package:solace_mobile/features/chat/chat_controller.dart';
 import 'package:solace_mobile/core/models/consent.dart';
 import 'package:solace_mobile/core/models/user_profile.dart';
 import 'package:solace_mobile/data/repositories/in_memory_consent_repository.dart';
@@ -138,5 +141,52 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('forget-all-confirm')));
     await tester.pumpAndSettle();
     expect(moments.all, isEmpty);
+  });
+
+  testWidgets('lists the notes kept on long conversations, and each can be forgotten', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final chat = ChatController(preferences: await SharedPreferences.getInstance());
+    await tester.runAsync(() async {
+      await chat.load();
+      await chat.addMessage(
+        ChatMessageRecord(
+          id: 'm1',
+          isUser: true,
+          text: 'A long day.',
+          timestamp: DateTime(2026, 10, 20),
+        ),
+      );
+      await chat.setSummary(chat.activeConversation!.id, 'The user had a long day at work.', 'm1');
+    });
+    final id = chat.activeConversation!.id;
+
+    tester.view.physicalSize = const Size(1080, 3200);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WhatSolRemembersPage(
+          moments: moments,
+          memory: memory,
+          consent: consent,
+          profileController: profile,
+          chat: chat,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('The user had a long day at work.'), findsOneWidget);
+
+    await tester.tap(find.byKey(ValueKey('forget-note-$id')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('The user had a long day at work.'), findsNothing);
+    expect(chat.activeConversation!.messages, isNotEmpty);
   });
 }

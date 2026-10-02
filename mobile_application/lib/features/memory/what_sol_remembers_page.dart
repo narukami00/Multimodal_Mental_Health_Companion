@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/consent.dart';
 import '../../core/models/memory_moment.dart';
 import '../../core/theme/solace_palette.dart';
+import '../chat/chat_controller.dart';
 import '../consent/consent_controller.dart';
 import '../profile/profile_controller.dart';
 import 'companion_memory_context.dart';
@@ -26,9 +27,12 @@ class WhatSolRemembersPage extends StatelessWidget {
     required this.memory,
     required this.consent,
     required this.profileController,
+    this.chat,
     super.key,
   });
 
+  /// With it, the notes Sol keeps on long conversations are listed here too.
+  final ChatController? chat;
   final MomentsController moments;
   final CompanionMemoryContext memory;
   final ConsentController consent;
@@ -54,7 +58,12 @@ class WhatSolRemembersPage extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 380),
             child: ListenableBuilder(
-              listenable: Listenable.merge([moments, consent, profileController]),
+              listenable: Listenable.merge([
+                moments,
+                consent,
+                profileController,
+                ?chat,
+              ]),
               builder: (context, _) => ListView(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
                 children: [
@@ -79,6 +88,7 @@ class WhatSolRemembersPage extends StatelessWidget {
                   _momentList(context),
                   const SizedBox(height: 10),
                   _addButton(context),
+                  if (chat != null) ..._notes(context),
                   _label('ASKING'),
                   _askingCard(),
                   const SizedBox(height: 18),
@@ -101,6 +111,78 @@ class WhatSolRemembersPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Short summaries of long conversations, kept so a chat can be picked up
+  /// again. Shown with the conversation they belong to, each one deletable.
+  List<Widget> _notes(BuildContext context) {
+    final noted = [
+      for (final c in chat!.conversations)
+        if (c.hasSummary) c,
+    ];
+    if (noted.isEmpty) return const [];
+    return [
+      _label('NOTES ON LONG CONVERSATIONS'),
+      _card(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        child: Column(
+          key: const ValueKey('conversation-notes'),
+          children: [
+            for (var i = 0; i < noted.length; i++) ...[
+              if (i > 0) const Divider(height: 1, color: _line),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            noted[i].title,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: _muted,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            noted[i].summary!,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              height: 1.45,
+                              color: _ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      key: ValueKey('forget-note-${noted[i].id}'),
+                      tooltip: 'Forget this note',
+                      onPressed: () => chat!.clearSummary(noted[i].id),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 20, color: _muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(4, 8, 4, 0),
+        child: Text(
+          'When a conversation gets long, Sol writes itself a short note so it '
+          'can pick the thread up again. The messages themselves stay as they '
+          'are, and forgetting a note never removes them.',
+          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, height: 1.5, color: _muted),
+        ),
+      ),
+    ];
   }
 
   Widget _label(String text) => Padding(

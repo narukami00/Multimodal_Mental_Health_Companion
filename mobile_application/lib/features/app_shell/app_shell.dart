@@ -493,6 +493,7 @@ class _AppShellState extends State<AppShell> {
                                     memory: widget.memory!,
                                     consent: widget.memory!.consent,
                                     profileController: widget.profileController,
+                                    chat: _chatController,
                                   ),
                                 ),
                               ),
@@ -506,6 +507,7 @@ class _AppShellState extends State<AppShell> {
                 phonePatterns: widget.phonePatterns,
                 moments: widget.moments,
                 memory: widget.memory,
+                chatController: _chatController,
                 extraEventTags: () =>
                     widget.breakPrompts?.activeThemes() ?? const [],
               ),
