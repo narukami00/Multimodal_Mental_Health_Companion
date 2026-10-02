@@ -30,6 +30,7 @@ class TodayPage extends StatelessWidget {
     this.homeRail,
     this.patternPrompt,
     this.dayRhythm,
+    this.momentPrompt,
     this.onTaskOpen,
     this.onTaskAccept,
     this.onTaskDecline,
@@ -82,6 +83,9 @@ class TodayPage extends StatelessWidget {
 
   /// Yesterday as a 24-hour ring, straight under the conversation rail.
   final Widget? dayRhythm;
+
+  /// "Want me to remember this?", when a good moment is waiting for an answer.
+  final Widget? momentPrompt;
   final VoidCallback? onTaskOpen;
 
   /// The day's task, offered inside the check-in card rather than as a second
@@ -210,6 +214,11 @@ class TodayPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
                 child: patternPrompt!,
+              ),
+            if (momentPrompt != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                child: momentPrompt!,
               ),
             const SizedBox(height: 26),
             Padding(

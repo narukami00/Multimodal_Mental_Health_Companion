@@ -187,6 +187,10 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  /// Called after the person sends a typed message, so other features can look
+  /// at it. Voice messages are not passed on until they have a transcription.
+  void Function(ChatMessageRecord message)? onUserMessage;
+
   /// Append a new message to the active conversation and auto-save.
   Future<void> addMessage(ChatMessageRecord message) async {
     if (_conversations.isEmpty || _activeConversationId == null) {
@@ -229,6 +233,7 @@ class ChatController extends ChangeNotifier {
 
     await _saveToPrefs();
     notifyListeners();
+    if (message.isUser && !message.isVoice) onUserMessage?.call(message);
   }
 
   /// Update an existing message (e.g. adding transcription or finishing LLM stream).

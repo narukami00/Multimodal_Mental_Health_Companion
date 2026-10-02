@@ -37,6 +37,10 @@ import 'providers/mock/mock_providers.dart';
 import 'providers/safety/keyword_safety_screener.dart';
 import 'services/check_in_reminder_service.dart';
 import 'services/check_in_widget_service.dart';
+import 'core/models/memory_moment.dart';
+import 'data/repositories/shared_preferences_moment_repository.dart';
+import 'domain/memory/moment_extractor.dart';
+import 'features/memory/moments_controller.dart';
 import 'services/usage_collector_service.dart';
 
 Future<void> main() async {
@@ -154,6 +158,41 @@ Future<void> main() async {
   profileController.addListener(() => unawaited(breakPrompts.refresh()));
   unawaited(breakPrompts.refresh());
 
+  // Moments: good things the person wrote about, offered for keeping and kept
+  // only on a yes. Looked at when an entry is saved or a message is sent, never
+  // while safety support is active or when the person turned asking off.
+  final moments = MomentsController(
+    repository: SharedPreferencesMomentRepository(preferences),
+  );
+  await moments.load();
+  void offerMoment(MomentCandidate candidate) {
+    if (profileController.profile.momentPromptsMuted) return;
+    if (safetyController.hasActiveFlag) return;
+    unawaited(moments.consider(candidate).catchError((Object _) => null));
+  }
+
+  sessionController.onSaved = (session) {
+    final text = session.text;
+    if (text == null || text.trim().isEmpty) return;
+    offerMoment(
+      MomentCandidate(
+        text: text,
+        source: text.length > 80 ? MomentSource.journal : MomentSource.checkIn,
+        createdAt: session.createdAt,
+        sourceRef: session.id,
+        moodWord: session.mood,
+      ),
+    );
+  };
+  chatController.onUserMessage = (message) => offerMoment(
+    MomentCandidate(
+      text: message.text,
+      source: MomentSource.chat,
+      createdAt: message.timestamp,
+      sourceRef: 'chat:${message.id}',
+    ),
+  );
+
   final navigatorKey = GlobalKey<NavigatorState>();
 
   void openCheckInFromWidget(Uri? uri) {
@@ -211,6 +250,7 @@ Future<void> main() async {
       chatController: chatController,
       phonePatterns: phonePatterns,
       breakPrompts: breakPrompts,
+      moments: moments,
       navigatorKey: navigatorKey,
     ),
   );
@@ -226,6 +266,7 @@ class SolaceApp extends StatelessWidget {
     this.chatController,
     this.phonePatterns,
     this.breakPrompts,
+    this.moments,
     this.navigatorKey,
     super.key,
   }) : safetyController =
@@ -258,6 +299,7 @@ class SolaceApp extends StatelessWidget {
 
   /// The "anything going on?" question. Null in tests that do not need it.
   final BreakPromptController? breakPrompts;
+  final MomentsController? moments;
 
   /// Lets the home-screen widget push the check-in flow from outside the tree.
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -285,6 +327,7 @@ class SolaceApp extends StatelessWidget {
             chatController: chatController,
             phonePatterns: phonePatterns,
             breakPrompts: breakPrompts,
+            moments: moments,
           ),
         );
       },

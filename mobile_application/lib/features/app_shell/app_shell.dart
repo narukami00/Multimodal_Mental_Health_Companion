@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../memory/moment_proposal_card.dart';
+import '../memory/moments_controller.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/navigation/app_tab.dart';
@@ -51,6 +53,7 @@ class AppShell extends StatefulWidget {
     this.chatController,
     this.phonePatterns,
     this.breakPrompts,
+    this.moments,
     this.initialTab,
     super.key,
   });
@@ -62,6 +65,7 @@ class AppShell extends StatefulWidget {
   final ChatController? chatController;
   final PhonePatternsController? phonePatterns;
   final BreakPromptController? breakPrompts;
+  final MomentsController? moments;
   final AppTab? initialTab;
 
   @override
@@ -414,6 +418,16 @@ class _AppShellState extends State<AppShell> {
                         listenable: widget.breakPrompts!,
                         builder: (context, _) =>
                             BreakPromptCard(controller: widget.breakPrompts!),
+                      ),
+                momentPrompt: widget.moments == null
+                    ? null
+                    : MomentProposalCard(
+                        controller: widget.moments!,
+                        suppressed: () =>
+                            widget.safetyController.hasActiveFlag ||
+                            widget.profileController.profile.momentPromptsMuted,
+                        onStopAsking: () =>
+                            widget.profileController.setMomentPromptsMuted(true),
                       ),
                 onTaskOpen: () => _openSuggestionDetails(suggestionChoice),
                 onTaskAccept: () => _acceptSuggestion(suggestionChoice!),

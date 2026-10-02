@@ -15,6 +15,10 @@ class SessionController extends ChangeNotifier {
 
   final SessionRepository _repository;
   final EmotionAnalyzer _emotionAnalyzer;
+  /// Called after an entry is saved, so other features can look at it. The
+  /// callback must not throw into the save: failures there are theirs to catch.
+  void Function(SessionRecord session)? onSaved;
+
   List<SessionRecord> _sessions = const [];
 
   List<SessionRecord> get sessions => List.unmodifiable(_sessions);
@@ -68,6 +72,7 @@ class SessionController extends ChangeNotifier {
       ..._sessions.where((item) => item.id != session.id),
     ];
     notifyListeners();
+    onSaved?.call(session);
     return session;
   }
 

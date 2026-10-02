@@ -219,6 +219,12 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
+  /// Turns "Want me to remember this?" off or on.
+  Future<void> setMomentPromptsMuted(bool muted) async {
+    _profile = _profile.copyWith(momentPromptsMuted: muted);
+    await _persist();
+  }
+
   static const minRetentionDays = 30;
   static const maxRetentionDays = 365;
 

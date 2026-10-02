@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../memory/moments_controller.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../data/contracts/onboarding_repository.dart';
 import '../app_shell/app_shell.dart';
@@ -30,6 +31,7 @@ class OnboardingGate extends StatefulWidget {
     this.chatController,
     this.phonePatterns,
     this.breakPrompts,
+    this.moments,
     super.key,
   });
 
@@ -41,6 +43,7 @@ class OnboardingGate extends StatefulWidget {
   final ChatController? chatController;
   final PhonePatternsController? phonePatterns;
   final BreakPromptController? breakPrompts;
+  final MomentsController? moments;
 
   @override
   State<OnboardingGate> createState() => _OnboardingGateState();
@@ -135,6 +138,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
         chatController: widget.chatController,
         phonePatterns: widget.phonePatterns,
         breakPrompts: widget.breakPrompts,
+        moments: widget.moments,
       );
     }
 

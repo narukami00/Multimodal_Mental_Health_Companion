@@ -38,6 +38,7 @@ class UserProfile {
     this.weekendSleepEndMinutes,
     this.featureRetentionDays = defaultFeatureRetentionDays,
     this.patternPromptsMuted = false,
+    this.momentPromptsMuted = false,
   });
 
   /// How long derived daily features are kept, unless the user changes it.
@@ -137,6 +138,10 @@ class UserProfile {
   /// to switch off.
   final bool patternPromptsMuted;
 
+  /// Whether the person has turned off "Want me to remember this?". Off by
+  /// default for the asking, never for the remembering: nothing is kept unasked.
+  final bool momentPromptsMuted;
+
   /// Whether the user has given usual sleep hours.
   bool get sleepHoursSet => sleepStartMinutes != null && sleepEndMinutes != null;
 
@@ -214,6 +219,7 @@ class UserProfile {
     int? weekendSleepEndMinutes,
     int? featureRetentionDays,
     bool? patternPromptsMuted,
+    bool? momentPromptsMuted,
   }) {
     return UserProfile(
       preferredActivities: preferredActivities ?? this.preferredActivities,
@@ -252,6 +258,7 @@ class UserProfile {
           weekendSleepEndMinutes ?? this.weekendSleepEndMinutes,
       featureRetentionDays: featureRetentionDays ?? this.featureRetentionDays,
       patternPromptsMuted: patternPromptsMuted ?? this.patternPromptsMuted,
+      momentPromptsMuted: momentPromptsMuted ?? this.momentPromptsMuted,
     );
   }
 
@@ -292,6 +299,7 @@ class UserProfile {
       'weekendSleepEndMinutes': weekendSleepEndMinutes,
       'featureRetentionDays': featureRetentionDays,
       'patternPromptsMuted': patternPromptsMuted,
+      'momentPromptsMuted': momentPromptsMuted,
     };
   }
 
@@ -338,6 +346,7 @@ class UserProfile {
       weekendSleepEndMinutes: _minuteOfDay(map['weekendSleepEndMinutes']),
       featureRetentionDays: _retentionDays(map['featureRetentionDays']),
       patternPromptsMuted: map['patternPromptsMuted'] as bool? ?? false,
+      momentPromptsMuted: map['momentPromptsMuted'] as bool? ?? false,
     );
   }
 
