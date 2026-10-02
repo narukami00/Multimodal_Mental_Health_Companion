@@ -133,7 +133,10 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 380),
                 child: ListenableBuilder(
-                  listenable: Listenable.merge([_patterns, widget.profileController]),
+                  listenable: Listenable.merge([
+                    _patterns,
+                    widget.profileController,
+                  ]),
                   builder: (context, _) => ListView(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                     children: [
@@ -141,7 +144,8 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
                       const SizedBox(height: 14),
                       _Reveal(index: 0, child: _statusCard(context)),
                       const SizedBox(height: 12),
-                      if (_loaded) _Reveal(index: 1, child: _yesterdayCard(context)),
+                      if (_loaded)
+                        _Reveal(index: 1, child: _yesterdayCard(context)),
                       const SizedBox(height: 12),
                       if (_loaded) _Reveal(index: 2, child: _weekCard()),
                       const SizedBox(height: 12),
@@ -169,7 +173,9 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
             foregroundColor: _ink,
             minimumSize: const Size(44, 44),
             backgroundColor: colors.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
         ),
         const SizedBox(height: 14),
@@ -217,7 +223,11 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
     );
   }
 
-  Widget _card({required Widget child, Gradient? gradient, EdgeInsets? padding}) {
+  Widget _card({
+    required Widget child,
+    Gradient? gradient,
+    EdgeInsets? padding,
+  }) {
     return Container(
       width: double.infinity,
       padding: padding ?? const EdgeInsets.all(18),
@@ -305,7 +315,10 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
               const Expanded(child: Text('STATUS', style: _label)),
               Container(
                 key: const ValueKey('patterns-status'),
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: on ? const Color(0xFFDDF0DE) : const Color(0xFFF4F1E7),
                   borderRadius: BorderRadius.circular(999),
@@ -315,7 +328,9 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w800,
-                    color: on ? const Color(0xFF3F823B) : const Color(0xFF7A6E5D),
+                    color: on
+                        ? const Color(0xFF3F823B)
+                        : const Color(0xFF7A6E5D),
                   ),
                 ),
               ),
@@ -370,14 +385,18 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
     final summary = DaySummary.of(row, categoryLimit: 4);
     final rhythm = dayRhythm(_rows, _now);
     final ring = rhythm != null && rhythm.dayKey == row.dayKey ? rhythm : null;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final busiest = summary.busiestHour;
 
     final stats = <({String value, String label})>[
       if (summary.screenOn != null)
         (value: _duration(summary.screenOn!), label: 'Screen on'),
       if (summary.pickups != null && summary.pickups! > 0)
-        (value: '${summary.pickups}', label: summary.pickups == 1 ? 'Pickup' : 'Pickups'),
+        (
+          value: '${summary.pickups}',
+          label: summary.pickups == 1 ? 'Pickup' : 'Pickups',
+        ),
       if (summary.longestStretch != null)
         (value: _duration(summary.longestStretch!), label: 'Longest stretch'),
     ];
@@ -409,10 +428,13 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
                   SizedBox(
                     width: 132,
                     height: 132,
-                    child: DayRhythmRing(
-                      rhythm: ring,
-                      animate: !reduceMotion,
-                      showTotal: false,
+                    child: Semantics(
+                      label: 'Screen time through the day. ${ring.caption}',
+                      child: DayRhythmRing(
+                        rhythm: ring,
+                        animate: !reduceMotion,
+                        showTotal: false,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -493,7 +515,10 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
 
   Widget _weekCard() {
     final days = recentScreenMinutes(_rows, _now);
-    final known = [for (final d in days) if (d.minutes != null) d.minutes!];
+    final known = [
+      for (final d in days)
+        if (d.minutes != null) d.minutes!,
+    ];
     final peak = known.isEmpty ? 0 : known.reduce((a, b) => a > b ? a : b);
     final low = known.isEmpty ? 0 : known.reduce((a, b) => a < b ? a : b);
 
@@ -530,9 +555,14 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
                                   : const LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
-                                      colors: [Color(0xFFFFC95E), Color(0xFFFFA726)],
+                                      colors: [
+                                        Color(0xFFFFC95E),
+                                        Color(0xFFFFA726),
+                                      ],
                                     ),
-                              color: day.minutes == null ? const Color(0xFFEFE8D8) : null,
+                              color: day.minutes == null
+                                  ? const Color(0xFFEFE8D8)
+                                  : null,
                               borderRadius: BorderRadius.circular(6),
                             ),
                           ),
@@ -556,14 +586,22 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
             const SizedBox(height: 8),
             const Text(
               'No days read yet.',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _soft),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _soft,
+              ),
             ),
           ] else if (known.length >= 2) ...[
             const SizedBox(height: 10),
             Text(
               'From ${_duration(Duration(minutes: low))} to '
               '${_duration(Duration(minutes: peak))} a day.',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _soft),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _soft,
+              ),
             ),
           ],
         ],
@@ -598,20 +636,28 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
             switchKey: const ValueKey('patterns-ask-switch'),
             icon: Icons.chat_bubble_outline_rounded,
             title: 'Ask me when my days look different',
-            subtitle: 'Now and then, when your patterns shift in more than one '
+            subtitle:
+                'Now and then, when your patterns shift in more than one '
                 'way, Solace may ask once whether anything is going on. Never '
                 'about a single odd day, and never more than once a week.',
             value: !widget.profileController.profile.patternPromptsMuted,
-            onChanged: (on) => widget.profileController.setPatternPromptsMuted(!on),
+            onChanged: (on) =>
+                widget.profileController.setPatternPromptsMuted(!on),
           ),
           const Divider(height: 22, color: _line),
           const Row(
             children: [
               Icon(Icons.history_toggle_off_rounded, size: 19, color: _muted),
               SizedBox(width: 10),
-              Text(
-                'Keep patterns for',
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: _ink),
+              Expanded(
+                child: Text(
+                  'Keep patterns for',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                  ),
+                ),
               ),
             ],
           ),
@@ -651,19 +697,37 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
           ),
           if (_usageDays > 0) ...[
             const SizedBox(height: 14),
-            OutlinedButton.icon(
+            OutlinedButton(
               key: const ValueKey('patterns-delete-all'),
               onPressed: _confirmDelete,
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFB5503C),
                 side: const BorderSide(color: Color(0xFFF0CFC6)),
                 shape: const StadiumBorder(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
               ),
-              icon: const Icon(Icons.delete_outline_rounded, size: 17),
-              label: Text(
-                'Delete all stored patterns ($_usageDays '
-                '${_usageDays == 1 ? 'day' : 'days'})',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              // A Row with a Flexible label, so the long label wraps at large
+              // text sizes instead of running off the screen.
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.delete_outline_rounded, size: 17),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Delete all stored patterns ($_usageDays '
+                      '${_usageDays == 1 ? 'day' : 'days'})',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -694,7 +758,11 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
             children: [
               Text(
                 title,
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: _ink),
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                ),
               ),
               const SizedBox(height: 3),
               Text(
@@ -785,7 +853,11 @@ class _Stat extends StatelessWidget {
       ),
       Text(
         label,
-        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: _muted),
+        style: const TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          color: _muted,
+        ),
       ),
     ],
   );
@@ -840,7 +912,8 @@ class _CategoryBars extends StatelessWidget {
                           child: Container(
                             height: 10,
                             decoration: BoxDecoration(
-                              color: _categoryColors[i % _categoryColors.length],
+                              color:
+                                  _categoryColors[i % _categoryColors.length],
                               borderRadius: BorderRadius.circular(99),
                             ),
                           ),
@@ -899,7 +972,10 @@ class _Reveal extends StatelessWidget {
       curve: Curves.easeOutCubic,
       builder: (context, t, child) => Opacity(
         opacity: t,
-        child: Transform.translate(offset: Offset(0, 14 * (1 - t)), child: child),
+        child: Transform.translate(
+          offset: Offset(0, 14 * (1 - t)),
+          child: child,
+        ),
       ),
       child: child,
     );

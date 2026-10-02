@@ -67,7 +67,8 @@ class _DayRhythmCardState extends State<DayRhythmCard> {
   Widget build(BuildContext context) {
     final rhythm = dayRhythm(_rows, (widget.clock ?? DateTime.now)());
     if (rhythm == null) return const SizedBox.shrink();
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Semantics(
       container: true,
@@ -122,9 +123,13 @@ class _DayRhythmCardState extends State<DayRhythmCard> {
                         runSpacing: 4,
                         children: [
                           const _Key(color: _amber, label: 'Screen on'),
-                          if (rhythm.hasNight) const _Key(color: _night, label: 'Phone down'),
+                          if (rhythm.hasNight)
+                            const _Key(color: _night, label: 'Phone down'),
                           if (rhythm.usualHours != null)
-                            const _Key(color: Color(0xFFD9CBB0), label: 'Your usual'),
+                            const _Key(
+                              color: Color(0xFFD9CBB0),
+                              label: 'Your usual',
+                            ),
                         ],
                       ),
                     ],
@@ -154,9 +159,15 @@ class _Key extends StatelessWidget {
         decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
       const SizedBox(width: 5),
-      Text(
-        label,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _muted),
+      Flexible(
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: _muted,
+          ),
+        ),
       ),
     ],
   );
@@ -182,7 +193,8 @@ class DayRhythmRing extends StatefulWidget {
   State<DayRhythmRing> createState() => _DayRhythmRingState();
 }
 
-class _DayRhythmRingState extends State<DayRhythmRing> with TickerProviderStateMixin {
+class _DayRhythmRingState extends State<DayRhythmRing>
+    with TickerProviderStateMixin {
   late final AnimationController _grow = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1400),
@@ -229,22 +241,34 @@ class _DayRhythmRingState extends State<DayRhythmRing> with TickerProviderStateM
               ),
             ),
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                widget.showTotal ? _compact(r.totalMinutes) : '24',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: _ink,
-                ),
+          // Sized to the hollow of the ring and scaled down to fit it, so
+          // enlarged text never spills over the ticks.
+          FractionallySizedBox(
+            widthFactor: 0.52,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.showTotal ? _compact(r.totalMinutes) : '24',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                    ),
+                  ),
+                  Text(
+                    widget.showTotal ? 'screen on' : 'hours',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: _muted,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                widget.showTotal ? 'screen on' : 'hours',
-                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _muted),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -253,7 +277,11 @@ class _DayRhythmRingState extends State<DayRhythmRing> with TickerProviderStateM
 }
 
 class _RingPainter extends CustomPainter {
-  _RingPainter({required this.rhythm, required this.grow, required this.breathe});
+  _RingPainter({
+    required this.rhythm,
+    required this.grow,
+    required this.breathe,
+  });
 
   final DayRhythm rhythm;
   final double grow;
@@ -280,7 +308,13 @@ class _RingPainter extends CustomPainter {
         ..strokeWidth = 5
         ..strokeCap = StrokeCap.round
         ..color = _night.withValues(alpha: 0.55 + 0.15 * breathe);
-      canvas.drawArc(rect, _angle(start), (end - start) / 24 * 2 * math.pi * grow, false, paint);
+      canvas.drawArc(
+        rect,
+        _angle(start),
+        (end - start) / 24 * 2 * math.pi * grow,
+        false,
+        paint,
+      );
     }
 
     final usual = rhythm.usualHours;
@@ -314,7 +348,9 @@ class _RingPainter extends CustomPainter {
         Paint()
           ..strokeWidth = 5
           ..strokeCap = StrokeCap.round
-          ..color = (share <= 0 ? const Color(0xFFEFE6D4) : _amber).withValues(alpha: alpha),
+          ..color = (share <= 0 ? const Color(0xFFEFE6D4) : _amber).withValues(
+            alpha: alpha,
+          ),
       );
     }
 
@@ -322,7 +358,11 @@ class _RingPainter extends CustomPainter {
     final dot = Paint()..color = const Color(0xFFBCAC8E);
     for (final h in [0, 6, 12, 18]) {
       final a = _angle(h.toDouble());
-      canvas.drawCircle(center + Offset(math.cos(a), math.sin(a)) * (outer + 0), 1.6, dot);
+      canvas.drawCircle(
+        center + Offset(math.cos(a), math.sin(a)) * (outer + 0),
+        1.6,
+        dot,
+      );
     }
   }
 

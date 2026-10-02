@@ -83,7 +83,9 @@ class _InsightsPageState extends State<InsightsPage> {
   @override
   Widget build(BuildContext context) {
     final tabs = _tabs;
-    final selected = tabs.any((t) => t.id == _selected) ? _selected : tabs.first.id;
+    final selected = tabs.any((t) => t.id == _selected)
+        ? _selected
+        : tabs.first.id;
 
     return Scaffold(
       backgroundColor: SolaceColors.from(context).background,
@@ -124,16 +126,17 @@ class _InsightsPageState extends State<InsightsPage> {
                           AnimatedSwitcher(
                             duration: const Duration(milliseconds: 220),
                             switchInCurve: Curves.easeOut,
-                            transitionBuilder: (child, animation) => FadeTransition(
-                              opacity: animation,
-                              child: SlideTransition(
-                                position: Tween(
-                                  begin: const Offset(0, 0.02),
-                                  end: Offset.zero,
-                                ).animate(animation),
-                                child: child,
-                              ),
-                            ),
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween(
+                                      begin: const Offset(0, 0.02),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
+                                ),
                             child: KeyedSubtree(
                               key: ValueKey(selected),
                               child: _content(selected),
@@ -208,7 +211,11 @@ class _InsightsPageState extends State<InsightsPage> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: insightLine),
             ),
-            child: const Icon(Icons.info_outline_rounded, size: 19, color: insightSoft),
+            child: const Icon(
+              Icons.info_outline_rounded,
+              size: 19,
+              color: insightSoft,
+            ),
           ),
         ),
       ),
@@ -278,7 +285,11 @@ class _InsightsPageState extends State<InsightsPage> {
 }
 
 class _TabBar extends StatelessWidget {
-  const _TabBar({required this.tabs, required this.selected, required this.onSelected});
+  const _TabBar({
+    required this.tabs,
+    required this.selected,
+    required this.onSelected,
+  });
 
   final List<_Tab> tabs;
   final String selected;
@@ -311,27 +322,36 @@ class _TabBar extends StatelessWidget {
                     height: 40,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: tab.id == selected ? const Color(0xFFFFB534) : Colors.transparent,
+                      color: tab.id == selected
+                          ? const Color(0xFFFFB534)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          tab.icon,
-                          size: 15,
-                          color: tab.id == selected ? insightInk : insightMuted,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          tab.label,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
-                            color: tab.id == selected ? insightInk : insightSoft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            tab.icon,
+                            size: 15,
+                            color: tab.id == selected
+                                ? insightInk
+                                : insightMuted,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 5),
+                          Text(
+                            tab.label,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: tab.id == selected
+                                  ? insightInk
+                                  : insightSoft,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

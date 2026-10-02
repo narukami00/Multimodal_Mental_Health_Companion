@@ -78,7 +78,11 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
         children: [
           const Row(
             children: [
-              Icon(Icons.check_circle_rounded, size: 15, color: Color(0xFF3F823B)),
+              Icon(
+                Icons.check_circle_rounded,
+                size: 15,
+                color: Color(0xFF3F823B),
+              ),
               SizedBox(width: 7),
               Text(
                 'KEPT',
@@ -134,7 +138,9 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
               TextButton(
                 key: const ValueKey('moment-consent-no'),
                 onPressed: () => answer(false),
-                style: TextButton.styleFrom(foregroundColor: const Color(0xFF7B6A55)),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF7B6A55),
+                ),
                 child: const Text('Keep them private'),
               ),
             ],
@@ -151,7 +157,9 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
       builder: (context, _) {
         if (_askingConsent && !widget.suppressed()) return _consentStep();
         final pending = widget.controller.pending;
-        if (pending.isEmpty || widget.suppressed()) return const SizedBox.shrink();
+        if (pending.isEmpty || widget.suppressed()) {
+          return const SizedBox.shrink();
+        }
         final moment = pending.first;
         final editing = _editingId == moment.id;
 
@@ -172,15 +180,21 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.bookmark_added_rounded, size: 15, color: Color(0xFFB5586A)),
+                  Icon(
+                    Icons.bookmark_added_rounded,
+                    size: 15,
+                    color: Color(0xFFB5586A),
+                  ),
                   SizedBox(width: 7),
-                  Text(
-                    'A MOMENT WORTH KEEPING?',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                      color: Color(0xFFB5586A),
+                  Flexible(
+                    child: Text(
+                      'A MOMENT WORTH KEEPING?',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                        color: Color(0xFFB5586A),
+                      ),
                     ),
                   ),
                 ],
@@ -265,7 +279,8 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
                         _editingId = null;
                         // First moment kept and nothing decided yet: ask, in
                         // context, whether Sol may be told about them.
-                        _askingConsent = ledger != null &&
+                        _askingConsent =
+                            ledger != null &&
                             ledger.statusOf(ConsentKey.memoryMoments) ==
                                 ConsentStatus.notAsked;
                       });
@@ -296,7 +311,9 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
                       widget.controller.delete(moment.id);
                       setState(() => _editingId = null);
                     },
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFF7B6A55)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF7B6A55),
+                    ),
                     child: const Text('Not this'),
                   ),
                 ],
@@ -313,7 +330,10 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
                   ),
                   child: const Text(
                     'Stop asking me this',
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
             ],
