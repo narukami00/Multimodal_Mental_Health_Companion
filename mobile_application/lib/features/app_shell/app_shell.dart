@@ -428,6 +428,7 @@ class _AppShellState extends State<AppShell> {
                     ? null
                     : MomentProposalCard(
                         controller: widget.moments!,
+                        consent: widget.memory?.consent,
                         suppressed: () =>
                             widget.safetyController.hasActiveFlag ||
                             widget.profileController.profile.momentPromptsMuted,

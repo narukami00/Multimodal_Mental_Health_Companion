@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/models/consent.dart';
+import 'package:solace_mobile/data/repositories/in_memory_consent_repository.dart';
+import 'package:solace_mobile/features/consent/consent_controller.dart';
 import 'package:solace_mobile/core/models/memory_moment.dart';
 import 'package:solace_mobile/data/repositories/in_memory_moment_repository.dart';
 import 'package:solace_mobile/domain/memory/moment_extractor.dart';
@@ -20,13 +23,14 @@ void main() {
     await controller.load();
   });
 
-  Future<void> pump(WidgetTester tester) async {
+  Future<void> pump(WidgetTester tester, {ConsentController? consent}) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
             child: MomentProposalCard(
               controller: controller,
+              consent: consent,
               suppressed: () => suppressed,
               onStopAsking: () => stopped = true,
             ),
@@ -118,5 +122,84 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('moment-stop')));
     expect(stopped, isTrue);
+  });
+
+  group('asking, in context, whether Sol may know about kept moments', () {
+    late ConsentController consent;
+
+    setUp(() async {
+      consent = ConsentController(repository: InMemoryConsentRepository());
+      await consent.load();
+    });
+
+    testWidgets('after the first yes, asks once and records the answer', (tester) async {
+      await pump(tester, consent: consent);
+      await propose(tester);
+
+      await tester.tap(find.byKey(const ValueKey('moment-yes')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('moment-consent')), findsOneWidget);
+      expect(consent.isGranted(ConsentKey.memoryMoments), isFalse);
+
+      await tester.tap(find.byKey(const ValueKey('moment-consent-yes')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(consent.isGranted(ConsentKey.memoryMoments), isTrue);
+      expect(find.byKey(const ValueKey('moment-consent')), findsNothing);
+    });
+
+    testWidgets('keeping them private is an answer too, and is not asked again', (
+      tester,
+    ) async {
+      await pump(tester, consent: consent);
+      await propose(tester);
+      await tester.tap(find.byKey(const ValueKey('moment-yes')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('moment-consent-no')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(consent.statusOf(ConsentKey.memoryMoments), ConsentStatus.declined);
+
+      // A second moment is kept: no second question.
+      await tester.runAsync(
+        () => controller.consider(
+          MomentCandidate(
+            text: 'We went for a walk by the river and I felt calmer.',
+            source: MomentSource.journal,
+            createdAt: DateTime(2026, 10, 21),
+            sourceRef: 'r2',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('moment-yes')));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('moment-consent')), findsNothing);
+      expect(controller.confirmed, hasLength(2));
+    });
+
+    testWidgets('no question when consent was already decided', (tester) async {
+      await consent.grant(ConsentKey.memoryMoments);
+      await pump(tester, consent: consent);
+      await propose(tester);
+
+      await tester.tap(find.byKey(const ValueKey('moment-yes')));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('moment-consent')), findsNothing);
+    });
+
+    testWidgets('keeping the moment never depends on answering', (tester) async {
+      await pump(tester, consent: consent);
+      await propose(tester);
+
+      await tester.tap(find.byKey(const ValueKey('moment-yes')));
+      await tester.pump();
+
+      expect(controller.confirmed.single.text, _warm);
+    });
   });
 }
