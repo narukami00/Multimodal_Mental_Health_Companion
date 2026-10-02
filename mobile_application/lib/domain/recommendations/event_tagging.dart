@@ -12,6 +12,9 @@ class EventTaggingService {
     'money': {'money', 'finance', 'bill', 'bills'},
   };
 
+  /// The themes the app recognises, in a fixed order, for offering as choices.
+  static List<String> get knownThemes => _canonicalAliases.keys.toList();
+
   String canonicalize(String label) {
     final normalized = _normalize(label);
     for (final entry in _canonicalAliases.entries) {
