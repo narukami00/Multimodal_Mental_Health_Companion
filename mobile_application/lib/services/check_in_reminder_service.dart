@@ -1,8 +1,15 @@
+import 'dart:ui' show Color;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+
+/// The status-bar mark (a flat white silhouette of the app icon) and the accent
+/// Android tints it with. Shared by every notification the app posts.
+const notificationIcon = 'ic_stat_solace';
+const notificationColor = Color(0xFFFFB534);
 
 /// Result of trying to schedule the daily reminder.
 enum ReminderScheduleOutcome {
@@ -86,6 +93,8 @@ class CheckInReminderService {
       channelId,
       channelName,
       channelDescription: channelDescription,
+      icon: notificationIcon,
+      color: notificationColor,
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
     ),
@@ -111,7 +120,7 @@ class CheckInReminderService {
     try {
       await _plugin.initialize(
         settings: const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings(notificationIcon),
         ),
       );
       await _android?.createNotificationChannel(
@@ -317,6 +326,8 @@ class CheckInReminderService {
               ideaChannelId,
               ideaChannelName,
               channelDescription: ideaChannelDescription,
+              icon: notificationIcon,
+              color: notificationColor,
               importance: Importance.low,
               priority: Priority.low,
               visibility: NotificationVisibility.private,

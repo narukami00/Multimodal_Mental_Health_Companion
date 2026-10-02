@@ -8,6 +8,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../core/models/habit_reminder.dart';
+import '../../services/check_in_reminder_service.dart';
 
 /// Manages habit reminders: CRUD, persistence, and notification scheduling.
 ///
@@ -66,7 +67,7 @@ class HabitController extends ChangeNotifier {
     try {
       await _plugin.initialize(
         settings: const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings(notificationIcon),
         ),
       );
       await _android?.createNotificationChannel(
