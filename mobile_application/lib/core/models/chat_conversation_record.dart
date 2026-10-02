@@ -9,6 +9,9 @@ class ChatConversationRecord {
     required this.createdAt,
     required this.updatedAt,
     required this.messages,
+    this.summary,
+    this.summarizedThroughId,
+    this.summaryUpdatedAt,
   });
 
   final String id;
@@ -16,6 +19,17 @@ class ChatConversationRecord {
   final DateTime createdAt;
   final DateTime updatedAt;
   final List<ChatMessageRecord> messages;
+
+  /// A short summary of the older part of this conversation, made so a resumed
+  /// chat does not need the whole history. Null until the conversation is long
+  /// enough to need one.
+  final String? summary;
+
+  /// The last message the summary covers. Messages after it are still verbatim.
+  final String? summarizedThroughId;
+  final DateTime? summaryUpdatedAt;
+
+  bool get hasSummary => summary != null && summary!.trim().isNotEmpty;
 
   bool get hasVoice => messages.any((m) => m.isVoice);
   int get messageCount => messages.length;
@@ -83,6 +97,10 @@ class ChatConversationRecord {
     String? title,
     DateTime? updatedAt,
     List<ChatMessageRecord>? messages,
+    String? summary,
+    String? summarizedThroughId,
+    DateTime? summaryUpdatedAt,
+    bool clearSummary = false,
   }) {
     return ChatConversationRecord(
       id: id,
@@ -90,6 +108,13 @@ class ChatConversationRecord {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       messages: messages ?? this.messages,
+      summary: clearSummary ? null : (summary ?? this.summary),
+      summarizedThroughId: clearSummary
+          ? null
+          : (summarizedThroughId ?? this.summarizedThroughId),
+      summaryUpdatedAt: clearSummary
+          ? null
+          : (summaryUpdatedAt ?? this.summaryUpdatedAt),
     );
   }
 
@@ -100,6 +125,11 @@ class ChatConversationRecord {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'messages': messages.map((m) => m.toMap()).toList(),
+      if (summary != null) 'summary': summary,
+      if (summarizedThroughId != null)
+        'summarizedThroughId': summarizedThroughId,
+      if (summaryUpdatedAt != null)
+        'summaryUpdatedAt': summaryUpdatedAt!.toIso8601String(),
     };
   }
 
@@ -115,6 +145,10 @@ class ChatConversationRecord {
           .whereType<Map<String, dynamic>>()
           .map(ChatMessageRecord.fromMap)
           .toList(),
+      summary: map['summary'] as String?,
+      summarizedThroughId: map['summarizedThroughId'] as String?,
+      summaryUpdatedAt:
+          DateTime.tryParse(map['summaryUpdatedAt'] as String? ?? ''),
     );
   }
 

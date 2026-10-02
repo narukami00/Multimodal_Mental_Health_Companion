@@ -1,3 +1,4 @@
+import '../../domain/chat/conversation_summary.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -374,6 +375,9 @@ class _ChatPageState extends State<ChatPage> {
           ttsEnabled: _ttsEnabled,
           voiceId: _selectedVoiceId,
           speed: _ttsSpeed,
+          // A resumed conversation brings its summary and last few turns, so
+          // Sol remembers what was said even on a fresh connection.
+          resume: resumeBlock(_chatController.activeConversation),
         );
       }
     });
@@ -498,7 +502,9 @@ class _ChatPageState extends State<ChatPage> {
         _chips = newSuggestions!;
       });
       if (completedRecord != null) {
-        _chatController.addMessage(completedRecord!);
+        _chatController
+            .addMessage(completedRecord!)
+            .then((_) => _maybeSummarize());
       }
       _scrollDown();
     });
@@ -572,6 +578,31 @@ class _ChatPageState extends State<ChatPage> {
         setState(() {});
       }
       _scrollDown();
+    }
+  }
+
+  bool _summarizing = false;
+
+  /// Folds older turns into the conversation's summary once enough have piled
+  /// up. Quiet: nothing in the chat changes, and a missing answer just means
+  /// trying again after a later turn.
+  Future<void> _maybeSummarize() async {
+    if (_summarizing || _wsStatus != CompanionConnectionStatus.connected) return;
+    final conversation = _chatController.activeConversation;
+    if (conversation == null) return;
+    final plan = planSummary(conversation);
+    if (plan == null) return;
+    _summarizing = true;
+    try {
+      final summary = await _wsService.requestSummary(
+        messages: turnsOf(plan.toSummarize),
+        previousSummary: conversation.summary,
+      );
+      if (summary != null) {
+        await _chatController.setSummary(conversation.id, summary, plan.throughId);
+      }
+    } finally {
+      _summarizing = false;
     }
   }
 

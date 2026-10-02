@@ -570,6 +570,7 @@ class CompanionWebSocketService {
     int playbackSampleRate = 24000,
     String codec = 'pcm_s16le',
     Map<String, dynamic>? vad,
+    Map<String, Object?>? resume,
   }) async {
     if (mode != 'duplex_call') {
       _heartbeatInterval = const Duration(seconds: 15);
@@ -585,6 +586,7 @@ class CompanionWebSocketService {
       codec: codec,
       vad: vad,
       memory: memoryProvider?.call(),
+      resume: resume,
     );
     _sendJson(payload);
   }
@@ -609,6 +611,7 @@ class CompanionWebSocketService {
     String codec = 'pcm_s16le',
     Map<String, dynamic>? vad,
     Map<String, Object?>? memory,
+    Map<String, Object?>? resume,
   }) {
     return {
       'v': 1,
@@ -627,6 +630,7 @@ class CompanionWebSocketService {
       },
       if (vad != null) 'vad': vad,
       if (memory != null) 'memory': memory,
+      if (resume != null) 'resume': resume,
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
   }
@@ -681,6 +685,36 @@ class CompanionWebSocketService {
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
     _sendJson(payload);
+  }
+
+  final Map<String, Completer<String?>> _pendingSummaries = {};
+  int _summarySequence = 0;
+
+  /// Asks the companion to fold [messages] into [previousSummary]. Resolves to
+  /// the new summary, or null if the server did not answer in time, was not
+  /// reachable, or sent nothing usable. Never throws.
+  Future<String?> requestSummary({
+    required List<Map<String, String>> messages,
+    String? previousSummary,
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    if (_channel == null || messages.isEmpty) return null;
+    final requestId = 'sum_${DateTime.now().microsecondsSinceEpoch}_${_summarySequence++}';
+    final completer = Completer<String?>();
+    _pendingSummaries[requestId] = completer;
+    _sendJson({
+      'v': 1,
+      'type': 'summary.request',
+      'request_id': requestId,
+      'previous_summary': previousSummary ?? '',
+      'messages': messages,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
+    try {
+      return await completer.future.timeout(timeout, onTimeout: () => null);
+    } finally {
+      _pendingSummaries.remove(requestId);
+    }
   }
 
   void _sendJson(Map<String, dynamic> data) {
@@ -738,6 +772,14 @@ class CompanionWebSocketService {
           if (!_echoController.isClosed) {
             _echoController.add(data);
           }
+          break;
+
+        case 'summary.result':
+          final id = data['request_id'] as String?;
+          final text = (data['summary'] as String?)?.trim();
+          _pendingSummaries[id]?.complete(
+            text == null || text.isEmpty ? null : text,
+          );
           break;
 
         case 'llm_start':
@@ -904,6 +946,9 @@ class CompanionWebSocketService {
   }
 
   Future<void> _cleanUpConnection({bool resetManual = true}) async {
+    for (final pending in _pendingSummaries.values) {
+      if (!pending.isCompleted) pending.complete(null);
+    }
     if (resetManual) _manualDisconnect = false;
     try {
       await _subscription?.cancel();

@@ -275,6 +275,46 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Stores the summary of a conversation's older messages, covering up to and
+  /// including [throughId]. Ignored if the conversation is gone, the message is
+  /// not in it, or a newer summary is already stored, so a slow reply that
+  /// arrives late can never roll a summary back.
+  Future<void> setSummary(
+    String conversationId,
+    String summary,
+    String throughId, {
+    DateTime? at,
+  }) async {
+    final text = summary.trim();
+    if (text.isEmpty) return;
+    final index = _conversations.indexWhere((c) => c.id == conversationId);
+    if (index < 0) return;
+    final conversation = _conversations[index];
+    final newest = conversation.messages.indexWhere((m) => m.id == throughId);
+    if (newest < 0) return;
+    final stored = conversation.summarizedThroughId;
+    if (stored != null) {
+      final storedAt = conversation.messages.indexWhere((m) => m.id == stored);
+      if (storedAt >= newest) return;
+    }
+    _conversations[index] = conversation.copyWith(
+      summary: text,
+      summarizedThroughId: throughId,
+      summaryUpdatedAt: at ?? DateTime.now(),
+    );
+    await _saveToPrefs();
+    notifyListeners();
+  }
+
+  /// Forgets a conversation's summary. The messages themselves stay.
+  Future<void> clearSummary(String conversationId) async {
+    final index = _conversations.indexWhere((c) => c.id == conversationId);
+    if (index < 0 || !_conversations[index].hasSummary) return;
+    _conversations[index] = _conversations[index].copyWith(clearSummary: true);
+    await _saveToPrefs();
+    notifyListeners();
+  }
+
   /// Called after a conversation is deleted, with the ids of the messages the
   /// person sent in it, so things derived from them can be deleted too.
   void Function(List<String> messageIds)? onConversationDeleted;
