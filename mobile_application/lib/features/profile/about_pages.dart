@@ -204,8 +204,14 @@ class AboutSolacePage extends StatelessWidget {
           'There is no account to create and no password.',
         ),
         _Body(
-          'You can export everything you have written at any time, and remove '
-          'individual records from the Journal.',
+          'Conversations with Sol are the exception: they go to the companion '
+          'service you connect to, which writes the replies. Anything more '
+          'about you is sent only if you switch it on in What Sol remembers.',
+        ),
+        _Body(
+          'You can export what you have written at any time, delete journal '
+          'entries and conversations one by one, and see everything Solace '
+          'keeps on one page.',
         ),
         _SectionHeading('HOW SUGGESTIONS ARE CHOSEN'),
         _Body(
@@ -238,28 +244,48 @@ class TermsAndPrivacyPage extends StatelessWidget {
       title: 'Terms & privacy',
       children: [
         _DraftBanner(
-          what: 'Placeholder. The real terms and privacy policy are written '
-              'once the app is finished.',
+          what: 'This describes what the app does today, in plain words. The '
+              'final terms and privacy policy are written once the app is '
+              'finished.',
         ),
         _SectionHeading('WHAT IS STORED'),
         _Body(
-          'Placeholder. To cover: reflections, check-in records, mood and '
-          'context tags, settings, and emergency contacts.',
+          'On this device: your check-ins and journal entries with the mood '
+          'word you chose, your conversations with Sol and any short notes '
+          'Sol keeps on long ones, the moments you chose to keep, your answers '
+          'to suggestions, your settings and sleep hours, and emergency '
+          'contacts. If you turn phone patterns on: daily totals of screen '
+          'time, when you are active, an estimated night, and time by kind of '
+          'app. App names are kept only if you choose that.',
         ),
         _SectionHeading('WHERE IT GOES'),
         _Body(
-          'Placeholder. To cover: what stays on the device, and what — if '
-          'anything — is sent to the companion service during a conversation.',
+          'Messages you send in a conversation, and voice you send in a chat or '
+          'call, go to the companion service to be answered. When a '
+          'conversation gets long, older messages are sent to it once more to '
+          'write a short note.',
+        ),
+        _Body(
+          'Two more things are sent only if you switch them on in What Sol '
+          'remembers: a short note about how you like things, and your few most '
+          'recent kept moments. What would be sent is shown there, word for '
+          'word. Phone patterns, journal entries and check-ins stay on this '
+          'device.',
         ),
         _SectionHeading('WHAT IS NOT COLLECTED'),
         _Body(
-          'Placeholder. The Permissions page already lists what Solace does not '
-          'collect; this section has to agree with it exactly.',
+          'What is inside your other apps or messages, where you are, your '
+          'phone contact list contact list, and anything that compares you with other people. The '
+          'microphone and camera are used only when you start a voice or video '
+          'check-in, send a voice message, or make a call. The Permissions page '
+          'and How Solace decides say the same.',
         ),
         _SectionHeading('YOUR RIGHTS'),
         _Body(
-          'Placeholder. To cover: export, deletion, and how to remove '
-          'everything stored on the device.',
+          'You can export your reflections, delete a journal entry or a '
+          'conversation, forget any moment or note, delete stored phone '
+          'patterns, and turn each optional thing off. Everything Solace keeps '
+          'lists each kind and where to manage it.',
         ),
         _SectionHeading('CHILDREN'),
         _Body('Placeholder.'),
@@ -296,7 +322,8 @@ class FaqPage extends StatelessWidget {
         ),
         _Faq(
           question: 'Where are my reflections stored?',
-          answer: 'On this device. Solace has no account system.',
+          answer: 'On this device. Solace has no account system. Conversations '
+              'with Sol are sent to the companion service to be answered.',
         ),
         _Faq(
           question: 'Can I take my data somewhere else?',
