@@ -48,4 +48,45 @@ void main() {
       service.dispose();
     });
   });
+
+  group('session.configure memory block', () {
+    test('is absent when nothing was agreed to, so the server treats it as none', () {
+      final payload = CompanionWebSocketService.buildSessionConfigurePayload(
+        sessionId: 's1',
+        mode: 'chat_voice_playback',
+      );
+      expect(payload.containsKey('memory'), isFalse);
+      expect(payload['type'], 'session.configure');
+    });
+
+    test('carries the snippet and moments exactly as given', () {
+      final payload = CompanionWebSocketService.buildSessionConfigurePayload(
+        sessionId: 's1',
+        mode: 'chat_voice_playback',
+        memory: const {
+          'v': 1,
+          'profile_snippet': 'Prefers a gentle tone.',
+          'memory_facts': ['Tea with my sister.'],
+        },
+      );
+      expect(payload['memory'], {
+        'v': 1,
+        'profile_snippet': 'Prefers a gentle tone.',
+        'memory_facts': ['Tea with my sister.'],
+      });
+    });
+
+    test('the provider is only read when a configure is built', () {
+      var reads = 0;
+      CompanionWebSocketService.memoryProvider = () {
+        reads++;
+        return null;
+      };
+      addTearDown(() => CompanionWebSocketService.memoryProvider = null);
+
+      final service = CompanionWebSocketService();
+      expect(reads, 0);
+      service.dispose();
+    });
+  });
 }

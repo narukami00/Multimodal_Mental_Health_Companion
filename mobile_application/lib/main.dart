@@ -42,6 +42,7 @@ import 'data/repositories/shared_preferences_moment_repository.dart';
 import 'domain/memory/moment_extractor.dart';
 import 'features/memory/companion_memory_context.dart';
 import 'features/memory/moments_controller.dart';
+import 'services/companion_websocket_service.dart';
 import 'services/usage_collector_service.dart';
 
 Future<void> main() async {
@@ -201,6 +202,10 @@ Future<void> main() async {
     sessions: () => sessionController.sessions,
     themes: breakPrompts.activeThemes,
   );
+
+  // Every connection to the companion carries exactly what the person agreed to
+  // share, and the same object feeds the "What Sol remembers" preview.
+  CompanionWebSocketService.memoryProvider = memory.payload;
 
   final navigatorKey = GlobalKey<NavigatorState>();
 

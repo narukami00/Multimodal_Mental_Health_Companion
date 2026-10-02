@@ -574,10 +574,46 @@ class CompanionWebSocketService {
     if (mode != 'duplex_call') {
       _heartbeatInterval = const Duration(seconds: 15);
     }
-    final payload = {
+    final payload = buildSessionConfigurePayload(
+      sessionId: _sessionId,
+      mode: mode,
+      ttsEnabled: ttsEnabled,
+      voiceId: voiceId,
+      speed: speed,
+      micSampleRate: micSampleRate,
+      playbackSampleRate: playbackSampleRate,
+      codec: codec,
+      vad: vad,
+      memory: memoryProvider?.call(),
+    );
+    _sendJson(payload);
+  }
+
+  /// Supplies the person's consented memory block (a profile snippet and the
+  /// moments they kept) for every `session.configure`. Set once at start-up.
+  /// Returning null sends nothing, which is also how withdrawn consent reaches
+  /// the server: it treats an absent block as "none" on each configure.
+  static Map<String, Object?>? Function()? memoryProvider;
+
+  /// The `session.configure` message. Pure, so what goes on the wire can be
+  /// tested without a socket.
+  @visibleForTesting
+  static Map<String, dynamic> buildSessionConfigurePayload({
+    required String? sessionId,
+    required String mode,
+    bool ttsEnabled = true,
+    String voiceId = 'af_heart',
+    double speed = 0.96,
+    int micSampleRate = 16000,
+    int playbackSampleRate = 24000,
+    String codec = 'pcm_s16le',
+    Map<String, dynamic>? vad,
+    Map<String, Object?>? memory,
+  }) {
+    return {
       'v': 1,
       'type': 'session.configure',
-      'session_id': _sessionId,
+      'session_id': sessionId,
       'mode': mode,
       'tts': {
         'enabled': ttsEnabled,
@@ -590,9 +626,9 @@ class CompanionWebSocketService {
         'codec': codec,
       },
       if (vad != null) 'vad': vad,
+      if (memory != null) 'memory': memory,
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
-    _sendJson(payload);
   }
 
   /// Cancels voice audio synthesis without stopping LLM text streaming (Phase 6).
