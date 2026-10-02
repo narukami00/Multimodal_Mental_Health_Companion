@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../memory/companion_memory_context.dart';
 import '../memory/moment_proposal_card.dart';
 import '../memory/moments_controller.dart';
 import '../../core/models/safety_assessment.dart';
@@ -54,6 +55,7 @@ class AppShell extends StatefulWidget {
     this.phonePatterns,
     this.breakPrompts,
     this.moments,
+    this.memory,
     this.initialTab,
     super.key,
   });
@@ -66,6 +68,7 @@ class AppShell extends StatefulWidget {
   final PhonePatternsController? phonePatterns;
   final BreakPromptController? breakPrompts;
   final MomentsController? moments;
+  final CompanionMemoryContext? memory;
   final AppTab? initialTab;
 
   @override
@@ -482,6 +485,8 @@ class _AppShellState extends State<AppShell> {
                 suggestionController: widget.suggestionController,
                 sessionController: widget.sessionController,
                 phonePatterns: widget.phonePatterns,
+                moments: widget.moments,
+                memory: widget.memory,
                 extraEventTags: () =>
                     widget.breakPrompts?.activeThemes() ?? const [],
               ),

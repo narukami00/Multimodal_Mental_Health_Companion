@@ -1,3 +1,6 @@
+import '../memory/companion_memory_context.dart';
+import '../memory/moments_controller.dart';
+import '../memory/what_sol_remembers_page.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -170,6 +173,8 @@ class ProfilePage extends StatelessWidget {
     required this.suggestionController,
     required this.sessionController,
     this.phonePatterns,
+    this.moments,
+    this.memory,
     this.extraEventTags,
     super.key,
   });
@@ -181,6 +186,10 @@ class ProfilePage extends StatelessWidget {
 
   /// The opt-in phone patterns control, shown on the permissions page.
   final PhonePatternsController? phonePatterns;
+
+  /// With [memory], gives the "What Sol remembers" row.
+  final MomentsController? moments;
+  final CompanionMemoryContext? memory;
 
   /// Themes the person chose recently, so the engine's described state matches
   /// what it is actually being fed.
@@ -543,6 +552,23 @@ class ProfilePage extends StatelessWidget {
                               MaterialPageRoute<void>(
                                 builder: (_) => PhonePatternsPage(
                                   phonePatterns: phonePatterns!,
+                                  profileController: profileController,
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (moments != null && memory != null)
+                          _row(
+                            icon: Icons.bookmark_added_outlined,
+                            title: 'What Sol remembers',
+                            tint: const Color(0xFFE4F2E9),
+                            onTint: const Color(0xFF3F823B),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => WhatSolRemembersPage(
+                                  moments: moments!,
+                                  memory: memory!,
+                                  consent: memory!.consent,
                                   profileController: profileController,
                                 ),
                               ),

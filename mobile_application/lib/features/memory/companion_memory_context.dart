@@ -38,7 +38,13 @@ class CompanionMemoryContext {
   bool get momentsOn => consent.isGranted(ConsentKey.memoryMoments);
 
   /// The short description of the person, empty without consent.
-  ProfileSnippet snippet() {
+  ProfileSnippet snippet() => _build(consented: snippetOn);
+
+  /// What the snippet would say if it were turned on, for showing the person
+  /// before they decide. Never sent.
+  ProfileSnippet previewSnippet() => _build(consented: true);
+
+  ProfileSnippet _build({required bool consented}) {
     final now = _clock();
     final all = sessions();
     Capacity? capacity;
@@ -52,7 +58,7 @@ class CompanionMemoryContext {
       capacity = null;
     }
     return buildProfileSnippet(
-      consented: snippetOn,
+      consented: consented,
       profile: profile.profile,
       capacity: capacity,
       recentMoodScores: dailyMoodScores(sessions: all, now: now, days: 7),
@@ -61,9 +67,10 @@ class CompanionMemoryContext {
   }
 
   /// The confirmed moments Sol may be told, empty without consent.
-  List<String> momentLines() => momentsOn
-      ? [for (final m in moments.forSol) m.text]
-      : const [];
+  List<String> momentLines() => momentsOn ? previewMomentLines() : const [];
+
+  /// The moments that would be told if it were turned on. Never sent.
+  List<String> previewMomentLines() => [for (final m in moments.forSol) m.text];
 
   /// The block sent to the server, or null when there is nothing to send.
   Map<String, Object?>? payload() {

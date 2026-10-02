@@ -40,6 +40,7 @@ import 'services/check_in_widget_service.dart';
 import 'core/models/memory_moment.dart';
 import 'data/repositories/shared_preferences_moment_repository.dart';
 import 'domain/memory/moment_extractor.dart';
+import 'features/memory/companion_memory_context.dart';
 import 'features/memory/moments_controller.dart';
 import 'services/usage_collector_service.dart';
 
@@ -193,6 +194,14 @@ Future<void> main() async {
     ),
   );
 
+  final memory = CompanionMemoryContext(
+    consent: consentController,
+    profile: profileController,
+    moments: moments,
+    sessions: () => sessionController.sessions,
+    themes: breakPrompts.activeThemes,
+  );
+
   final navigatorKey = GlobalKey<NavigatorState>();
 
   void openCheckInFromWidget(Uri? uri) {
@@ -251,6 +260,7 @@ Future<void> main() async {
       phonePatterns: phonePatterns,
       breakPrompts: breakPrompts,
       moments: moments,
+      memory: memory,
       navigatorKey: navigatorKey,
     ),
   );
@@ -267,6 +277,7 @@ class SolaceApp extends StatelessWidget {
     this.phonePatterns,
     this.breakPrompts,
     this.moments,
+    this.memory,
     this.navigatorKey,
     super.key,
   }) : safetyController =
@@ -300,6 +311,7 @@ class SolaceApp extends StatelessWidget {
   /// The "anything going on?" question. Null in tests that do not need it.
   final BreakPromptController? breakPrompts;
   final MomentsController? moments;
+  final CompanionMemoryContext? memory;
 
   /// Lets the home-screen widget push the check-in flow from outside the tree.
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -328,6 +340,7 @@ class SolaceApp extends StatelessWidget {
             phonePatterns: phonePatterns,
             breakPrompts: breakPrompts,
             moments: moments,
+            memory: memory,
           ),
         );
       },
