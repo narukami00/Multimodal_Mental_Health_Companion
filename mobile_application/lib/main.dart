@@ -30,6 +30,7 @@ import 'features/footprint/usage_collection_runner.dart';
 import 'features/footprint/usage_recorder.dart';
 import 'features/onboarding/onboarding_gate.dart';
 import 'features/profile/profile_controller.dart';
+import 'features/profile/therapist_controller.dart';
 import 'features/safety/safety_controller.dart';
 import 'features/sessions/session_controller.dart';
 import 'features/suggestions/suggestion_controller.dart';
@@ -64,6 +65,9 @@ Future<void> main() async {
   );
   await profileController.load();
   await profileController.ensureFirstRun();
+
+  final therapistController = TherapistController(preferences: preferences);
+  await therapistController.load();
 
   // Restore the daily reminder in case the OS dropped it (for example after a
   // reboot or an app update). If the user has been away a long time, stop
@@ -273,6 +277,7 @@ Future<void> main() async {
       sessionController: sessionController,
       safetyController: safetyController,
       profileController: profileController,
+      therapistController: therapistController,
       suggestionController: suggestionController,
       chatController: chatController,
       phonePatterns: phonePatterns,
@@ -292,6 +297,7 @@ class SolaceApp extends StatelessWidget {
     ProfileController? profileController,
     SuggestionController? suggestionController,
     this.chatController,
+    this.therapistController,
     this.phonePatterns,
     this.breakPrompts,
     this.moments,
@@ -322,6 +328,9 @@ class SolaceApp extends StatelessWidget {
   /// Shared with whatever else needs the chat history. When null the shell
   /// creates its own, as it always did.
   final ChatController? chatController;
+
+  /// The user's stored therapist contact. Null in tests that do not need it.
+  final TherapistController? therapistController;
 
   /// The opt-in phone patterns control. Null in tests that do not need it.
   final PhonePatternsController? phonePatterns;
@@ -355,6 +364,7 @@ class SolaceApp extends StatelessWidget {
             profileController: profileController,
             suggestionController: suggestionController,
             chatController: chatController,
+            therapistController: therapistController,
             phonePatterns: phonePatterns,
             breakPrompts: breakPrompts,
             moments: moments,

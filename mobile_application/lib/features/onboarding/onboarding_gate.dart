@@ -16,6 +16,7 @@ import '../footprint/break_prompt_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
+import '../profile/therapist_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
@@ -30,6 +31,7 @@ class OnboardingGate extends StatefulWidget {
     required this.profileController,
     required this.suggestionController,
     this.chatController,
+    this.therapistController,
     this.phonePatterns,
     this.breakPrompts,
     this.moments,
@@ -43,6 +45,7 @@ class OnboardingGate extends StatefulWidget {
   final ProfileController profileController;
   final SuggestionController suggestionController;
   final ChatController? chatController;
+  final TherapistController? therapistController;
   final PhonePatternsController? phonePatterns;
   final BreakPromptController? breakPrompts;
   final MomentsController? moments;
@@ -139,6 +142,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
         profileController: widget.profileController,
         suggestionController: widget.suggestionController,
         chatController: widget.chatController,
+        therapistController: widget.therapistController,
         phonePatterns: widget.phonePatterns,
         breakPrompts: widget.breakPrompts,
         moments: widget.moments,

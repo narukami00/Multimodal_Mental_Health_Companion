@@ -7,12 +7,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
+import '../../core/models/therapist_contact.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../domain/home/baseline_progress.dart';
 import '../../domain/profile/behavioral_profile.dart';
@@ -35,6 +37,7 @@ import 'phone_patterns_page.dart';
 import 'profile_controller.dart';
 import 'profile_insights_page.dart';
 import 'sleep_hours_settings.dart';
+import 'therapist_controller.dart';
 
 /// The baseline reflections entry, which carries its own progress and button.
 ///
@@ -178,6 +181,7 @@ class ProfilePage extends StatelessWidget {
     this.moments,
     this.memory,
     this.chatController,
+    this.therapistController,
     this.extraEventTags,
     super.key,
   });
@@ -195,6 +199,9 @@ class ProfilePage extends StatelessWidget {
   final CompanionMemoryContext? memory;
   final ChatController? chatController;
 
+  /// The user's stored therapist contact, if any.
+  final TherapistController? therapistController;
+
   /// Themes the person chose recently, so the engine's described state matches
   /// what it is actually being fed.
   final List<String> Function()? extraEventTags;
@@ -202,7 +209,11 @@ class ProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([profileController, sessionController]),
+      animation: Listenable.merge([
+        profileController,
+        sessionController,
+        if (therapistController != null) therapistController!,
+      ]),
       builder: (context, _) {
         final profile = profileController.profile;
         final completeCount = BaselineProgress.of(profile).completed;
@@ -517,8 +528,11 @@ class ProfilePage extends StatelessWidget {
                         _row(
                           icon: Icons.groups_outlined,
                           title: 'Therapist collaboration',
-                          value: 'On',
-                          onTap: () => _showTherapistSheet(context),
+                          value: therapistController?.contact?.name ?? 'None yet',
+                          onTap: () => _showTherapistSheet(
+                            context,
+                            therapistController,
+                          ),
                         ),
                         _row(
                           icon: Icons.checklist_rounded,
@@ -1301,187 +1315,17 @@ class ProfilePage extends StatelessWidget {
   }
 
   // 3. Therapist Collaboration Sheet
-  static void _showTherapistSheet(BuildContext context) {
-    _showModalSheet(
-      context: context,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3DC),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.groups_outlined,
-                  size: 20,
-                  color: Color(0xFFB57A12),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Therapist collaboration',
-                      style: TextStyle(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF3B3327),
-                      ),
-                    ),
-                    Text(
-                      'High-level overview · Private entries remain locked',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF93887A),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFF2ECDD)),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: const Color(0xFFFFE8D1),
-                  child: const Text(
-                    'AR',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFFD2603A),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Dr. Amara Reid, PhD',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF3B3327),
-                        ),
-                      ),
-                      Text(
-                        'Mindful Care Associates · Licensed Clinical',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF93887A),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEBF7EB),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: const Text(
-                    'Active',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF3F823B),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'SHARED SCOPE',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
-              color: Color(0xFFBCAC8E),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _scopeItem(Icons.check_circle_outline, 'Weekly emotion rhythm & energy cadence', true),
-          _scopeItem(Icons.check_circle_outline, 'GAD-7 & PHQ-9 baseline summaries', true),
-          _scopeItem(Icons.lock_outline, 'Private verbatim journal text (Always confidential to you)', false),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFB534),
-                foregroundColor: const Color(0xFF3D2E14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Clinician 1-Page Brief prepared for Dr. Reid'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.share_outlined, size: 18),
-              label: const Text(
-                'Send 1-Page Summary Brief',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  static void _showTherapistSheet(
+    BuildContext context,
+    TherapistController? controller,
+  ) {
+    if (controller == null) return;
 
-  static Widget _scopeItem(IconData icon, String text, bool shared) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 16,
-            color: shared ? const Color(0xFF3F823B) : const Color(0xFFB4522C),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: shared ? const Color(0xFF4A4133) : const Color(0xFFB4522C),
-              ),
-            ),
-          ),
-        ],
-      ),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _TherapistSheetContent(controller: controller),
     );
   }
 
@@ -2382,6 +2226,408 @@ class _AvatarContent extends StatelessWidget {
         size: 42,
         color: Color(0xFF7A5832),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Therapist Collaboration — real sheet with contact CRUD, call, email
+// ---------------------------------------------------------------------------
+
+class _TherapistSheetContent extends StatefulWidget {
+  const _TherapistSheetContent({required this.controller});
+
+  final TherapistController controller;
+
+  @override
+  State<_TherapistSheetContent> createState() => _TherapistSheetContentState();
+}
+
+class _TherapistSheetContentState extends State<_TherapistSheetContent> {
+  bool _editing = false;
+  late TextEditingController _name;
+  late TextEditingController _phone;
+  late TextEditingController _email;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final contact = widget.controller.contact;
+    _name = TextEditingController(text: contact?.name ?? '');
+    _phone = TextEditingController(text: contact?.phone ?? '');
+    _email = TextEditingController(text: contact?.email ?? '');
+    // Open in edit mode if no contact exists yet.
+    _editing = contact == null;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    if (name.isEmpty) return;
+    if (_saving) return;
+    setState(() => _saving = true);
+
+    await widget.controller.save(TherapistContact(
+      name: name,
+      phone: _phone.text.trim(),
+      email: _email.text.trim(),
+    ));
+
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _editing = false;
+    });
+  }
+
+  Future<void> _remove() async {
+    await widget.controller.remove();
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  void _call(String phone) {
+    final number = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (number.isEmpty) return;
+    launchUrl(Uri(scheme: 'tel', path: number));
+  }
+
+  void _sendEmail(String email) {
+    if (email.isEmpty) return;
+    launchUrl(Uri(scheme: 'mailto', path: email));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: SolaceColors.from(context).surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33684B20),
+            blurRadius: 32,
+            offset: Offset(0, -6),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 26,
+        top: 12,
+        left: 20,
+        right: 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4.5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2D6C0),
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          // Header
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3DC),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.groups_outlined,
+                  size: 20,
+                  color: Color(0xFFB57A12),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Therapist collaboration',
+                      style: TextStyle(
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF3B3327),
+                      ),
+                    ),
+                    Text(
+                      'Store your therapist\u2019s contact for quick access',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF93887A),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (_editing) _buildForm() else _buildContactCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _field(_name, 'Name', TextInputType.name, TextCapitalization.words),
+        const SizedBox(height: 12),
+        _field(_phone, 'Phone number', TextInputType.phone, TextCapitalization.none),
+        const SizedBox(height: 12),
+        _field(_email, 'Email address', TextInputType.emailAddress, TextCapitalization.none),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFB534),
+              foregroundColor: const Color(0xFF3D2E14),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: _saving ? null : _save,
+            child: Text(
+              widget.controller.hasContact ? 'Update Contact' : 'Save Contact',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+        if (widget.controller.hasContact) ...[
+          const SizedBox(height: 10),
+          Center(
+            child: TextButton(
+              onPressed: () => setState(() => _editing = false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF93887A),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _field(
+    TextEditingController controller,
+    String label,
+    TextInputType keyboard,
+    TextCapitalization capitalization,
+  ) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboard,
+      textCapitalization: capitalization,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFFFB534), width: 1.8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContactCard() {
+    final contact = widget.controller.contact;
+    if (contact == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Contact card
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFF2ECDD)),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: const Color(0xFFFFE8D1),
+                child: Text(
+                  contact.initials,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFD2603A),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      contact.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF3B3327),
+                      ),
+                    ),
+                    if (contact.hasPhone || contact.hasEmail)
+                      Text(
+                        [
+                          if (contact.hasPhone) contact.phone,
+                          if (contact.hasEmail) contact.email,
+                        ].join(' · '),
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF93887A),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                color: const Color(0xFFB57A12),
+                onPressed: () => setState(() => _editing = true),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Action buttons
+        Row(
+          children: [
+            if (contact.hasPhone)
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF3F823B),
+                      side: const BorderSide(color: Color(0xFFD4E8D4)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: () => _call(contact.phone),
+                    icon: const Icon(Icons.call_outlined, size: 18),
+                    label: const Text(
+                      'Call',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (contact.hasPhone && contact.hasEmail)
+              const SizedBox(width: 10),
+            if (contact.hasEmail)
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFB57A12),
+                      side: const BorderSide(color: Color(0xFFF2ECDD)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: () => _sendEmail(contact.email),
+                    icon: const Icon(Icons.email_outlined, size: 18),
+                    label: const Text(
+                      'Email',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // Send summary — coming soon
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE8E0D0),
+              foregroundColor: const Color(0xFF93887A),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: null,
+            icon: const Icon(Icons.share_outlined, size: 18),
+            label: const Text(
+              'Send 1-Page Summary Brief · Coming soon',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Remove contact
+        Center(
+          child: TextButton(
+            onPressed: _remove,
+            child: const Text(
+              'Remove therapist',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFB4522C),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
