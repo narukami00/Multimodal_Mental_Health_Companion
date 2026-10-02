@@ -275,8 +275,8 @@ class TermsAndPrivacyPage extends StatelessWidget {
         _SectionHeading('WHAT IS NOT COLLECTED'),
         _Body(
           'What is inside your other apps or messages, where you are, your '
-          'phone contact list contact list, and anything that compares you with other people. The '
-          'microphone and camera are used only when you start a voice or video '
+          'phone contact list, and anything that compares you with other '
+          'people. The microphone and camera are used only when you start a voice or video '
           'check-in, send a voice message, or make a call. The Permissions page '
           'and How Solace decides say the same.',
         ),
