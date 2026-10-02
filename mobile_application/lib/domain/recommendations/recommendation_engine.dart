@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../../core/models/activity.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/models/user_profile.dart';
+import '../../core/research/ablations.dart';
 import '../capacity/capacity_estimator.dart';
 import 'activity_safety_policy.dart';
 import 'mood_change.dart';
@@ -650,6 +651,7 @@ class RecommendationEngine {
   /// reading: no mood after, no recent mood before, or a change too small to
   /// tell from noise.
   double? _meaningfulMoodChange(SuggestionRecord record) {
+    if (!Ablations.current.moodChangeOutcomes) return null;
     final change = moodChange(record.moodBefore, record.moodAfter);
     if (change == null || change.abs() < moodChangeMeaningful) return null;
     return change;

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../../core/research/ablations.dart';
 import 'phone_patterns_controller.dart';
 import 'usage_recorder.dart';
 
@@ -46,7 +47,7 @@ class UsageCollectionRunner with WidgetsBindingObserver {
     _running = true;
     try {
       await _patterns.refresh();
-      if (_patterns.isCollecting) {
+      if (_patterns.isCollecting && Ablations.current.phoneSignals) {
         final written = await _recorder.catchUp();
         // Any open page is told, so it shows the days as they land.
         if (written > 0) _patterns.dataChanged();

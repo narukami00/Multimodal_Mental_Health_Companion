@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/models/break_annotation.dart';
 import '../../core/models/daily_features.dart';
+import '../../core/research/ablations.dart';
 import '../../core/models/session_record.dart';
 import '../../data/contracts/break_annotation_repository.dart';
 import '../../domain/footprint/break_prompt_policy.dart';
@@ -54,6 +55,13 @@ class BreakPromptController extends ChangeNotifier {
   /// as shown only the first time it appears, and never throws.
   Future<void> refresh() async {
     if (_refreshing) return;
+    if (!Ablations.current.phoneSignals) {
+      if (_current != null) {
+        _current = null;
+        notifyListeners();
+      }
+      return;
+    }
     _refreshing = true;
     try {
       _annotations = await _repository.loadAll();

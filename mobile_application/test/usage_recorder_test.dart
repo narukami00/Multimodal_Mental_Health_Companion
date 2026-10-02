@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/research/ablations.dart';
 import 'package:solace_mobile/core/models/app_description.dart';
 import 'package:solace_mobile/core/models/consent.dart';
 import 'package:solace_mobile/core/models/daily_features.dart';
@@ -312,6 +313,17 @@ void main() {
       await runner().run();
 
       expect(collector.queries, isEmpty);
+    });
+
+    test('with phone signals ablated, nothing is read even with consent and access', () async {
+      Ablations.current = const Ablations(phoneSignals: false);
+      addTearDown(Ablations.reset);
+      await consent.grant(ConsentKey.usageFootprint);
+
+      await runner().run();
+
+      expect(collector.queries, isEmpty);
+      expect(await repository.loadAll(), isEmpty);
     });
 
     test('catches up once both consent and access are there', () async {

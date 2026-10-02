@@ -1,4 +1,5 @@
 import '../../core/models/session_record.dart';
+import '../../core/research/ablations.dart';
 import '../../core/models/user_profile.dart';
 import '../../domain/capacity/capacity_estimator.dart';
 import '../../domain/capacity/mood_trend.dart';
@@ -27,9 +28,9 @@ RecommendationContext buildRecommendationContext({
   final tags = text == null || text.isEmpty
       ? const <String>[]
       : const EventTaggingService()
-          .extractKnownTags(text)
-          .map((tag) => tag.canonicalLabel)
-          .toList();
+            .extractKnownTags(text)
+            .map((tag) => tag.canonicalLabel)
+            .toList();
 
   return RecommendationContext(
     currentState: latest?.mood,
@@ -42,13 +43,15 @@ RecommendationContext buildRecommendationContext({
     ],
     profileAgeDays: profileAgeInDays(profile, now: current),
     preferGentle: prefersGentleStart(profile),
-    capacity: estimateCapacity(
-      now: current,
-      sleepWindow: resolveSleepWindow(profile: profile, now: current),
-      // Only a check-in close enough to mean something about right now.
-      latestMood: moodBeforeFor(shownAt: current, sessions: sessions),
-      recentMoodScores: dailyMoodScores(sessions: sessions, now: current),
-    ),
+    capacity: !Ablations.current.capacity
+        ? null
+        : estimateCapacity(
+            now: current,
+            sleepWindow: resolveSleepWindow(profile: profile, now: current),
+            // Only a check-in close enough to mean something about right now.
+            latestMood: moodBeforeFor(shownAt: current, sessions: sessions),
+            recentMoodScores: dailyMoodScores(sessions: sessions, now: current),
+          ),
   );
 }
 

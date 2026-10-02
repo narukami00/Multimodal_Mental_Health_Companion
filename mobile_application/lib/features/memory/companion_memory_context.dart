@@ -1,5 +1,6 @@
 import '../../core/models/consent.dart';
 import '../../core/models/session_record.dart';
+import '../../core/research/ablations.dart';
 import '../../domain/capacity/capacity_estimator.dart';
 import '../../domain/capacity/mood_trend.dart';
 import '../../domain/memory/profile_snippet_builder.dart';
@@ -34,8 +35,12 @@ class CompanionMemoryContext {
   final List<String> Function() themes;
   final DateTime Function() _clock;
 
-  bool get snippetOn => consent.isGranted(ConsentKey.profileSnippet);
-  bool get momentsOn => consent.isGranted(ConsentKey.memoryMoments);
+  bool get snippetOn =>
+      Ablations.current.companionMemory &&
+      consent.isGranted(ConsentKey.profileSnippet);
+  bool get momentsOn =>
+      Ablations.current.companionMemory &&
+      consent.isGranted(ConsentKey.memoryMoments);
 
   /// The short description of the person, empty without consent.
   ProfileSnippet snippet() => _build(consented: snippetOn);

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/research/ablations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:solace_mobile/core/models/break_annotation.dart';
 import 'package:solace_mobile/core/models/daily_features.dart';
@@ -270,6 +271,17 @@ void main() {
       safety = false;
       shifted = true;
       now = _now;
+    });
+
+    test('with phone signals ablated, nothing is asked and nothing is recorded', () async {
+      Ablations.current = const Ablations(phoneSignals: false);
+      addTearDown(Ablations.reset);
+
+      final controller = build();
+      await controller.refresh();
+
+      expect(controller.current, isNull);
+      expect(await repository.loadAll(), isEmpty);
     });
 
     test('shows a question for a shift and records it as shown once', () async {
