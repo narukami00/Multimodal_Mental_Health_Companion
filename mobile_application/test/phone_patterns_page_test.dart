@@ -71,7 +71,7 @@ void main() {
   });
 
   Future<void> pump(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1080, 3600);
+    tester.view.physicalSize = const Size(1080, 9000);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() {
       tester.view.resetPhysicalSize();
@@ -81,6 +81,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light(),
+        // The ring breathes forever, which pumpAndSettle can never wait out.
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
         home: PhonePatternsPage(
           phonePatterns: patterns,
           profileController: profile,
@@ -119,16 +124,18 @@ void main() {
     await pump(tester);
 
     expect(find.text('FRIDAY 2 OCTOBER'), findsOneWidget);
-    expect(find.text('Screen on for about 3 h 25 min.'), findsOneWidget);
-    expect(
-      find.text('Picked up 64 times; the longest stretch was 38 min.'),
-      findsOneWidget,
-    );
+    expect(find.text('3 h 25 min'), findsOneWidget);
+    expect(find.text('Screen on'), findsOneWidget);
+    expect(find.text('64'), findsOneWidget);
+    expect(find.text('Pickups'), findsOneWidget);
+    expect(find.text('38 min'), findsOneWidget);
+    expect(find.text('Longest stretch'), findsOneWidget);
     expect(find.text('Busiest around 9:00 PM.'), findsOneWidget);
-    expect(
-      find.text('Most time in social (1 h 10 min), then other (30 min).'),
-      findsOneWidget,
-    );
+    // Where the time went: one bar per kind of app, with its time.
+    expect(find.text('Social'), findsOneWidget);
+    expect(find.text('1 h 10 min'), findsOneWidget);
+    expect(find.text('Other'), findsOneWidget);
+    expect(find.text('30 min'), findsOneWidget);
   });
 
   testWidgets('never describes a day still in progress', (tester) async {
@@ -142,7 +149,7 @@ void main() {
     await pump(tester);
 
     expect(key('patterns-empty'), findsOneWidget);
-    expect(find.textContaining('Screen on for about'), findsNothing);
+    expect(find.text('Screen on'), findsNothing);
   });
 
   testWidgets('labels sleep an estimate that can run long', (tester) async {

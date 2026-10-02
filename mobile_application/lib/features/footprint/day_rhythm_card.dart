@@ -90,7 +90,7 @@ class _DayRhythmCardState extends State<DayRhythmCard> {
                 SizedBox(
                   width: 140,
                   height: 140,
-                  child: _RhythmRing(rhythm: rhythm, animate: !reduceMotion),
+                  child: DayRhythmRing(rhythm: rhythm, animate: !reduceMotion),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -162,16 +162,27 @@ class _Key extends StatelessWidget {
   );
 }
 
-class _RhythmRing extends StatefulWidget {
-  const _RhythmRing({required this.rhythm, required this.animate});
+/// The 24-hour ring itself, sized by its parent. Shared by Home and by
+/// My phone patterns.
+class DayRhythmRing extends StatefulWidget {
+  const DayRhythmRing({
+    required this.rhythm,
+    required this.animate,
+    this.showTotal = true,
+    super.key,
+  });
   final DayRhythm rhythm;
   final bool animate;
 
+  /// Whether the centre says how long the screen was on. A page that already
+  /// says so beside the ring turns it off and shows "24 hours" instead.
+  final bool showTotal;
+
   @override
-  State<_RhythmRing> createState() => _RhythmRingState();
+  State<DayRhythmRing> createState() => _DayRhythmRingState();
 }
 
-class _RhythmRingState extends State<_RhythmRing> with TickerProviderStateMixin {
+class _DayRhythmRingState extends State<DayRhythmRing> with TickerProviderStateMixin {
   late final AnimationController _grow = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1400),
@@ -222,15 +233,15 @@ class _RhythmRingState extends State<_RhythmRing> with TickerProviderStateMixin 
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _compact(r.totalMinutes),
+                widget.showTotal ? _compact(r.totalMinutes) : '24',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: _ink,
                 ),
               ),
-              const Text(
-                'screen on',
+              Text(
+                widget.showTotal ? 'screen on' : 'hours',
                 style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: _muted),
               ),
             ],

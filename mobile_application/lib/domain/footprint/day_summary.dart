@@ -20,7 +20,9 @@ class DaySummary {
   });
 
   /// Builds a summary from a stored row.
-  factory DaySummary.of(DailyFeatures row) {
+  ///
+  /// [categoryLimit] is how many kinds of app to keep, biggest first.
+  factory DaySummary.of(DailyFeatures row, {int categoryLimit = 2}) {
     final screen = row.screenOnMinutes;
     final longest = row.longestSessionMinutes;
     final hours = row.hourlyActiveMinutes;
@@ -59,7 +61,7 @@ class DaySummary {
       sleepEndMinute: row.estimatedSleepEndMinute,
       sleepMinutes: row.estimatedSleepMinutes,
       topCategories: [
-        for (final entry in categories.take(2))
+        for (final entry in categories.take(categoryLimit))
           (name: entry.key, minutes: entry.value),
       ],
     );
