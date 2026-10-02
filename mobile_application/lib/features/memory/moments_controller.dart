@@ -34,6 +34,10 @@ class MomentsController extends ChangeNotifier {
 
   List<MemoryMoment> _moments = const [];
   bool _loaded = false;
+  int _sequence = 0;
+
+  /// Unique even when two moments are made in the same clock tick.
+  String _newId(DateTime now) => 'moment_${now.microsecondsSinceEpoch}_${_sequence++}';
 
   bool get isLoaded => _loaded;
 
@@ -99,7 +103,7 @@ class MomentsController extends ChangeNotifier {
 
     final now = _clock();
     final moment = MemoryMoment(
-      id: 'moment_${now.microsecondsSinceEpoch}',
+      id: _newId(now),
       text: proposal.text,
       createdAt: now,
       occurredOn: proposal.occurredOn,
@@ -121,7 +125,7 @@ class MomentsController extends ChangeNotifier {
     if (trimmed.isEmpty) return null;
     final now = _clock();
     final moment = MemoryMoment(
-      id: 'moment_${now.microsecondsSinceEpoch}',
+      id: _newId(now),
       text: trimmed.length > MemoryMoment.maxLength
           ? trimmed.substring(0, MemoryMoment.maxLength)
           : trimmed,

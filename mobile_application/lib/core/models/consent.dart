@@ -60,7 +60,16 @@ class ConsentKey {
     currentVersion: '1.0',
   );
 
-  static const all = [usageFootprint, topAppNames, profileSnippet];
+  /// Telling the companion server the few confirmed moments the person chose to
+  /// keep, so replies can remember them. Moments stay on the phone otherwise.
+  static const memoryMoments = ConsentKey._(
+    category: 'memoryMoments',
+    modality: 'text',
+    purpose: 'chatCompanion',
+    currentVersion: '1.0',
+  );
+
+  static const all = [usageFootprint, topAppNames, profileSnippet, memoryMoments];
 
   static ConsentKey? fromKey(String key) {
     for (final candidate in all) {
