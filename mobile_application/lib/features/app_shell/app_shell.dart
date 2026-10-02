@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../insights/moments_tab.dart';
 import '../memory/companion_memory_context.dart';
+import '../memory/what_sol_remembers_page.dart';
 import '../memory/moment_proposal_card.dart';
 import '../memory/moments_controller.dart';
 import '../../core/models/safety_assessment.dart';
@@ -478,6 +480,23 @@ class _AppShellState extends State<AppShell> {
                 phonePatterns: widget.phonePatterns,
                 profileController: widget.profileController,
                 breakPrompts: widget.breakPrompts,
+                momentsTab: widget.moments == null
+                    ? null
+                    : MomentsInsightsTab(
+                        moments: widget.moments!,
+                        onManage: widget.memory == null
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => WhatSolRemembersPage(
+                                    moments: widget.moments!,
+                                    memory: widget.memory!,
+                                    consent: widget.memory!.consent,
+                                    profileController: widget.profileController,
+                                  ),
+                                ),
+                              ),
+                      ),
               ),
               ProfilePage(
                 profileController: widget.profileController,
