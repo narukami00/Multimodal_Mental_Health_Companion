@@ -15,6 +15,7 @@ from typing import AsyncGenerator, Iterator, List, Dict, Any, Optional
 
 import torch
 from conversation_memory import clean_summary, extractive_summary, summary_messages
+from moment_extraction import extraction_messages, validate_moment
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
 
 logger = logging.getLogger("solace_llm")
@@ -282,6 +283,26 @@ class LlmService:
             if token is None:
                 break
             yield token
+
+    async def extract_moment_async(self, text: str) -> Optional[str]:
+        """One good moment quoted from [text], or None. Never raises.
+
+        The model is only asked to copy a sentence; `validate_moment` then checks
+        the copy is faithful, short, and not about a sensitive topic, so a
+        paraphrase, an invention or a hard subject all end as None.
+        """
+        if not self.is_ready or not text or not text.strip():
+            return None
+        try:
+            parts: List[str] = []
+            async for chunk in self.generate_stream_async(
+                extraction_messages(text), max_new_tokens=60
+            ):
+                parts.append(chunk)
+            return validate_moment(text, "".join(parts))
+        except Exception as e:  # noqa: BLE001 - extraction must never break a chat
+            logger.warning(f"Moment extraction failed: {e}")
+            return None
 
     async def summarize_async(
         self,

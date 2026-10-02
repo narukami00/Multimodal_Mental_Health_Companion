@@ -870,6 +870,29 @@ async def websocket_session(
                     }
                     await websocket.send_text(json.dumps(ready_payload))
 
+                # Moment extraction: quote at most one good moment from a chat
+                # message the person just sent. Validated server-side too, and
+                # its own task so a slow model never blocks the socket.
+                elif msg_type == "moment.extract":
+                    request_id = str(data.get("request_id", ""))[:64]
+                    message_text = data.get("text")
+                    message_text = message_text if isinstance(message_text, str) else ""
+
+                    async def _extract(request_id=request_id, message_text=message_text):
+                        moment = await llm.extract_moment_async(message_text)
+                        try:
+                            await websocket.send_text(json.dumps({
+                                "v": 1,
+                                "type": "moment.proposal",
+                                "request_id": request_id,
+                                "text": moment,
+                                "ts": int(time.time() * 1000),
+                            }))
+                        except Exception:
+                            logger.debug("moment.proposal not delivered; socket closed")
+
+                    asyncio.create_task(_extract())
+
                 # Rolling summary: fold older turns into a short summary. Runs as
                 # its own task so a slow model never blocks the socket, and falls
                 # back to an extractive summary rather than failing.
