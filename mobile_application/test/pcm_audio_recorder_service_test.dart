@@ -62,9 +62,8 @@ void main() {
       expect(metrics.last.sampleOffset, metrics.last.seq * 800);
       expect(metrics.last.frameMs, 50);
 
-      // The mock emits a speech/silence cadence, so the gate can actually run.
-      expect(metrics.any((m) => m.isSpeech), isTrue);
-      expect(recorder.preRollBytes, greaterThan(0));
+      // The mock emits a tone, so the measured level is real, not zero.
+      expect(metrics.map((m) => m.rms).reduce(math.max), greaterThan(0.05));
 
       await recorder.stopRecording();
       expect(recorder.isRecording, isFalse);
@@ -74,19 +73,26 @@ void main() {
       recorder.dispose();
     });
 
-    test('pre-roll drains the onset audio once a turn opens', () async {
+    test('every captured frame reaches the stream, none are held back', () async {
       final recorder = PcmAudioRecorderService(isMock: true);
-      final metricsSub = recorder.frameMetricsStream.listen((_) {});
+      final frames = <Uint8List>[];
+      final sub = recorder.audioStream.listen(frames.add);
       await recorder.startRecording(sampleRate: 16000, frameMs: 20);
       await Future<void>.delayed(const Duration(milliseconds: 200));
-
-      final drained = recorder.drainPreRoll(200);
-      expect(drained.length, inInclusiveRange(8, 10)); // 10 x 20 ms of history
-      expect(drained.every((f) => f.length == 640), isTrue);
-      expect(recorder.drainPreRoll(200).length, 0); // drained, not copied
-
-      await metricsSub.cancel();
       await recorder.stopRecording();
+
+      // A call streams the microphone continuously; the recorder must not decide
+      // which frames are worth sending.
+      expect(frames.length, greaterThanOrEqualTo(5));
+      expect(frames.every((f) => f.length == 640), isTrue);
+
+      await sub.cancel();
+      recorder.dispose();
+    });
+
+    test('the mock is never on a headset', () async {
+      final recorder = PcmAudioRecorderService(isMock: true);
+      expect(await recorder.isHeadsetConnected(), isFalse);
       recorder.dispose();
     });
 

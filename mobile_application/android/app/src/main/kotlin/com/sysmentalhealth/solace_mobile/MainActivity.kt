@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -97,6 +98,7 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
                 "captureInfo" -> result.success(captureInfo())
+                "outputRoute" -> result.success(outputRoute())
                 else -> result.notImplemented()
             }
         }
@@ -235,7 +237,10 @@ class MainActivity : FlutterActivity() {
             // Keep normal media audio mode so all audio playback routes to the
             // main loudspeaker with full-frequency fidelity, not through the in-call earpiece.
             audioManager.mode = AudioManager.MODE_NORMAL
-            audioManager.isSpeakerphoneOn = true
+            // Loudspeaker unless something is worn on the head: forcing the speaker
+            // would override headphones, and the app treats "headset connected" as
+            // "no echo", so the two must agree.
+            audioManager.isSpeakerphoneOn = outputRoute()["headset"] != true
 
             var record = try {
                 AudioRecord(
@@ -413,6 +418,35 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             Log.w(TAG, "capture configuration probe failed: $e")
         }
+    }
+
+    /**
+     * Is the audio going to something worn on the head rather than the phone's
+     * loudspeaker? Only then can the microphone stay open while the assistant
+     * talks: through a loudspeaker the phone hears its own voice a few
+     * centimetres away and cannot tell it from the person.
+     */
+    private fun outputRoute(): Map<String, Any?> {
+        val headsetTypes = mutableSetOf(
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+            AudioDeviceInfo.TYPE_USB_HEADSET,
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            headsetTypes.add(AudioDeviceInfo.TYPE_HEARING_AID)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            headsetTypes.add(AudioDeviceInfo.TYPE_BLE_HEADSET)
+        }
+        val headset = try {
+            audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in headsetTypes }
+        } catch (e: Exception) {
+            Log.w(TAG, "output route probe failed: $e")
+            false
+        }
+        return mapOf("headset" to headset)
     }
 
     private fun captureInfo(): Map<String, Any?> = mapOf(

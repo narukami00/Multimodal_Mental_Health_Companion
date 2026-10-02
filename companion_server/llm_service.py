@@ -9,14 +9,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import shutil
 import threading
 import time
+from pathlib import Path
 from typing import AsyncGenerator, Iterator, List, Dict, Any, Optional
 
-import torch
+from cuda_libs import register_cuda_dll_dirs
+
+register_cuda_dll_dirs()
+
+import torch  # noqa: E402
 from conversation_memory import clean_summary, extractive_summary, summary_messages
 from moment_extraction import extraction_messages, validate_moment
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
+from transformers import (  # noqa: E402
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    StoppingCriteria,
+    StoppingCriteriaList,
+    TextIteratorStreamer,
+)
 
 logger = logging.getLogger("solace_llm")
 
@@ -101,8 +114,29 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 
+SPOKEN_STYLE_ADDENDUM = (
+    "\nYou are speaking out loud on a live voice call. Answer in one to three short, "
+    "natural spoken sentences. No lists, no emojis, no stage directions."
+)
+
+CT2_MODELS_DIR = Path(__file__).resolve().parent / "models" / "llm"
+_STOP_TOKENS = ("<|im_end|>", "<|endoftext|>")
+
+
 class LlmService:
-    """Manages causal LM tokenizer, model loading, and streaming text generation."""
+    """Manages the causal LM, its tokenizer and streaming text generation.
+
+    Two interchangeable backends sit behind the same API:
+
+    * CTranslate2 int8 (default): the Qwen weights are converted once on first
+      start, then run on the GPU when the CUDA runtime is present and on the CPU
+      otherwise. Roughly four times faster than float32 PyTorch on a laptop CPU,
+      and generation can be cancelled mid-token.
+    * Hugging Face Transformers: the original path, kept as the fallback if
+      CTranslate2 cannot load the model.
+
+    Set SOLACE_LLM_BACKEND=hf to force the fallback.
+    """
 
     def __init__(
         self,
@@ -114,10 +148,13 @@ class LlmService:
         self.system_prompt = system_prompt
         self._tokenizer: Optional[AutoTokenizer] = None
         self._model: Optional[AutoModelForCausalLM] = None
+        self._ct2_generator: Any = None
         self._is_ready: bool = False
         self._load_lock = threading.Lock()
+        self.backend: str = "unloaded"
+        self._backend_pref = os.environ.get("SOLACE_LLM_BACKEND", "auto").lower()
 
-        # Device selection: prefer CUDA if available, else CPU
+        # Device selection for the HF fallback; the CT2 backend reports its own.
         if device:
             self.device = device
         else:
@@ -132,35 +169,220 @@ class LlmService:
         with self._load_lock:
             if self._is_ready:
                 return True
-
-            logger.info(f"Loading LLM model '{self.model_id}' on device '{self.device}'...")
             t0 = time.time()
+            if self._backend_pref in ("auto", "ct2"):
+                try:
+                    self._initialize_ct2()
+                    logger.info(
+                        f"LLM ready in {time.time() - t0:.2f}s "
+                        f"({self.model_id}, ctranslate2 int8 on {self.device})"
+                    )
+                    return True
+                except Exception as e:
+                    logger.warning(
+                        f"CTranslate2 backend unavailable ({e}); falling back to Transformers.",
+                        exc_info=True,
+                    )
+                    self._ct2_generator = None
+            return self._initialize_hf(t0)
+
+    # -- CTranslate2 backend -------------------------------------------------
+
+    def _ct2_model_dir(self) -> Path:
+        return CT2_MODELS_DIR / (self.model_id.replace("/", "__") + "-ct2-int8")
+
+    def _ensure_ct2_model(self) -> Path:
+        out = self._ct2_model_dir()
+        if (out / "model.bin").exists() and (out / "vocabulary.json").exists():
+            return out
+        from ctranslate2.converters import TransformersConverter
+
+        logger.info(f"Converting {self.model_id} to CTranslate2 int8 (one-time, ~30 s)...")
+        CT2_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = out.with_name(out.name + ".tmp")
+        shutil.rmtree(tmp, ignore_errors=True)
+        TransformersConverter(self.model_id).convert(str(tmp), quantization="int8", force=True)
+        AutoTokenizer.from_pretrained(self.model_id, trust_remote_code=True).save_pretrained(str(tmp))
+        shutil.rmtree(out, ignore_errors=True)
+        tmp.rename(out)
+        return out
+
+    def _initialize_ct2(self) -> None:
+        import ctranslate2
+
+        from cuda_libs import cuda_usable
+
+        model_dir = self._ensure_ct2_model()
+        if not (model_dir / "tokenizer_config.json").exists():
+            # Converted by an earlier build that did not keep the tokenizer.
+            AutoTokenizer.from_pretrained(self.model_id, trust_remote_code=True).save_pretrained(
+                str(model_dir)
+            )
+        # From the model directory: no network round trip at start-up.
+        self._tokenizer = AutoTokenizer.from_pretrained(str(model_dir), trust_remote_code=True)
+
+        generator = None
+        device = "cpu"
+        if cuda_usable():
             try:
-                self._tokenizer = AutoTokenizer.from_pretrained(
-                    self.model_id,
-                    trust_remote_code=True,
+                generator = ctranslate2.Generator(
+                    str(model_dir), device="cuda", compute_type="int8", inter_threads=2
                 )
-
-                # Use float32 on CPU for universal compatibility; float16/bfloat16 on CUDA
-                torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
-
-                self._model = AutoModelForCausalLM.from_pretrained(
-                    self.model_id,
-                    dtype=torch_dtype,
-                    device_map=self.device,
-                    trust_remote_code=True,
-                )
-
-                load_sec = time.time() - t0
-                self._is_ready = True
-                logger.info(
-                    f"LLM loaded successfully in {load_sec:.2f}s ({self.model_id} on {self.device})"
-                )
-                return True
+                # A CUDA device can be listed while cuBLAS is missing; the failure
+                # only shows on the first real decode, so probe it here.
+                self._probe_ct2(generator)
+                device = "cuda"
             except Exception as e:
-                logger.error(f"Failed to load LLM '{self.model_id}': {e}", exc_info=True)
-                self._is_ready = False
-                return False
+                logger.warning(f"LLM on CUDA unavailable ({e}); using CPU int8.")
+                generator = None
+        if generator is None:
+            cores = os.cpu_count() or 4
+            generator = ctranslate2.Generator(
+                str(model_dir),
+                device="cpu",
+                compute_type="int8",
+                inter_threads=2,
+                intra_threads=max(2, min(4, cores // 2)),
+            )
+            self._probe_ct2(generator)
+        self._ct2_generator = generator
+        self.device = device
+        self.backend = "ctranslate2"
+        self._is_ready = True
+
+    def _probe_ct2(self, generator: Any) -> None:
+        tokens = self._tokenizer.convert_ids_to_tokens(self._tokenizer.encode("Hello"))
+        for _ in generator.generate_tokens(tokens, max_length=2):
+            pass
+
+    def _generate_ct2(
+        self,
+        messages: List[Dict[str, str]],
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        cancel: Optional[threading.Event],
+    ) -> Iterator[str]:
+        prompt_text = self._tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        prompt_tokens = self._tokenizer.convert_ids_to_tokens(
+            self._tokenizer.encode(prompt_text, add_special_tokens=False)
+        )
+        stream = self._ct2_generator.generate_tokens(
+            prompt_tokens,
+            max_length=max_new_tokens,
+            sampling_temperature=temperature,
+            sampling_topk=40,
+            sampling_topp=top_p,
+            repetition_penalty=1.1,
+            end_token=list(_STOP_TOKENS),
+        )
+        ids: List[int] = []
+        emitted = ""
+        try:
+            for step in stream:
+                if cancel is not None and cancel.is_set():
+                    break
+                if step.token in _STOP_TOKENS:
+                    break
+                ids.append(step.token_id)
+                text = self._tokenizer.decode(ids, skip_special_tokens=True)
+                # A multi-byte character split across tokens decodes to U+FFFD until
+                # its last byte arrives; hold the text back rather than speak it.
+                if text.endswith("�"):
+                    continue
+                delta = text[len(emitted):]
+                if delta:
+                    emitted = text
+                    yield delta
+        finally:
+            # Closing the generator tells CTranslate2 to stop decoding.
+            stream.close()
+
+    # -- Transformers fallback -----------------------------------------------
+
+    def _initialize_hf(self, t0: float) -> bool:
+        logger.info(f"Loading LLM model '{self.model_id}' on device '{self.device}'...")
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(
+                self.model_id,
+                trust_remote_code=True,
+            )
+
+            # Use float32 on CPU for universal compatibility; float16/bfloat16 on CUDA
+            torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
+
+            self._model = AutoModelForCausalLM.from_pretrained(
+                self.model_id,
+                dtype=torch_dtype,
+                device_map=self.device,
+                trust_remote_code=True,
+            )
+
+            self._is_ready = True
+            self.backend = "transformers"
+            logger.info(
+                f"LLM loaded successfully in {time.time() - t0:.2f}s ({self.model_id} on {self.device})"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load LLM '{self.model_id}': {e}", exc_info=True)
+            self._is_ready = False
+            return False
+
+    def _generate_hf(
+        self,
+        messages: List[Dict[str, str]],
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        cancel: Optional[threading.Event],
+    ) -> Iterator[str]:
+        prompt_text = self._tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
+        inputs = self._tokenizer([prompt_text], return_tensors="pt")
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+        streamer = TextIteratorStreamer(
+            self._tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True,
+        )
+
+        class _Cancelled(StoppingCriteria):
+            def __call__(self, input_ids, scores, **kwargs):
+                return cancel is not None and cancel.is_set()
+
+        generation_kwargs = dict(
+            **inputs,
+            streamer=streamer,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            do_sample=True,
+            pad_token_id=self._tokenizer.eos_token_id,
+            stopping_criteria=StoppingCriteriaList([_Cancelled()]),
+        )
+
+        gen_thread = threading.Thread(
+            target=self._model.generate,
+            kwargs=generation_kwargs,
+            daemon=True,
+        )
+        gen_thread.start()
+
+        for token in streamer:
+            if token:
+                yield token
+
+        gen_thread.join(timeout=30.0)
+
+    # -- Public API ------------------------------------------------------------
 
     def build_messages(
         self,
@@ -168,18 +390,18 @@ class LlmService:
         history: Optional[List[Dict[str, str]]] = None,
         memory: Optional[Dict[str, Any]] = None,
         summary: str = "",
+        spoken: bool = False,
     ) -> List[Dict[str, str]]:
         """Construct the prompt message list with system prompt and prior conversation turns.
 
         `memory` is an already-sanitized block (see `sanitize_memory`). It is
-        per connection and never stored by the server.
+        per connection and never stored by the server. `spoken` adds the
+        voice-call style rule so replies are short enough to say aloud.
         """
-        messages: List[Dict[str, str]] = [
-            {
-                "role": "system",
-                "content": self.system_prompt + memory_prompt_block(memory, summary),
-            }
-        ]
+        system = self.system_prompt + memory_prompt_block(memory, summary)
+        if spoken:
+            system += SPOKEN_STYLE_ADDENDUM
+        messages: List[Dict[str, str]] = [{"role": "system", "content": system}]
 
         if history:
             # Append recent history turns (e.g. up to 10 messages)
@@ -198,52 +420,18 @@ class LlmService:
         max_new_tokens: int = 128,
         temperature: float = 0.7,
         top_p: float = 0.9,
+        cancel: Optional[threading.Event] = None,
     ) -> Iterator[str]:
-        """Synchronously stream decoded tokens using TextIteratorStreamer."""
-        if not self._is_ready or self._model is None or self._tokenizer is None:
+        """Synchronously stream decoded text. Set [cancel] to stop generation."""
+        if not self._is_ready:
             self.initialize()
             if not self._is_ready:
                 yield "I am currently preparing my thoughts. Please try again in a moment."
                 return
-
-        # Apply chat template
-        prompt_text = self._tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-
-        inputs = self._tokenizer([prompt_text], return_tensors="pt")
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-        streamer = TextIteratorStreamer(
-            self._tokenizer,
-            skip_prompt=True,
-            skip_special_tokens=True,
-        )
-
-        generation_kwargs = dict(
-            **inputs,
-            streamer=streamer,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            do_sample=True,
-            pad_token_id=self._tokenizer.eos_token_id,
-        )
-
-        gen_thread = threading.Thread(
-            target=self._model.generate,
-            kwargs=generation_kwargs,
-            daemon=True,
-        )
-        gen_thread.start()
-
-        for token in streamer:
-            if token:
-                yield token
-
-        gen_thread.join(timeout=30.0)
+        if self._ct2_generator is not None:
+            yield from self._generate_ct2(messages, max_new_tokens, temperature, top_p, cancel)
+        else:
+            yield from self._generate_hf(messages, max_new_tokens, temperature, top_p, cancel)
 
     async def generate_stream_async(
         self,
@@ -251,10 +439,17 @@ class LlmService:
         max_new_tokens: int = 128,
         temperature: float = 0.7,
         top_p: float = 0.9,
+        cancel: Optional[threading.Event] = None,
     ) -> AsyncGenerator[str, None]:
-        """Asynchronously stream tokens to integrate smoothly with FastAPI WebSockets."""
+        """Asynchronously stream tokens to integrate smoothly with FastAPI WebSockets.
+
+        Cancelling the consuming task (or setting [cancel]) stops the model: the
+        worker thread is signalled instead of being left to finish a reply nobody
+        will hear while it competes with the next turn for the same device.
+        """
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
+        stop = cancel if cancel is not None else threading.Event()
 
         def _producer():
             try:
@@ -263,8 +458,9 @@ class LlmService:
                     max_new_tokens=max_new_tokens,
                     temperature=temperature,
                     top_p=top_p,
+                    cancel=stop,
                 ):
-                    if loop.is_closed():
+                    if loop.is_closed() or stop.is_set():
                         break
                     loop.call_soon_threadsafe(queue.put_nowait, token)
             except Exception as e:
@@ -278,11 +474,15 @@ class LlmService:
 
         threading.Thread(target=_producer, daemon=True).start()
 
-        while True:
-            token = await queue.get()
-            if token is None:
-                break
-            yield token
+        try:
+            while True:
+                token = await queue.get()
+                if token is None:
+                    break
+                yield token
+        finally:
+            # Reached on normal end, on aclose() and on task cancellation alike.
+            stop.set()
 
     async def extract_moment_async(self, text: str) -> Optional[str]:
         """One good moment quoted from [text], or None. Never raises.
@@ -376,6 +576,11 @@ class LlmService:
             logger.debug(f"LLM suggestion generation failed: {e}")
 
         return fallback
+
+    @staticmethod
+    def fallback_suggestions(assistant_text: str, user_text: str = "") -> List[str]:
+        """Instant keyword-based reply chips: no model call, so nothing waits on them."""
+        return LlmService._get_fallback_suggestions(assistant_text, user_text)
 
     @staticmethod
     def _get_fallback_suggestions(assistant_text: str, user_text: str = "") -> List[str]:

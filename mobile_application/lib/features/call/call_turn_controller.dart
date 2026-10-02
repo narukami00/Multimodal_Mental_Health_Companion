@@ -14,14 +14,10 @@ enum TurnStage { vad, stt, llmFirstToken, ttsFirstFrame, llmTimeout, tool, compl
 
 enum DiscardReason { silence, unintelligible, tooShort, noSpeechProb, echo, cancelled }
 
-/// §5.8: barge-in is a classification problem, not a detection problem.
-enum BargeInClass { interrupt, backchannel, echo, noise }
-
 /// Every input that can move the machine. The table below is the whole machine.
 enum TurnEvent {
   turnStarted,
   speechDetected,
-  localOnset,
   endpointed,
   processing,
   firstToken,
@@ -31,6 +27,7 @@ enum TurnEvent {
   discarded,
   ttsResume,
   cancelled,
+  serverIdle,
   callEnded,
 }
 
@@ -150,26 +147,23 @@ const Map<(CallPhase, CallPhase), double> _transitionTau = {
 };
 
 /// Client-side mirror of the §7.4 table. A `null` result is an illegal pair —
-/// a race between the local provisional gate and a server event. It is logged
-/// and absorbed: a live call must not die on a server race.
+/// a race between two server events and the speaker. It is logged and absorbed:
+/// a live call must not die on a race.
 const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   // IDLE -> USER_SPEAKING
   (CallPhase.idle, TurnEvent.turnStarted): CallPhase.userSpeaking,
-  (CallPhase.idle, TurnEvent.localOnset): CallPhase.userSpeaking,
   (CallPhase.idle, TurnEvent.speechDetected): CallPhase.userSpeaking,
   (CallPhase.idle, TurnEvent.interrupted): CallPhase.userSpeaking,
   (CallPhase.idle, TurnEvent.firstToken): CallPhase.thinking,
   (CallPhase.idle, TurnEvent.firstAudioFrame): CallPhase.assistantSpeaking,
   (CallPhase.idle, TurnEvent.processing): CallPhase.thinking,
   (CallPhase.idle, TurnEvent.ttsComplete): CallPhase.idle,
+  (CallPhase.idle, TurnEvent.serverIdle): CallPhase.idle,
   // USER_SPEAKING
-  // Confirmations of a turn the client already opened locally: no change.
+  // The server reports the same turn twice (`turn.started`, `turn.speech_detected`).
   (CallPhase.userSpeaking, TurnEvent.turnStarted): CallPhase.userSpeaking,
   (CallPhase.userSpeaking, TurnEvent.speechDetected): CallPhase.userSpeaking,
-  // A fresh onset while the previous turn is still being finalised: the floor
-  // is already ours, the new turn simply replaces the old one's audio.
-  (CallPhase.userSpeaking, TurnEvent.localOnset): CallPhase.userSpeaking,
-  // The server answered before this client's own endpoint landed.
+  // The server answered before the turn's end was reported.
   (CallPhase.userSpeaking, TurnEvent.firstAudioFrame): CallPhase.assistantSpeaking,
   (CallPhase.userSpeaking, TurnEvent.firstToken): CallPhase.thinking,
   (CallPhase.userSpeaking, TurnEvent.endpointed): CallPhase.thinking,
@@ -177,9 +171,9 @@ const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   (CallPhase.userSpeaking, TurnEvent.cancelled): CallPhase.idle,
   (CallPhase.userSpeaking, TurnEvent.interrupted): CallPhase.assistantSpeaking,
   (CallPhase.userSpeaking, TurnEvent.ttsComplete): CallPhase.userSpeaking,
+  (CallPhase.userSpeaking, TurnEvent.serverIdle): CallPhase.idle,
   // THINKING
   // The user reclaimed the floor while a response was still in flight.
-  (CallPhase.thinking, TurnEvent.localOnset): CallPhase.userSpeaking,
   (CallPhase.thinking, TurnEvent.turnStarted): CallPhase.userSpeaking,
   (CallPhase.thinking, TurnEvent.speechDetected): CallPhase.userSpeaking,
   (CallPhase.thinking, TurnEvent.firstToken): CallPhase.thinking,
@@ -189,6 +183,7 @@ const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   (CallPhase.thinking, TurnEvent.cancelled): CallPhase.idle,
   (CallPhase.thinking, TurnEvent.interrupted): CallPhase.userSpeaking,
   (CallPhase.thinking, TurnEvent.ttsComplete): CallPhase.idle,
+  (CallPhase.thinking, TurnEvent.serverIdle): CallPhase.idle,
   // MUTED / ENDED absorb a late server event without leaving their state.
   (CallPhase.muted, TurnEvent.cancelled): CallPhase.muted,
   (CallPhase.muted, TurnEvent.discarded): CallPhase.muted,
@@ -197,9 +192,8 @@ const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   // ASSISTANT_SPEAKING
   (CallPhase.assistantSpeaking, TurnEvent.interrupted): CallPhase.userSpeaking,
   (CallPhase.assistantSpeaking, TurnEvent.speechDetected): CallPhase.userSpeaking,
-  (CallPhase.assistantSpeaking, TurnEvent.localOnset): CallPhase.userSpeaking,
   // A new turn can start while the previous audio is still draining: the
-  // server raced our playback, the floor goes to the user.
+  // floor goes to the user.
   (CallPhase.assistantSpeaking, TurnEvent.turnStarted): CallPhase.userSpeaking,
   (CallPhase.assistantSpeaking, TurnEvent.firstAudioFrame):
       CallPhase.assistantSpeaking,
@@ -210,32 +204,8 @@ const Map<(CallPhase, TurnEvent), CallPhase> _transitionTable = {
   (CallPhase.assistantSpeaking, TurnEvent.endpointed): CallPhase.thinking,
   (CallPhase.assistantSpeaking, TurnEvent.ttsComplete): CallPhase.idle,
   (CallPhase.assistantSpeaking, TurnEvent.discarded): CallPhase.idle,
+  (CallPhase.assistantSpeaking, TurnEvent.serverIdle): CallPhase.idle,
 };
-
-/// What the local gate knows when it proposes an onset. Passed as one value so
-/// there is a single barge-in path (spec §5.4: two paths into barge-in, one
-/// gated evaluator).
-class SpeechProbe {
-  const SpeechProbe({
-    required this.snrDb,
-    required this.onsetRunMs,
-    required this.speechMs,
-    required this.assistantSpeaking,
-    required this.sinceAssistantStartMs,
-  });
-
-  final double snrDb;
-  final int onsetRunMs;
-  final int speechMs;
-  final bool assistantSpeaking;
-  final int sinceAssistantStartMs;
-
-  /// A backchannel ("mm-hm", "right") is short and lands early in the
-  /// assistant's turn. That is the single most common barge-in bug, and
-  /// duration + position is enough to catch it without a model.
-  static const int backchannelMaxMs = 250;
-  static const int backchannelWindowMs = 1000;
-}
 
 /// The single owner of conversational state. `call_page.dart` and the Living
 /// Orb both read from here; nothing else writes orb state (spec §7.5).
@@ -340,28 +310,6 @@ class CallTurnController extends ChangeNotifier {
 
   // --- events ----------------------------------------------------------------
 
-  /// A local onset is *provisional*: the client acts on echo-filtered evidence
-  /// immediately and reconciles when `turn.speech_detected` or `transcript_final`
-  /// arrives. Returns the barge-in class so the caller knows whether to flush
-  /// playback.
-  BargeInClass onLocalOnset(SpeechProbe probe) {
-    if (_ended) return BargeInClass.noise;
-    if (!probe.assistantSpeaking) {
-      _apply(TurnEvent.localOnset);
-      return BargeInClass.interrupt;
-    }
-    final isBackchannel = probe.speechMs > 0 &&
-        probe.speechMs < SpeechProbe.backchannelMaxMs &&
-        probe.sinceAssistantStartMs < SpeechProbe.backchannelWindowMs;
-    if (isBackchannel) {
-      // Logged, not acted on: the assistant keeps talking (spec §5.8).
-      _log(TurnEvent.localOnset, currentPhase);
-      return BargeInClass.backchannel;
-    }
-    _apply(TurnEvent.localOnset);
-    return BargeInClass.interrupt;
-  }
-
   void onTurnStarted(String? turnId) {
     if (turnId != null) _turnId = turnId;
     _apply(TurnEvent.turnStarted);
@@ -427,6 +375,14 @@ class CallTurnController extends ChangeNotifier {
     _apply(TurnEvent.cancelled);
   }
 
+  /// The server settled back to listening: whatever the phone still showed as in
+  /// flight (a turn, a thought) is over.
+  void onServerIdle() {
+    if (_ended) return;
+    _turnId = null;
+    _apply(TurnEvent.serverIdle);
+  }
+
   void onMicMutedChanged(bool muted) {
     if (_ended || _muted == muted) return;
     _muted = muted;
@@ -470,9 +426,8 @@ class CallTurnController extends ChangeNotifier {
     final from = currentPhase;
     final to = _transitionTable[(from, event)];
     if (to == null) {
-      // Illegal pair: a race between the local provisional gate and a server
-      // event. Log and absorb — a fatal assert here killed the event stream
-      // mid-call.
+      // Illegal pair: a race between server events and the speaker. Log and
+      // absorb — a fatal assert here killed the event stream mid-call.
       debugPrint(
         '[CallTurnController] Unhandled transition: ${from.name} --${event.name}--> ignoring',
       );

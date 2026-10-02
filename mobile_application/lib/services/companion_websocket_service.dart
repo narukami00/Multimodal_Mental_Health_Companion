@@ -177,6 +177,18 @@ class CompanionWebSocketService {
   Stream<Map<String, dynamic>> get turnDiagnosticStream =>
       _turnDiagnosticController.stream;
 
+  /// Where a turn's time went: speech-to-text, first token, first audio.
+  final _turnLatencyController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get turnLatencyStream =>
+      _turnLatencyController.stream;
+
+  /// The server acknowledges `call.listen` / `call.config`.
+  final _callListeningController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get callListeningStream =>
+      _callListeningController.stream;
+
   static CompanionWebSocketService? _live;
 
   /// Quotes one good moment from a chat message over the live connection, or
@@ -469,10 +481,13 @@ class CompanionWebSocketService {
         _channel!.sink.add(chunk);
         return;
       }
-      final header = ByteData(8)
+      // 50 frames a second for the length of a call: one allocation, no spreads.
+      final out = Uint8List(8 + chunk.length);
+      ByteData.sublistView(out, 0, 8)
         ..setUint32(0, _inputStreamId, Endian.little)
         ..setUint32(4, _inputSeq++, Endian.little);
-      _channel!.sink.add(Uint8List.fromList([...header.buffer.asUint8List(), ...chunk]));
+      out.setRange(8, out.length, chunk);
+      _channel!.sink.add(out);
     } catch (e) {
       debugPrint('[CompanionWS] Failed to send binary audio chunk: $e');
     }
@@ -495,6 +510,53 @@ class CompanionWebSocketService {
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
     _sendJson(payload);
+  }
+
+  /// Starts a live call: from here the microphone streams continuously through
+  /// [sendAudioChunk] and the *server* decides where each turn starts and ends.
+  ///
+  /// [bargeIn] says whether the person may talk over the assistant. Only true
+  /// when the audio goes to headphones: a loudspeaker's own voice would come
+  /// straight back in through the microphone.
+  Future<void> sendCallListen({bool bargeIn = false}) async {
+    _heartbeatInterval = callHeartbeatInterval;
+    _inputSeq = 0;
+    // Restart the timer so the call cadence applies to a connection that was
+    // opened for chat.
+    if (_status == CompanionConnectionStatus.connected) _startHeartbeat();
+    _sendJson({
+      'v': 1,
+      'type': 'call.listen',
+      'session_id': _sessionId,
+      'sample_rate': 16000,
+      'frame_ms': 20,
+      'barge_in': bargeIn,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  /// Changes a live call: the audio route moved between loudspeaker and
+  /// headphones, so talking over the assistant became unsafe or safe.
+  Future<void> sendCallConfig({required bool bargeIn}) async {
+    _sendJson({
+      'v': 1,
+      'type': 'call.config',
+      'session_id': _sessionId,
+      'barge_in': bargeIn,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  /// Mutes or unmutes the microphone for the server's turn detector. A muted
+  /// call drops the turn in progress and ignores audio until unmuted.
+  Future<void> sendCallMute({required bool muted}) async {
+    _sendJson({
+      'v': 1,
+      'type': 'call.mute',
+      'session_id': _sessionId,
+      'muted': muted,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
   }
 
   /// The client abandoned the turn (page disposed, mute, call end). Sent
@@ -954,6 +1016,18 @@ class CompanionWebSocketService {
           }
           break;
 
+        case 'turn.latency':
+          if (!_turnLatencyController.isClosed) {
+            _turnLatencyController.add(data);
+          }
+          break;
+
+        case 'call.listening':
+          if (!_callListeningController.isClosed) {
+            _callListeningController.add(data);
+          }
+          break;
+
         case 'error':
           debugPrint('[CompanionWS] Server error: ${data['message']}');
           break;
@@ -1069,5 +1143,7 @@ class CompanionWebSocketService {
     _turnDiscardedController.close();
     _ttsResumeController.close();
     _turnDiagnosticController.close();
+    _turnLatencyController.close();
+    _callListeningController.close();
   }
 }

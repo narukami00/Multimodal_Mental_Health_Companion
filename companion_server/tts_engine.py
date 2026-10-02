@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import logging
 import math
+import os
 from pathlib import Path
 import threading
 import time
@@ -416,7 +417,10 @@ class SherpaOnnxTtsEngine(BaseTtsEngine):
                     sid = v["sid"]
                     break
 
-        audio = self._tts.generate(clean_text, sid=sid, speed=speed)
+        # One decode at a time: the runtime session is not re-entrant, and the
+        # reply pipeline now prefetches the next clause while one is in flight.
+        with self._lock:
+            audio = self._tts.generate(clean_text, sid=sid, speed=speed)
         samples = np.array(audio.samples, dtype=np.float32)
         sample_rate = audio.sample_rate
 
@@ -447,14 +451,22 @@ def get_tts_engine(
 ) -> BaseTtsEngine:
     """Factory to acquire the best available TTS engine.
 
-    Priority:
-    1. Explicit 'mock' -> MockTtsEngine
-    2. EdgeTtsEngine -> studio-quality neural voices
-    3. SherpaOnnxTtsEngine -> local Kokoro / Piper ONNX
-    4. Fallback -> MockTtsEngine
+    `engine_type` comes from SOLACE_TTS: auto | kokoro | piper | edge | mock.
+
+    Priority for `auto`:
+    1. Local Kokoro / Piper ONNX weights, when the model files are present
+    2. EdgeTtsEngine -> cloud neural voices (needs internet; ~1.5 s per clause)
+    3. Fallback -> MockTtsEngine
+
+    `piper` and `kokoro` force the local engine; if its files are incomplete the
+    factory says what is missing rather than silently using the cloud voice.
     """
     if engine_type == "mock":
         return MockTtsEngine()
+
+    # `edge` skips local weights entirely: the cloud voice, chosen explicitly.
+    if engine_type == "edge":
+        return EdgeTtsEngine()
 
     base_dir = Path(models_dir) if models_dir else Path(__file__).resolve().parent / "models" / "tts"
 
@@ -462,9 +474,10 @@ def get_tts_engine(
     kokoro_model = base_dir / "kokoro-v0_19.onnx"
     kokoro_tokens = base_dir / "tokens.txt"
     kokoro_voices = base_dir / "voices.bin"
-    kokoro_data = base_dir / "espeak-ng-data"
+    # espeak-ng-data may live next to the models or wherever SOLACE_ESPEAK_DATA says.
+    kokoro_data = Path(os.environ.get("SOLACE_ESPEAK_DATA", base_dir / "espeak-ng-data"))
 
-    if kokoro_model.exists() and kokoro_tokens.exists():
+    if engine_type in ("auto", "kokoro") and kokoro_model.exists() and kokoro_tokens.exists():
         engine = SherpaOnnxTtsEngine(
             model_path=kokoro_model,
             tokens_path=kokoro_tokens,
@@ -478,9 +491,17 @@ def get_tts_engine(
     # Check for Piper VITS model
     piper_model = base_dir / "en_US-amy-low.onnx"
     piper_tokens = base_dir / "tokens.txt"
-    piper_data = base_dir / "espeak-ng-data"
+    piper_data = kokoro_data
 
-    if piper_model.exists() and piper_tokens.exists() and piper_data.exists():
+    if engine_type == "piper" and not piper_data.exists():
+        logger.warning(
+            f"SOLACE_TTS=piper but espeak-ng-data was not found at {piper_data}; "
+            "set SOLACE_ESPEAK_DATA or copy the folder next to the model."
+        )
+    if (
+        engine_type in ("auto", "piper")
+        and piper_model.exists() and piper_tokens.exists() and piper_data.exists()
+    ):
         engine = SherpaOnnxTtsEngine(
             model_path=piper_model,
             tokens_path=piper_tokens,
@@ -490,8 +511,8 @@ def get_tts_engine(
         if engine.initialize():
             return engine
 
-    # High-fidelity Neural Edge-TTS
-    if engine_type in ("auto", "neural"):
+    # High-fidelity Neural Edge-TTS (cloud)
+    if engine_type in ("auto", "neural", "edge"):
         try:
             import edge_tts
             import av

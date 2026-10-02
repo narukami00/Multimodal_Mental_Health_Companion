@@ -16,8 +16,9 @@ import websockets
 import httpx
 
 
-SERVER_HTTP_URL = "http://127.0.0.1:8000"
-SERVER_WS_URL = "ws://127.0.0.1:8000/ws/v1/session"
+SERVER_ADDR = __import__("os").environ.get("SOLACE_SERVER", "127.0.0.1:8000")
+SERVER_HTTP_URL = "http://" + SERVER_ADDR
+SERVER_WS_URL = "ws://" + SERVER_ADDR + "/ws/v1/session"
 
 
 @pytest.mark.asyncio
