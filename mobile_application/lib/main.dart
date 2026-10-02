@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +24,8 @@ import 'features/checkin/check_in_mode_page.dart';
 import 'features/consent/consent_controller.dart';
 import 'features/footprint/in_app_feature_recorder.dart';
 import 'features/footprint/phone_patterns_controller.dart';
+import 'features/footprint/usage_collection_runner.dart';
+import 'features/footprint/usage_recorder.dart';
 import 'features/onboarding/onboarding_gate.dart';
 import 'features/profile/profile_controller.dart';
 import 'features/safety/safety_controller.dart';
@@ -115,6 +119,22 @@ Future<void> main() async {
     repository: dailyFeatures,
   );
   await phonePatterns.refresh();
+
+  // Catches up on device usage when the app opens, returns to the foreground, or
+  // phone patterns is switched on. Reads nothing unless both the person's
+  // consent and Android's usage access are in place.
+  final usageRunner = UsageCollectionRunner(
+    patterns: phonePatterns,
+    recorder: UsageRecorder(
+      collector: MethodChannelUsageCollector.instance,
+      repository: dailyFeatures,
+      profile: () => profileController.profile,
+      isCollecting: () => phonePatterns.isCollecting,
+      keepsAppNames: () => phonePatterns.keepsAppNames,
+    ),
+  )..start();
+  // Not awaited: the first screen should not wait on a week of events.
+  unawaited(usageRunner.run());
 
   final navigatorKey = GlobalKey<NavigatorState>();
 
