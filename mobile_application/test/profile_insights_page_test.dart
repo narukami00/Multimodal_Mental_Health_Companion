@@ -53,10 +53,14 @@ BehavioralProfile _profile({
   );
 }
 
-Future<void> _pump(WidgetTester tester, BehavioralProfile profile) async {
+Future<void> _pump(
+  WidgetTester tester,
+  BehavioralProfile profile, {
+  DecisionSignals signals = const DecisionSignals(),
+}) async {
   // Tall viewport: the page is a lazy ListView, so sections below the fold
   // would otherwise never build and the finds below would miss them.
-  tester.view.physicalSize = const Size(1080, 3000);
+  tester.view.physicalSize = const Size(1080, 9000);
   tester.view.devicePixelRatio = 2.0;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -66,13 +70,15 @@ Future<void> _pump(WidgetTester tester, BehavioralProfile profile) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.light(),
-      home: ProfileInsightsPage(profile: profile),
+      home: ProfileInsightsPage(profile: profile, signals: signals),
     ),
   );
   await tester.pump();
 }
 
 void main() {
+  widerPictureTests();
+
   testWidgets('a fresh user sees honest empty states, not fake numbers', (tester) async {
     await _pump(tester, _profile());
 
@@ -241,4 +247,82 @@ class _ListLibraryRepository implements ActivityLibraryRepository {
 
   @override
   Future<List<Activity>> load() async => activities;
+}
+
+void widerPictureTests() {
+  group('the wider picture', () {
+    testWidgets('lists what else shapes an idea, moments, and what is never used', (
+      tester,
+    ) async {
+      await _pump(tester, _profile());
+
+      for (final title in [
+        'WHAT ELSE SHAPES AN IDEA',
+        'AFTER YOU TRY SOMETHING',
+        'YOUR PHONE PATTERNS',
+        'MOMENTS, AND WHAT SOL IS TOLD',
+        'NEVER USED',
+      ]) {
+        expect(find.text(title), findsOneWidget, reason: title);
+      }
+      expect(find.textContaining('never a diagnosis'), findsOneWidget);
+    });
+
+    testWidgets('says what is true for a person who switched nothing on', (tester) async {
+      await _pump(tester, _profile());
+
+      expect(find.textContaining('Off. Solace reads nothing from your phone'), findsOneWidget);
+      expect(find.text('No moments are kept right now.'), findsOneWidget);
+      expect(find.textContaining('not told anything about you beyond'), findsOneWidget);
+      expect(find.text('Sol is not told your moments.'), findsOneWidget);
+      // The short-night line only appears when phone patterns are on.
+      expect(find.textContaining('A short night'), findsNothing);
+    });
+
+    testWidgets('says what is true for a person who switched things on', (tester) async {
+      await _pump(
+        tester,
+        _profile(),
+        signals: const DecisionSignals(
+          phonePatterns: PhoneSignal.on,
+          keptMoments: 3,
+          snippetShared: true,
+          momentsShared: true,
+        ),
+      );
+
+      expect(find.textContaining('On. Solace reads screen time'), findsOneWidget);
+      expect(find.textContaining('A short night'), findsOneWidget);
+      expect(find.text('3 moments are kept, in your own words.'), findsOneWidget);
+      expect(find.text('Sol is told a short note about how you like things.'), findsOneWidget);
+      expect(find.text('Sol is told your few most recent kept moments.'), findsOneWidget);
+    });
+
+    testWidgets('says when access is missing, and uses the singular', (tester) async {
+      await _pump(
+        tester,
+        _profile(),
+        signals: const DecisionSignals(
+          phonePatterns: PhoneSignal.needsAccess,
+          keptMoments: 1,
+        ),
+      );
+
+      expect(find.textContaining('usage access is off for Solace'), findsOneWidget);
+      expect(find.text('1 moment is kept, in your own words.'), findsOneWidget);
+    });
+
+    testWidgets('promises nothing about emotion reading, and judges nothing', (tester) async {
+      await _pump(tester, _profile());
+
+      expect(find.textContaining('placeholders and shape nothing'), findsOneWidget);
+      for (final word in ['too much', 'addict', 'unhealthy', 'diagnose you']) {
+        expect(
+          find.textContaining(RegExp(word, caseSensitive: false)),
+          findsNothing,
+          reason: '"$word" would be a judgement',
+        );
+      }
+    });
+  });
 }

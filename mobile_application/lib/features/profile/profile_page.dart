@@ -646,6 +646,17 @@ class ProfilePage extends StatelessWidget {
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) => ProfileInsightsPage(
+                                signals: DecisionSignals(
+                                  phonePatterns: switch (phonePatterns?.status) {
+                                    PhonePatternsStatus.on => PhoneSignal.on,
+                                    PhonePatternsStatus.needsAndroidAccess =>
+                                      PhoneSignal.needsAccess,
+                                    _ => PhoneSignal.off,
+                                  },
+                                  keptMoments: moments?.confirmed.length ?? 0,
+                                  snippetShared: memory?.snippetOn ?? false,
+                                  momentsShared: memory?.momentsOn ?? false,
+                                ),
                                 profile: BehavioralProfile.compute(
                                   profile: profileController.profile,
                                   sessions: sessionController.sessions,
