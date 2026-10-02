@@ -5,12 +5,25 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/solace_palette.dart';
+import '../footprint/phone_patterns_controller.dart';
+import '../profile/profile_controller.dart';
 import '../sessions/session_controller.dart';
+import 'phone_patterns_section.dart';
 
 class InsightsPage extends StatefulWidget {
-  const InsightsPage({required this.sessionController, super.key});
+  const InsightsPage({
+    required this.sessionController,
+    this.phonePatterns,
+    this.profileController,
+    super.key,
+  });
 
   final SessionController sessionController;
+
+  /// When both are given, a real phone patterns section leads the page. Without
+  /// them it is not shown.
+  final PhonePatternsController? phonePatterns;
+  final ProfileController? profileController;
 
   @override
   State<InsightsPage> createState() => _InsightsPageState();
@@ -54,6 +67,12 @@ class _InsightsPageState extends State<InsightsPage> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _buildHeader(context),
+                          if (widget.phonePatterns != null &&
+                              widget.profileController != null)
+                            PhonePatternsSection(
+                              phonePatterns: widget.phonePatterns!,
+                              profileController: widget.profileController!,
+                            ),
                           const SizedBox(height: 16),
                           _buildChartCard(),
                           _buildSectionLabel('NOTICINGS'),

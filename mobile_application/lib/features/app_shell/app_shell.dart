@@ -448,7 +448,11 @@ class _AppShellState extends State<AppShell> {
                 onOpenCall: () => _openCall(context),
               ),
               JournalPage(sessionController: widget.sessionController),
-              InsightsPage(sessionController: widget.sessionController),
+              InsightsPage(
+                sessionController: widget.sessionController,
+                phonePatterns: widget.phonePatterns,
+                profileController: widget.profileController,
+              ),
               ProfilePage(
                 profileController: widget.profileController,
                 safetyController: widget.safetyController,
