@@ -213,6 +213,12 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
+  /// Turns the "anything going on?" questions about shifting patterns off or on.
+  Future<void> setPatternPromptsMuted(bool muted) async {
+    _profile = _profile.copyWith(patternPromptsMuted: muted);
+    await _persist();
+  }
+
   static const minRetentionDays = 30;
   static const maxRetentionDays = 365;
 

@@ -490,6 +490,38 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
             ),
           ),
           const SizedBox(height: 16),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Ask me when my days look different',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF3B3327),
+                  ),
+                ),
+              ),
+              Switch(
+                key: const ValueKey('patterns-ask-switch'),
+                value: !widget.profileController.profile.patternPromptsMuted,
+                onChanged: (on) =>
+                    widget.profileController.setPatternPromptsMuted(!on),
+              ),
+            ],
+          ),
+          const Text(
+            'Now and then, when your patterns shift in more than one way, '
+            'Solace may ask once whether anything is going on. Never about a '
+            'single odd day, and never more than once a week.',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              height: 1.45,
+              color: Color(0xFF7B6A55),
+            ),
+          ),
+          const SizedBox(height: 16),
           const Text(
             'Keep patterns for',
             style: TextStyle(

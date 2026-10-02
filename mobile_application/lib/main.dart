@@ -11,6 +11,7 @@ import 'data/repositories/asset_activity_library_repository.dart';
 import 'data/repositories/in_memory_profile_repository.dart';
 import 'data/repositories/in_memory_safety_event_repository.dart';
 import 'data/repositories/in_memory_suggestion_repository.dart';
+import 'data/repositories/shared_preferences_break_annotation_repository.dart';
 import 'data/repositories/shared_preferences_consent_repository.dart';
 import 'data/repositories/shared_preferences_daily_features_repository.dart';
 import 'data/repositories/shared_preferences_onboarding_repository.dart';
@@ -23,6 +24,7 @@ import 'features/chat/chat_controller.dart';
 import 'features/checkin/check_in_mode_page.dart';
 import 'features/consent/consent_controller.dart';
 import 'features/footprint/in_app_feature_recorder.dart';
+import 'features/footprint/break_prompt_controller.dart';
 import 'features/footprint/phone_patterns_controller.dart';
 import 'features/footprint/usage_collection_runner.dart';
 import 'features/footprint/usage_recorder.dart';
@@ -136,6 +138,22 @@ Future<void> main() async {
   // Not awaited: the first screen should not wait on a week of events.
   unawaited(usageRunner.run());
 
+  // Asks, once and gently, whether anything is going on when the person's days
+  // look different from their own usual. It only ever asks about a shift across
+  // more than one kind of pattern, never while safety support is active, and
+  // never when they have turned it off.
+  final breakPrompts = BreakPromptController(
+    repository: SharedPreferencesBreakAnnotationRepository(preferences),
+    rows: dailyFeatures.loadAll,
+    sessions: () => sessionController.sessions,
+    muted: () => profileController.profile.patternPromptsMuted,
+    safetyActive: () => safetyController.hasActiveFlag,
+  );
+  phonePatterns.addListener(() => unawaited(breakPrompts.refresh()));
+  sessionController.addListener(() => unawaited(breakPrompts.refresh()));
+  profileController.addListener(() => unawaited(breakPrompts.refresh()));
+  unawaited(breakPrompts.refresh());
+
   final navigatorKey = GlobalKey<NavigatorState>();
 
   void openCheckInFromWidget(Uri? uri) {
@@ -192,6 +210,7 @@ Future<void> main() async {
       suggestionController: suggestionController,
       chatController: chatController,
       phonePatterns: phonePatterns,
+      breakPrompts: breakPrompts,
       navigatorKey: navigatorKey,
     ),
   );
@@ -206,6 +225,7 @@ class SolaceApp extends StatelessWidget {
     SuggestionController? suggestionController,
     this.chatController,
     this.phonePatterns,
+    this.breakPrompts,
     this.navigatorKey,
     super.key,
   }) : safetyController =
@@ -236,6 +256,9 @@ class SolaceApp extends StatelessWidget {
   /// The opt-in phone patterns control. Null in tests that do not need it.
   final PhonePatternsController? phonePatterns;
 
+  /// The "anything going on?" question. Null in tests that do not need it.
+  final BreakPromptController? breakPrompts;
+
   /// Lets the home-screen widget push the check-in flow from outside the tree.
   final GlobalKey<NavigatorState>? navigatorKey;
 
@@ -261,6 +284,7 @@ class SolaceApp extends StatelessWidget {
             suggestionController: suggestionController,
             chatController: chatController,
             phonePatterns: phonePatterns,
+            breakPrompts: breakPrompts,
           ),
         );
       },

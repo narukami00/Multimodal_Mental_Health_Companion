@@ -28,6 +28,7 @@ class TodayPage extends StatelessWidget {
     this.weekDots,
     this.onOpenRhythm,
     this.homeRail,
+    this.patternPrompt,
     this.onTaskOpen,
     this.onTaskAccept,
     this.onTaskDecline,
@@ -72,6 +73,11 @@ class TodayPage extends StatelessWidget {
 
   /// Journal and the most recent conversation, side by side.
   final Widget? homeRail;
+
+  /// A quiet question under the rail, such as asking whether anything is going on
+  /// when the person's patterns have shifted. Null, or an empty box, when there
+  /// is nothing to ask.
+  final Widget? patternPrompt;
   final VoidCallback? onTaskOpen;
 
   /// The day's task, offered inside the check-in card rather than as a second
@@ -191,6 +197,11 @@ class TodayPage extends StatelessWidget {
               child: homeRail ??
                   _buildSolCompanionHub(context),
             ),
+            if (patternPrompt != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                child: patternPrompt!,
+              ),
             const SizedBox(height: 26),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),

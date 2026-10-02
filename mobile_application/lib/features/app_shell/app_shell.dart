@@ -16,6 +16,8 @@ import '../chat/chat_page.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../insights/insights_page.dart';
 import '../journal/journal_page.dart';
+import '../footprint/break_prompt_card.dart';
+import '../footprint/break_prompt_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../profile/profile_controller.dart';
 import '../profile/profile_page.dart';
@@ -47,6 +49,7 @@ class AppShell extends StatefulWidget {
     required this.suggestionController,
     this.chatController,
     this.phonePatterns,
+    this.breakPrompts,
     this.initialTab,
     super.key,
   });
@@ -57,6 +60,7 @@ class AppShell extends StatefulWidget {
   final SuggestionController suggestionController;
   final ChatController? chatController;
   final PhonePatternsController? phonePatterns;
+  final BreakPromptController? breakPrompts;
   final AppTab? initialTab;
 
   @override
@@ -393,6 +397,13 @@ class _AppShellState extends State<AppShell> {
                     );
                   },
                 ),
+                patternPrompt: widget.breakPrompts == null
+                    ? null
+                    : ListenableBuilder(
+                        listenable: widget.breakPrompts!,
+                        builder: (context, _) =>
+                            BreakPromptCard(controller: widget.breakPrompts!),
+                      ),
                 onTaskOpen: () => _openSuggestionDetails(suggestionChoice),
                 onTaskAccept: () => _acceptSuggestion(suggestionChoice!),
                 onTaskDecline: _declineSuggestion,
