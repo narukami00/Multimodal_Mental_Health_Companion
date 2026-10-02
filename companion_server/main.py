@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from stt_service import SttService
-from llm_service import LlmService
+from llm_service import LlmService, sanitize_memory
 from text_chunker import TextChunker
 from tts_engine import BaseTtsEngine, get_tts_engine, TtsAudioResult
 
@@ -241,7 +241,11 @@ async def stream_llm_response(
     sample_rate = engine.default_sample_rate if engine else 24000
 
     # Build prompt messages including session conversational history
-    messages = llm.build_messages(user_text, history=session_history)
+    messages = llm.build_messages(
+        user_text,
+        history=session_history,
+        memory=(session_config or {}).get("memory"),
+    )
 
     # 1. Send llm_start metadata
     await websocket.send_text(json.dumps({
@@ -806,6 +810,11 @@ async def websocket_session(
                 elif msg_type == "session.configure":
                     mode = data.get("mode", session_config["mode"])
                     session_config["mode"] = mode
+                    # The person's own consented memory block. Authoritative on every
+                    # configure: absent means none, so withdrawing consent takes
+                    # effect on the next configure. Held for this connection only
+                    # and never logged or persisted.
+                    session_config["memory"] = sanitize_memory(data.get("memory"))
                     tts_opts = data.get("tts", {})
                     if isinstance(tts_opts, dict):
                         if "enabled" in tts_opts:
