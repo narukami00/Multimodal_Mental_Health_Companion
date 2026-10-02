@@ -61,6 +61,10 @@ class PhonePatternsController extends ChangeNotifier {
   bool get keepsAppNames =>
       isCollecting && _consent.isGranted(ConsentKey.topAppNames);
 
+  /// Tells listeners that stored days changed underneath them, so a page that
+  /// is open shows new data as it arrives instead of only on its next visit.
+  void dataChanged() => notifyListeners();
+
   /// Re-reads Android's usage access. Safe to call often.
   Future<void> refresh() async {
     final granted = await _collector.hasAccess();

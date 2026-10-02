@@ -46,7 +46,11 @@ class UsageCollectionRunner with WidgetsBindingObserver {
     _running = true;
     try {
       await _patterns.refresh();
-      if (_patterns.isCollecting) await _recorder.catchUp();
+      if (_patterns.isCollecting) {
+        final written = await _recorder.catchUp();
+        // Any open page is told, so it shows the days as they land.
+        if (written > 0) _patterns.dataChanged();
+      }
     } catch (error) {
       // Collection is best effort: a failure must never reach the person.
       debugPrint('UsageCollectionRunner warning: $error');

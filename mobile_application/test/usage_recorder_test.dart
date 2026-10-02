@@ -330,6 +330,29 @@ void main() {
       expect(collector.queries, isEmpty);
     });
 
+    test('tells listeners when new days have been written', () async {
+      await consent.grant(ConsentKey.usageFootprint);
+      var changes = 0;
+      patterns.addListener(() => changes++);
+
+      await runner().run();
+      final afterFirst = changes;
+      expect(afterFirst, greaterThan(0));
+      expect(await repository.loadAll(), isNotEmpty);
+    });
+
+    test('says nothing when nothing was written', () async {
+      await consent.grant(ConsentKey.usageFootprint);
+      collector.script.clear();
+      await patterns.refresh();
+      var changes = 0;
+      patterns.addListener(() => changes++);
+
+      await runner().run();
+
+      expect(changes, 0);
+    });
+
     test('a failure is swallowed rather than reaching the person', () async {
       await consent.grant(ConsentKey.usageFootprint);
       final failing = UsageCollectionRunner(
