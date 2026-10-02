@@ -325,28 +325,6 @@ class ProfilePage extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            Positioned(
-                              right: -2,
-                              bottom: -2,
-                              child: Container(
-                                width: 20,
-                                height: 20,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Container(
-                                    width: 11,
-                                    height: 11,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF8DCB8A),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                         const SizedBox(width: 16),
@@ -2103,12 +2081,20 @@ class _AvatarContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final path = avatarPath;
     if (path != null && File(path).existsSync()) {
-      return Image.file(
-        File(path),
-        width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _fallback(),
+      // A 512px photo squeezed into a 68px box was resampled with the default
+      // low-quality filter, so its pixels shifted at every sub-pixel scroll
+      // offset. High-quality filtering keeps the downscale stable, and the
+      // boundary lets the page scroll without re-rasterising the photo.
+      return RepaintBoundary(
+        child: Image.file(
+          File(path),
+          width: double.infinity,
+          height: double.infinity,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => _fallback(),
+        ),
       );
     }
     return _fallback();
