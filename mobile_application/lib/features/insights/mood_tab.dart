@@ -74,6 +74,7 @@ class _MoodTabState extends State<MoodTab> {
         final strip = moodStrip(sessions, now);
         final summary = moodStripSummary(strip);
         final nights = nightsAndMoods(_rows, sessions);
+        final throughDay = moodThroughTheDay(sessions);
 
         if (summary == null) {
           return const InsightEmpty(
@@ -110,6 +111,10 @@ class _MoodTabState extends State<MoodTab> {
                 ],
               ),
             ),
+            if (throughDay != null) ...[
+              const InsightLabel('THROUGH THE DAY'),
+              _ThroughTheDay(data: throughDay),
+            ],
             if (nights != null) ...[
               const InsightLabel('NIGHTS AND MOODS'),
               InsightCard(
@@ -264,4 +269,112 @@ class _Legend extends StatelessWidget {
         ),
     ],
   );
+}
+
+/// How the mood words were spread over the four parts of the day. Each part is
+/// one stacked bar of the words chosen then, so it shows how many check-ins there
+/// were as well as what they said. Descriptive only.
+class _ThroughTheDay extends StatelessWidget {
+  const _ThroughTheDay({required this.data});
+
+  final MoodThroughTheDay data;
+
+  static const _icons = {
+    DayPart.morning: Icons.wb_twilight_rounded,
+    DayPart.afternoon: Icons.wb_sunny_rounded,
+    DayPart.evening: Icons.wb_cloudy_rounded,
+    DayPart.night: Icons.nightlight_round,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final most = data.parts.map((p) => p.total).reduce((a, b) => a > b ? a : b);
+    return InsightCard(
+      key: const ValueKey('through-the-day'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final part in data.parts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Icon(_icons[part.part], size: 17, color: insightMuted),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 72,
+                    child: Text(
+                      part.part.label,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: insightInk,
+                      ),
+                    ),
+                  ),
+                  Expanded(child: _bar(part, most)),
+                  SizedBox(
+                    width: 28,
+                    child: Text(
+                      '${part.total}',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: insightSoft,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (data.noticing != null) ...[
+            const SizedBox(height: 2),
+            InsightBody(data.noticing!, strong: true),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Segments are in proportion to the check-ins, and the whole bar to the
+  /// busiest part, so a part with few check-ins looks like it has few.
+  Widget _bar(DayPartMood part, int most) {
+    if (part.total == 0) {
+      return Container(
+        height: 10,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4EEDF),
+          borderRadius: BorderRadius.circular(99),
+        ),
+      );
+    }
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: part.total / most),
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeOutCubic,
+      builder: (context, width, _) => Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: width.clamp(0.05, 1.0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: SizedBox(
+              height: 10,
+              child: Row(
+                children: [
+                  for (final word in moodColors.keys)
+                    if ((part.counts[word] ?? 0) > 0)
+                      Expanded(
+                        flex: part.counts[word]!,
+                        child: Container(color: moodColors[word]),
+                      ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

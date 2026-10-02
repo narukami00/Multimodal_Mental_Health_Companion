@@ -49,6 +49,8 @@ SuggestionRecord _r(String id, String activity, String? before, String? after, {
     );
 
 void main() {
+  dayPartTests();
+
   group('mood strip', () {
     test('is exactly the asked-for days, oldest first, gaps left empty', () {
       final strip = moodStrip([_s(0, 'Bright'), _s(2, 'Wobbly')], _now);
@@ -152,6 +154,86 @@ void main() {
       final sessions = [for (var b = 1; b <= 20; b++) _s(b, 'Steady')];
       expect(nightsAndMoods(rows, sessions), isNull);
       expect(nightsAndMoods(const [], const []), isNull);
+    });
+  });
+}
+
+void dayPartTests() {
+  SessionRecord at(int hour, String mood, {int day = 1}) => SessionRecord(
+    id: '$day-$hour-$mood',
+    createdAt: DateTime(2026, 10, day, hour),
+    mode: CaptureMode.text,
+    text: 'x',
+    mood: mood,
+  );
+
+  group('mood through the day', () {
+    test('hours belong to the part of the day they fall in', () {
+      expect(DayPartLabels.ofHour(4), DayPart.night);
+      expect(DayPartLabels.ofHour(5), DayPart.morning);
+      expect(DayPartLabels.ofHour(11), DayPart.morning);
+      expect(DayPartLabels.ofHour(12), DayPart.afternoon);
+      expect(DayPartLabels.ofHour(17), DayPart.evening);
+      expect(DayPartLabels.ofHour(22), DayPart.night);
+      expect(DayPartLabels.ofHour(0), DayPart.night);
+    });
+
+    test('says nothing until there are enough check-ins', () {
+      expect(moodThroughTheDay([for (var d = 1; d <= 11; d++) at(9, 'Steady', day: d)]), isNull);
+      expect(moodThroughTheDay(const []), isNull);
+    });
+
+    test('check-ins without a mood word are not counted', () {
+      final sessions = [
+        for (var d = 1; d <= 12; d++) at(9, 'Steady', day: d),
+        SessionRecord(
+          id: 'n',
+          createdAt: DateTime(2026, 10, 20, 9),
+          mode: CaptureMode.text,
+          text: 'x',
+        ),
+      ];
+      expect(moodThroughTheDay(sessions)!.total, 12);
+    });
+
+    test('describes a part where heavier words are clearly more common', () {
+      final sessions = [
+        for (var d = 1; d <= 10; d++) at(9, 'Steady', day: d),
+        for (var d = 1; d <= 5; d++) at(19, 'Wobbly', day: d),
+        for (var d = 6; d <= 8; d++) at(19, 'Steady', day: d),
+      ];
+      final result = moodThroughTheDay(sessions)!;
+
+      expect(
+        result.noticing,
+        'In the evening, 5 of your 8 check-ins used Tender or Wobbly. In the '
+        'rest of the day, 0 of 10 did.',
+      );
+    });
+
+    test('no sentence when parts look alike or one part is too small', () {
+      final alike = [
+        for (var d = 1; d <= 8; d++) at(9, 'Steady', day: d),
+        for (var d = 1; d <= 8; d++) at(19, 'Steady', day: d),
+      ];
+      expect(moodThroughTheDay(alike)!.noticing, isNull);
+
+      final tiny = [
+        for (var d = 1; d <= 12; d++) at(9, 'Steady', day: d),
+        for (var d = 1; d <= 3; d++) at(19, 'Wobbly', day: d),
+      ];
+      expect(moodThroughTheDay(tiny)!.noticing, isNull);
+    });
+
+    test('never claims a cause or judges', () {
+      final sessions = [
+        for (var d = 1; d <= 10; d++) at(9, 'Steady', day: d),
+        for (var d = 1; d <= 8; d++) at(19, 'Wobbly', day: d),
+      ];
+      final text = moodThroughTheDay(sessions)!.noticing!.toLowerCase();
+      for (final w in ['because', 'caused', 'worse', 'bad', 'should', 'problem']) {
+        expect(text, isNot(contains(w)));
+      }
     });
   });
 }
