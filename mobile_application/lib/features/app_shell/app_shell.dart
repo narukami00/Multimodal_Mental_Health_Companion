@@ -457,8 +457,10 @@ class _AppShellState extends State<AppShell> {
               JournalPage(sessionController: widget.sessionController),
               InsightsPage(
                 sessionController: widget.sessionController,
+                suggestionController: widget.suggestionController,
                 phonePatterns: widget.phonePatterns,
                 profileController: widget.profileController,
+                breakPrompts: widget.breakPrompts,
               ),
               ProfilePage(
                 profileController: widget.profileController,

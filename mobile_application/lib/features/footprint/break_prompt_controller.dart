@@ -40,6 +40,13 @@ class BreakPromptController extends ChangeNotifier {
   BreakPrompt? _current;
   bool _refreshing = false;
 
+  /// Shifts the person answered, newest first: the theme they chose, or null for
+  /// "nothing in particular". Dismissed and unanswered questions are left out.
+  List<BreakAnnotation> get answered => [
+    for (final a in _annotations)
+      if (a.status == BreakAnnotationStatus.answered && a.decidedAt != null) a,
+  ]..sort((a, b) => b.decidedAt!.compareTo(a.decidedAt!));
+
   /// The question to show now, or null.
   BreakPrompt? get current => _current;
 
