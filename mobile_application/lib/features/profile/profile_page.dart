@@ -623,6 +623,7 @@ class ProfilePage extends StatelessWidget {
                         _row(
                           icon: Icons.file_download_outlined,
                           title: 'Export reflections & data',
+                          value: 'Coming soon',
                           tint: const Color(0xFFE4F2E9),
                           onTint: const Color(0xFF3F823B),
                           onTap: () => _showExportSheet(context),
@@ -1057,27 +1058,42 @@ class ProfilePage extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           _exportOptionCard(
-            title: 'Formatted Reflection Journal (PDF)',
+            title: 'Formatted Reflection Journal',
             desc: 'Clean, printable layout with emotion cadence & baseline history.',
             icon: Icons.picture_as_pdf_outlined,
-            isSelected: true,
+            format: 'PDF',
           ),
           const SizedBox(height: 10),
           _exportOptionCard(
-            title: 'Encrypted Full Backup (JSON)',
-            desc: 'Complete database export for offline archival or migration.',
+            title: 'Structured Local Archive',
+            desc: 'Complete database export for offline archival, analysis, or migration.',
             icon: Icons.data_object_rounded,
-            isSelected: false,
+            format: 'JSON',
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _rangeChip('Last 7 days', false),
-              const SizedBox(width: 8),
-              _rangeChip('Last 30 days', true),
-              const SizedBox(width: 8),
-              _rangeChip('All time', false),
-            ],
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF9EE),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFF7EBCE)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Color(0xFFB57A12)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Direct PDF and JSON file generation is in active development. Your entries remain safely encrypted on this device.',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF7A6E5D),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
           SizedBox(
@@ -1085,26 +1101,32 @@ class ProfilePage extends StatelessWidget {
             height: 44,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFB534),
-                foregroundColor: const Color(0xFF3D2E14),
+                backgroundColor: const Color(0xFFE8E0D0),
+                foregroundColor: const Color(0xFF93887A),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              onPressed: () {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Export generated: solace_reflections_maya.pdf'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
+              onPressed: null,
               icon: const Icon(Icons.download_rounded, size: 18),
               label: const Text(
-                'Generate Export File',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                'Generate Export File · Coming soon',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF93887A),
+                ),
               ),
             ),
           ),
@@ -1117,16 +1139,16 @@ class ProfilePage extends StatelessWidget {
     required String title,
     required String desc,
     required IconData icon,
-    required bool isSelected,
+    required String format,
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFFFF9EE) : Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isSelected ? const Color(0xFFFFB534) : const Color(0xFFF2ECDD),
-          width: isSelected ? 1.5 : 1,
+          color: const Color(0xFFF2ECDD),
+          width: 1,
         ),
       ),
       child: Row(
@@ -1134,20 +1156,41 @@ class ProfilePage extends StatelessWidget {
           Icon(
             icon,
             size: 24,
-            color: isSelected ? const Color(0xFFB57A12) : const Color(0xFFA2988A),
+            color: const Color(0xFFB57A12),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF3B3327),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF3B3327),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF6F1E5),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        format,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF887D6E),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -1162,27 +1205,6 @@ class ProfilePage extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  static Widget _rangeChip(String label, bool active) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: active ? const Color(0xFFFFF0D4) : const Color(0xFFF6F1E5),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: active ? const Color(0xFFFFB534) : Colors.transparent,
-        ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w700,
-          color: active ? const Color(0xFFB57A12) : const Color(0xFF887D6E),
-        ),
       ),
     );
   }
