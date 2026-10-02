@@ -186,6 +186,10 @@ Future<void> main() async {
       ),
     );
   };
+  // Deleting a conversation deletes the moments that came from it.
+  chatController.onConversationDeleted = (messageIds) => unawaited(
+    moments.deleteForSources([for (final id in messageIds) 'chat:$id']),
+  );
   chatController.onUserMessage = (message) => offerMoment(
     MomentCandidate(
       text: message.text,

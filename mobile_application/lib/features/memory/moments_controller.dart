@@ -176,10 +176,14 @@ class MomentsController extends ChangeNotifier {
   }
 
   /// Gone with the entry they came from.
-  Future<void> deleteForSource(String sourceRef) async {
+  Future<void> deleteForSource(String sourceRef) => deleteForSources([sourceRef]);
+
+  /// Gone with the entries they came from, in one change.
+  Future<void> deleteForSources(Iterable<String> sourceRefs) async {
+    final refs = sourceRefs.toSet();
     final ids = [
       for (final m in _moments)
-        if (m.sourceRef == sourceRef) m.id,
+        if (m.sourceRef != null && refs.contains(m.sourceRef)) m.id,
     ];
     for (final id in ids) {
       await _repository.delete(id, at: _clock());

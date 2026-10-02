@@ -275,8 +275,17 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Called after a conversation is deleted, with the ids of the messages the
+  /// person sent in it, so things derived from them can be deleted too.
+  void Function(List<String> messageIds)? onConversationDeleted;
+
   /// Delete a conversation by its ID.
   Future<void> deleteConversation(String id) async {
+    final messageIds = [
+      for (final c in _conversations.where((c) => c.id == id))
+        for (final m in c.messages)
+          if (m.isUser) m.id,
+    ];
     _conversations.removeWhere((c) => c.id == id);
     final remaining = _conversations.where((c) => c.hasUserMessage).toList();
 
@@ -292,6 +301,7 @@ class ChatController extends ChangeNotifier {
 
     await _saveToPrefs();
     notifyListeners();
+    if (messageIds.isNotEmpty) onConversationDeleted?.call(messageIds);
   }
 
   String _deriveTitle(String text) {
