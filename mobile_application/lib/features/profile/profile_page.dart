@@ -26,6 +26,7 @@ import '../footprint/phone_patterns_controller.dart';
 import 'about_pages.dart';
 import 'baseline_quiz_page.dart';
 import 'permissions_page.dart';
+import 'phone_patterns_page.dart';
 import 'profile_controller.dart';
 import 'profile_insights_page.dart';
 import 'sleep_hours_settings.dart';
@@ -527,6 +528,21 @@ class ProfilePage extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (phonePatterns != null)
+                          _row(
+                            icon: Icons.phone_android_rounded,
+                            title: 'My phone patterns',
+                            tint: const Color(0xFFE4F2E9),
+                            onTint: const Color(0xFF3F823B),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => PhonePatternsPage(
+                                  phonePatterns: phonePatterns!,
+                                  profileController: profileController,
+                                ),
+                              ),
+                            ),
+                          ),
                         _row(
                           icon: Icons.file_download_outlined,
                           title: 'Export reflections & data',

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/models/consent.dart';
+import '../../core/models/daily_features.dart';
 import '../../data/contracts/daily_features_repository.dart';
 import '../../services/usage_collector_service.dart';
 import '../consent/consent_controller.dart';
@@ -108,6 +109,20 @@ class PhonePatternsController extends ChangeNotifier {
 
   /// How many days of patterns are stored, for saying so before deleting them.
   Future<int> storedDayCount() async => (await _repository.loadAll()).length;
+
+  /// Every stored day, oldest first, for showing the person their own patterns.
+  Future<List<DailyFeatures>> storedDays() => _repository.loadAll();
+
+  /// Removes stored days older than the retention the person chose, straight
+  /// away, so shortening it takes effect now rather than at the next cleanup.
+  /// Returns how many days went.
+  Future<int> pruneTo(int retentionDays, {DateTime? now}) async {
+    final removed = await _repository.deleteBefore(
+      retentionCutoffDayKey(now ?? DateTime.now(), retentionDays),
+    );
+    if (removed > 0) notifyListeners();
+    return removed;
+  }
 
   /// The one-tap delete of everything stored.
   Future<void> deleteStored() async {
