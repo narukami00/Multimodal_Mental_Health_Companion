@@ -359,121 +359,134 @@ class _StitchedEntry extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 14),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
+              // The shadow lives on a plain box outside the Material: painted by
+              // an Ink inside it, the shadow was clipped to a rectangle and
+              // showed as a square haze behind the rounded corners.
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFDF6),
                   borderRadius: BorderRadius.circular(22),
-                  onTap: onTap,
-                  child: Ink(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFFDF6),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: const Color(0x60E2C185)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0x3396641E),
-                          blurRadius: 22,
-                          offset: const Offset(0, 10),
-                        ),
-                        BoxShadow(
-                          color: const Color(0x1F96641E),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                  border: Border.all(color: const Color(0x60E2C185)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0x3396641E),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(15, 15, 12, 14),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            top: -6,
-                            right: 14,
-                            child: Transform.rotate(
-                              angle: 3 * 3.1415926535 / 180,
-                              child: Container(
-                                width: 60,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: tapeColor,
-                                  borderRadius: BorderRadius.circular(3),
+                    BoxShadow(
+                      color: const Color(0x1F96641E),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: onTap,
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(15, 15, 12, 14),
+                        child: Stack(
+                          // The tape sits on the card's top edge, above the time,
+                          // instead of lying across it.
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned(
+                              top: -20,
+                              right: 14,
+                              child: Transform.rotate(
+                                angle: 3 * 3.1415926535 / 180,
+                                child: Container(
+                                  width: 60,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: tapeColor,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      modeLabel,
-                                      style: const TextStyle(
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 1.3,
-                                        color: Color(0xFFAC9770),
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    time,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF8A7458),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 7),
-                              Text(
-                                snippet,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 15.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF483523),
-                                  height: 1.35,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  if (session.mood != null)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 5,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: beadColor.withValues(
-                                          alpha: 0.16,
-                                        ),
-                                        borderRadius: BorderRadius.circular(99),
-                                      ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
                                       child: Text(
-                                        session.mood!,
-                                        style: TextStyle(
-                                          fontSize: 10.5,
+                                        modeLabel,
+                                        style: const TextStyle(
+                                          fontSize: 9.5,
                                           fontWeight: FontWeight.w800,
-                                          color: _moodInk(beadColor),
+                                          letterSpacing: 1.3,
+                                          color: Color(0xFFAC9770),
                                         ),
                                       ),
                                     ),
-                                  const Spacer(),
-                                  const Icon(
-                                    Icons.chevron_right_rounded,
-                                    size: 20,
-                                    color: Color(0xFFC6B28C),
+                                    Text(
+                                      time,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF8A7458),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 7),
+                                Text(
+                                  snippet,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF483523),
+                                    height: 1.35,
                                   ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ],
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    if (session.mood != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: beadColor.withValues(
+                                            alpha: 0.16,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            99,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          session.mood!,
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: _moodInk(beadColor),
+                                          ),
+                                        ),
+                                      ),
+                                    const Spacer(),
+                                    const Icon(
+                                      Icons.chevron_right_rounded,
+                                      size: 20,
+                                      color: Color(0xFFC6B28C),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
