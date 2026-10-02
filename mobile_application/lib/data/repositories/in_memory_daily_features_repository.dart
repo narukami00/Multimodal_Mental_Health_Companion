@@ -26,5 +26,12 @@ class InMemoryDailyFeaturesRepository implements DailyFeaturesRepository {
   }
 
   @override
+  Future<void> removeAppNames() async {
+    for (final key in _rows.keys.toList()) {
+      _rows[key] = _rows[key]!.withoutAppNames();
+    }
+  }
+
+  @override
   Future<void> deleteAll() async => _rows.clear();
 }

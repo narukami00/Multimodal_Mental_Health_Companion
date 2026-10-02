@@ -10,6 +10,7 @@ import '../chat/chat_controller.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../checkin/text_check_in_page.dart';
 import '../journal/session_detail_page.dart';
+import '../footprint/phone_patterns_controller.dart';
 import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
@@ -26,6 +27,7 @@ class OnboardingGate extends StatefulWidget {
     required this.profileController,
     required this.suggestionController,
     this.chatController,
+    this.phonePatterns,
     super.key,
   });
 
@@ -35,6 +37,7 @@ class OnboardingGate extends StatefulWidget {
   final ProfileController profileController;
   final SuggestionController suggestionController;
   final ChatController? chatController;
+  final PhonePatternsController? phonePatterns;
 
   @override
   State<OnboardingGate> createState() => _OnboardingGateState();
@@ -127,6 +130,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
         profileController: widget.profileController,
         suggestionController: widget.suggestionController,
         chatController: widget.chatController,
+        phonePatterns: widget.phonePatterns,
       );
     }
 

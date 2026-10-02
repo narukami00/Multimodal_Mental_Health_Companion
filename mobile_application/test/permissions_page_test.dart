@@ -135,14 +135,14 @@ void main() {
     );
   });
 
-  testWidgets('names the phone-use signals it deliberately does not take', (
+  testWidgets('names what it deliberately does not collect', (
     tester,
   ) async {
     await pumpPage(tester);
 
     expect(find.text('WHAT SOLACE DOES NOT COLLECT'), findsOneWidget);
     expect(
-      find.textContaining('Phone-use rhythm, screen time or app usage'),
+      find.textContaining('Your location, contacts, messages or call history'),
       findsOneWidget,
     );
     expect(

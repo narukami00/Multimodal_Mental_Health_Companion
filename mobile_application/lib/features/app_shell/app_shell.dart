@@ -16,6 +16,7 @@ import '../chat/chat_page.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../insights/insights_page.dart';
 import '../journal/journal_page.dart';
+import '../footprint/phone_patterns_controller.dart';
 import '../profile/profile_controller.dart';
 import '../profile/profile_page.dart';
 import '../profile/baseline_quiz_page.dart';
@@ -45,6 +46,7 @@ class AppShell extends StatefulWidget {
     required this.profileController,
     required this.suggestionController,
     this.chatController,
+    this.phonePatterns,
     this.initialTab,
     super.key,
   });
@@ -54,6 +56,7 @@ class AppShell extends StatefulWidget {
   final ProfileController profileController;
   final SuggestionController suggestionController;
   final ChatController? chatController;
+  final PhonePatternsController? phonePatterns;
   final AppTab? initialTab;
 
   @override
@@ -436,6 +439,7 @@ class _AppShellState extends State<AppShell> {
                 safetyController: widget.safetyController,
                 suggestionController: widget.suggestionController,
                 sessionController: widget.sessionController,
+                phonePatterns: widget.phonePatterns,
               ),
             ],
           ),

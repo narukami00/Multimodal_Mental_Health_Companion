@@ -11,6 +11,10 @@ abstract interface class DailyFeaturesRepository {
   /// Removes every row older than [dayKey] (exclusive) and returns how many.
   Future<int> deleteBefore(String dayKey);
 
+  /// Removes the names of individual apps from every row, keeping everything
+  /// else. For when that separate consent ends: category totals are not apps.
+  Future<void> removeAppNames();
+
   /// Removes everything. The user's one-tap delete.
   Future<void> deleteAll();
 }

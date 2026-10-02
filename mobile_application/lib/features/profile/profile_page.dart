@@ -22,6 +22,7 @@ import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_context.dart';
 import '../suggestions/suggestion_controller.dart';
+import '../footprint/phone_patterns_controller.dart';
 import 'about_pages.dart';
 import 'baseline_quiz_page.dart';
 import 'permissions_page.dart';
@@ -167,6 +168,7 @@ class ProfilePage extends StatelessWidget {
     required this.safetyController,
     required this.suggestionController,
     required this.sessionController,
+    this.phonePatterns,
     super.key,
   });
 
@@ -174,6 +176,9 @@ class ProfilePage extends StatelessWidget {
   final SafetyController safetyController;
   final SuggestionController suggestionController;
   final SessionController sessionController;
+
+  /// The opt-in phone patterns control, shown on the permissions page.
+  final PhonePatternsController? phonePatterns;
 
   @override
   Widget build(BuildContext context) {
@@ -518,7 +523,7 @@ class ProfilePage extends StatelessWidget {
                           onTint: const Color(0xFF3F823B),
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) => const PermissionsPage(),
+                              builder: (_) => PermissionsPage(phonePatterns: phonePatterns),
                             ),
                           ),
                         ),

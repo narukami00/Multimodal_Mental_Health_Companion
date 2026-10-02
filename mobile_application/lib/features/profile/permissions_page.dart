@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/solace_palette.dart';
 import '../../services/app_permission_service.dart';
+import '../footprint/phone_patterns_controller.dart';
+import 'phone_patterns_card.dart';
 
 /// What Solace can access, what it does with it, and what it never collects.
 ///
@@ -9,10 +11,13 @@ import '../../services/app_permission_service.dart';
 /// offers a way to the system screen that changes it. Nothing here pretends the
 /// app can switch an OS permission itself.
 class PermissionsPage extends StatefulWidget {
-  const PermissionsPage({this.permissions, super.key});
+  const PermissionsPage({this.permissions, this.phonePatterns, super.key});
 
   /// Injectable so the page can be exercised without the platform channel.
   final AppPermissionService? permissions;
+
+  /// The opt-in phone patterns control. Without it the row is not shown.
+  final PhonePatternsController? phonePatterns;
 
   @override
   State<PermissionsPage> createState() => _PermissionsPageState();
@@ -127,6 +132,10 @@ class _PermissionsPageState extends State<PermissionsPage> {
                     granted: _microphone,
                     onOpenSettings: _openSettings,
                   ),
+                  if (widget.phonePatterns != null) ...[
+                    const SizedBox(height: 10),
+                    PhonePatternsCard(controller: widget.phonePatterns!),
+                  ],
                 ],
                 const SizedBox(height: 24),
                 _buildLeavesDevice(colors),
@@ -251,15 +260,17 @@ class _PermissionsPageState extends State<PermissionsPage> {
             ],
           ),
           const SizedBox(height: 10),
-          _bullet('Phone-use rhythm, screen time or app usage', dark: true),
           _bullet('Your location, contacts, messages or call history',
               dark: true),
+          _bullet('What is inside any app, message or notification, even with '
+              'phone patterns on', dark: true),
           _bullet('Advertising identifiers or third-party analytics',
               dark: true),
           const SizedBox(height: 4),
           const Text(
-            'These stay off by design. If phone-use patterns are ever added, '
-            'they would be a separate choice you could decline.',
+            'These stay off by design. Phone patterns (screen time and which '
+            'kind of app is open) are off unless you turn them on above, and '
+            'stay on this phone.',
             style: TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w600,

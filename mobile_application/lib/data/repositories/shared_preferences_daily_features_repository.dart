@@ -73,6 +73,15 @@ class SharedPreferencesDailyFeaturesRepository
   }
 
   @override
+  Future<void> removeAppNames() async {
+    final rows = _read();
+    if (rows.values.every((row) => row.topApps == null)) return;
+    await _write({
+      for (final entry in rows.entries) entry.key: entry.value.withoutAppNames(),
+    });
+  }
+
+  @override
   Future<void> deleteAll() async {
     await _preferences.remove(_rowsKey);
   }

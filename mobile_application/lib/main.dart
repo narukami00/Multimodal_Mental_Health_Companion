@@ -9,6 +9,7 @@ import 'data/repositories/asset_activity_library_repository.dart';
 import 'data/repositories/in_memory_profile_repository.dart';
 import 'data/repositories/in_memory_safety_event_repository.dart';
 import 'data/repositories/in_memory_suggestion_repository.dart';
+import 'data/repositories/shared_preferences_consent_repository.dart';
 import 'data/repositories/shared_preferences_daily_features_repository.dart';
 import 'data/repositories/shared_preferences_onboarding_repository.dart';
 import 'data/repositories/shared_preferences_profile_repository.dart';
@@ -18,7 +19,9 @@ import 'data/repositories/shared_preferences_suggestion_repository.dart';
 import 'domain/rhythm/reminder_lapse_policy.dart';
 import 'features/chat/chat_controller.dart';
 import 'features/checkin/check_in_mode_page.dart';
+import 'features/consent/consent_controller.dart';
 import 'features/footprint/in_app_feature_recorder.dart';
+import 'features/footprint/phone_patterns_controller.dart';
 import 'features/onboarding/onboarding_gate.dart';
 import 'features/profile/profile_controller.dart';
 import 'features/safety/safety_controller.dart';
@@ -28,6 +31,7 @@ import 'providers/mock/mock_providers.dart';
 import 'providers/safety/keyword_safety_screener.dart';
 import 'services/check_in_reminder_service.dart';
 import 'services/check_in_widget_service.dart';
+import 'services/usage_collector_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,8 +91,9 @@ Future<void> main() async {
   // Keeps the in-app part of each day's behavior row current, and drops rows
   // older than the retention the user chose. Reads only what the app already
   // holds; nothing here touches the device's usage data.
+  final dailyFeatures = SharedPreferencesDailyFeaturesRepository(preferences);
   final featureRecorder = InAppFeatureRecorder(
-    repository: SharedPreferencesDailyFeaturesRepository(preferences),
+    repository: dailyFeatures,
     sessions: () => sessionController.sessions,
     conversations: () => chatController.conversations,
     profile: () => profileController.profile,
@@ -97,6 +102,19 @@ Future<void> main() async {
   await featureRecorder.prune();
   sessionController.addListener(featureRecorder.scheduleToday);
   chatController.addListener(featureRecorder.scheduleToday);
+
+  // Phone patterns: off until the person turns it on, and reading anything
+  // requires both their consent and Android's usage access.
+  final consentController = ConsentController(
+    repository: SharedPreferencesConsentRepository(preferences),
+  );
+  await consentController.load();
+  final phonePatterns = PhonePatternsController(
+    consent: consentController,
+    collector: MethodChannelUsageCollector.instance,
+    repository: dailyFeatures,
+  );
+  await phonePatterns.refresh();
 
   final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -153,6 +171,7 @@ Future<void> main() async {
       profileController: profileController,
       suggestionController: suggestionController,
       chatController: chatController,
+      phonePatterns: phonePatterns,
       navigatorKey: navigatorKey,
     ),
   );
@@ -166,6 +185,7 @@ class SolaceApp extends StatelessWidget {
     ProfileController? profileController,
     SuggestionController? suggestionController,
     this.chatController,
+    this.phonePatterns,
     this.navigatorKey,
     super.key,
   }) : safetyController =
@@ -193,6 +213,9 @@ class SolaceApp extends StatelessWidget {
   /// creates its own, as it always did.
   final ChatController? chatController;
 
+  /// The opt-in phone patterns control. Null in tests that do not need it.
+  final PhonePatternsController? phonePatterns;
+
   /// Lets the home-screen widget push the check-in flow from outside the tree.
   final GlobalKey<NavigatorState>? navigatorKey;
 
@@ -217,6 +240,7 @@ class SolaceApp extends StatelessWidget {
             profileController: profileController,
             suggestionController: suggestionController,
             chatController: chatController,
+            phonePatterns: phonePatterns,
           ),
         );
       },

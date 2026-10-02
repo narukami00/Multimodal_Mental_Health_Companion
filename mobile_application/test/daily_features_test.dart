@@ -217,6 +217,26 @@ void main() {
         expect(await repository.deleteBefore('2026-09-30'), 0);
       });
 
+      test('removeAppNames strips names and keeps everything else', () async {
+        await repository.upsert(
+          const DailyFeatures(
+            dayKey: '2026-10-01',
+            screenOnMinutes: 120,
+            categoryMinutes: {'social': 40},
+            topApps: [AppUsage(name: 'Chrome', minutes: 40)],
+          ),
+        );
+        await repository.upsert(const DailyFeatures(dayKey: '2026-10-02'));
+
+        await repository.removeAppNames();
+
+        final rows = await repository.loadAll();
+        expect(rows, hasLength(2));
+        expect(rows.first.topApps, isNull);
+        expect(rows.first.screenOnMinutes, 120);
+        expect(rows.first.categoryMinutes, {'social': 40});
+      });
+
       test('deleteAll removes everything', () async {
         await repository.upsert(_usageDay('2026-10-01'));
         await repository.upsert(_usageDay('2026-10-02'));
