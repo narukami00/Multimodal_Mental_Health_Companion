@@ -17,6 +17,7 @@ RecommendationContext buildRecommendationContext({
   required UserProfile profile,
   required List<SessionRecord> sessions,
   DateTime? now,
+  List<String> extraTags = const [],
 }) {
   final current = now ?? DateTime.now();
   // Sessions arrive newest first.
@@ -32,7 +33,13 @@ RecommendationContext buildRecommendationContext({
 
   return RecommendationContext(
     currentState: latest?.mood,
-    eventTags: tags,
+    // What they wrote about, then anything they chose themselves when asked what
+    // was going on. Each once.
+    eventTags: [
+      ...tags,
+      for (final tag in extraTags)
+        if (!tags.contains(tag)) tag,
+    ],
     profileAgeDays: profileAgeInDays(profile, now: current),
     preferGentle: prefersGentleStart(profile),
     capacity: estimateCapacity(

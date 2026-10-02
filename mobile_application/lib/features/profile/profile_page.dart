@@ -170,6 +170,7 @@ class ProfilePage extends StatelessWidget {
     required this.suggestionController,
     required this.sessionController,
     this.phonePatterns,
+    this.extraEventTags,
     super.key,
   });
 
@@ -180,6 +181,10 @@ class ProfilePage extends StatelessWidget {
 
   /// The opt-in phone patterns control, shown on the permissions page.
   final PhonePatternsController? phonePatterns;
+
+  /// Themes the person chose recently, so the engine's described state matches
+  /// what it is actually being fed.
+  final List<String> Function()? extraEventTags;
 
   @override
   Widget build(BuildContext context) {
@@ -620,6 +625,7 @@ class ProfilePage extends StatelessWidget {
                                   context: buildRecommendationContext(
                                     profile: profileController.profile,
                                     sessions: sessionController.sessions,
+                                    extraTags: extraEventTags?.call() ?? const [],
                                   ),
                                 ),
                               ),

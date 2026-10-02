@@ -26,6 +26,7 @@ class SuggestionPage extends StatefulWidget {
     this.sessionController,
     this.seededRecordId,
     this.seededChoice,
+    this.extraEventTags = const [],
     super.key,
   });
 
@@ -50,6 +51,10 @@ class SuggestionPage extends StatefulWidget {
   /// Opening this page must not count as having been offered the idea — only
   /// answering does — so the record is created on the first answer instead.
   final SuggestionCardChoice? seededChoice;
+
+  /// Themes the person chose when asked what was going on, to count as context
+  /// alongside what they wrote about.
+  final List<String> extraEventTags;
 
   @override
   State<SuggestionPage> createState() => _SuggestionPageState();
@@ -136,6 +141,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
         context: buildRecommendationContext(
           profile: widget.profileController.profile,
           sessions: widget.sessionController?.sessions ?? const [],
+          extraTags: widget.extraEventTags,
         ),
       );
     } finally {

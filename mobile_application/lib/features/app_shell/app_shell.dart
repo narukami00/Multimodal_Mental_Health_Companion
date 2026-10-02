@@ -142,6 +142,7 @@ class _AppShellState extends State<AppShell> {
           profile: profile,
           sessions: widget.sessionController.sessions,
           now: now,
+          extraTags: widget.breakPrompts?.activeThemes() ?? const [],
         ),
       );
     }
@@ -159,6 +160,7 @@ class _AppShellState extends State<AppShell> {
       profile: profile,
       sessions: widget.sessionController.sessions,
       now: now,
+      extraTags: widget.breakPrompts?.activeThemes() ?? const [],
     );
     final recommendation = widget.suggestionController.peek(
       profile: profile,
@@ -213,6 +215,7 @@ class _AppShellState extends State<AppShell> {
           safetyController: widget.safetyController,
           sessionController: widget.sessionController,
           seededRecordId: record.id,
+          extraEventTags: widget.breakPrompts?.activeThemes() ?? const [],
         ),
       ),
     );
@@ -245,6 +248,7 @@ class _AppShellState extends State<AppShell> {
           safetyController: widget.safetyController,
           sessionController: widget.sessionController,
           seededChoice: choice,
+          extraEventTags: widget.breakPrompts?.activeThemes() ?? const [],
         ),
       ),
     );
@@ -451,6 +455,8 @@ class _AppShellState extends State<AppShell> {
                 suggestionController: widget.suggestionController,
                 sessionController: widget.sessionController,
                 phonePatterns: widget.phonePatterns,
+                extraEventTags: () =>
+                    widget.breakPrompts?.activeThemes() ?? const [],
               ),
             ],
           ),
