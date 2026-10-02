@@ -1,5 +1,6 @@
 import '../chat/chat_controller.dart';
 import '../memory/companion_memory_context.dart';
+import 'everything_kept_page.dart';
 import '../memory/moments_controller.dart';
 import '../memory/what_sol_remembers_page.dart';
 import 'dart:async';
@@ -560,6 +561,24 @@ class ProfilePage extends StatelessWidget {
                               ),
                             ),
                           ),
+                        _row(
+                          icon: Icons.inventory_2_outlined,
+                          title: 'Everything Solace keeps',
+                          tint: const Color(0xFFE4F2E9),
+                          onTint: const Color(0xFF3F823B),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => EverythingKeptPage(
+                                sessionController: sessionController,
+                                profileController: profileController,
+                                chatController: chatController,
+                                moments: moments,
+                                memory: memory,
+                                phonePatterns: phonePatterns,
+                              ),
+                            ),
+                          ),
+                        ),
                         if (moments != null && memory != null)
                           _row(
                             icon: Icons.bookmark_added_outlined,
