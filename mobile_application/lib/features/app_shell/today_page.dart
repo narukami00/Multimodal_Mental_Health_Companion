@@ -29,6 +29,7 @@ class TodayPage extends StatelessWidget {
     this.onOpenRhythm,
     this.homeRail,
     this.patternPrompt,
+    this.dayRhythm,
     this.onTaskOpen,
     this.onTaskAccept,
     this.onTaskDecline,
@@ -78,6 +79,9 @@ class TodayPage extends StatelessWidget {
   /// when the person's patterns have shifted. Null, or an empty box, when there
   /// is nothing to ask.
   final Widget? patternPrompt;
+
+  /// Yesterday as a 24-hour ring, straight under the conversation rail.
+  final Widget? dayRhythm;
   final VoidCallback? onTaskOpen;
 
   /// The day's task, offered inside the check-in card rather than as a second
@@ -197,6 +201,11 @@ class TodayPage extends StatelessWidget {
               child: homeRail ??
                   _buildSolCompanionHub(context),
             ),
+            if (dayRhythm != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                child: dayRhythm!,
+              ),
             if (patternPrompt != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),

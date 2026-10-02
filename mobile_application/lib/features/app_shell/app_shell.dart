@@ -17,6 +17,7 @@ import '../checkin/check_in_mode_page.dart';
 import '../insights/insights_page.dart';
 import '../journal/journal_page.dart';
 import '../footprint/break_prompt_card.dart';
+import '../footprint/day_rhythm_card.dart';
 import '../footprint/break_prompt_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../profile/profile_controller.dart';
@@ -401,6 +402,12 @@ class _AppShellState extends State<AppShell> {
                     );
                   },
                 ),
+                dayRhythm: widget.phonePatterns == null
+                    ? null
+                    : DayRhythmCard(
+                        phonePatterns: widget.phonePatterns!,
+                        profileController: widget.profileController,
+                      ),
                 patternPrompt: widget.breakPrompts == null
                     ? null
                     : ListenableBuilder(
