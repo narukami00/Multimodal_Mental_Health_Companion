@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from stt_service import SttService
+from conversation_memory import sanitize_resume, sanitize_turns, clean_summary
 from llm_service import LlmService, sanitize_memory
 from text_chunker import TextChunker
 from tts_engine import BaseTtsEngine, get_tts_engine, TtsAudioResult
@@ -245,6 +246,7 @@ async def stream_llm_response(
         user_text,
         history=session_history,
         memory=(session_config or {}).get("memory"),
+        summary=(session_config or {}).get("summary", ""),
     )
 
     # 1. Send llm_start metadata
@@ -815,6 +817,14 @@ async def websocket_session(
                     # effect on the next configure. Held for this connection only
                     # and never logged or persisted.
                     session_config["memory"] = sanitize_memory(data.get("memory"))
+                    # Resuming a conversation: a summary of older turns plus the last
+                    # few verbatim. History is seeded only when this connection has
+                    # none, so a repeated configure never overwrites a live chat.
+                    resume = sanitize_resume(data.get("resume"))
+                    if resume:
+                        session_config["summary"] = resume["summary"]
+                        if not session_history:
+                            session_history.extend(resume["recent"])
                     tts_opts = data.get("tts", {})
                     if isinstance(tts_opts, dict):
                         if "enabled" in tts_opts:
@@ -859,6 +869,30 @@ async def websocket_session(
                         "ts": int(time.time() * 1000)
                     }
                     await websocket.send_text(json.dumps(ready_payload))
+
+                # Rolling summary: fold older turns into a short summary. Runs as
+                # its own task so a slow model never blocks the socket, and falls
+                # back to an extractive summary rather than failing.
+                elif msg_type == "summary.request":
+                    request_id = str(data.get("request_id", ""))[:64]
+                    previous = clean_summary(data.get("previous_summary"))
+                    turns = sanitize_turns(data.get("messages"), max_turns=40)
+
+                    async def _summarize(request_id=request_id, previous=previous, turns=turns):
+                        result = await llm.summarize_async(previous, turns)
+                        try:
+                            await websocket.send_text(json.dumps({
+                                "v": 1,
+                                "type": "summary.result",
+                                "request_id": request_id,
+                                "summary": result["summary"],
+                                "method": result["method"],
+                                "ts": int(time.time() * 1000),
+                            }))
+                        except Exception:
+                            logger.debug("summary.result not delivered; socket closed")
+
+                    asyncio.create_task(_summarize())
 
                 # Speech Cancel (chat mute / stop voice)
                 elif msg_type == "speech.cancel":
