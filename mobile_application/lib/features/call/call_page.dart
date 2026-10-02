@@ -45,9 +45,9 @@ class CallPage extends StatefulWidget {
 }
 
 class _CaptionLine {
-  _CaptionLine({required this.aria, required this.words});
+  _CaptionLine({required this.sol, required this.words});
 
-  final bool aria;
+  final bool sol;
   final List<String> words;
   int shown = 0;
 }
@@ -62,7 +62,7 @@ class _CallPageState extends State<CallPage> {
 
   // ponytail: fixed script loop instead of real audio pipeline; swap for live STT/TTS when available
   static const _script = <(bool, String)>[
-    (true, "Hi, it's Aria. I'm really glad you came back today."),
+    (true, "Hi, it's Sol. I'm really glad you came back today."),
     (false, "Hey… honestly, it's been a heavy week."),
     (true, 'That sounds like a lot to carry. Where would feel easiest to begin?'),
     (false, "I keep feeling like I'm behind on everything."),
@@ -83,7 +83,7 @@ class _CallPageState extends State<CallPage> {
   var _handRaised = false;
   var _paused = false;
   var _ended = false;
-  var _ariaSpeaking = false;
+  var _solSpeaking = false;
   final _lines = <_CaptionLine>[];
 
   CompanionWebSocketService? _wsService;
@@ -267,7 +267,7 @@ class _CallPageState extends State<CallPage> {
     // pair and the two magic amplitude thresholds (spec 9.4).
     _on(_audioRecorder!.frameMetricsStream, _onFrameMetrics);
 
-    // Playback level feeds the orb envelope while Aria speaks, and the echo
+    // Playback level feeds the orb envelope while Sol speaks, and the echo
     // filter's idea of what our own voice sounds like in the mic.
     _on(_ttsPlayback?.amplitudeStream, (double amp) {
       _ttsLevelRms = amp;
@@ -280,14 +280,14 @@ class _CallPageState extends State<CallPage> {
     // Real speaker output is what the echo filter must know about, and what
     // "the assistant is speaking" has to mean (spec 5.4: never network arrival).
     _on(_ttsPlayback?.playingStream, (bool playing) {
-      final wasSpeaking = _ariaSpeaking;
+      final wasSpeaking = _solSpeaking;
       setState(() {
-        _ariaSpeaking = playing;
+        _solSpeaking = playing;
       });
       _syncEchoFilter();
       if (playing) {
         _assistantSinceMs = _nowMs;
-      } else if (wasSpeaking && !_ariaSpeaking) {
+      } else if (wasSpeaking && !_solSpeaking) {
         // Playback drained: ASSISTANT_SPEAKING -> IDLE.
         // Instantly purge loudspeaker leakage from echo filter, gate, and floor
         // so the user's voice is recognized immediately without delay!
@@ -313,7 +313,7 @@ class _CallPageState extends State<CallPage> {
     _on(_wsService?.ttsStartStream, (Map<String, dynamic> data) {
       _ttsStartedAtMs = _nowMs;
       if (_assistantSinceMs < 0) _assistantSinceMs = _nowMs;
-      setState(() => _ariaSpeaking = true);
+      setState(() => _solSpeaking = true);
       _syncEchoFilter();
       // First response audio: ASSISTANT_SPEAKING begins (spec 5.9).
       if (!_ended && !_muted &&
@@ -331,7 +331,7 @@ class _CallPageState extends State<CallPage> {
         _assistantTurnCancelled = true;
         _ttsStartedAtMs = -1;
         setState(() {
-          _ariaSpeaking = false;
+          _solSpeaking = false;
           _ttsLevelRms = 0.0;
         });
         _syncEchoFilter();
@@ -342,7 +342,7 @@ class _CallPageState extends State<CallPage> {
       _commitAssistantTurn();
       _ttsStartedAtMs = -1;
       _turnId = null;
-      if (!_ariaSpeaking && _turn.currentPhase != CallPhase.userSpeaking) {
+      if (!_solSpeaking && _turn.currentPhase != CallPhase.userSpeaking) {
         _turn.onTtsComplete();
         if (_turn.currentPhase != CallPhase.idle) {
           _turn.phase.value = CallPhase.idle;
@@ -420,7 +420,7 @@ class _CallPageState extends State<CallPage> {
       _assistantTurnCancelled = false;
       setState(() {
         if (_lines.length >= 2) _lines.removeAt(0);
-        _lines.add(_CaptionLine(aria: true, words: []));
+        _lines.add(_CaptionLine(sol: true, words: []));
       });
       if (!_ended && !_muted &&
           _turn.currentPhase != CallPhase.assistantSpeaking) {
@@ -433,7 +433,7 @@ class _CallPageState extends State<CallPage> {
       if (delta.isNotEmpty) {
         _assistantTurnBuffer.write(delta);
       }
-      if (delta.trim().isNotEmpty && _lines.isNotEmpty && _lines.last.aria) {
+      if (delta.trim().isNotEmpty && _lines.isNotEmpty && _lines.last.sol) {
         final newWords = delta.trim().split(' ');
         setState(() {
           _lines.last.words.addAll(newWords);
@@ -457,7 +457,7 @@ class _CallPageState extends State<CallPage> {
       setState(() {
         if (_lines.length >= 2) _lines.removeAt(0);
         final words = text.split(' ');
-        final line = _CaptionLine(aria: false, words: words);
+        final line = _CaptionLine(sol: false, words: words);
         line.shown = words.length;
         _lines.add(line);
       });
@@ -525,7 +525,7 @@ class _CallPageState extends State<CallPage> {
   /// Tell the echo filter whether the loudspeaker is actually making noise.
   void _syncEchoFilter() {
     _audioRecorder?.onPlaybackChanged(
-      active: _ariaSpeaking,
+      active: _solSpeaking,
       levelRms: (_ttsLevelRms.clamp(0.0, 1.0) * 32767).round(),
     );
   }
@@ -569,10 +569,10 @@ class _CallPageState extends State<CallPage> {
     if (_turnOpen) {
       // Our turn is already open: no new decision to make. The exception is
       // playback that resumed underneath the turn — take the floor back.
-      if (_ariaSpeaking) _flushInterruption();
+      if (_solSpeaking) _flushInterruption();
       return;
     }
-    if (_ariaSpeaking) {
+    if (_solSpeaking) {
       _pendingOnset = true;
       return;
     }
@@ -700,7 +700,7 @@ class _CallPageState extends State<CallPage> {
       turnId: turnId ?? 'call_$_nowMs',
       playedMs: playedMs,
     );
-    if (mounted) setState(() => _ariaSpeaking = false);
+    if (mounted) setState(() => _solSpeaking = false);
   }
 
   static TurnStage? _stageOf(String? stage) => switch (stage) {
@@ -802,8 +802,8 @@ class _CallPageState extends State<CallPage> {
           continue;
         }
 
-        final (aria, text) = _script[_lineIndex % _script.length];
-        if (!aria && _muted) {
+        final (sol, text) = _script[_lineIndex % _script.length];
+        if (!sol && _muted) {
           _lineIndex++;
           await _wait(1100, token);
           continue;
@@ -811,11 +811,11 @@ class _CallPageState extends State<CallPage> {
 
         final words = text.split(' ');
         setState(() {
-          _ariaSpeaking = aria;
+          _solSpeaking = sol;
           if (_lines.length >= 2) _lines.removeAt(0);
-          _lines.add(_CaptionLine(aria: aria, words: words));
+          _lines.add(_CaptionLine(sol: sol, words: words));
         });
-        _syncScriptPhase(aria);
+        _syncScriptPhase(sol);
 
         for (var i = 0; i < words.length; i++) {
           while (_paused && token == _generation && !_ended) {
@@ -823,7 +823,7 @@ class _CallPageState extends State<CallPage> {
           }
           if (token != _generation || _ended) return;
 
-          var beat = aria ? 96 : 82;
+          var beat = sol ? 96 : 82;
           if (words[i].length > 7) beat += 34;
           if (RegExp(r'[,.;:—?!]$').hasMatch(words[i])) beat += 210;
           await _wait(beat, token);
@@ -832,9 +832,9 @@ class _CallPageState extends State<CallPage> {
         }
 
         _lineIndex++;
-        await _wait(aria ? 1500 : 1150, token);
+        await _wait(sol ? 1500 : 1150, token);
         if (mounted && token == _generation) {
-          setState(() => _ariaSpeaking = false);
+          setState(() => _solSpeaking = false);
           _syncScriptPhase(false, allowOnset: false);
         }
         await _wait(500, token);
@@ -846,9 +846,9 @@ class _CallPageState extends State<CallPage> {
 
   /// The scripted demo has no server, so its two beats are pushed through the
   /// same machine: the orb shows the same states a live call would.
-  void _syncScriptPhase(bool ariaSpeaking, {bool allowOnset = true}) {
+  void _syncScriptPhase(bool solSpeaking, {bool allowOnset = true}) {
     if (_muted || _ended) return;
-    if (ariaSpeaking) {
+    if (solSpeaking) {
       if (_turn.currentPhase != CallPhase.assistantSpeaking) {
         _turn.onProcessing(null, TurnStage.ttsFirstFrame);
       }
@@ -899,7 +899,7 @@ class _CallPageState extends State<CallPage> {
       _handRaised = false;
       _silenceSinceMs = -1;
       _syncEchoFilter();
-      if (!_ariaSpeaking && _turn.currentPhase != CallPhase.idle) {
+      if (!_solSpeaking && _turn.currentPhase != CallPhase.idle) {
         _turn.reset();
       }
     }
@@ -918,7 +918,7 @@ class _CallPageState extends State<CallPage> {
 
     // 2. Stop assistant speech immediately
     _ttsPlayback?.stopVoice(fadeMs: 10);
-    _ariaSpeaking = false;
+    _solSpeaking = false;
     _ttsLevelRms = 0.0;
     final playedMs = _ttsStartedAtMs >= 0
         ? (_nowMs - _ttsStartedAtMs).clamp(0, 60000)
@@ -963,7 +963,7 @@ class _CallPageState extends State<CallPage> {
 
     setState(() {
       _handRaised = true;
-      _ariaSpeaking = false;
+      _solSpeaking = false;
     });
     _syncEchoFilter();
   }
@@ -979,7 +979,7 @@ class _CallPageState extends State<CallPage> {
       _ended = true;
       _paused = false;
       _generation++;
-      _ariaSpeaking = false;
+      _solSpeaking = false;
       _handRaised = false;
     });
     _releaseDelay();
@@ -2152,12 +2152,12 @@ class _CaptionText extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              line.aria ? 'ARIA' : 'YOU',
+              line.sol ? 'SOL' : 'YOU',
               style: TextStyle(
                 fontSize: 9.5,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.9,
-                color: line.aria
+                color: line.sol
                     ? const Color(0x9ED66E34)
                     : _CallPageState._ink.withValues(alpha: 0.34),
               ),
