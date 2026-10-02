@@ -17,14 +17,10 @@ class JournalPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = SolaceColors.from(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [colors.background, colors.surface],
-        ),
-      ),
+    // The page colour itself, as Insights and You use. The gradient into the
+    // surface colour is what made this page read whiter than its neighbours.
+    return ColoredBox(
+      color: colors.background,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
@@ -294,10 +290,6 @@ class _StitchedEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final beadColor = _beadColor();
-    final isVideo = session.mode == CaptureMode.video;
-    final tapeColor = isVideo
-        ? const Color(0x59FF7F50)
-        : const Color(0x59FFB534);
     final modeLabel = switch (session.mode) {
       CaptureMode.text => 'TEXT CHECK-IN',
       CaptureMode.voice => 'VOICE CHECK-IN',
@@ -392,25 +384,7 @@ class _StitchedEntry extends StatelessWidget {
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(15, 15, 12, 14),
                         child: Stack(
-                          // The tape sits on the card's top edge, above the time,
-                          // instead of lying across it.
-                          clipBehavior: Clip.none,
                           children: [
-                            Positioned(
-                              top: -20,
-                              right: 14,
-                              child: Transform.rotate(
-                                angle: 3 * 3.1415926535 / 180,
-                                child: Container(
-                                  width: 60,
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    color: tapeColor,
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
-                              ),
-                            ),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
