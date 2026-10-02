@@ -122,6 +122,11 @@ class DailyFeatures {
   /// Whether any usage-derived signal is present.
   bool get hasUsage => sources.contains('usage');
 
+  /// Whether the day's device data is complete. A day read while it was still
+  /// going has only part of its usage, so it is not safe to compare with whole
+  /// days. A row with no device data has nothing to be incomplete.
+  bool get usageComplete => !hasUsage || sources.contains('usageFinal');
+
   /// Combines two rows for the same day. A value in [other] replaces the same
   /// field here; a field [other] has no value for keeps what this row had.
   DailyFeatures mergedWith(DailyFeatures other) {
