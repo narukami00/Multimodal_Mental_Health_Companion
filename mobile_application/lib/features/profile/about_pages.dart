@@ -209,9 +209,8 @@ class AboutSolacePage extends StatelessWidget {
           'about you is sent only if you switch it on in What Sol remembers.',
         ),
         _Body(
-          'You can export what you have written at any time, delete journal '
-          'entries and conversations one by one, and see everything Solace '
-          'keeps on one page.',
+          'You can delete journal entries and conversations one by one, and '
+          'see everything Solace keeps on one page.',
         ),
         _SectionHeading('HOW SUGGESTIONS ARE CHOSEN'),
         _Body(
@@ -282,10 +281,10 @@ class TermsAndPrivacyPage extends StatelessWidget {
         ),
         _SectionHeading('YOUR RIGHTS'),
         _Body(
-          'You can export your reflections, delete a journal entry or a '
-          'conversation, forget any moment or note, delete stored phone '
-          'patterns, and turn each optional thing off. Everything Solace keeps '
-          'lists each kind and where to manage it.',
+          'You can delete a journal entry or a conversation, forget any moment '
+          'or note, delete stored phone patterns, and turn each optional thing '
+          'off. Everything Solace keeps lists each kind and where to manage '
+          'it.',
         ),
         _SectionHeading('CHILDREN'),
         _Body('Placeholder.'),
