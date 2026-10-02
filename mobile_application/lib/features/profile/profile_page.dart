@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/therapist_contact.dart';
+import '../../core/models/habit_reminder.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../domain/home/baseline_progress.dart';
 import '../../domain/profile/behavioral_profile.dart';
@@ -38,6 +39,7 @@ import 'profile_controller.dart';
 import 'profile_insights_page.dart';
 import 'sleep_hours_settings.dart';
 import 'therapist_controller.dart';
+import 'habit_controller.dart';
 
 /// The baseline reflections entry, which carries its own progress and button.
 ///
@@ -182,6 +184,7 @@ class ProfilePage extends StatelessWidget {
     this.memory,
     this.chatController,
     this.therapistController,
+    this.habitController,
     this.extraEventTags,
     super.key,
   });
@@ -202,6 +205,9 @@ class ProfilePage extends StatelessWidget {
   /// The user's stored therapist contact, if any.
   final TherapistController? therapistController;
 
+  /// The user's habit reminders, if configured.
+  final HabitController? habitController;
+
   /// Themes the person chose recently, so the engine's described state matches
   /// what it is actually being fed.
   final List<String> Function()? extraEventTags;
@@ -213,6 +219,7 @@ class ProfilePage extends StatelessWidget {
         profileController,
         sessionController,
         if (therapistController != null) therapistController!,
+        if (habitController != null) habitController!,
       ]),
       builder: (context, _) {
         final profile = profileController.profile;
@@ -536,9 +543,11 @@ class ProfilePage extends StatelessWidget {
                         ),
                         _row(
                           icon: Icons.checklist_rounded,
-                          title: 'Habit & medication',
-                          value: '3 of 4',
-                          onTap: () => _showHabitsSheet(context),
+                          title: 'Habits & hobbies',
+                          value: habitController == null || habitController!.reminders.isEmpty
+                              ? 'None set'
+                              : '${habitController!.reminders.length}',
+                          onTap: () => _showHabitsSheet(context, habitController),
                         ),
                       ],
                     ),
@@ -983,154 +992,18 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  // 1. Habit & Medication Sheet
-  static void _showHabitsSheet(BuildContext context) {
-    _showModalSheet(
-      context: context,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3DC),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.checklist_rounded,
-                  size: 20,
-                  color: Color(0xFFB57A12),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Habit & medication tracking',
-                      style: TextStyle(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF3B3327),
-                      ),
-                    ),
-                    Text(
-                      'Gentle anchors · Zero punishment for rest days',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF93887A),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          _habitItem('Morning sunlight & hydration', '8:00 AM', true),
-          _habitItem('Midday 3-minute breath pause', '1:30 PM', true),
-          _habitItem('Evening emotional reflection', '8:30 PM', true),
-          _habitItem('Gentle medication reminder', '9:15 PM', false),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF9EE),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFF7EBCE)),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.spa_outlined, size: 16, color: Color(0xFFB57A12)),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'No broken streak counters. Resting is an essential part of gentle care.',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF7A6E5D),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFB534),
-                foregroundColor: const Color(0xFF3D2E14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Done',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // 1. Habits & Hobbies Sheet
+  static void _showHabitsSheet(
+    BuildContext context,
+    HabitController? controller,
+  ) {
+    if (controller == null) return;
 
-  static Widget _habitItem(String title, String time, bool completed) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              color: completed ? const Color(0xFF8DCB8A) : Colors.transparent,
-              borderRadius: BorderRadius.circular(7),
-              border: Border.all(
-                color: completed
-                    ? const Color(0xFF8DCB8A)
-                    : const Color(0xFFD6C8AF),
-                width: 1.5,
-              ),
-            ),
-            child: completed
-                ? const Icon(Icons.check, size: 14, color: Colors.white)
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-                color: completed
-                    ? const Color(0xFF3B3327)
-                    : const Color(0xFF706454),
-              ),
-            ),
-          ),
-          Text(
-            time,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFFA2988A),
-            ),
-          ),
-        ],
-      ),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _HabitsSheetContent(controller: controller),
     );
   }
 
@@ -2623,6 +2496,703 @@ class _TherapistSheetContentState extends State<_TherapistSheetContent> {
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFFB4522C),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Habits & Hobbies — real sheet with custom reminders & notification scheduling
+// ---------------------------------------------------------------------------
+
+class _HabitsSheetContent extends StatefulWidget {
+  const _HabitsSheetContent({required this.controller});
+
+  final HabitController controller;
+
+  @override
+  State<_HabitsSheetContent> createState() => _HabitsSheetContentState();
+}
+
+class _HabitsSheetContentState extends State<_HabitsSheetContent> {
+  bool _editing = false;
+  String? _editingId;
+  late TextEditingController _title;
+  late TextEditingController _description;
+  TimeOfDay _selectedTime = const TimeOfDay(hour: 8, minute: 0);
+  Set<int> _selectedDays = {1, 2, 3, 4, 5, 6, 7};
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController();
+    _description = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  void _startAdd() {
+    setState(() {
+      _editingId = null;
+      _title.text = '';
+      _description.text = '';
+      _selectedTime = const TimeOfDay(hour: 8, minute: 0);
+      _selectedDays = {1, 2, 3, 4, 5, 6, 7};
+      _editing = true;
+    });
+  }
+
+  void _startEdit(HabitReminder reminder) {
+    setState(() {
+      _editingId = reminder.id;
+      _title.text = reminder.title;
+      _description.text = reminder.description;
+      _selectedTime = TimeOfDay(hour: reminder.hour, minute: reminder.minute);
+      _selectedDays = Set<int>.from(reminder.days);
+      _editing = true;
+    });
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _editing = false;
+      _editingId = null;
+    });
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime,
+    );
+    if (picked != null) {
+      setState(() => _selectedTime = picked);
+    }
+  }
+
+  Future<void> _save() async {
+    final title = _title.text.trim();
+    if (title.isEmpty) return;
+    if (_selectedDays.isEmpty) return;
+    if (_saving) return;
+
+    setState(() => _saving = true);
+
+    if (_editingId != null) {
+      final existing = widget.controller.reminders
+          .where((r) => r.id == _editingId)
+          .firstOrNull;
+      final updated = HabitReminder(
+        id: _editingId!,
+        title: title,
+        description: _description.text.trim(),
+        hour: _selectedTime.hour,
+        minute: _selectedTime.minute,
+        days: _selectedDays,
+        enabled: existing?.enabled ?? true,
+      );
+      await widget.controller.update(updated);
+    } else {
+      final newReminder = HabitReminder(
+        id: 'habit_${DateTime.now().millisecondsSinceEpoch}',
+        title: title,
+        description: _description.text.trim(),
+        hour: _selectedTime.hour,
+        minute: _selectedTime.minute,
+        days: _selectedDays,
+        enabled: true,
+      );
+      await widget.controller.add(newReminder);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _editing = false;
+      _editingId = null;
+    });
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final h = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final m = time.minute.toString().padLeft(2, '0');
+    final ampm = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$h:$m $ampm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (context, _) {
+        final reminders = widget.controller.reminders;
+
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          decoration: BoxDecoration(
+            color: SolaceColors.from(context).surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33684B20),
+                blurRadius: 32,
+                offset: Offset(0, -6),
+              ),
+            ],
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            top: 12,
+            left: 20,
+            right: 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4.5,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2D6C0),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3DC),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.checklist_rounded,
+                        size: 20,
+                        color: Color(0xFFB57A12),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Habits & hobbies',
+                            style: TextStyle(
+                              fontSize: 16.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF3B3327),
+                            ),
+                          ),
+                          Text(
+                            'Gentle anchors · Set your own rhythm',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF93887A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Philosophy banner
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF9EE),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFF7EBCE)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.spa_outlined, size: 16, color: Color(0xFFB57A12)),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'No streak counters or penalties. Solace simply sends a gentle nudge at the time you choose.',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF7A6E5D),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                if (_editing)
+                  _buildForm()
+                else ...[
+                  if (reminders.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ...reminders.map((r) => _buildReminderCard(r)),
+
+                  const SizedBox(height: 14),
+                  if (!_editing && widget.controller.canAddMore)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFB57A12),
+                          side: const BorderSide(color: Color(0xFFF2ECDD)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: _startAdd,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text(
+                          'Add habit or hobby',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFFB534),
+                        foregroundColor: const Color(0xFF3D2E14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF2ECDD)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF9EE),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.schedule_rounded,
+              color: Color(0xFFB57A12),
+              size: 22,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'No reminders set yet',
+            style: TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF3B3327),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Add a gentle reminder for walking, reading, stretching, or any personal practice.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF93887A),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReminderCard(HabitReminder reminder) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: reminder.enabled
+              ? const Color(0xFFF2ECDD)
+              : const Color(0xFFECE7DB).withValues(alpha: 0.6),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reminder.title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: reminder.enabled
+                        ? const Color(0xFF3B3327)
+                        : const Color(0xFF93887A),
+                  ),
+                ),
+                if (reminder.description.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    reminder.description,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: reminder.enabled
+                          ? const Color(0xFF706454)
+                          : const Color(0xFFAFA79D),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: reminder.enabled
+                            ? const Color(0xFFFFF0D4)
+                            : const Color(0xFFF5EFE3),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        reminder.timeLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: reminder.enabled
+                              ? const Color(0xFFB57A12)
+                              : const Color(0xFF93887A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        reminder.daysLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: reminder.enabled
+                              ? const Color(0xFF93887A)
+                              : const Color(0xFFB0A79B),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch(
+            value: reminder.enabled,
+            activeColor: const Color(0xFFFFB534),
+            onChanged: (_) => widget.controller.toggleEnabled(reminder.id),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 18, color: Color(0xFF93887A)),
+            onSelected: (val) {
+              if (val == 'edit') {
+                _startEdit(reminder);
+              } else if (val == 'delete') {
+                widget.controller.remove(reminder.id);
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: Text('Edit', style: TextStyle(fontSize: 13)),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Text(
+                  'Delete',
+                  style: TextStyle(fontSize: 13, color: Color(0xFFB4522C)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForm() {
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _editingId != null ? 'Edit Reminder' : 'New Reminder',
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF3B3327),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _title,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            labelText: 'What would you like to do?',
+            hintText: 'e.g., Morning walk, evening reading',
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFFFB534), width: 1.8),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _description,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            labelText: 'Notes or description (optional)',
+            hintText: 'e.g., 15 minutes, leave phone in room',
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2D6C0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFFFB534), width: 1.8),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Time selector
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE2D6C0)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.access_time_rounded, size: 20, color: Color(0xFFB57A12)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Reminder time',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF93887A),
+                      ),
+                    ),
+                    Text(
+                      _formatTime(_selectedTime),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF3B3327),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFB57A12),
+                  side: const BorderSide(color: Color(0xFFE2D6C0)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: _pickTime,
+                child: const Text('Change', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Days of week selector
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'REPEAT DAYS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+                color: Color(0xFFBCAC8E),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  if (_selectedDays.length == 7) {
+                    _selectedDays = {};
+                  } else {
+                    _selectedDays = {1, 2, 3, 4, 5, 6, 7};
+                  }
+                });
+              },
+              child: Text(
+                _selectedDays.length == 7 ? 'Clear all' : 'Every day',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFB57A12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(7, (i) {
+            final dayNumber = i + 1;
+            final isSelected = _selectedDays.contains(dayNumber);
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (isSelected) {
+                    _selectedDays.remove(dayNumber);
+                  } else {
+                    _selectedDays.add(dayNumber);
+                  }
+                });
+              },
+              child: Container(
+                width: 42,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFFFFB534) : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xFFFFB534)
+                        : const Color(0xFFE2D6C0),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  dayNames[i],
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: isSelected ? const Color(0xFF3D2E14) : const Color(0xFF706454),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 20),
+
+        // Action buttons
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFB534),
+              foregroundColor: const Color(0xFF3D2E14),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: _selectedDays.isEmpty || _saving ? null : _save,
+            child: Text(
+              _editingId != null ? 'Update Reminder' : 'Set Reminder',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: TextButton(
+            onPressed: _cancelEdit,
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF93887A),
               ),
             ),
           ),

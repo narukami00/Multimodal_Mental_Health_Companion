@@ -28,6 +28,7 @@ import '../footprint/phone_patterns_controller.dart';
 import '../profile/profile_controller.dart';
 import '../profile/profile_page.dart';
 import '../profile/therapist_controller.dart';
+import '../profile/habit_controller.dart';
 import '../profile/baseline_quiz_page.dart';
 import '../rhythm/rhythm_card.dart';
 import '../rhythm/rhythm_detail_page.dart';
@@ -56,6 +57,7 @@ class AppShell extends StatefulWidget {
     required this.suggestionController,
     this.chatController,
     this.therapistController,
+    this.habitController,
     this.phonePatterns,
     this.breakPrompts,
     this.moments,
@@ -70,6 +72,7 @@ class AppShell extends StatefulWidget {
   final SuggestionController suggestionController;
   final ChatController? chatController;
   final TherapistController? therapistController;
+  final HabitController? habitController;
   final PhonePatternsController? phonePatterns;
   final BreakPromptController? breakPrompts;
   final MomentsController? moments;
@@ -509,6 +512,7 @@ class _AppShellState extends State<AppShell> {
                 suggestionController: widget.suggestionController,
                 sessionController: widget.sessionController,
                 therapistController: widget.therapistController,
+                habitController: widget.habitController,
                 phonePatterns: widget.phonePatterns,
                 moments: widget.moments,
                 memory: widget.memory,
