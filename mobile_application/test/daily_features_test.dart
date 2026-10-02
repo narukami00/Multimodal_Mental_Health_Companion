@@ -92,6 +92,33 @@ void main() {
       expect(merged.categoryMinutes, isNotNull);
     });
 
+    test('withoutUsage keeps what the app recorded and drops what the phone gave', () {
+      final row = _usageDay('2026-10-01').mergedWith(
+        const DailyFeatures(
+          dayKey: '2026-10-01',
+          sources: {'inApp', 'usageFinal'},
+          checkInCount: 2,
+          journalWordCount: 80,
+          selfMoodMedian: 0.25,
+        ),
+      );
+
+      final stripped = row.withoutUsage();
+
+      expect(stripped.sources, {'inApp'});
+      expect(stripped.checkInCount, 2);
+      expect(stripped.journalWordCount, 80);
+      expect(stripped.selfMoodMedian, 0.25);
+      expect(stripped.screenOnMinutes, isNull);
+      expect(stripped.hourlyActiveMinutes, isNull);
+      expect(stripped.estimatedSleepMinutes, isNull);
+      expect(stripped.categoryMinutes, isNull);
+    });
+
+    test('a row of only device data has no sources left once stripped', () {
+      expect(_usageDay('2026-10-01').withoutUsage().sources, isEmpty);
+    });
+
     test('withoutAppNames drops only the names', () {
       const row = DailyFeatures(
         dayKey: '2026-10-01',
@@ -235,6 +262,36 @@ void main() {
         expect(rows.first.topApps, isNull);
         expect(rows.first.screenOnMinutes, 120);
         expect(rows.first.categoryMinutes, {'social': 40});
+      });
+
+      test('removeUsageData keeps in-app days and removes device-only ones', () async {
+        await repository.upsert(_usageDay('2026-10-01'));
+        await repository.upsert(
+          const DailyFeatures(
+            dayKey: '2026-10-02',
+            sources: {'inApp'},
+            checkInCount: 1,
+          ),
+        );
+        await repository.upsert(_usageDay('2026-10-03'));
+        await repository.upsert(
+          const DailyFeatures(
+            dayKey: '2026-10-03',
+            sources: {'inApp'},
+            checkInCount: 3,
+          ),
+        );
+
+        await repository.removeUsageData();
+
+        final rows = await repository.loadAll();
+        // The device-only day is gone; the in-app day and the mixed day stay,
+        // the mixed one without anything read from the phone.
+        expect(rows.map((r) => r.dayKey), ['2026-10-02', '2026-10-03']);
+        expect(rows.last.checkInCount, 3);
+        expect(rows.last.screenOnMinutes, isNull);
+        expect(rows.last.sources, {'inApp'});
+        expect(rows.every((r) => !r.hasUsage), isTrue);
       });
 
       test('deleteAll removes everything', () async {

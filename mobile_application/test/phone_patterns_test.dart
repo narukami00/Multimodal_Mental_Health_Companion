@@ -198,6 +198,44 @@ void main() {
     });
   });
 
+  group('in-app days are not phone data', () {
+    test('are not counted as stored phone patterns', () async {
+      await repository.upsert(
+        const DailyFeatures(dayKey: '2026-10-01', sources: {'inApp'}, checkInCount: 2),
+      );
+      await addDays(2);
+
+      expect(await controller.storedDayCount(), 2);
+    });
+
+    test('survive deleting the stored phone patterns', () async {
+      await repository.upsert(
+        const DailyFeatures(dayKey: '2026-10-01', sources: {'inApp'}, checkInCount: 2),
+      );
+      await addDays(1);
+
+      await controller.deleteStored();
+
+      final rows = await repository.loadAll();
+      expect(rows.single.dayKey, '2026-10-01');
+      expect(rows.single.checkInCount, 2);
+      expect(await controller.storedDayCount(), 0);
+    });
+
+    test('survive turning off with deletion', () async {
+      collector.access = true;
+      await controller.turnOn();
+      await repository.upsert(
+        const DailyFeatures(dayKey: '2026-10-01', sources: {'inApp'}, checkInCount: 2),
+      );
+      await addDays(1);
+
+      await controller.turnOff(deleteStored: true);
+
+      expect((await repository.loadAll()).single.checkInCount, 2);
+    });
+  });
+
   group('app names', () {
     setUp(() async {
       collector.access = true;

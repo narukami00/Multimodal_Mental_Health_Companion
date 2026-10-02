@@ -82,6 +82,18 @@ class SharedPreferencesDailyFeaturesRepository
   }
 
   @override
+  Future<void> removeUsageData() async {
+    final rows = _read();
+    if (!rows.values.any((row) => row.hasUsage)) return;
+    final kept = <String, DailyFeatures>{};
+    for (final entry in rows.entries) {
+      final stripped = entry.value.withoutUsage();
+      if (stripped.sources.isNotEmpty) kept[entry.key] = stripped;
+    }
+    await _write(kept);
+  }
+
+  @override
   Future<void> deleteAll() async {
     await _preferences.remove(_rowsKey);
   }

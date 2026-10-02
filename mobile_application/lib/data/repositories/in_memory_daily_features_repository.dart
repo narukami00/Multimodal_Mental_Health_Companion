@@ -33,5 +33,17 @@ class InMemoryDailyFeaturesRepository implements DailyFeaturesRepository {
   }
 
   @override
+  Future<void> removeUsageData() async {
+    for (final key in _rows.keys.toList()) {
+      final stripped = _rows[key]!.withoutUsage();
+      if (stripped.sources.isEmpty) {
+        _rows.remove(key);
+      } else {
+        _rows[key] = stripped;
+      }
+    }
+  }
+
+  @override
   Future<void> deleteAll() async => _rows.clear();
 }

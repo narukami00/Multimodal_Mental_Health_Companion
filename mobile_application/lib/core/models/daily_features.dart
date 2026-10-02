@@ -194,6 +194,26 @@ class DailyFeatures {
     chatMinutes: chatMinutes,
   );
 
+  /// This row with everything read from the device removed, keeping what the
+  /// app itself recorded (check-ins, mood words, words written, chat time).
+  ///
+  /// The result has no sources left when the row held only device data, which
+  /// is how a repository knows the whole row can go.
+  DailyFeatures withoutUsage() => DailyFeatures(
+    dayKey: dayKey,
+    sources: {
+      for (final source in sources)
+        if (source != 'usage' && source != 'usageFinal') source,
+    },
+    schemaVersion: schemaVersion,
+    checkInCount: checkInCount,
+    firstCheckInMinute: firstCheckInMinute,
+    checkInLatencyMinutes: checkInLatencyMinutes,
+    selfMoodMedian: selfMoodMedian,
+    journalWordCount: journalWordCount,
+    chatMinutes: chatMinutes,
+  );
+
   /// Only fields with a value are written, so a stored row says exactly what
   /// was collected.
   Map<String, Object?> toMap() {

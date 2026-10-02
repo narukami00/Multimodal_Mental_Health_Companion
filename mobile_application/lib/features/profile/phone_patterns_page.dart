@@ -66,8 +66,10 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
     await _reload();
   }
 
+  int get _usageDays => _rows.where((row) => row.hasUsage).length;
+
   Future<void> _confirmDelete() async {
-    final days = _rows.length;
+    final days = _usageDays;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -519,7 +521,7 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
               color: Color(0xFF7B6A55),
             ),
           ),
-          if (_rows.isNotEmpty) ...[
+          if (_usageDays > 0) ...[
             const SizedBox(height: 10),
             TextButton.icon(
               key: const ValueKey('patterns-delete-all'),
@@ -532,8 +534,8 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
               ),
               icon: const Icon(Icons.delete_outline_rounded, size: 16),
               label: Text(
-                'Delete all stored patterns (${_rows.length} '
-                '${_rows.length == 1 ? 'day' : 'days'})',
+                'Delete all stored patterns ($_usageDays '
+                '${_usageDays == 1 ? 'day' : 'days'})',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,

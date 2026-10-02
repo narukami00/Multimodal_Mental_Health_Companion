@@ -89,7 +89,7 @@ class PhonePatternsController extends ChangeNotifier {
     await _consent.revoke(ConsentKey.topAppNames);
     await _consent.revoke(ConsentKey.usageFootprint);
     if (deleteStored) {
-      await _repository.deleteAll();
+      await _repository.removeUsageData();
     } else {
       await _repository.removeAppNames();
     }
@@ -107,8 +107,11 @@ class PhonePatternsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// How many days of patterns are stored, for saying so before deleting them.
-  Future<int> storedDayCount() async => (await _repository.loadAll()).length;
+  /// How many days of phone patterns are stored, for saying so before deleting
+  /// them. Days that hold only what the app recorded itself are not counted:
+  /// nothing was read from the phone for them.
+  Future<int> storedDayCount() async =>
+      (await _repository.loadAll()).where((row) => row.hasUsage).length;
 
   /// Every stored day, oldest first, for showing the person their own patterns.
   Future<List<DailyFeatures>> storedDays() => _repository.loadAll();
@@ -124,9 +127,10 @@ class PhonePatternsController extends ChangeNotifier {
     return removed;
   }
 
-  /// The one-tap delete of everything stored.
+  /// The one-tap delete of everything read from the phone. What the app
+  /// recorded itself (check-in counts and the like) is not phone data and stays.
   Future<void> deleteStored() async {
-    await _repository.deleteAll();
+    await _repository.removeUsageData();
     notifyListeners();
   }
 
