@@ -29,6 +29,7 @@ class MainActivity : FlutterActivity() {
     private val CONTROL_CHANNEL = "com.sysmentalhealth.solace_mobile/audio_control"
     private val STREAM_CHANNEL = "com.sysmentalhealth.solace_mobile/audio_stream"
     private val PERMISSIONS_CHANNEL = "com.sysmentalhealth.solace_mobile/app_permissions"
+    private val USAGE_CHANNEL = "com.sysmentalhealth.solace_mobile/usage_collector"
     private val PERMISSION_REQUEST_CODE = 1002
 
     private companion object {
@@ -139,6 +140,47 @@ class MainActivity : FlutterActivity() {
                         Log.w(TAG, "could not open app settings: $e")
                         result.success(false)
                     }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // Device usage for the daily behavior row. Reads only the few event types
+        // UsageCollector maps; the logic that reduces them lives in Dart.
+        val usage = UsageCollector(applicationContext)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, USAGE_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "hasAccess" -> result.success(usage.hasAccess())
+                "openAccessSettings" -> {
+                    try {
+                        startActivity(usage.accessSettingsIntent())
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "could not open usage access settings: $e")
+                        result.success(false)
+                    }
+                }
+                "events" -> {
+                    val from = call.argument<Number>("from")?.toLong()
+                    val to = call.argument<Number>("to")?.toLong()
+                    if (from == null || to == null) {
+                        result.error("bad_args", "from and to are required", null)
+                    } else {
+                        // Off the main thread: a day of events can be thousands.
+                        thread(start = true, name = "UsageEvents") {
+                            val events = try {
+                                usage.events(from, to)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "usage events failed: $e")
+                                emptyList()
+                            }
+                            mainHandler.post { result.success(events) }
+                        }
+                    }
+                }
+                "describeApps" -> {
+                    val packages = call.argument<List<String>>("packages") ?: emptyList()
+                    result.success(usage.describeApps(packages))
                 }
                 else -> result.notImplemented()
             }
