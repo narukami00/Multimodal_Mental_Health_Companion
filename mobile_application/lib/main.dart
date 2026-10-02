@@ -40,6 +40,7 @@ import 'services/check_in_widget_service.dart';
 import 'core/models/memory_moment.dart';
 import 'data/repositories/shared_preferences_moment_repository.dart';
 import 'domain/memory/moment_extractor.dart';
+import 'domain/memory/server_moment_extractor.dart';
 import 'features/memory/companion_memory_context.dart';
 import 'features/memory/moments_controller.dart';
 import 'services/companion_websocket_service.dart';
@@ -165,6 +166,11 @@ Future<void> main() async {
   // while safety support is active or when the person turned asking off.
   final moments = MomentsController(
     repository: SharedPreferencesMomentRepository(preferences),
+    // Chat messages are read by the companion's model when it is connected;
+    // everything else, and any miss, falls back to the offline reader.
+    extractor: ServerMomentExtractor(
+      requesterProvider: () => CompanionWebSocketService.liveMomentRequester,
+    ),
   );
   await moments.load();
   void offerMoment(MomentCandidate candidate) {

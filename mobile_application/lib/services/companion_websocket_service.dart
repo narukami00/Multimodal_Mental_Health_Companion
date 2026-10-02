@@ -177,9 +177,24 @@ class CompanionWebSocketService {
   Stream<Map<String, dynamic>> get turnDiagnosticStream =>
       _turnDiagnosticController.stream;
 
+  static CompanionWebSocketService? _live;
+
+  /// Quotes one good moment from a chat message over the live connection, or
+  /// null when no connection is live. Lets code that does not own a connection
+  /// (such as the moments controller) use whichever one is open.
+  static Future<String?> Function(String text)? get liveMomentRequester {
+    final live = _live;
+    return live == null ? null : (text) => live.requestMoment(text);
+  }
+
   void _updateStatus(CompanionConnectionStatus newStatus) {
     if (_status != newStatus) {
       _status = newStatus;
+      if (newStatus == CompanionConnectionStatus.connected) {
+        _live = this;
+      } else if (identical(_live, this)) {
+        _live = null;
+      }
       if (!_statusController.isClosed) {
         _statusController.add(newStatus);
       }
@@ -687,6 +702,34 @@ class CompanionWebSocketService {
     _sendJson(payload);
   }
 
+  final Map<String, Completer<String?>> _pendingMoments = {};
+
+  /// Asks the companion to quote one good moment from [text], a chat message
+  /// the person just sent. Resolves to the quoted sentence, or null when there
+  /// is none, the server did not answer in time, or it is not reachable. Never
+  /// throws. The server validates its answer; the caller validates it again.
+  Future<String?> requestMoment(
+    String text, {
+    Duration timeout = const Duration(seconds: 12),
+  }) async {
+    if (_channel == null || text.trim().isEmpty) return null;
+    final requestId = 'mom_${DateTime.now().microsecondsSinceEpoch}_${_summarySequence++}';
+    final completer = Completer<String?>();
+    _pendingMoments[requestId] = completer;
+    _sendJson({
+      'v': 1,
+      'type': 'moment.extract',
+      'request_id': requestId,
+      'text': text,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
+    try {
+      return await completer.future.timeout(timeout, onTimeout: () => null);
+    } finally {
+      _pendingMoments.remove(requestId);
+    }
+  }
+
   final Map<String, Completer<String?>> _pendingSummaries = {};
   int _summarySequence = 0;
 
@@ -772,6 +815,14 @@ class CompanionWebSocketService {
           if (!_echoController.isClosed) {
             _echoController.add(data);
           }
+          break;
+
+        case 'moment.proposal':
+          final momentId = data['request_id'] as String?;
+          final quoted = (data['text'] as String?)?.trim();
+          _pendingMoments[momentId]?.complete(
+            quoted == null || quoted.isEmpty ? null : quoted,
+          );
           break;
 
         case 'summary.result':
@@ -946,7 +997,10 @@ class CompanionWebSocketService {
   }
 
   Future<void> _cleanUpConnection({bool resetManual = true}) async {
-    for (final pending in _pendingSummaries.values) {
+    for (final pending in [
+      ..._pendingSummaries.values,
+      ..._pendingMoments.values,
+    ]) {
       if (!pending.isCompleted) pending.complete(null);
     }
     if (resetManual) _manualDisconnect = false;
@@ -978,6 +1032,7 @@ class CompanionWebSocketService {
 
   void dispose() {
     _isDisposed = true;
+    if (identical(_live, this)) _live = null;
     _manualDisconnect = true;
     _wasConnected = false;
     _connectSequence++;
