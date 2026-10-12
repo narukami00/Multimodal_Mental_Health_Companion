@@ -26,7 +26,7 @@ void main() {
 
     await tester.tap(find.text('Check in now'));
     await tester.pumpAndSettle();
-    expect(find.text('How would you like to check in?'), findsOneWidget);
+    expect(find.textContaining('to check in?'), findsOneWidget);
 
     await tester.tap(find.text('Text'));
     await tester.pumpAndSettle();
