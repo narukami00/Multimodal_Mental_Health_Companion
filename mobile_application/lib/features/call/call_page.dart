@@ -19,6 +19,7 @@ import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'call_turn_controller.dart';
+import 'mood_note.dart';
 
 class CallPage extends StatefulWidget {
   const CallPage({
@@ -422,6 +423,12 @@ class _CallPageState extends State<CallPage> {
     // Two independent safety nets for spoken words: the app's own screener on
     // every final transcript, and the server's gate (which also answers with a
     // fixed supportive reply). Either one opens Support; it opens only once.
+    _on(_wsService?.emotionUpdateStream, (Map<String, dynamic> data) {
+      _showMoodNote(
+        moodNoteFor(data['mood'] as String?, data['tier'] as String?),
+      );
+    });
+
     _on(_wsService?.safetyAlertStream, (Map<String, dynamic> data) {
       final level = data['level'] == 'urgent_support'
           ? SafetyLevel.urgentSupport
@@ -581,6 +588,7 @@ class _CallPageState extends State<CallPage> {
     _releaseDelay();
     _ticker?.cancel();
     _handTimer?.cancel();
+    _moodTimer?.cancel();
     _commitAssistantTurn();
 
     for (final sub in _subs) {
@@ -818,6 +826,19 @@ class _CallPageState extends State<CallPage> {
     setState(() => _paused = false);
     _syncMicOpen();
     if (leave == true) _endSession();
+  }
+
+  /// The hedged "you sound ..." line, shown briefly after a turn when the person opted in.
+  String? _moodNote;
+  Timer? _moodTimer;
+
+  void _showMoodNote(String? note) {
+    _moodTimer?.cancel();
+    if (note == null) return;
+    setState(() => _moodNote = note);
+    _moodTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted) setState(() => _moodNote = null);
+    });
   }
 
   bool _supportOpen = false;
@@ -1127,6 +1148,20 @@ class _CallPageState extends State<CallPage> {
             const SizedBox(height: 10),
             for (var i = 0; i < _lines.length; i++)
               _CaptionText(line: _lines[i], past: i < _lines.length - 1),
+            if (_moodNote != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _moodNote!,
+                key: const ValueKey('mood-note'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  fontStyle: FontStyle.italic,
+                  color: _ink.withValues(alpha: 0.55),
+                ),
+              ),
+            ],
           ],
         ),
       ),

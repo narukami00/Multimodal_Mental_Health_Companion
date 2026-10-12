@@ -69,7 +69,24 @@ class ConsentKey {
     currentVersion: '1.0',
   );
 
-  static const all = [usageFootprint, topAppNames, profileSnippet, memoryMoments];
+  /// Letting the companion server estimate, from the voice and words of each
+  /// spoken or typed turn, whether the person sounds low, tense or upbeat. The
+  /// estimate only softens Sol's tone and shows a hedged line; audio is analysed
+  /// in memory and never kept.
+  static const emotionEstimate = ConsentKey._(
+    category: 'emotionEstimate',
+    modality: 'voiceText',
+    purpose: 'chatCompanion',
+    currentVersion: '1.0',
+  );
+
+  static const all = [
+    usageFootprint,
+    topAppNames,
+    profileSnippet,
+    memoryMoments,
+    emotionEstimate,
+  ];
 
   static ConsentKey? fromKey(String key) {
     for (final candidate in all) {

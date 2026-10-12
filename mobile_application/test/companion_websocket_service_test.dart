@@ -59,6 +59,20 @@ void main() {
       expect(payload['type'], 'session.configure');
     });
 
+    test('asks for the emotion cue only when the person agreed', () {
+      final on = CompanionWebSocketService.buildSessionConfigurePayload(
+        sessionId: 's1',
+        mode: 'duplex_call',
+        emotion: true,
+      );
+      expect(on['emotion'], {'enabled': true});
+      final off = CompanionWebSocketService.buildSessionConfigurePayload(
+        sessionId: 's1',
+        mode: 'duplex_call',
+      );
+      expect(off.containsKey('emotion'), isFalse);
+    });
+
     test('carries the country so the server names the right local help', () {
       final withCountry = CompanionWebSocketService.buildSessionConfigurePayload(
         sessionId: 's1',

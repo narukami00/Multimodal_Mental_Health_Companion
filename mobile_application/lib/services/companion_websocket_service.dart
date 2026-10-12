@@ -679,6 +679,7 @@ class CompanionWebSocketService {
       memory: memoryProvider?.call(),
       resume: resume,
       country: countryProvider?.call(),
+      emotion: emotionProvider?.call() ?? false,
     );
     _sendJson(payload);
   }
@@ -692,6 +693,10 @@ class CompanionWebSocketService {
   /// Where the person is based (ISO alpha-2), sent with every `session.configure` so the server
   /// can name the right local emergency resources if it ever has to. Set once at start-up.
   static String? Function()? countryProvider;
+
+  /// Whether the person agreed to Sol noticing how they sound. Read on every configure, so
+  /// withdrawing the consent reaches the server on the next one. Set once at start-up.
+  static bool Function()? emotionProvider;
 
   /// The `session.configure` message. Pure, so what goes on the wire can be
   /// tested without a socket.
@@ -709,6 +714,7 @@ class CompanionWebSocketService {
     Map<String, Object?>? memory,
     Map<String, Object?>? resume,
     String? country,
+    bool emotion = false,
   }) {
     return {
       'v': 1,
@@ -729,6 +735,7 @@ class CompanionWebSocketService {
       if (memory != null) 'memory': memory,
       if (resume != null) 'resume': resume,
       if (country != null && country.isNotEmpty) 'country': country,
+      if (emotion) 'emotion': {'enabled': true},
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
   }

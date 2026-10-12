@@ -84,6 +84,8 @@ class WhatSolRemembersPage extends StatelessWidget {
                   _snippetCard(context),
                   const SizedBox(height: 10),
                   _momentsToldCard(context),
+                  _label('HOW YOU SOUND'),
+                  _emotionCard(context),
                   _label('YOUR MOMENTS'),
                   _momentList(context),
                   const SizedBox(height: 10),
@@ -231,6 +233,39 @@ class WhatSolRemembersPage extends StatelessWidget {
             text: snippet.isEmpty
                 ? 'Nothing yet. There is not enough to say.'
                 : snippet.text,
+            dim: !on,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emotionCard(BuildContext context) {
+    final on = consent.isGranted(ConsentKey.emotionEstimate);
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _switchRow(
+            key: const ValueKey('emotion-switch'),
+            title: 'Let Sol notice how I sound',
+            subtitle: 'From your voice and words, Sol can guess whether you '
+                'sound low, tense or upbeat, and soften its tone to match. '
+                'It is a weak guess, never a diagnosis. Your voice is '
+                'analysed on the spot and never kept.',
+            value: on,
+            onChanged: (v) => v
+                ? consent.grant(ConsentKey.emotionEstimate)
+                : consent.revoke(ConsentKey.emotionEstimate),
+          ),
+          const SizedBox(height: 10),
+          _quote(
+            key: const ValueKey('emotion-preview'),
+            heading: on ? 'Sol is told, at most:' : 'If you turn this on, Sol would be told, at most:',
+            text: 'One private line such as "they may sound a bit low, '
+                'this is a weak guess" for a turn. Never your voice, '
+                'never a label like "depressed", and nothing at all when '
+                'it is unsure.',
             dim: !on,
           ),
         ],

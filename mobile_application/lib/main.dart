@@ -22,6 +22,7 @@ import 'data/repositories/shared_preferences_suggestion_repository.dart';
 import 'domain/rhythm/reminder_lapse_policy.dart';
 import 'features/chat/chat_controller.dart';
 import 'features/checkin/check_in_mode_page.dart';
+import 'core/models/consent.dart';
 import 'features/consent/consent_controller.dart';
 import 'features/footprint/in_app_feature_recorder.dart';
 import 'features/footprint/break_prompt_controller.dart';
@@ -229,6 +230,8 @@ Future<void> main() async {
   CompanionWebSocketService.memoryProvider = memory.payload;
   CompanionWebSocketService.countryProvider = () =>
       profileController.profile.countryCode;
+  CompanionWebSocketService.emotionProvider = () =>
+      consentController.isGranted(ConsentKey.emotionEstimate);
 
   final navigatorKey = GlobalKey<NavigatorState>();
 

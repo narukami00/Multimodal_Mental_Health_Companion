@@ -40,7 +40,7 @@ void main() {
   });
 
   Future<void> pump(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1080, 3200);
+    tester.view.physicalSize = const Size(1080, 4400);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() {
       tester.view.resetPhysicalSize();
@@ -80,6 +80,22 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('snippet-switch')));
     await tester.pumpAndSettle();
     expect(consent.isGranted(ConsentKey.profileSnippet), isFalse);
+  });
+
+  testWidgets('noticing how I sound is off until the person turns it on', (
+    tester,
+  ) async {
+    await pump(tester);
+    expect(consent.isGranted(ConsentKey.emotionEstimate), isFalse);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('emotion-switch')));
+    await tester.tap(find.byKey(const ValueKey('emotion-switch')));
+    await tester.pumpAndSettle();
+    expect(consent.isGranted(ConsentKey.emotionEstimate), isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('emotion-switch')));
+    await tester.pumpAndSettle();
+    expect(consent.isGranted(ConsentKey.emotionEstimate), isFalse);
   });
 
   testWidgets('lists every moment, and its menu keeps, sets aside, and deletes', (
@@ -162,7 +178,7 @@ void main() {
     });
     final id = chat.activeConversation!.id;
 
-    tester.view.physicalSize = const Size(1080, 3200);
+    tester.view.physicalSize = const Size(1080, 4400);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() {
       tester.view.resetPhysicalSize();

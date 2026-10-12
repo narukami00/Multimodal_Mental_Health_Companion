@@ -28,6 +28,7 @@ class _CallWs extends CompanionWebSocketService {
   final _ttsEnd = StreamController<Map<String, dynamic>>.broadcast();
   final _transcript = StreamController<Map<String, dynamic>>.broadcast();
   final _safetyAlert = StreamController<Map<String, dynamic>>.broadcast();
+  final _emotion = StreamController<Map<String, dynamic>>.broadcast();
 
   @override
   CompanionConnectionStatus get status => _fakeStatus;
@@ -49,6 +50,8 @@ class _CallWs extends CompanionWebSocketService {
   Stream<Map<String, dynamic>> get transcriptFinalStream => _transcript.stream;
   @override
   Stream<Map<String, dynamic>> get safetyAlertStream => _safetyAlert.stream;
+  @override
+  Stream<Map<String, dynamic>> get emotionUpdateStream => _emotion.stream;
 
   void setStatus(CompanionConnectionStatus next) {
     _fakeStatus = next;
@@ -64,6 +67,8 @@ class _CallWs extends CompanionWebSocketService {
   void serverState(String state) => _callState.add({'state': state});
   void serverTranscribed(String text) =>
       _transcript.add({'turn_id': 'srv_1', 'text': text});
+  void serverEmotion(String? mood, String? tier) =>
+      _emotion.add({'mood': mood, 'tier': tier, 'valence': -0.7});
   void serverSafetyAlert(String level) =>
       _safetyAlert.add({'level': level, 'turn_id': 'srv_1'});
   void serverEndedAudio({bool cancelled = false}) =>
@@ -125,6 +130,7 @@ class _CallWs extends CompanionWebSocketService {
     _ttsEnd.close();
     _transcript.close();
     _safetyAlert.close();
+    _emotion.close();
     super.dispose();
   }
 }
@@ -402,5 +408,29 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(SupportResourcesPage), findsNothing);
+  });
+
+  testWidgets('a hedged mood line appears for an opted-in turn, then fades', (
+    tester,
+  ) async {
+    await startCall(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+
+    ws.serverEmotion('low or tired', 'hint');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('mood-note')), findsOneWidget);
+    expect(find.text('You might be feeling a bit low or tired.'), findsOneWidget);
+    expect(find.textContaining('valence'), findsNothing);
+
+    await tester.pump(const Duration(seconds: 9));
+    expect(find.byKey(const ValueKey('mood-note')), findsNothing);
+  });
+
+  testWidgets('an unsure turn shows no mood line at all', (tester) async {
+    await startCall(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+    ws.serverEmotion(null, null);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('mood-note')), findsNothing);
   });
 }
