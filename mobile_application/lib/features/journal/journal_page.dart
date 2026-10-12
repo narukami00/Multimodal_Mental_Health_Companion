@@ -56,7 +56,10 @@ class _JournalPageState extends State<JournalPage> {
   Future<void> _openFilter() async {
     final next = await showModalBottomSheet<JournalFilter>(
       context: context,
+      // Full height so the Drag handles swipe-down, but the sheet content
+      // itself still sizes to fit what it holds.
       isScrollControlled: true,
+      showDragHandle: true,
       backgroundColor: const Color(0xFFFFFDF6),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
       builder: (_) => _FilterSheet(initial: _filter, sessions: sessionController.sessions),
@@ -277,6 +280,8 @@ class _FilterSheetState extends State<_FilterSheet> {
         padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
         child: Column(
           key: const ValueKey('journal-filter-sheet'),
+          // The sheet's height is whatever the content needs — never a layout
+          // fight between a scroll view and full-height constraints.
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -384,6 +384,11 @@ class _ContinueCardState extends State<_ContinueCard>
   );
   late final AnimationController _fluidTicker;
 
+  // One continuous envelope for the whole trail: it rises while the finger
+  // is down and decays after it lifts, so the effect is never snapped on or
+  // off — it flows in and melts away in the same terms.
+  double _trailAlpha = 0;
+
   @override
   void initState() {
     super.initState();
@@ -409,11 +414,11 @@ class _ContinueCardState extends State<_ContinueCard>
   }
 
   void _onPointerDown(PointerDownEvent e) {
-    // The pool appears under the finger: the head snaps there and the rest of
-    // the chain gathers, instead of flying in from wherever it last rested.
+    // The pool gathers under the finger rather than flying in from wherever
+    // it last rested. Its brightness arrives through the envelope, not a
+    // snap, so touching reads as one motion.
     for (final p in _fluid) {
       p
-        ..visible = true
         ..pos = e.localPosition
         ..vel = Offset.zero;
     }
@@ -423,15 +428,15 @@ class _ContinueCardState extends State<_ContinueCard>
 
   void _onPointerMove(PointerMoveEvent e) {
     _pointer = e.localPosition;
-    // A hover alone should not keep the sim alive; only a touch steers it,
-    // so hovering lights nothing up until the finger lands.
     _ensureTicker();
   }
 
   void _onPointerUp(PointerEvent e) {
     // Finger gone: nothing pulls any more, so the chain glides on its own
-    // momentum until damping brings it to rest, and the sim then sleeps.
+    // momentum while the envelope decays, melting the trail away over half
+    // a second or so.
     _pointer = null;
+    _ensureTicker();
   }
 
   Offset? _pointer;
@@ -460,12 +465,20 @@ class _ContinueCardState extends State<_ContinueCard>
       }
     }
 
-    // Asleep once the pointer has left and everything has come to rest; the
-    // next touch wakes the chain where the finger lands.
-    if (_pointer == null && energy < 0.6) {
-      for (final p in _fluid) {
-        p.visible = false;
-      }
+    // The envelope: quick ease in while pressed, then a slow melt away once
+    // the finger has gone, so the trail brightens and fades in the same
+    // currency the whole time.
+    if (_pointer != null) {
+      _trailAlpha += (1 - _trailAlpha) * 0.22;
+    } else {
+      _trailAlpha *= 0.86;
+    }
+
+    // Asleep once the pointer has left, the envelope has fully faded and
+    // everything has come to rest; the next touch wakes the chain where the
+    // finger lands.
+    if (_pointer == null && _trailAlpha < 0.012 && energy < 0.6) {
+      _trailAlpha = 0;
       _fluidTicker.stop();
     }
   }
@@ -517,6 +530,7 @@ class _ContinueCardState extends State<_ContinueCard>
                           painter: _WashPainter(
                             animation: loop,
                             fluid: _fluid,
+                            trailAlpha: _trailAlpha,
                             repaintNotifier: _fluidTicker,
                           ),
                         ),
@@ -585,11 +599,17 @@ class _WashPainter extends CustomPainter {
   _WashPainter({
     required this.animation,
     required this.fluid,
+    required this.trailAlpha,
     required Listenable repaintNotifier,
   }) : super(repaint: Listenable.merge([animation, repaintNotifier]));
 
   final Animation<double> animation;
   final List<_FluidPoint> fluid;
+
+  /// One envelope over the whole trail, driven by the spring sim: it rises
+  /// while the finger presses and decays after it lifts, so the effect never
+  /// snaps between states.
+  final double trailAlpha;
 
   /// How many points chase the finger. More reads softer and more liquid
   /// and costs more per frame; twelve cover a half-width tile generously.
@@ -654,31 +674,34 @@ class _WashPainter extends CustomPainter {
     _paintFluid(canvas, w);
   }
 
-  /// The pointer trail: deep accent pools that melt into one another. Each
-  /// point paints a radial gradient over its neighbour (the head is warmest
-  /// and tightest, the tail coolest and widest), so the chain reads as one
-  /// continuous liquid streak rather than a row of circles.
+  /// The pointer trail: deep accent pools that melt into one another, all
+  /// under one [trailAlpha] envelope. Each point paints its gradient exactly
+  /// once (visible or not), so brightness never double-stacks and the contact
+  /// area is one continuous pool rather than layers that jump when points
+  /// toggle on or off.
   void _paintFluid(Canvas canvas, double w) {
-    final living = fluid.where((p) => p.visible || p.vel.distance > 8).toList();
-    if (living.isEmpty) return;
+    if (trailAlpha <= 0.002) return;
 
-    const headColor = Color(0xE6FF7F50);
-    const midColor = Color(0xD9FFB534);
-    const tailColor = Color(0x8C6A63A8);
+    const headColor = Color(0xFFFF7F50); // coral
+    const midColor = Color(0xFFFFB534); // amber
 
-    for (final (i, p) in living.indexed) {
-      final fade = p.visible ? 1.0 : (1 - (i / living.length)).clamp(0.0, 1.0);
-      final t = i / (living.length - 1).clamp(1, 1 << 30);
+    Offset? headPos;
+    for (final (i, p) in fluid.indexed) {
+      final t = i / (fluid.length - 1).clamp(1, 1 << 30);
       final speed = p.vel.distance.clamp(0.0, 1200.0);
-      // Velocity stretches the blob along its motion: fast digs a streak,
-      // slow pools a round drop.
+      // Velocity stretches the blob along its motion: a fast finger digs a
+      // streak, a still one pools a round drop.
       final stretch = 1 + speed / 900.0;
-      final radius = w * (0.16 + 0.10 * (1 - t)) * stretch;
+      // The envelope rides on the tail: the head is nearly always full, and
+      // the fade reads along the trail, gradually emptying back to the head.
+      final sizeFade = (1 - t * 0.7).clamp(0.25, 1.0);
+      final alpha = (0.4 + 0.6 * sizeFade) * trailAlpha;
+      final radius = w * (0.17 - 0.05 * t) * stretch;
       final color = Color.lerp(
         headColor,
         midColor,
         t * 0.6,
-      )!.withValues(alpha: (1 - t * 0.75) * fade);
+      )!.withValues(alpha: (0.85 - 0.55 * t) * alpha);
       canvas.drawCircle(
         p.pos,
         radius,
@@ -687,19 +710,21 @@ class _WashPainter extends CustomPainter {
             colors: [color, color.withValues(alpha: 0)],
           ).createShader(Rect.fromCircle(center: p.pos, radius: radius)),
       );
+      headPos ??= p.pos;
     }
-    // And a soft indigo under-glow beneath the head, tying the trail into the
+    // A soft indigo under-glow beneath the head, tying the trail into the
     // card's own cool surface.
-    final head = living.first;
-    final glow = tailColor.withValues(alpha: 0.5);
-    canvas.drawCircle(
-      head.pos,
-      w * 0.34,
-      Paint()
-        ..shader = RadialGradient(
-          colors: [glow, glow.withValues(alpha: 0)],
-        ).createShader(Rect.fromCircle(center: head.pos, radius: w * 0.34)),
-    );
+    if (headPos != null) {
+      final glow = const Color(0xFF6A63A8).withValues(alpha: 0.5 * trailAlpha);
+      canvas.drawCircle(
+        headPos,
+        w * 0.34,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [glow, glow.withValues(alpha: 0)],
+          ).createShader(Rect.fromCircle(center: headPos, radius: w * 0.34)),
+      );
+    }
   }
 
   @override
