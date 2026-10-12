@@ -240,144 +240,12 @@ class ProfilePage extends StatelessWidget {
               // across the app's pages.
               padding: const EdgeInsets.fromLTRB(22, 10, 22, 120),
               children: [
-                // Only the settings control. The brandmark and the SOLACE
-                // wordmark that used to sit opposite it are gone: they named
-                // the app three inches above a name that was already on
-                // screen, so they were decoration repeating what the page
-                // said anyway. The gear stays, because it is the one thing
-                // the header exists for — and it is the only route to app
-                // settings now that the duplicate row is gone.
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    InkWell(
-                      onTap: () =>
-                          _showAppSettingsSheet(context, profileController),
-                      borderRadius: BorderRadius.circular(13),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(13),
-                          border: Border.all(color: const Color(0xFFF2ECDD)),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x1078501E),
-                              blurRadius: 10,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.tune_rounded,
-                          size: 19,
-                          color: Color(0xFF8E8272),
-                        ),
-                      ),
-                    ),
-                  ],
+                _identityHeader(
+                  context,
+                  displayName: displayName,
+                  avatarPath: profile.avatarPath,
+                  firstRunAt: profile.firstRunAt,
                 ),
-                const SizedBox(height: 20),
-
-                // Profile avatar + Name header
-                Row(
-                  children: [
-                    // Avatar ring
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          width: 74,
-                          height: 74,
-                          padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFFFFD88A),
-                                Color(0xFFFFB534),
-                                Color(0xFFFF9A6A),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(26),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x3BD69628),
-                                blurRadius: 20,
-                                offset: Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(23),
-                            child: GestureDetector(
-                              onTap: () => _pickAvatar(context),
-                              child: Container(
-                                color: const Color(0xFFFFF6E4),
-                                child: _AvatarContent(
-                                  avatarPath: profile.avatarPath,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  displayName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF332C21),
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              InkWell(
-                                onTap: () => _showEditProfileSheet(
-                                  context,
-                                  profileController,
-                                ),
-                                borderRadius: BorderRadius.circular(99),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(4),
-                                  child: Icon(
-                                    Icons.edit_outlined,
-                                    size: 16,
-                                    color: Color(0xFFA2988A),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _memberSinceLabel(profile.firstRunAt),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF93887A),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
 
                 // SECTION: SUPPORT.
                 //
@@ -1194,6 +1062,281 @@ class ProfilePage extends StatelessWidget {
 
   // 4. Permissions & data now lives on its own page, because it reports real
   // platform state rather than decoration. See PermissionsPage.
+
+  /// The identity header: a cover banner, the portrait breaking its lower
+  /// edge and the name beneath — the shape a social profile page uses,
+  /// because that is where a person's own details are expected to live.
+  ///
+  /// The settings gear rides the cover, where a profile page keeps its
+  /// actions, and it is still the only route to app settings.
+  Widget _identityHeader(
+    BuildContext context, {
+    required String displayName,
+    required String? avatarPath,
+    required DateTime? firstRunAt,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 124,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(26),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFFFEFD6),
+                        Color(0xFFFEE0B4),
+                        Color(0xFFFFCF96),
+                      ],
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x2ED69628),
+                        blurRadius: 22,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  // The discs inside are clipped to the cover's corners.
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          top: -52,
+                          right: -30,
+                          child: Container(
+                            width: 146,
+                            height: 146,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.30),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: -66,
+                          left: 78,
+                          child: Container(
+                            width: 140,
+                            height: 140,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0x26FF9A6A),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 22,
+                          right: 86,
+                          child: Container(
+                            width: 76,
+                            height: 76,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.45),
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                // Its own Material so the splash lands on the cover, not on
+                // the page underneath it.
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () =>
+                        _showAppSettingsSheet(context, profileController),
+                    borderRadius: BorderRadius.circular(13),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(color: const Color(0xFFF2ECDD)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x1A78501E),
+                            blurRadius: 10,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.tune_rounded,
+                        size: 19,
+                        color: Color(0xFF8E8272),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Portrait: white ring, warm gradient rim, photo inside. It
+              // sits on the cover's edge the way a profile picture does.
+              Positioned(
+                left: 16,
+                bottom: -36,
+                child: GestureDetector(
+                  onTap: () => _pickAvatar(context),
+                  child: Container(
+                    width: 90,
+                    height: 90,
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x3378501E),
+                          blurRadius: 16,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFFFD88A),
+                            Color(0xFFFFB534),
+                            Color(0xFFFF9A6A),
+                          ],
+                        ),
+                      ),
+                      child: ClipOval(
+                        child: Container(
+                          color: const Color(0xFFFFF6E4),
+                          child: _AvatarContent(avatarPath: avatarPath),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Room for the portrait hanging below the cover.
+        const SizedBox(height: 46),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF332C21),
+                  letterSpacing: -0.5,
+                  height: 1.15,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _showEditProfileSheet(context, profileController),
+                borderRadius: BorderRadius.circular(99),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(color: const Color(0xFFEFE7D6)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x1278501E),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 14,
+                        color: Color(0xFF8E8272),
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF6E6152),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 9),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8EA),
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(color: const Color(0x33FFB534)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                firstRunAt == null
+                    ? Icons.waving_hand_rounded
+                    : Icons.event_available_rounded,
+                size: 13,
+                color: const Color(0xFFB98A2E),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _memberSinceLabel(firstRunAt),
+                style: const TextStyle(
+                  fontSize: 12.3,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF8A7355),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
 
   // 5. App Settings Sheet
   static void _showAppSettingsSheet(
