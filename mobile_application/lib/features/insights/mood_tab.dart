@@ -681,8 +681,10 @@ class _JournalBreakdownCard extends StatelessWidget {
                     Row(mainAxisSize: MainAxisSize.min, children: [
                       Container(width: 8, height: 8, decoration: BoxDecoration(color: _colorForWord(w), shape: BoxShape.circle)),
                       const SizedBox(width: 5),
-                      Text('$w ${b.moodCounts[w]} · ${(b.moodCounts[w]! * 100 / b.read).round()}%',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: insightSoft)),
+                      Flexible(
+                        child: Text('$w ${b.moodCounts[w]} · ${(b.moodCounts[w]! * 100 / b.read).round()}%',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: insightSoft)),
+                      ),
                     ]),
               ],
             ),

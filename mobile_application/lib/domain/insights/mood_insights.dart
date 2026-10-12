@@ -72,7 +72,7 @@ String? moodStripSummary(List<MoodDay> strip) {
   final top = ranked.first;
   final days = withMood.length;
   return 'You checked in on $days of the last ${strip.length} days. '
-      '${top.key} came up most, on ${top.value}.';
+      '${Moods.display(top.key)} came up most, on ${top.value}.';
 }
 
 /// What can honestly be said about late nights and the mood words on the days

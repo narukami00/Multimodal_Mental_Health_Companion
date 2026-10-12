@@ -90,7 +90,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('mood-strip')), findsOneWidget);
     expect(
-      find.text('You checked in on 1 of the last 30 days. Steady came up most, on 1.'),
+      find.text('You checked in on 1 of the last 30 days. Calm came up most, on 1.'),
       findsOneWidget,
     );
   });

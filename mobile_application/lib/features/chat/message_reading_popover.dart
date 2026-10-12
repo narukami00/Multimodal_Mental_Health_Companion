@@ -30,7 +30,6 @@ OverlayEntry showMessageReading({
       const cardHeight = 200.0;
       final left = (anchor.right - width).clamp(12.0, media.size.width - width - 12);
       final above = anchor.top - cardHeight - 10 > media.padding.top + 8;
-      final top = above ? anchor.top - cardHeight - 10 : anchor.bottom + 10;
       return Stack(
         children: [
           Positioned.fill(
@@ -43,7 +42,9 @@ OverlayEntry showMessageReading({
           ),
           Positioned(
             left: left,
-            top: top,
+            // Hugs the bubble: its bottom edge sits just above it (or its top edge just below it).
+            top: above ? null : anchor.bottom + 10,
+            bottom: above ? media.size.height - anchor.top + 10 : null,
             width: width,
             child: MessageReadingCard(message: message, read: read),
           ),

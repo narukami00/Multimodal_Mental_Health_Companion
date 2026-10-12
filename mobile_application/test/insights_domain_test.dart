@@ -78,7 +78,7 @@ void main() {
       final text = moodStripSummary(
         moodStrip([_s(0, 'Steady'), _s(1, 'Steady'), _s(2, 'Bright')], _now),
       )!;
-      expect(text, 'You checked in on 3 of the last 30 days. Steady came up most, on 2.');
+      expect(text, 'You checked in on 3 of the last 30 days. Calm came up most, on 2.');
     });
   });
 
