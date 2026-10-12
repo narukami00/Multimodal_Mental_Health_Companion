@@ -105,59 +105,54 @@ class _InsightsPageState extends State<InsightsPage> {
             ),
             Positioned.fill(
               child: SafeArea(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 380),
-                    child: SingleChildScrollView(
-                      // Room for the floating pill, which overlays the page.
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _header(context),
-                          const SizedBox(height: 16),
-                          _TabBar(
-                            tabs: tabs,
-                            selected: selected,
-                            onSelected: (id) => setState(() => _selected = id),
-                          ),
-                          const SizedBox(height: 16),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 220),
-                            switchInCurve: Curves.easeOut,
-                            transitionBuilder: (child, animation) =>
-                                FadeTransition(
-                                  opacity: animation,
-                                  child: SlideTransition(
-                                    position: Tween(
-                                      begin: const Offset(0, 0.02),
-                                      end: Offset.zero,
-                                    ).animate(animation),
-                                    child: child,
-                                  ),
-                                ),
-                            child: KeyedSubtree(
-                              key: ValueKey(selected),
-                              child: _content(selected),
-                            ),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(8, 24, 8, 4),
-                            child: Text(
-                              'Patterns are reflections of what you shared, never clinical conclusions.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 11,
-                                height: 1.65,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFFB9AB96),
-                              ),
-                            ),
-                          ),
-                        ],
+                child: SingleChildScrollView(
+                  // Room for the floating pill, which overlays the page.
+                  // Horizontal inset matches the Today page so cards line up
+                  // across the app's pages.
+                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _header(context),
+                      const SizedBox(height: 16),
+                      _TabBar(
+                        tabs: tabs,
+                        selected: selected,
+                        onSelected: (id) => setState(() => _selected = id),
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOut,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween(
+                              begin: const Offset(0, 0.02),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: KeyedSubtree(
+                          key: ValueKey(selected),
+                          child: _content(selected),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(8, 24, 8, 4),
+                        child: Text(
+                          'Patterns are reflections of what you shared, never clinical conclusions.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.65,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFB9AB96),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
