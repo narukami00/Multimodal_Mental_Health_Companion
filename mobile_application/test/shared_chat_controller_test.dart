@@ -76,10 +76,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // The rail no longer prints whole messages: the last-chat tile shows the
+    // thread's date and carries the line itself as its label for readers.
+    final handle = tester.ensureSemantics();
     expect(
-      find.textContaining('A distinctive line from the shared history'),
+      find.bySemanticsLabel(
+        RegExp('A distinctive line from the shared history'),
+      ),
       findsOneWidget,
     );
+    handle.dispose();
+
+    expect(find.text('LAST CHAT'), findsOneWidget);
+    expect(find.text(conversation.dateStr), findsOneWidget);
     // The shell was handed this controller, so it must not have disposed or
     // replaced it: it still holds the conversation it loaded.
     expect(chat.conversations, hasLength(1));

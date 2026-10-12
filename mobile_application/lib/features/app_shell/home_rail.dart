@@ -195,25 +195,36 @@ class _JournalCardState extends State<_JournalCard>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            count == 0 ? 'Start writing' : '$count',
-                            style: const TextStyle(
-                              fontSize: 34,
-                              height: 1.05,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -1.2,
-                              color: Color(0xFF4A2F10),
+                          // Half a page wide is not enough for "Start writing"
+                          // at 34px, so the line shrinks instead of wrapping
+                          // out of the fixed-height tile.
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.bottomLeft,
+                            child: Text(
+                              count == 0 ? 'Start writing' : '$count',
+                              style: const TextStyle(
+                                fontSize: 34,
+                                height: 1.05,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -1.2,
+                                color: Color(0xFF4A2F10),
+                              ),
                             ),
                           ),
-                          Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              height: 1.16,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF6B4A22),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.bottomLeft,
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                height: 1.16,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF6B4A22),
+                              ),
                             ),
                           ),
                         ],
