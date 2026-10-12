@@ -72,6 +72,8 @@ DEFAULT_VAD_CONFIG: Dict[str, Any] = {
 _LEGACY_VAD_KEYS = {"min_silence_ms": "endpoint_ms"}
 
 FRAME_HEADER = struct.Struct("<II")  # uint32 stream_id, uint32 sequence
+FACE_SERVER_ENABLED = os.environ.get("SOLACE_EMOTION_FACE") == "1"  # camera frames are refused unless this server switch is on
+LIVE_SESSIONS: Dict[str, "Session"] = {}  # session id -> its newest connection (the video socket finds its session here)
 LOG_TEXT = os.environ.get("SOLACE_LOG_TEXT") == "1"  # development only: the user's words are not written to the log otherwise
 
 
@@ -263,6 +265,7 @@ class Session:
             "playback_sample_rate": tts.default_sample_rate,
             "codec": "pcm_s16le",
             "emotion": False,
+            "emotion_face": False,
         }
         self.phase = CallPhase.IDLE
         self._stream_ids = iter(range(2001, 1 << 31))
@@ -314,6 +317,7 @@ class Session:
     async def run(self) -> None:
         """Serve the connection until the client leaves."""
         await self.ws.accept()
+        LIVE_SESSIONS[self.session_id] = self  # a reconnect with the same id replaces the old connection
         logger.info(f"WebSocket client connected. Session ID: {self.session_id}")
         try:
             while True:
@@ -333,6 +337,8 @@ class Session:
 
     async def _shutdown(self) -> None:
         self._closed = True
+        if LIVE_SESSIONS.get(self.session_id) is self:
+            del LIVE_SESSIONS[self.session_id]
         reply = self.reply
         if reply is not None:
             self._stop_generation(reply, tts=True, llm=True, reason="disconnect")
@@ -349,7 +355,21 @@ class Session:
     def _emotion_on(self) -> bool:
         return bool(self.config.get("emotion")) and self.emotion.usable
 
-    async def _emotion_cue(self, turn_id: str, text: str, use_audio: bool) -> str:
+    def face_allowed(self) -> bool:
+        """Camera frames are accepted only with the server switch, the app's emotion opt-in AND its separate face consent."""
+        return FACE_SERVER_ENABLED and bool(self.config.get("emotion")) and bool(self.config.get("emotion_face"))
+
+    async def video_frame(self, jpeg: bytes) -> Dict[str, Any]:
+        """One upright JPEG frame from the video socket. Refused (never decoded) without consent; otherwise the face numbers are
+        computed by the emotion service and kept there in memory. Returns {'usable': 0/1/None} or {'refused': reason}."""
+        if not self.face_allowed():
+            return {"refused": "no_consent"}
+        if not self.emotion.usable:
+            return {"usable": None}
+        res = await self.emotion.frame(self.session_id, time.monotonic(), jpeg)
+        return {"usable": None if not res or not res.get("accepted") else res.get("usable")}
+
+    async def _emotion_cue(self, turn_id: str, text: str, use_audio: bool, face_window: Optional[Tuple[float, float]] = None) -> str:
         """Ask the emotion service about this turn and return the hedged cue ('' = none).
 
         Bounded by the client's timeout, never raises. Also tells an opted-in app what was inferred (`emotion.update`).
@@ -367,7 +387,8 @@ class Session:
                         accepted = bool(await asyncio.wait_for(asyncio.shield(upload), 1.5))
                     except Exception:
                         accepted = False
-                res = await self.emotion.finalize(self.session_id, turn_id, text, use_audio=accepted)
+                extra = {"face_window": list(face_window)} if face_window and self.face_allowed() else {}
+                res = await self.emotion.finalize(self.session_id, turn_id, text, use_audio=accepted, **extra)
             else:
                 res = await self.emotion.text(self.session_id, text)
         except Exception as e:  # the client already swallows errors; this is belt and braces
@@ -549,7 +570,10 @@ class Session:
         if isinstance(emotion_opts, dict):
             # Opt-in per session (consent is the app's call); effective only if the service is switched on server-side.
             self.config["emotion"] = bool(emotion_opts.get("enabled")) and self.emotion.enabled
-            ready["emotion"] = {"enabled": self.config["emotion"], "server_enabled": self.emotion.enabled}
+            # The camera is a SEPARATE consent: the app says so explicitly, and the server must have it switched on too.
+            self.config["emotion_face"] = bool(emotion_opts.get("face_features")) and FACE_SERVER_ENABLED
+            ready["emotion"] = {"enabled": self.config["emotion"], "server_enabled": self.emotion.enabled,
+                               "face": self.face_allowed()}
         await self._send(ready)
 
     async def _h_ping(self, data: Dict[str, Any]) -> None:
@@ -887,6 +911,7 @@ class Session:
         self._spawn(self._process_listen_turn(
             turn.turn_id, pcm, listener.sample_rate, event.speech_ms,
             stopped_at, event.reason == "max_duration", self._call_gen, turn.overlapped_assistant,
+            (turn.opened_at - 1.0, stopped_at + 0.5),  # the camera frames that belong to this turn
         ))
 
     async def _on_discard(self, event) -> None:
@@ -924,6 +949,7 @@ class Session:
         forced: bool,
         call_gen: int,
         overlapped_assistant: bool = False,
+        face_window: Optional[Tuple[float, float]] = None,
     ) -> None:
         """Transcribe one endpointed turn, then answer it."""
         if self._emotion_on() and not overlapped_assistant and sample_rate and len(pcm) >= 2 * sample_rate // 3:
@@ -964,7 +990,7 @@ class Session:
             "language": language, "confidence": round(confidence, 2),
             "audio_ms": int(len(pcm) / 2 / sample_rate * 1000),
         })
-        self._pending_cue = await self._emotion_cue(turn_id, text, use_audio=True)
+        self._pending_cue = await self._emotion_cue(turn_id, text, use_audio=True, face_window=face_window)
 
         # A thought continued after a pause is one turn, not two.
         if self._carry_text:

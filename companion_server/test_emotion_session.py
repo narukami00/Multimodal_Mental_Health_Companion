@@ -47,9 +47,9 @@ class FakeEmotion:
         self.order.append("audio_done")
         return self.accept_audio
 
-    async def finalize(self, session_id, turn_id, text, use_audio=True):
+    async def finalize(self, session_id, turn_id, text, use_audio=True, face_window=None):
         self.order.append("finalize")
-        self.finalized.append({"turn_id": turn_id, "text": text, "use_audio": use_audio})
+        self.finalized.append({"turn_id": turn_id, "text": text, "use_audio": use_audio, "face_window": face_window})
         if self.delay:
             await asyncio.sleep(self.delay)
         return self.res
@@ -57,6 +57,10 @@ class FakeEmotion:
     async def text(self, session_id, text):
         self.texts.append(text)
         return self.res
+
+    async def frame(self, session_id, t, jpeg):
+        self.frames = getattr(self, "frames", []) + [(t, len(jpeg))]
+        return {"accepted": True, "usable": 1}
 
     async def reset(self, session_id):
         self.resets.append(session_id)
@@ -101,7 +105,7 @@ async def test_session_ready_reports_emotion_only_when_asked():
         assert "emotion" not in ready
         call.ws.put_json({"type": "session.configure", "emotion": {"enabled": True}})
         await call.until("session.ready", count=2)
-        assert call.ws.of("session.ready")[-1]["emotion"] == {"enabled": True, "server_enabled": True}
+        assert call.ws.of("session.ready")[-1]["emotion"] == {"enabled": True, "server_enabled": True, "face": False}
 
 
 @pytest.mark.asyncio
@@ -237,3 +241,15 @@ async def test_a_turn_that_overlaps_the_assistants_voice_is_not_analysed_for_emo
         await call.until("llm_start", count=2)
         assert len(fake.audio) == 1  # her voice may be in the second turn: no audio handed over
         assert fake.finalized[-1]["use_audio"] is False  # words only
+
+
+@pytest.mark.asyncio
+async def test_failing_camera_frames_never_open_the_circuit_breaker():
+    c = EmotionClient(base_url="http://127.0.0.1:9", timeout_s=0.2, enabled=True)  # nothing listens on port 9
+    for _ in range(4):
+        assert await c.frame("s", 1.0, b"x" * 500) is None
+    assert c.usable is True  # audio and text estimates keep working while frames fail
+    assert await c.finalize("s", "t", "hello") is None
+    assert await c.finalize("s", "t", "hello") is None
+    assert c.usable is False  # but real estimate failures still do open it
+    await c.aclose()

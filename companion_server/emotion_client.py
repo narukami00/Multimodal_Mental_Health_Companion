@@ -10,7 +10,7 @@ the budget for the answer after the transcript is ready).
 import logging
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("solace_companion.emotion")
 
@@ -49,16 +49,20 @@ class EmotionClient:
             self._down_until = time.monotonic() + BREAKER_PAUSE_S
             self._fails = 0
 
-    async def _post(self, path: str, what: str, timeout: Optional[float] = None, **kw) -> Optional[Dict[str, Any]]:
+    async def _post(self, path: str, what: str, timeout: Optional[float] = None, droppable: bool = False, **kw) -> Optional[Dict[str, Any]]:
+        """[droppable] calls (camera frames) may fail or time out without counting against the circuit breaker: losing a frame is free,
+        and a slow frame must never switch off the audio and text estimates."""
         if not self.usable:
             return None
         try:
             r = await self._http().post(path, timeout=timeout or self.timeout_s, **kw)
             r.raise_for_status()
-            self._ok()
+            if not droppable:
+                self._ok()
             return r.json()
         except Exception as e:  # timeouts, connection errors, HTTP errors: all mean 'no emotion this turn'
-            self._fail(what, e)
+            if not droppable:
+                self._fail(what, e)
             return None
 
     # ---- API --------------------------------------------------------------------------------------------------------
@@ -67,10 +71,19 @@ class EmotionClient:
         r = await self._post("/v1/emotion/audio", "audio", timeout=1.0, params={"session_id": session_id, "turn_id": turn_id, "sample_rate": sample_rate}, content=pcm)
         return bool(r and r.get("accepted"))
 
-    async def finalize(self, session_id: str, turn_id: str, text: str, use_audio: bool = True, max_audio_wait_ms: int = 500) -> Optional[Dict[str, Any]]:
-        """The service waits at most [max_audio_wait_ms] for the turn's audio features, then answers from the text alone."""
-        return await self._post("/v1/emotion/finalize", "finalize", json={"session_id": session_id, "turn_id": turn_id, "text": text,
-                                                                           "use_audio": use_audio, "max_audio_wait_ms": max_audio_wait_ms})
+    async def finalize(self, session_id: str, turn_id: str, text: str, use_audio: bool = True, max_audio_wait_ms: int = 500,
+                       face_window: Optional[List[float]] = None) -> Optional[Dict[str, Any]]:
+        """The service waits at most [max_audio_wait_ms] for the turn's audio features, then answers from the text alone.
+        [face_window] = [t0, t1] on the clock of `frame` calls: the camera frames inside it are pooled into the estimate."""
+        body: Dict[str, Any] = {"session_id": session_id, "turn_id": turn_id, "text": text, "use_audio": use_audio,
+                                "max_audio_wait_ms": max_audio_wait_ms}
+        if face_window:
+            body["face_window"] = [float(face_window[0]), float(face_window[1])]
+        return await self._post("/v1/emotion/finalize", "finalize", json=body)
+
+    async def frame(self, session_id: str, t: float, jpeg: bytes) -> Optional[Dict[str, Any]]:
+        """One upright JPEG frame taken at [t] (this process's monotonic clock). Droppable: None on any problem."""
+        return await self._post("/v1/emotion/frame", "frame", timeout=0.6, droppable=True, params={"session_id": session_id, "t": t}, content=jpeg)
 
     async def text(self, session_id: str, text: str) -> Optional[Dict[str, Any]]:
         return await self._post("/v1/emotion/text", "text", json={"session_id": session_id, "text": text})
