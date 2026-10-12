@@ -482,7 +482,7 @@ class _ContinueCardState extends State<_ContinueCard>
     if (_pointer != null) {
       _trailAlpha += (1 - _trailAlpha) * 0.22;
     } else {
-      _trailAlpha *= 0.86;
+      _trailAlpha *= 0.92;
     }
 
     // Asleep once the pointer has left, the envelope has fully faded and
@@ -541,7 +541,7 @@ class _ContinueCardState extends State<_ContinueCard>
                           painter: _WashPainter(
                             animation: loop,
                             fluid: _fluid,
-                            trailAlpha: _trailAlpha,
+                            trailAlpha: () => _trailAlpha,
                             repaintNotifier: _fluidTicker,
                           ),
                         ),
@@ -620,7 +620,11 @@ class _WashPainter extends CustomPainter {
   /// One envelope over the whole trail, driven by the spring sim: it rises
   /// while the finger presses and decays after it lifts, so the effect never
   /// snaps between states.
-  final double trailAlpha;
+  ///
+  /// Read live on every paint. The sim changes it between frames, and a value
+  /// snapshotted when the tile last built would freeze the trail in place —
+  /// the blob would sit there until the next rebuild.
+  final double Function() trailAlpha;
 
   /// How many points chase the finger. More reads softer and more liquid
   /// and costs more per frame; twelve cover a half-width tile generously.
@@ -691,7 +695,8 @@ class _WashPainter extends CustomPainter {
   /// area is one continuous pool rather than layers that jump when points
   /// toggle on or off.
   void _paintFluid(Canvas canvas, double w) {
-    if (trailAlpha <= 0.002) return;
+    final envelope = trailAlpha();
+    if (envelope <= 0.002) return;
 
     const headColor = Color(0xFFFF7F50); // coral
     const midColor = Color(0xFFFFB534); // amber
@@ -706,7 +711,7 @@ class _WashPainter extends CustomPainter {
       // The envelope rides on the tail: the head is nearly always full, and
       // the fade reads along the trail, gradually emptying back to the head.
       final sizeFade = (1 - t * 0.7).clamp(0.25, 1.0);
-      final alpha = (0.4 + 0.6 * sizeFade) * trailAlpha;
+      final alpha = (0.4 + 0.6 * sizeFade) * envelope;
       final radius = w * (0.17 - 0.05 * t) * stretch;
       final color = Color.lerp(
         headColor,
@@ -726,7 +731,7 @@ class _WashPainter extends CustomPainter {
     // A soft indigo under-glow beneath the head, tying the trail into the
     // card's own cool surface.
     if (headPos != null) {
-      final glow = const Color(0xFF6A63A8).withValues(alpha: 0.5 * trailAlpha);
+      final glow = const Color(0xFF6A63A8).withValues(alpha: 0.5 * envelope);
       canvas.drawCircle(
         headPos,
         w * 0.34,
