@@ -330,6 +330,30 @@ void main() {
     expect(find.text('LISTENING'), findsOneWidget);
   });
 
+  testWidgets('raise hand is greyed out and does nothing while Sol is not speaking',
+      (tester) async {
+    await startCall(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tts.isPlaying, isFalse);
+    final opacity = tester.widget<Opacity>(
+      find.ancestor(of: find.byIcon(Icons.front_hand_rounded), matching: find.byType(Opacity)).first,
+    );
+    expect(opacity.opacity, lessThan(0.5));
+
+    await tester.tap(find.byIcon(Icons.front_hand_rounded), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(ws.sent, isNot(contains('barge_in:user_raised_hand')));
+    expect(find.text('RAISE HAND'), findsOneWidget);
+
+    // while Sol talks it becomes available
+    await tts.playAudioFile('/mock/a.wav', utteranceId: 'u1');
+    await tester.pump(const Duration(milliseconds: 300));
+    final ready = tester.widget<Opacity>(
+      find.ancestor(of: find.byIcon(Icons.front_hand_rounded), matching: find.byType(Opacity)).first,
+    );
+    expect(ready.opacity, 1);
+  });
+
   testWidgets('the header follows what the server and the speaker report',
       (tester) async {
     await startCall(tester);
@@ -345,7 +369,7 @@ void main() {
 
     await tts.playAudioFile('/mock/a.wav', utteranceId: 'u1');
     await tester.pump();
-    expect(find.text('Solace speaking'), findsOneWidget,
+    expect(find.text('Sol speaking'), findsOneWidget,
         reason: 'speaking means the speaker is making sound');
 
     await tts.stopVoice(fadeMs: 0);

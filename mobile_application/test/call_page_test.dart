@@ -87,7 +87,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('MIC ON'), findsOneWidget);
 
-    // Raise hand button is rendered and toggles to listening state
+    // The offline demo has Sol speaking, so the raise-hand button is available and toggles to listening
     expect(find.text('RAISE HAND'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.front_hand_rounded), warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 300));

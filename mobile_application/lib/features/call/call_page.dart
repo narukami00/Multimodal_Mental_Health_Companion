@@ -648,7 +648,7 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
   (Color, String) _statusFor(CallPhase phase) => switch (phase) {
         CallPhase.userSpeaking => (const Color(0xFF10B981), 'Listening to you...'),
         CallPhase.thinking => (_amber, 'Thinking...'),
-        CallPhase.assistantSpeaking => (_coral, 'Solace speaking'),
+        CallPhase.assistantSpeaking => (_coral, 'Sol speaking'),
         CallPhase.muted => (_softInk, 'Microphone muted'),
         CallPhase.ended => (_softInk, 'Call ended'),
         _ => (_amber, 'Listening · take your time'),
@@ -753,8 +753,12 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
     _syncMicOpen();
   }
 
+  /// Raising a hand interrupts Sol, so it only makes sense while Sol is speaking.
+  bool get _canRaiseHand =>
+      !_ended && (_solSpeaking || _turn.currentPhase == CallPhase.assistantSpeaking);
+
   void _onRaiseHand() {
-    if (_ended) return;
+    if (_ended || !_canRaiseHand) return;
     HapticFeedback.heavyImpact();
     debugPrint('[CallPage] Raise hand: silencing Sol and giving the floor to you');
 
@@ -1339,7 +1343,9 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
             ),
             _Ctrl(
               label: _handRaised ? 'Listening' : 'Raise hand',
-              active: _handRaised || _turn.currentPhase == CallPhase.userSpeaking,
+              // Ready (white) only while Sol is talking; otherwise there is nothing to interrupt.
+              active: _canRaiseHand || _handRaised,
+              enabled: _canRaiseHand,
               onTap: _onRaiseHand,
               icon: Icons.front_hand_rounded,
               slashed: false,
@@ -2214,6 +2220,7 @@ class _Ctrl extends StatelessWidget {
     required this.onTap,
     required this.icon,
     required this.slashed,
+    this.enabled = true,
   });
 
   final String label;
@@ -2222,15 +2229,25 @@ class _Ctrl extends StatelessWidget {
   final IconData icon;
   final bool slashed;
 
+  /// False greys the button out and ignores taps.
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
     final fg = active ? _CallPageState._ink : const Color(0xFF8A5A1E);
+    return Opacity(
+      opacity: enabled ? 1 : 0.38,
+      child: _body(fg),
+    );
+  }
+
+  Widget _body(Color fg) {
     return Column(
       children: [
         Material(
           type: MaterialType.transparency,
           child: InkWell(
-            onTap: onTap,
+            onTap: enabled ? onTap : null,
             borderRadius: BorderRadius.circular(999),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),

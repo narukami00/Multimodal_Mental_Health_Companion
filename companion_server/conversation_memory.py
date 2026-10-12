@@ -75,7 +75,7 @@ def summary_messages(
         lines.append("")
     lines.append("New conversation to fold in:")
     for turn in turns[-MAX_SUMMARY_INPUT_TURNS:]:
-        speaker = "User" if turn["role"] == "user" else "Solace"
+        speaker = "User" if turn["role"] == "user" else "Sol"
         lines.append(f"{speaker}: {turn['content']}")
     return [
         {"role": "system", "content": SUMMARY_INSTRUCTION},
