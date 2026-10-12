@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/companion_server_config.dart';
 import '../../core/models/chat_message_record.dart';
+import '../../core/models/safety_assessment.dart';
 import '../../services/audio_processor.dart';
 import '../../services/companion_websocket_service.dart';
 import '../../services/pcm_audio_recorder_service.dart';
@@ -418,9 +419,34 @@ class _CallPageState extends State<CallPage> {
       }
     });
 
+    // Two independent safety nets for spoken words: the app's own screener on
+    // every final transcript, and the server's gate (which also answers with a
+    // fixed supportive reply). Either one opens Support; it opens only once.
+    _on(_wsService?.safetyAlertStream, (Map<String, dynamic> data) {
+      final level = data['level'] == 'urgent_support'
+          ? SafetyLevel.urgentSupport
+          : SafetyLevel.supportSuggested;
+      unawaited(
+        widget.safetyController
+            .assessSignal(
+              source: 'call_server',
+              assessment: SafetyAssessment(
+                level: level,
+                matchedSignals: const ['server_safety_gate'],
+              ),
+            )
+            .then(_openSupportFor),
+      );
+    });
+
     _on(_wsService?.transcriptFinalStream, (Map<String, dynamic> data) {
       final text = data['text'] as String? ?? '';
       if (text.trim().isEmpty) return;
+      unawaited(
+        widget.safetyController
+            .assessText(source: 'call', text: text)
+            .then(_openSupportFor),
+      );
       _commitUserTurn(text.trim());
       setState(() {
         if (_lines.length >= 2) _lines.removeAt(0);
@@ -792,6 +818,30 @@ class _CallPageState extends State<CallPage> {
     setState(() => _paused = false);
     _syncMicOpen();
     if (leave == true) _endSession();
+  }
+
+  bool _supportOpen = false;
+
+  /// Opens Support for a flagged assessment, once at a time. The call keeps
+  /// running underneath, so the fixed supportive reply is still heard.
+  Future<void> _openSupportFor(SafetyAssessment assessment) async {
+    if (assessment.level == SafetyLevel.clear || _supportOpen || !mounted) {
+      return;
+    }
+    _supportOpen = true;
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SupportResourcesPage(
+            safetyController: widget.safetyController,
+            profileController: widget.profileController,
+            assessment: assessment,
+          ),
+        ),
+      );
+    } finally {
+      _supportOpen = false;
+    }
   }
 
   Future<void> _openSupport() async {

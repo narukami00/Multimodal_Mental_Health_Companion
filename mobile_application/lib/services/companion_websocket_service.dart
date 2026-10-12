@@ -189,6 +189,20 @@ class CompanionWebSocketService {
   Stream<Map<String, dynamic>> get callListeningStream =>
       _callListeningController.stream;
 
+  /// The server's own crisis-language gate fired for the person's last words
+  /// (`safety.alert`: a level, never their words).
+  final _safetyAlertController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get safetyAlertStream =>
+      _safetyAlertController.stream;
+
+  /// What the server inferred from a turn's voice and words (`emotion.update`),
+  /// sent only when the person opted in.
+  final _emotionUpdateController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get emotionUpdateStream =>
+      _emotionUpdateController.stream;
+
   static CompanionWebSocketService? _live;
 
   /// Quotes one good moment from a chat message over the live connection, or
@@ -968,6 +982,18 @@ class CompanionWebSocketService {
           }
           break;
 
+        case 'safety.alert':
+          if (!_safetyAlertController.isClosed) {
+            _safetyAlertController.add(data);
+          }
+          break;
+
+        case 'emotion.update':
+          if (!_emotionUpdateController.isClosed) {
+            _emotionUpdateController.add(data);
+          }
+          break;
+
         case 'transcript_failed':
           if (!_transcriptFailedController.isClosed) {
             _transcriptFailedController.add(data);
@@ -1136,6 +1162,8 @@ class CompanionWebSocketService {
     _audioReceivedController.close();
     _turnCancelledController.close();
     _transcriptFinalController.close();
+    _safetyAlertController.close();
+    _emotionUpdateController.close();
     _transcriptFailedController.close();
     _binaryAudioController.close();
     _ttsStartController.close();

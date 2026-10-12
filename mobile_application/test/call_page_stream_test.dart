@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/data/repositories/in_memory_safety_event_repository.dart';
 import 'package:solace_mobile/features/call/call_page.dart';
+import 'package:solace_mobile/features/safety/support_resources_page.dart';
 import 'package:solace_mobile/features/safety/safety_controller.dart';
 import 'package:solace_mobile/providers/safety/keyword_safety_screener.dart';
 import 'package:solace_mobile/services/companion_websocket_service.dart';
@@ -25,6 +26,8 @@ class _CallWs extends CompanionWebSocketService {
   final _interrupted = StreamController<Map<String, dynamic>>.broadcast();
   final _callState = StreamController<Map<String, dynamic>>.broadcast();
   final _ttsEnd = StreamController<Map<String, dynamic>>.broadcast();
+  final _transcript = StreamController<Map<String, dynamic>>.broadcast();
+  final _safetyAlert = StreamController<Map<String, dynamic>>.broadcast();
 
   @override
   CompanionConnectionStatus get status => _fakeStatus;
@@ -42,6 +45,10 @@ class _CallWs extends CompanionWebSocketService {
   Stream<Map<String, dynamic>> get callStateStream => _callState.stream;
   @override
   Stream<Map<String, dynamic>> get ttsEndStream => _ttsEnd.stream;
+  @override
+  Stream<Map<String, dynamic>> get transcriptFinalStream => _transcript.stream;
+  @override
+  Stream<Map<String, dynamic>> get safetyAlertStream => _safetyAlert.stream;
 
   void setStatus(CompanionConnectionStatus next) {
     _fakeStatus = next;
@@ -55,6 +62,10 @@ class _CallWs extends CompanionWebSocketService {
   void serverInterrupted() =>
       _interrupted.add({'turn_id': 'srv_1', 'played_ms': 800});
   void serverState(String state) => _callState.add({'state': state});
+  void serverTranscribed(String text) =>
+      _transcript.add({'turn_id': 'srv_1', 'text': text});
+  void serverSafetyAlert(String level) =>
+      _safetyAlert.add({'level': level, 'turn_id': 'srv_1'});
   void serverEndedAudio({bool cancelled = false}) =>
       _ttsEnd.add({'cancelled': cancelled});
 
@@ -112,6 +123,8 @@ class _CallWs extends CompanionWebSocketService {
     _interrupted.close();
     _callState.close();
     _ttsEnd.close();
+    _transcript.close();
+    _safetyAlert.close();
     super.dispose();
   }
 }
@@ -349,5 +362,45 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     expect(ws.sent.any((e) => e.startsWith('end:')), isTrue);
     expect(ws.sent, contains('configure:chat_voice_playback'));
+  });
+
+  testWidgets('spoken crisis words open Support, once, and the call keeps running',
+      (tester) async {
+    await startCall(tester);
+    await tester.pump(const Duration(milliseconds: 400)); // listeners attach once the call is up
+    ws.serverTranscribed('I want to die');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(SupportResourcesPage), findsOneWidget);
+
+    // The server's own gate says the same thing a moment later: no second page.
+    ws.serverSafetyAlert('urgent_support');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(SupportResourcesPage), findsOneWidget);
+    expect(ws.sent, isNot(contains('end:user_ended_call')));
+  });
+
+  testWidgets('the server alone can open Support when the phone missed it',
+      (tester) async {
+    await startCall(tester);
+    await tester.pump(const Duration(milliseconds: 400)); // listeners attach once the call is up
+    ws.serverTranscribed('some words the phone list does not know');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(SupportResourcesPage), findsNothing);
+
+    ws.serverSafetyAlert('urgent_support');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(SupportResourcesPage), findsOneWidget);
+  });
+
+  testWidgets('ordinary speech does not open Support', (tester) async {
+    await startCall(tester);
+    await tester.pump(const Duration(milliseconds: 400)); // listeners attach once the call is up
+    ws.serverTranscribed('I had a long day at work');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(SupportResourcesPage), findsNothing);
   });
 }
