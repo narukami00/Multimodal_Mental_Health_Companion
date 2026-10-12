@@ -73,89 +73,85 @@ class _PermissionsPageState extends State<PermissionsPage> {
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              children: [
-                _buildHeader(context, colors),
-                const SizedBox(height: 16),
-                const Text(
-                  'What Solace can access',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                    color: Color(0xFF3A3125),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Android owns these settings. Solace can only show you their '
-                  'state and take you to where they are changed.',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    height: 1.45,
-                    color: Color(0xFF7B6A55),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (_loading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: SizedBox.square(
-                        dimension: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  )
-                else ...[
-                  _PermissionRow(
-                    key: const ValueKey('permission-notifications'),
-                    icon: Icons.notifications_none_rounded,
-                    title: 'Notifications',
-                    grants: 'Gentle check-in reminders at the time you choose.',
-                    ifDenied: 'No reminders. Everything else still works.',
-                    granted: _notifications,
-                    onOpenSettings: _openSettings,
-                  ),
-                  const SizedBox(height: 10),
-                  _PermissionRow(
-                    key: const ValueKey('permission-microphone'),
-                    icon: Icons.mic_none_rounded,
-                    title: 'Microphone',
-                    grants: 'Voice check-ins and voice conversations.',
-                    ifDenied: 'Text check-ins only, with the same features.',
-                    granted: _microphone,
-                    onOpenSettings: _openSettings,
-                  ),
-                  if (widget.phonePatterns != null) ...[
-                    const SizedBox(height: 10),
-                    PhonePatternsCard(controller: widget.phonePatterns!),
-                  ],
-                ],
-                const SizedBox(height: 24),
-                _buildLeavesDevice(colors),
-                const SizedBox(height: 18),
-                _buildNotCollected(colors),
-                const SizedBox(height: 22),
-                const Text(
-                  'Solace is a reflection space, not a medical or clinical '
-                  'provider.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    height: 1.5,
-                    color: Color(0xFFA2988A),
-                  ),
-                ),
-              ],
+        child: ListView(
+          // Same 22px inset as the main pages, so cards line up app-wide.
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
+          children: [
+            _buildHeader(context, colors),
+            const SizedBox(height: 16),
+            const Text(
+              'What Solace can access',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+                color: Color(0xFF3A3125),
+              ),
             ),
-          ),
+            const SizedBox(height: 6),
+            const Text(
+              'Android owns these settings. Solace can only show you their '
+              'state and take you to where they are changed.',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                height: 1.45,
+                color: Color(0xFF7B6A55),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else ...[
+              _PermissionRow(
+                key: const ValueKey('permission-notifications'),
+                icon: Icons.notifications_none_rounded,
+                title: 'Notifications',
+                grants: 'Gentle check-in reminders at the time you choose.',
+                ifDenied: 'No reminders. Everything else still works.',
+                granted: _notifications,
+                onOpenSettings: _openSettings,
+              ),
+              const SizedBox(height: 10),
+              _PermissionRow(
+                key: const ValueKey('permission-microphone'),
+                icon: Icons.mic_none_rounded,
+                title: 'Microphone',
+                grants: 'Voice check-ins and voice conversations.',
+                ifDenied: 'Text check-ins only, with the same features.',
+                granted: _microphone,
+                onOpenSettings: _openSettings,
+              ),
+              if (widget.phonePatterns != null) ...[
+                const SizedBox(height: 10),
+                PhonePatternsCard(controller: widget.phonePatterns!),
+              ],
+            ],
+            const SizedBox(height: 24),
+            _buildLeavesDevice(colors),
+            const SizedBox(height: 18),
+            _buildNotCollected(colors),
+            const SizedBox(height: 22),
+            const Text(
+              'Solace is a reflection space, not a medical or clinical '
+              'provider.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                height: 1.5,
+                color: Color(0xFFA2988A),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -213,14 +209,22 @@ class _PermissionsPageState extends State<PermissionsPage> {
             ),
           ),
           const SizedBox(height: 10),
-          _bullet('Your check-ins, journal and mood history are stored only on '
-              'this device.'),
-          _bullet('Online chat sends your chat text to the Solace companion '
-              'server for processing.'),
-          _bullet('Voice check-ins and voice conversations send audio to the '
-              'companion server so it can be transcribed.'),
-          _bullet('Nothing is shared with anyone else, and no clinician is '
-              'connected in this build.'),
+          _bullet(
+            'Your check-ins, journal and mood history are stored only on '
+            'this device.',
+          ),
+          _bullet(
+            'Online chat sends your chat text to the Solace companion '
+            'server for processing.',
+          ),
+          _bullet(
+            'Voice check-ins and voice conversations send audio to the '
+            'companion server so it can be transcribed.',
+          ),
+          _bullet(
+            'Nothing is shared with anyone else, and no clinician is '
+            'connected in this build.',
+          ),
         ],
       ),
     );
@@ -240,11 +244,7 @@ class _PermissionsPageState extends State<PermissionsPage> {
         children: [
           const Row(
             children: [
-              Icon(
-                Icons.shield_outlined,
-                size: 17,
-                color: Color(0xFF3F823B),
-              ),
+              Icon(Icons.shield_outlined, size: 17, color: Color(0xFF3F823B)),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -260,12 +260,19 @@ class _PermissionsPageState extends State<PermissionsPage> {
             ],
           ),
           const SizedBox(height: 10),
-          _bullet('Your location, contacts, messages or call history',
-              dark: true),
-          _bullet('What is inside any app, message or notification, even with '
-              'phone patterns on', dark: true),
-          _bullet('Advertising identifiers or third-party analytics',
-              dark: true),
+          _bullet(
+            'Your location, contacts, messages or call history',
+            dark: true,
+          ),
+          _bullet(
+            'What is inside any app, message or notification, even with '
+            'phone patterns on',
+            dark: true,
+          ),
+          _bullet(
+            'Advertising identifiers or third-party analytics',
+            dark: true,
+          ),
           const SizedBox(height: 4),
           const Text(
             'These stay off by design. Phone patterns (screen time and which '
@@ -296,9 +303,7 @@ class _PermissionsPageState extends State<PermissionsPage> {
               height: 5,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: dark
-                    ? const Color(0xFF7BAE76)
-                    : const Color(0xFFD3C8B2),
+                color: dark ? const Color(0xFF7BAE76) : const Color(0xFFD3C8B2),
               ),
             ),
           ),
@@ -310,9 +315,7 @@ class _PermissionsPageState extends State<PermissionsPage> {
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 height: 1.5,
-                color: dark
-                    ? const Color(0xFF3F6B3C)
-                    : const Color(0xFF7B6A55),
+                color: dark ? const Color(0xFF3F6B3C) : const Color(0xFF7B6A55),
               ),
             ),
           ),
@@ -423,9 +426,7 @@ class _PermissionRow extends StatelessWidget {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w800,
-          color: granted
-              ? const Color(0xFF3F823B)
-              : const Color(0xFF7A6E5D),
+          color: granted ? const Color(0xFF3F823B) : const Color(0xFF7A6E5D),
         ),
       ),
     );

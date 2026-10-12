@@ -39,7 +39,9 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
   Widget _readingSection() {
     final r = session.reading;
     if (r != null) return EmotionReadingCard(reading: r);
-    final canRead = widget.onReanalyze != null && (session.text?.trim().isNotEmpty ?? false);
+    final canRead =
+        widget.onReanalyze != null &&
+        (session.text?.trim().isNotEmpty ?? false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -65,10 +67,14 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
     if (updated == null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(
-          content: Text("Couldn't read it: the companion server isn't reachable, or reading isn't switched on."),
-          behavior: SnackBarBehavior.floating,
-        ));
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Couldn't read it: the companion server isn't reachable, or reading isn't switched on.",
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
     }
   }
 
@@ -96,218 +102,210 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
             colors: [Color(0xFFFEFCE8), Color(0xFFFFFBEC)],
           ),
         ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          onPressed: () => Navigator.of(context).maybePop(),
-                          icon: const Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            size: 18,
-                            color: Color(0xFF8A6B33),
-                          ),
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(40, 40),
-                            maximumSize: const Size(40, 40),
-                            backgroundColor: const Color(0xFFFFF6E0),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                // Same 22px inset as the main pages, so cards line up app-wide.
+                padding: const EdgeInsets.fromLTRB(22, 8, 22, 4),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 18,
+                        color: Color(0xFF8A6B33),
+                      ),
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(40, 40),
+                        maximumSize: const Size(40, 40),
+                        backgroundColor: const Color(0xFFFFF6E0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '$date · $time',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: _ink,
-                                ),
-                              ),
-                              Text(
-                                modeLabel,
-                                style: const TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: _softInk,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF6E0),
-                            borderRadius: BorderRadius.circular(99),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0x1F7A5A28),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _modeIcon(session.mode),
-                                size: 15,
-                                color: const Color(0xFFC98A2E),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                modeLabel.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.6,
-                                  color: Color(0xFFA97410),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _readingSection(),
-                          const SizedBox(height: 18),
-                          if (session.text?.trim().isNotEmpty ?? false) ...[
-                            const Text(
-                              'Your words',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: _ink,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.fromLTRB(
-                                20,
-                                18,
-                                20,
-                                20,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFFDF6),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: const Color(0x4DE2C185),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0x1F96641E),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    '“',
-                                    style: TextStyle(
-                                      fontSize: 34,
-                                      height: 0.6,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0x66FFB534),
-                                    ),
-                                  ),
-                                  Text(
-                                    session.text!.trim(),
-                                    style: const TextStyle(
-                                      fontSize: 15.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF483523),
-                                      height: 1.55,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                          ],
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: _warm.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: _warm.withValues(alpha: 0.30),
-                              ),
-                            ),
-                            child: const Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.info_outline_rounded,
-                                  color: Color(0xFFA97410),
-                                  size: 20,
-                                ),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    'Solace offers reflections, not diagnoses. Model signals are optional and may be incomplete.',
-                                    style: TextStyle(
-                                      color: Color(0xFF8A6112),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          Text(
+                            '$date · $time',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: _ink,
                             ),
                           ),
-                          if (onDelete != null) ...[
-                            const SizedBox(height: 14),
-                            Center(
-                              child: TextButton.icon(
-                                key: const ValueKey('delete-entry'),
-                                onPressed: () => _confirmDelete(context),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFFB5503C),
-                                ),
-                                icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                                label: const Text(
-                                  'Delete this entry',
-                                  style: TextStyle(fontWeight: FontWeight.w800),
-                                ),
-                              ),
+                          Text(
+                            modeLabel,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: _softInk,
                             ),
-                          ],
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF6E0),
+                        borderRadius: BorderRadius.circular(99),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0x1F7A5A28),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _modeIcon(session.mode),
+                            size: 15,
+                            color: const Color(0xFFC98A2E),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            modeLabel.toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
+                              color: Color(0xFFA97410),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(22, 8, 22, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _readingSection(),
+                      const SizedBox(height: 18),
+                      if (session.text?.trim().isNotEmpty ?? false) ...[
+                        const Text(
+                          'Your words',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: _ink,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFDF6),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0x4DE2C185)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0x1F96641E),
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '“',
+                                style: TextStyle(
+                                  fontSize: 34,
+                                  height: 0.6,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0x66FFB534),
+                                ),
+                              ),
+                              Text(
+                                session.text!.trim(),
+                                style: const TextStyle(
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF483523),
+                                  height: 1.55,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _warm.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: _warm.withValues(alpha: 0.30),
+                          ),
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              color: Color(0xFFA97410),
+                              size: 20,
+                            ),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Solace offers reflections, not diagnoses. Model signals are optional and may be incomplete.',
+                                style: TextStyle(
+                                  color: Color(0xFF8A6112),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (onDelete != null) ...[
+                        const SizedBox(height: 14),
+                        Center(
+                          child: TextButton.icon(
+                            key: const ValueKey('delete-entry'),
+                            onPressed: () => _confirmDelete(context),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFFB5503C),
+                            ),
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                            ),
+                            label: const Text(
+                              'Delete this entry',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

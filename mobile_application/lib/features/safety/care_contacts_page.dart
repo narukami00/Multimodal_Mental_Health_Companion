@@ -30,40 +30,37 @@ class CareContactsPage extends StatelessWidget {
         return Scaffold(
           backgroundColor: SolaceColors.from(context).background,
           body: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: Column(
-                  children: [
-                    _buildHeader(context),
-                    Expanded(
-                      child: contacts.isEmpty
-                          ? const _EmptyContacts()
-                          : ListView(
-                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-                              children: [
-                                for (final contact in contacts)
-                                  _ContactCard(
-                                    key: ValueKey('contact-${contact.id}'),
-                                    contact: contact,
-                                    onCall: () => _call(context, contact),
-                                    onEdit: () => _editContact(context, contact),
-                                    onDelete: () =>
-                                        _confirmDelete(context, contact),
-                                    onMakeIce: contact.isIce
-                                        ? null
-                                        : () => profileController
-                                            .saveEmergencyContact(
-                                              contact.copyWith(isIce: true),
-                                            ),
-                                  ),
-                              ],
-                            ),
-                    ),
-                    _buildAddButton(context),
-                  ],
+            child: Column(
+              children: [
+                _buildHeader(context),
+                Expanded(
+                  child: contacts.isEmpty
+                      ? const _EmptyContacts()
+                      : ListView(
+                          // Same 22px inset as the main pages, so cards line
+                          // up app-wide.
+                          padding: const EdgeInsets.fromLTRB(22, 4, 22, 20),
+                          children: [
+                            for (final contact in contacts)
+                              _ContactCard(
+                                key: ValueKey('contact-${contact.id}'),
+                                contact: contact,
+                                onCall: () => _call(context, contact),
+                                onEdit: () => _editContact(context, contact),
+                                onDelete: () =>
+                                    _confirmDelete(context, contact),
+                                onMakeIce: contact.isIce
+                                    ? null
+                                    : () => profileController
+                                          .saveEmergencyContact(
+                                            contact.copyWith(isIce: true),
+                                          ),
+                              ),
+                          ],
+                        ),
                 ),
-              ),
+                _buildAddButton(context),
+              ],
             ),
           ),
         );
@@ -464,8 +461,8 @@ class _ContactEditorSheetState extends State<_ContactEditorSheet> {
 
   void _save() {
     if (!_canSave) return;
-    final id = widget.existing?.id ??
-        DateTime.now().microsecondsSinceEpoch.toString();
+    final id =
+        widget.existing?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
     Navigator.of(context).pop(
       EmergencyContact(
         id: id,

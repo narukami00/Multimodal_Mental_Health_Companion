@@ -64,12 +64,13 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
   @override
   void initState() {
     super.initState();
-    _breath = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: _pattern.cycleMs),
-    )
-      ..addListener(_onBreathTick)
-      ..addStatusListener(_onBreathStatus);
+    _breath =
+        AnimationController(
+            vsync: this,
+            duration: Duration(milliseconds: _pattern.cycleMs),
+          )
+          ..addListener(_onBreathTick)
+          ..addStatusListener(_onBreathStatus);
 
     // Never auto-run under test: an endless animation would hang pumpAndSettle.
     if (!_isTestEnvironment) {
@@ -125,8 +126,7 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
   CountryResources get _country =>
       CountryResources.byCode(widget.profileController?.profile.countryCode);
 
-  bool get _isUrgent =>
-      widget.assessment?.level == SafetyLevel.urgentSupport;
+  bool get _isUrgent => widget.assessment?.level == SafetyLevel.urgentSupport;
 
   Future<void> _close() async {
     await widget.safetyController.markSupportShown();
@@ -169,77 +169,73 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              children: [
-                _buildHeader(colors),
-                const SizedBox(height: 6),
-                const Text(
-                  'Right now',
-                  style: TextStyle(
-                    fontSize: 27,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    height: 1.15,
-                    color: Color(0xFF3A3125),
-                  ),
-                ),
-                const SizedBox(height: 5),
-                const Text(
-                  'One of these is enough.',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF7B6A55),
-                  ),
-                ),
-                const SizedBox(height: 18),
-
-                // For an acute flag, the emergency number comes before anything.
-                if (_isUrgent) ...[
-                  _DangerRow(
-                    number: _country.emergencyNumber,
-                    emphasised: true,
-                    onTap: _dialEmergency,
-                  ),
-                  const SizedBox(height: 14),
-                ],
-
-                _buildPersonBlock(),
-                const SizedBox(height: 14),
-
-                for (final line in _country.helplines) ...[
-                  _HelplineCard(helpline: line, onCall: () => _dial(line.phone)),
-                  const SizedBox(height: 14),
-                ],
-
-                _buildBreathCard(colors),
-
-                if (!_isUrgent) ...[
-                  const SizedBox(height: 16),
-                  _DangerRow(
-                    number: _country.emergencyNumber,
-                    emphasised: false,
-                    onTap: _dialEmergency,
-                  ),
-                ],
-
-                const SizedBox(height: 22),
-                const Text(
-                  'Solace is not an emergency service.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFA2988A),
-                  ),
-                ),
-              ],
+        child: ListView(
+          // Same 22px inset as the main pages, so cards line up app-wide.
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
+          children: [
+            _buildHeader(colors),
+            const SizedBox(height: 6),
+            const Text(
+              'Right now',
+              style: TextStyle(
+                fontSize: 27,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                height: 1.15,
+                color: Color(0xFF3A3125),
+              ),
             ),
-          ),
+            const SizedBox(height: 5),
+            const Text(
+              'One of these is enough.',
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF7B6A55),
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // For an acute flag, the emergency number comes before anything.
+            if (_isUrgent) ...[
+              _DangerRow(
+                number: _country.emergencyNumber,
+                emphasised: true,
+                onTap: _dialEmergency,
+              ),
+              const SizedBox(height: 14),
+            ],
+
+            _buildPersonBlock(),
+            const SizedBox(height: 14),
+
+            for (final line in _country.helplines) ...[
+              _HelplineCard(helpline: line, onCall: () => _dial(line.phone)),
+              const SizedBox(height: 14),
+            ],
+
+            _buildBreathCard(colors),
+
+            if (!_isUrgent) ...[
+              const SizedBox(height: 16),
+              _DangerRow(
+                number: _country.emergencyNumber,
+                emphasised: false,
+                onTap: _dialEmergency,
+              ),
+            ],
+
+            const SizedBox(height: 22),
+            const Text(
+              'Solace is not an emergency service.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFA2988A),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -630,7 +626,9 @@ class _DangerRow extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: emphasised ? const Color(0xFFFFE9DE) : const Color(0xFFFFF7F0),
+            color: emphasised
+                ? const Color(0xFFFFE9DE)
+                : const Color(0xFFFFF7F0),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: emphasised
@@ -747,7 +745,10 @@ class _HelplineCard extends StatelessWidget {
                 'Call ${helpline.name}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),

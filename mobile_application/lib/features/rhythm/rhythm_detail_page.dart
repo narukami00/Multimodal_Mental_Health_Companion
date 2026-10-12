@@ -44,10 +44,10 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
       (widget.libraryRepository ?? AssetActivityLibraryRepository()).load();
 
   RhythmSummary get _summary => summariseRhythm(
-        sessions: widget.sessionController.sessions,
-        restDays: widget.profileController.restDays,
-        suggestions: widget.suggestionController.history,
-      );
+    sessions: widget.sessionController.sessions,
+    restDays: widget.profileController.restDays,
+    suggestions: widget.suggestionController.history,
+  );
 
   List<SessionRecord> _sessionsOn(DateTime date) {
     final key = dayKey(date);
@@ -72,8 +72,8 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
     final state = day.isRestDay
         ? 'rested'
         : day.hasSuggestionOutcome
-            ? 'something you answered'
-            : 'nothing logged';
+        ? 'something you answered'
+        : 'nothing logged';
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -116,42 +116,38 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: AnimatedBuilder(
-              animation: Listenable.merge([
-                widget.sessionController,
-                widget.profileController,
-                widget.suggestionController,
-              ]),
-              builder: (context, _) {
-                final summary = _summary;
-                final restingToday = widget.profileController.restDays.contains(
-                  dayKey(dateOnly(DateTime.now())),
-                );
+        child: AnimatedBuilder(
+          animation: Listenable.merge([
+            widget.sessionController,
+            widget.profileController,
+            widget.suggestionController,
+          ]),
+          builder: (context, _) {
+            final summary = _summary;
+            final restingToday = widget.profileController.restDays.contains(
+              dayKey(dateOnly(DateTime.now())),
+            );
 
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-                  children: [
-                    _buildHeader(context, colors),
-                    const SizedBox(height: 18),
-                    _buildCounts(summary),
-                    const SizedBox(height: 16),
-                    _buildGrid(summary, colors),
-                    const SizedBox(height: 16),
-                    const RhythmLegend(),
-                    const SizedBox(height: 18),
-                    _buildUsual(summary),
-                    const SizedBox(height: 14),
-                    _buildRestToday(restingToday),
-                    const SizedBox(height: 22),
-                    _buildWhatHasHelped(),
-                  ],
-                );
-              },
-            ),
-          ),
+            return ListView(
+              // Same 22px inset as the main pages, so cards line up app-wide.
+              padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
+              children: [
+                _buildHeader(context, colors),
+                const SizedBox(height: 18),
+                _buildCounts(summary),
+                const SizedBox(height: 16),
+                _buildGrid(summary, colors),
+                const SizedBox(height: 16),
+                const RhythmLegend(),
+                const SizedBox(height: 18),
+                _buildUsual(summary),
+                const SizedBox(height: 14),
+                _buildRestToday(restingToday),
+                const SizedBox(height: 22),
+                _buildWhatHasHelped(),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -242,9 +238,9 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
                 SizedBox(
                   width: 54,
                   child: Text(
-                    MaterialLocalizations.of(context).formatShortDate(
-                      row.first.date,
-                    ),
+                    MaterialLocalizations.of(
+                      context,
+                    ).formatShortDate(row.first.date),
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -307,9 +303,9 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
           Text(
             usual == null
                 ? 'Too early to call this a pattern. '
-                    '${summary.checkInCount} check-ins so far.'
+                      '${summary.checkInCount} check-ins so far.'
                 : 'Your usual: about ${usual.daysPerWeek} days a week. '
-                    'Just a reference.',
+                      'Just a reference.',
             style: const TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w600,

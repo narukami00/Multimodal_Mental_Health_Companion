@@ -129,31 +129,61 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
             child: _AmbientBlob(color: Color(0x1F7C8DB8), size: 280),
           ),
           SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 380),
-                child: ListenableBuilder(
-                  listenable: Listenable.merge([
-                    _patterns,
-                    widget.profileController,
-                  ]),
-                  builder: (context, _) => ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            child: ListenableBuilder(
+              listenable: Listenable.merge([
+                _patterns,
+                widget.profileController,
+              ]),
+              builder: (context, _) {
+                // Loading state: the page renders fully populated once the
+                // stored days have arrived, but rather than flashing a blank
+                // frame in between, it shows placeholders in the same spots.
+                if (!_loaded) {
+                  return ListView(
+                    // Same 22px inset as the main pages, so cards line up
+                    // app-wide.
+                    padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
                     children: [
                       _header(context, colors),
                       const SizedBox(height: 14),
                       _Reveal(index: 0, child: _statusCard(context)),
                       const SizedBox(height: 12),
-                      if (_loaded)
-                        _Reveal(index: 1, child: _yesterdayCard(context)),
-                      const SizedBox(height: 12),
-                      if (_loaded) _Reveal(index: 2, child: _weekCard()),
-                      const SizedBox(height: 12),
-                      _Reveal(index: 3, child: _controlsCard(context)),
+                      _Reveal(
+                        index: 1,
+                        child: _card(
+                          child: const SizedBox(
+                            height: 120,
+                            child: Center(
+                              child: SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
-                  ),
-                ),
-              ),
+                  );
+                }
+                return ListView(
+                  // Same 22px inset as the main pages, so cards line up
+                  // app-wide.
+                  padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
+                  children: [
+                    _header(context, colors),
+                    const SizedBox(height: 14),
+                    _Reveal(index: 0, child: _statusCard(context)),
+                    const SizedBox(height: 12),
+                    _Reveal(index: 1, child: _yesterdayCard(context)),
+                    const SizedBox(height: 12),
+                    _Reveal(index: 2, child: _weekCard()),
+                    const SizedBox(height: 12),
+                    _Reveal(index: 3, child: _controlsCard(context)),
+                  ],
+                );
+              },
             ),
           ),
         ],

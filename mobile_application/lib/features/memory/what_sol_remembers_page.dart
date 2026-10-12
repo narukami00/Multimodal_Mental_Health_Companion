@@ -15,7 +15,18 @@ const _muted = Color(0xFFA69883);
 const _line = Color(0x143B2F26);
 
 const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /// Everything Sol remembers about the person and everything it is told, in one
@@ -54,63 +65,61 @@ class WhatSolRemembersPage extends StatelessWidget {
         ),
       ),
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 380),
-            child: ListenableBuilder(
-              listenable: Listenable.merge([
-                moments,
-                consent,
-                profileController,
-                ?chat,
-              ]),
-              builder: (context, _) => ListView(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
-                    child: Text(
-                      'Nothing here is kept or shared unless you say so. This is '
-                      'all of it, and all of it is yours to change.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        height: 1.5,
-                        color: _soft,
-                      ),
+        child: ListenableBuilder(
+          listenable: Listenable.merge([
+            moments,
+            consent,
+            profileController,
+            ?chat,
+          ]),
+          builder: (context, _) => ListView(
+            // Same 22px inset as the main pages, so cards line up app-wide.
+            padding: const EdgeInsets.fromLTRB(22, 4, 22, 32),
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
+                child: Text(
+                  'Nothing here is kept or shared unless you say so. This is '
+                  'all of it, and all of it is yours to change.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    height: 1.5,
+                    color: _soft,
+                  ),
+                ),
+              ),
+              _label('WHAT SOL IS TOLD'),
+              _snippetCard(context),
+              const SizedBox(height: 10),
+              _momentsToldCard(context),
+              _label('HOW YOU SOUND'),
+              _emotionCard(context),
+              const SizedBox(height: 10),
+              _faceCard(context),
+              _label('YOUR MOMENTS'),
+              _momentList(context),
+              const SizedBox(height: 10),
+              _addButton(context),
+              if (chat != null) ..._notes(context),
+              _label('ASKING'),
+              _askingCard(),
+              const SizedBox(height: 18),
+              if (moments.all.isNotEmpty)
+                Center(
+                  child: TextButton(
+                    key: const ValueKey('forget-all-moments'),
+                    onPressed: () => _confirmForgetAll(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFB5503C),
+                    ),
+                    child: const Text(
+                      'Forget all my moments',
+                      style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
-                  _label('WHAT SOL IS TOLD'),
-                  _snippetCard(context),
-                  const SizedBox(height: 10),
-                  _momentsToldCard(context),
-                  _label('HOW YOU SOUND'),
-                  _emotionCard(context),
-                  const SizedBox(height: 10),
-                  _faceCard(context),
-                  _label('YOUR MOMENTS'),
-                  _momentList(context),
-                  const SizedBox(height: 10),
-                  _addButton(context),
-                  if (chat != null) ..._notes(context),
-                  _label('ASKING'),
-                  _askingCard(),
-                  const SizedBox(height: 18),
-                  if (moments.all.isNotEmpty)
-                    Center(
-                      child: TextButton(
-                        key: const ValueKey('forget-all-moments'),
-                        onPressed: () => _confirmForgetAll(context),
-                        style: TextButton.styleFrom(foregroundColor: const Color(0xFFB5503C)),
-                        child: const Text(
-                          'Forget all my moments',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+                ),
+            ],
           ),
         ),
       ),
@@ -168,7 +177,11 @@ class WhatSolRemembersPage extends StatelessWidget {
                       key: ValueKey('forget-note-${noted[i].id}'),
                       tooltip: 'Forget this note',
                       onPressed: () => chat!.clearSummary(noted[i].id),
-                      icon: const Icon(Icons.delete_outline_rounded, size: 20, color: _muted),
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        size: 20,
+                        color: _muted,
+                      ),
                     ),
                   ],
                 ),
@@ -183,7 +196,12 @@ class WhatSolRemembersPage extends StatelessWidget {
           'When a conversation gets long, Sol writes itself a short note so it '
           'can pick the thread up again. The messages themselves stay as they '
           'are, and forgetting a note never removes them.',
-          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, height: 1.5, color: _muted),
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            height: 1.5,
+            color: _muted,
+          ),
         ),
       ),
     ];
@@ -222,16 +240,20 @@ class WhatSolRemembersPage extends StatelessWidget {
           _switchRow(
             key: const ValueKey('snippet-switch'),
             title: 'A short note about how you like things',
-            subtitle: 'Your tone, what has felt heavy or light lately, and '
+            subtitle:
+                'Your tone, what has felt heavy or light lately, and '
                 'whether energy seems low. Never numbers, times, or app names.',
             value: on,
-            onChanged: (v) =>
-                v ? consent.grant(ConsentKey.profileSnippet) : consent.revoke(ConsentKey.profileSnippet),
+            onChanged: (v) => v
+                ? consent.grant(ConsentKey.profileSnippet)
+                : consent.revoke(ConsentKey.profileSnippet),
           ),
           const SizedBox(height: 10),
           _quote(
             key: const ValueKey('snippet-preview'),
-            heading: on ? 'Sol is told:' : 'If you turn this on, Sol would be told:',
+            heading: on
+                ? 'Sol is told:'
+                : 'If you turn this on, Sol would be told:',
             text: snippet.isEmpty
                 ? 'Nothing yet. There is not enough to say.'
                 : snippet.text,
@@ -251,7 +273,8 @@ class WhatSolRemembersPage extends StatelessWidget {
           _switchRow(
             key: const ValueKey('emotion-switch'),
             title: 'Let Sol notice how I sound',
-            subtitle: 'From your voice and words, Sol can guess whether you '
+            subtitle:
+                'From your voice and words, Sol can guess whether you '
                 'sound low, tense or upbeat, and soften its tone to match. '
                 'It is a weak guess, never a diagnosis. Your voice is '
                 'analysed on the spot and never kept.',
@@ -263,8 +286,11 @@ class WhatSolRemembersPage extends StatelessWidget {
           const SizedBox(height: 10),
           _quote(
             key: const ValueKey('emotion-preview'),
-            heading: on ? 'Sol is told, at most:' : 'If you turn this on, Sol would be told, at most:',
-            text: 'One private line such as "they may sound a bit low, '
+            heading: on
+                ? 'Sol is told, at most:'
+                : 'If you turn this on, Sol would be told, at most:',
+            text:
+                'One private line such as "they may sound a bit low, '
                 'this is a weak guess" for a turn. Never your voice, '
                 'never a label like "depressed", and nothing at all when '
                 'it is unsure.',
@@ -281,7 +307,8 @@ class WhatSolRemembersPage extends StatelessWidget {
       child: _switchRow(
         key: const ValueKey('face-switch'),
         title: 'Let Sol read my face on video calls',
-        subtitle: 'Only while the camera is on in a call. Frames are analysed '
+        subtitle:
+            'Only while the camera is on in a call. Frames are analysed '
             'live on the companion server to help judge how you sound, and '
             'are never saved. Turning this on also turns on noticing how you sound.',
         value: on,
@@ -309,16 +336,20 @@ class WhatSolRemembersPage extends StatelessWidget {
           _switchRow(
             key: const ValueKey('moments-switch'),
             title: 'Let Sol remember my moments',
-            subtitle: 'Your few most recent kept moments, word for word, so '
+            subtitle:
+                'Your few most recent kept moments, word for word, so '
                 'Sol can gently bring up the good things.',
             value: on,
-            onChanged: (v) =>
-                v ? consent.grant(ConsentKey.memoryMoments) : consent.revoke(ConsentKey.memoryMoments),
+            onChanged: (v) => v
+                ? consent.grant(ConsentKey.memoryMoments)
+                : consent.revoke(ConsentKey.memoryMoments),
           ),
           const SizedBox(height: 10),
           _quote(
             key: const ValueKey('moments-preview'),
-            heading: on ? 'Sol is told:' : 'If you turn this on, Sol would be told:',
+            heading: on
+                ? 'Sol is told:'
+                : 'If you turn this on, Sol would be told:',
             text: lines.isEmpty
                 ? 'Nothing yet. Moments you keep will appear here.'
                 : [for (final l in lines) '• $l'].join('\n'),
@@ -347,7 +378,11 @@ class WhatSolRemembersPage extends StatelessWidget {
       children: [
         Text(
           heading,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _muted),
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: _muted,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
@@ -378,7 +413,11 @@ class WhatSolRemembersPage extends StatelessWidget {
           children: [
             Text(
               title,
-              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: _ink),
+              style: const TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w800,
+                color: _ink,
+              ),
             ),
             const SizedBox(height: 3),
             Text(
@@ -412,7 +451,12 @@ class WhatSolRemembersPage extends StatelessWidget {
           'No moments yet. When you write about something good, Sol may ask '
           'whether to remember it. Only what you say yes to is kept.',
           key: ValueKey('moments-empty'),
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.5, color: _soft),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            height: 1.5,
+            color: _soft,
+          ),
         ),
       );
     }
@@ -459,7 +503,11 @@ class WhatSolRemembersPage extends StatelessWidget {
                 Text(
                   '$label${date == null ? '' : '  ·  ${date.day} ${_months[date.month - 1]}'}'
                   '${m.editedByUser ? '  ·  edited' : ''}',
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: color),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
                 ),
               ],
             ),
@@ -471,11 +519,17 @@ class WhatSolRemembersPage extends StatelessWidget {
             itemBuilder: (_) => [
               if (m.state == MomentState.pending)
                 const PopupMenuItem(value: 'keep', child: Text('Keep it')),
-              const PopupMenuItem(value: 'edit', child: Text('Change the words')),
+              const PopupMenuItem(
+                value: 'edit',
+                child: Text('Change the words'),
+              ),
               if (m.state == MomentState.confirmed)
                 const PopupMenuItem(value: 'hide', child: Text('Set aside')),
               if (m.state == MomentState.hidden)
-                const PopupMenuItem(value: 'unhide', child: Text('Bring it back')),
+                const PopupMenuItem(
+                  value: 'unhide',
+                  child: Text('Bring it back'),
+                ),
               const PopupMenuItem(value: 'delete', child: Text('Delete')),
             ],
           ),
@@ -495,7 +549,11 @@ class WhatSolRemembersPage extends StatelessWidget {
       case 'delete':
         await moments.delete(m.id);
       case 'edit':
-        final text = await _askText(context, initial: m.text, title: 'Change the words');
+        final text = await _askText(
+          context,
+          initial: m.text,
+          title: 'Change the words',
+        );
         if (text != null) await moments.edit(m.id, text);
     }
   }
@@ -505,7 +563,11 @@ class WhatSolRemembersPage extends StatelessWidget {
     child: OutlinedButton.icon(
       key: const ValueKey('add-moment'),
       onPressed: () async {
-        final text = await _askText(context, initial: '', title: 'Add a moment');
+        final text = await _askText(
+          context,
+          initial: '',
+          title: 'Add a moment',
+        );
         if (text != null) await moments.addManual(text);
       },
       icon: const Icon(Icons.add_rounded, size: 18),
@@ -522,7 +584,8 @@ class WhatSolRemembersPage extends StatelessWidget {
     child: _switchRow(
       key: const ValueKey('asking-switch'),
       title: 'Ask me whether to remember things',
-      subtitle: 'After you write or chat, Sol may ask about a good moment. '
+      subtitle:
+          'After you write or chat, Sol may ask about a good moment. '
           'Nothing is ever kept without your yes.',
       value: !profileController.profile.momentPromptsMuted,
       onChanged: (asking) => profileController.setMomentPromptsMuted(!asking),
@@ -548,7 +611,10 @@ class WhatSolRemembersPage extends StatelessWidget {
           maxLength: MemoryMoment.maxLength,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             key: const ValueKey('moment-dialog-save'),
             onPressed: () => Navigator.pop(context, controller.text),
@@ -564,9 +630,14 @@ class WhatSolRemembersPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Forget all your moments?'),
-        content: const Text('This removes every moment on this phone. It cannot be undone.'),
+        content: const Text(
+          'This removes every moment on this phone. It cannot be undone.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep them')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep them'),
+          ),
           FilledButton(
             key: const ValueKey('forget-all-confirm'),
             onPressed: () => Navigator.pop(context, true),

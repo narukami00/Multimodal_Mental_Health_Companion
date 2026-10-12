@@ -53,23 +53,19 @@ class EverythingKeptPage extends StatelessWidget {
         ),
       ),
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 380),
-            child: ListenableBuilder(
-              listenable: Listenable.merge([
-                sessionController,
-                ?chatController,
-                ?moments,
-                ?phonePatterns,
-              ]),
-              builder: (context, _) => FutureBuilder<List<DailyFeatures>>(
-                future: phonePatterns?.storedDays(),
-                builder: (context, snapshot) => ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                  children: _rows(context, snapshot.data ?? const []),
-                ),
-              ),
+        child: ListenableBuilder(
+          listenable: Listenable.merge([
+            sessionController,
+            ?chatController,
+            ?moments,
+            ?phonePatterns,
+          ]),
+          builder: (context, _) => FutureBuilder<List<DailyFeatures>>(
+            future: phonePatterns?.storedDays(),
+            builder: (context, snapshot) => ListView(
+              // Same 22px inset as the main pages, so cards line up app-wide.
+              padding: const EdgeInsets.fromLTRB(22, 4, 22, 32),
+              children: _rows(context, snapshot.data ?? const []),
             ),
           ),
         ),
@@ -95,7 +91,12 @@ class EverythingKeptPage extends StatelessWidget {
           'All of this is on your phone. Nothing is sent anywhere unless you '
           'switch it on in What Sol remembers, and each kind can be looked at '
           'or deleted where it says.',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.5, color: _soft),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            height: 1.5,
+            color: _soft,
+          ),
         ),
       ),
       _card([
@@ -165,7 +166,12 @@ class EverythingKeptPage extends StatelessWidget {
         child: Text(
           'Your choices, such as sleep hours and preferences, are kept too. '
           'They are in the baseline and settings on this page.',
-          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, height: 1.5, color: _muted),
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            height: 1.5,
+            color: _muted,
+          ),
         ),
       ),
     ];
@@ -228,7 +234,11 @@ class _Row extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _ink),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                    ),
                   ),
                   const SizedBox(height: 3),
                   Text(

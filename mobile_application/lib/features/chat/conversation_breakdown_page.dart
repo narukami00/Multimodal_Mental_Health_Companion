@@ -46,7 +46,10 @@ class ConversationBreakdownPage extends StatelessWidget {
         elevation: 0,
         scrolledUnderElevation: 0,
         foregroundColor: _ink,
-        title: const Text('How this felt', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+        title: const Text(
+          'How this felt',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
         actions: [
           TextButton.icon(
             key: const ValueKey('breakdown-support'),
@@ -61,7 +64,9 @@ class ConversationBreakdownPage extends StatelessWidget {
             ),
             icon: const Icon(Icons.health_and_safety_outlined, size: 18),
             label: const Text('Support'),
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFD9674A)),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFD9674A),
+            ),
           ),
         ],
       ),
@@ -70,48 +75,80 @@ class ConversationBreakdownPage extends StatelessWidget {
         builder: (context, _) {
           final conv = chatController.conversationById(conversationId);
           if (conv == null) {
-            return const Center(child: Text('This conversation is no longer here.'));
+            return const Center(
+              child: Text('This conversation is no longer here.'),
+            );
           }
           final breakdown = ConversationBreakdown.from(conv);
           return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: ListView(
-                key: const ValueKey('breakdown-list'),
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                children: [
-                  Text(conv.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _ink, height: 1.2)),
-                  const SizedBox(height: 3),
-                  Text('${conv.dateStr} · ${breakdown.userMessages} ${breakdown.userMessages == 1 ? 'message' : 'messages'} from you',
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: _soft)),
-                  const SizedBox(height: 14),
-                  if (breakdown.unreadMessages > 0)
-                    _UnreadBanner(chatController: chatController, conversationId: conversationId, count: breakdown.unreadMessages),
-                  if (!breakdown.hasReadings)
-                    const _Card(
-                      key: ValueKey('breakdown-empty'),
-                      child: Text(
-                        'None of your messages here have been read for how they felt yet. Once they are, this page shows the '
-                        'overall mood, how it moved, and what stood out.',
-                        style: TextStyle(fontSize: 13.5, height: 1.5, fontWeight: FontWeight.w600, color: _soft),
-                      ),
-                    )
-                  else ...[
-                    _Overview(breakdown: breakdown),
-                    _TrendCard(breakdown: breakdown),
-                    if (breakdown.shifts.isNotEmpty) _ShiftsCard(shifts: breakdown.shifts),
-                    _TalkedAboutCard(conversation: conv, breakdown: breakdown),
-                    _NoticingCard(notes: breakdown.notes),
-                  ],
-                  _KeptCard(conversation: conv, kept: keptMoments?.call() ?? const []),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'These are guesses from your words and voice. They are never a diagnosis, and only you know how you felt.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11.5, height: 1.4, fontWeight: FontWeight.w600, color: _soft),
+            child: ListView(
+              key: const ValueKey('breakdown-list'),
+              // Same 22px inset as the main pages, so cards line up app-wide.
+              padding: const EdgeInsets.fromLTRB(22, 4, 22, 32),
+              children: [
+                Text(
+                  conv.title,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                    height: 1.2,
                   ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${conv.dateStr} · ${breakdown.userMessages} ${breakdown.userMessages == 1 ? 'message' : 'messages'} from you',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: _soft,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (breakdown.unreadMessages > 0)
+                  _UnreadBanner(
+                    chatController: chatController,
+                    conversationId: conversationId,
+                    count: breakdown.unreadMessages,
+                  ),
+                if (!breakdown.hasReadings)
+                  const _Card(
+                    key: ValueKey('breakdown-empty'),
+                    child: Text(
+                      'None of your messages here have been read for how they felt yet. Once they are, this page shows the '
+                      'overall mood, how it moved, and what stood out.',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        height: 1.5,
+                        fontWeight: FontWeight.w600,
+                        color: _soft,
+                      ),
+                    ),
+                  )
+                else ...[
+                  _Overview(breakdown: breakdown),
+                  _TrendCard(breakdown: breakdown),
+                  if (breakdown.shifts.isNotEmpty)
+                    _ShiftsCard(shifts: breakdown.shifts),
+                  _TalkedAboutCard(conversation: conv, breakdown: breakdown),
+                  _NoticingCard(notes: breakdown.notes),
                 ],
-              ),
+                _KeptCard(
+                  conversation: conv,
+                  kept: keptMoments?.call() ?? const [],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'These are guesses from your words and voice. They are never a diagnosis, and only you know how you felt.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                    color: _soft,
+                  ),
+                ),
+              ],
             ),
           );
         },
@@ -136,14 +173,27 @@ class _Card extends StatelessWidget {
         color: const Color(0xFFFFFDF6),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0x4DE2C185)),
-        boxShadow: const [BoxShadow(color: Color(0x1F96641E), blurRadius: 20, offset: Offset(0, 8))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1F96641E),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (title != null) ...[
-            Text(title!.toUpperCase(),
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: Color(0xFF9C8B72))),
+            Text(
+              title!.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: Color(0xFF9C8B72),
+              ),
+            ),
             const SizedBox(height: 10),
           ],
           child,
@@ -154,7 +204,11 @@ class _Card extends StatelessWidget {
 }
 
 class _UnreadBanner extends StatefulWidget {
-  const _UnreadBanner({required this.chatController, required this.conversationId, required this.count});
+  const _UnreadBanner({
+    required this.chatController,
+    required this.conversationId,
+    required this.count,
+  });
 
   final ChatController chatController;
   final String conversationId;
@@ -187,14 +241,18 @@ class _UnreadBannerState extends State<_UnreadBanner> {
     setState(() => _busy = false);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text(read == total
-            ? 'Read $read ${read == 1 ? 'message' : 'messages'}.'
-            : read == 0
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            read == total
+                ? 'Read $read ${read == 1 ? 'message' : 'messages'}.'
+                : read == 0
                 ? "Couldn't read them: the companion server isn't reachable, or reading isn't switched on."
-                : 'Read $read of $total. The rest need the server again.'),
-      ));
+                : 'Read $read of $total. The rest need the server again.',
+          ),
+        ),
+      );
   }
 
   @override
@@ -215,7 +273,11 @@ class _UnreadBannerState extends State<_UnreadBanner> {
               _busy
                   ? 'Reading… $_done of ${widget.count}'
                   : '${widget.count} ${widget.count == 1 ? 'message hasn\'t' : 'messages haven\'t'} been read yet.',
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF3A3125)),
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF3A3125),
+              ),
             ),
           ),
           TextButton(
@@ -229,7 +291,11 @@ class _UnreadBannerState extends State<_UnreadBanner> {
   }
 }
 
-Color _colorOf(String word) => moodColors[Moods.values.firstWhere((m) => Moods.display(m) == word, orElse: () => 'Quiet')] ??
+Color _colorOf(String word) =>
+    moodColors[Moods.values.firstWhere(
+      (m) => Moods.display(m) == word,
+      orElse: () => 'Quiet',
+    )] ??
     const Color(0xFFFFB534);
 
 class _Overview extends StatelessWidget {
@@ -251,23 +317,46 @@ class _Overview extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(width: 14, height: 14, decoration: BoxDecoration(color: _colorOf(word), shape: BoxShape.circle)),
+              Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: _colorOf(word),
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 10),
-              Text('$lead ${word.toLowerCase()}',
-                  key: const ValueKey('breakdown-dominant'),
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF3A3125))),
+              Text(
+                '$lead ${word.toLowerCase()}',
+                key: const ValueKey('breakdown-dominant'),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF3A3125),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          Text('$total of ${breakdown.userMessages} of your messages were read.',
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF8A7A61))),
+          Text(
+            '$total of ${breakdown.userMessages} of your messages were read.',
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF8A7A61),
+            ),
+          ),
           const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: Row(
               children: [
                 for (final w in ConversationBreakdown.moodOrder)
-                  if ((counts[w] ?? 0) > 0) Expanded(flex: counts[w]!, child: Container(height: 12, color: _colorOf(w))),
+                  if ((counts[w] ?? 0) > 0)
+                    Expanded(
+                      flex: counts[w]!,
+                      child: Container(height: 12, color: _colorOf(w)),
+                    ),
               ],
             ),
           ),
@@ -278,11 +367,28 @@ class _Overview extends StatelessWidget {
             children: [
               for (final w in ConversationBreakdown.moodOrder)
                 if ((counts[w] ?? 0) > 0)
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    Container(width: 8, height: 8, decoration: BoxDecoration(color: _colorOf(w), shape: BoxShape.circle)),
-                    const SizedBox(width: 5),
-                    Text('$w ${counts[w]}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF8A7A61))),
-                  ]),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _colorOf(w),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '$w ${counts[w]}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF8A7A61),
+                        ),
+                      ),
+                    ],
+                  ),
             ],
           ),
         ],
@@ -323,8 +429,22 @@ class _TrendCardState extends State<_TrendCard> {
             spacing: 14,
             runSpacing: 2,
             children: [
-              Text('Lighter ↑  ·  Heavier ↓', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF8A7A61))),
-              Text('— mood   ┄ energy', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF8A7A61))),
+              Text(
+                'Lighter ↑  ·  Heavier ↓',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF8A7A61),
+                ),
+              ),
+              Text(
+                '— mood   ┄ energy',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF8A7A61),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -333,8 +453,15 @@ class _TrendCardState extends State<_TrendCard> {
               key: const ValueKey('breakdown-chart'),
               onTapDown: (d) {
                 if (points.length < 2) return;
-                final x = (d.localPosition.dx - _TrendPainter.pad) / (box.maxWidth - 2 * _TrendPainter.pad);
-                setState(() => _selected = (x * (points.length - 1)).round().clamp(0, points.length - 1));
+                final x =
+                    (d.localPosition.dx - _TrendPainter.pad) /
+                    (box.maxWidth - 2 * _TrendPainter.pad);
+                setState(
+                  () => _selected = (x * (points.length - 1)).round().clamp(
+                    0,
+                    points.length - 1,
+                  ),
+                );
               },
               child: CustomPaint(
                 size: Size(box.maxWidth, 150),
@@ -345,18 +472,45 @@ class _TrendCardState extends State<_TrendCard> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Container(width: 10, height: 10, decoration: BoxDecoration(color: _colorOf(p.word), shape: BoxShape.circle)),
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: _colorOf(p.word),
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 7),
-              Text(p.word, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF3A3125))),
+              Text(
+                p.word,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF3A3125),
+                ),
+              ),
               const SizedBox(width: 8),
-              Text('message ${index + 1} of ${points.length}',
-                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF8A7A61))),
+              Text(
+                'message ${index + 1} of ${points.length}',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF8A7A61),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          Text('“${_snippet(p.message.spokenText)}”',
-              key: const ValueKey('breakdown-selected'),
-              style: const TextStyle(fontSize: 13, height: 1.4, fontWeight: FontWeight.w600, color: Color(0xFF483523))),
+          Text(
+            '“${_snippet(p.message.spokenText)}”',
+            key: const ValueKey('breakdown-selected'),
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF483523),
+            ),
+          ),
         ],
       ),
     );
@@ -378,18 +532,32 @@ class _TrendPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final h = size.height - 2 * pad;
-    double xAt(int i) => points.length == 1 ? size.width / 2 : pad + i * (size.width - 2 * pad) / (points.length - 1);
+    double xAt(int i) => points.length == 1
+        ? size.width / 2
+        : pad + i * (size.width - 2 * pad) / (points.length - 1);
     double yAt(double v) => pad + (1 - (v + 1) / 2) * h;
 
     final grid = Paint()
       ..color = const Color(0x33B4965A)
       ..strokeWidth = 1;
-    canvas.drawLine(Offset(pad, yAt(0)), Offset(size.width - pad, yAt(0)), grid);
+    canvas.drawLine(
+      Offset(pad, yAt(0)),
+      Offset(size.width - pad, yAt(0)),
+      grid,
+    );
     final faint = Paint()
       ..color = const Color(0x14B4965A)
       ..strokeWidth = 1;
-    canvas.drawLine(Offset(pad, yAt(0.5)), Offset(size.width - pad, yAt(0.5)), faint);
-    canvas.drawLine(Offset(pad, yAt(-0.5)), Offset(size.width - pad, yAt(-0.5)), faint);
+    canvas.drawLine(
+      Offset(pad, yAt(0.5)),
+      Offset(size.width - pad, yAt(0.5)),
+      faint,
+    );
+    canvas.drawLine(
+      Offset(pad, yAt(-0.5)),
+      Offset(size.width - pad, yAt(-0.5)),
+      faint,
+    );
 
     // energy: a thin dashed line
     final energy = Paint()
@@ -405,7 +573,11 @@ class _TrendPainter extends CustomPainter {
       const dash = 5.0, gap = 4.0;
       for (var d = 0.0; d < len; d += dash + gap) {
         final t0 = d / len, t1 = (d + dash).clamp(0, len) / len;
-        canvas.drawLine(Offset(a.dx + dx * t0, a.dy + dy * t0), Offset(a.dx + dx * t1, a.dy + dy * t1), energy);
+        canvas.drawLine(
+          Offset(a.dx + dx * t0, a.dy + dy * t0),
+          Offset(a.dx + dx * t1, a.dy + dy * t1),
+          energy,
+        );
       }
     }
 
@@ -425,7 +597,11 @@ class _TrendPainter extends CustomPainter {
       final o = Offset(xAt(i), yAt(points[i].score));
       final isSel = i == selected;
       canvas.drawCircle(o, isSel ? 8 : 5, Paint()..color = Colors.white);
-      canvas.drawCircle(o, isSel ? 6 : 3.6, Paint()..color = _colorOf(points[i].word));
+      canvas.drawCircle(
+        o,
+        isSel ? 6 : 3.6,
+        Paint()..color = _colorOf(points[i].word),
+      );
       if (isSel) {
         canvas.drawCircle(
           o,
@@ -440,7 +616,8 @@ class _TrendPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _TrendPainter old) => old.points != points || old.selected != selected;
+  bool shouldRepaint(covariant _TrendPainter old) =>
+      old.points != points || old.selected != selected;
 }
 
 class _ShiftsCard extends StatelessWidget {
@@ -462,18 +639,38 @@ class _ShiftsCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(s.lighter ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                      size: 18, color: s.lighter ? const Color(0xFF6E9560) : const Color(0xFFC96F48)),
+                  Icon(
+                    s.lighter
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
+                    size: 18,
+                    color: s.lighter
+                        ? const Color(0xFF6E9560)
+                        : const Color(0xFFC96F48),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${s.lighter ? 'Lighter' : 'Heavier'}: ${s.from.word} → ${s.to.word}',
-                            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF3A3125))),
+                        Text(
+                          '${s.lighter ? 'Lighter' : 'Heavier'}: ${s.from.word} → ${s.to.word}',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF3A3125),
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text('at “${_snippet(s.to.message.spokenText, 90)}”',
-                            style: const TextStyle(fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w600, color: Color(0xFF6E6252))),
+                        Text(
+                          'at “${_snippet(s.to.message.spokenText, 90)}”',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF6E6252),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -482,7 +679,12 @@ class _ShiftsCard extends StatelessWidget {
             ),
           const Text(
             'This points at what you were saying when the reading changed. It does not mean those words caused the feeling.',
-            style: TextStyle(fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w600, color: Color(0xFF8A7A61)),
+            style: TextStyle(
+              fontSize: 11.5,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF8A7A61),
+            ),
           ),
         ],
       ),
@@ -508,12 +710,23 @@ class _TalkedAboutCard extends StatelessWidget {
                 ? conversation.summary!.trim()
                 : 'No summary yet. Sol writes one once a conversation gets long.',
             key: const ValueKey('breakdown-summary'),
-            style: const TextStyle(fontSize: 13.5, height: 1.5, fontWeight: FontWeight.w600, color: Color(0xFF483523)),
+            style: const TextStyle(
+              fontSize: 13.5,
+              height: 1.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF483523),
+            ),
           ),
           if (breakdown.keywords.isNotEmpty) ...[
             const SizedBox(height: 12),
-            const Text('Words you came back to',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF8A7A61))),
+            const Text(
+              'Words you came back to',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF8A7A61),
+              ),
+            ),
             const SizedBox(height: 6),
             Wrap(
               key: const ValueKey('breakdown-keywords'),
@@ -522,9 +735,22 @@ class _TalkedAboutCard extends StatelessWidget {
               children: [
                 for (final k in breakdown.keywords)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-                    decoration: BoxDecoration(color: const Color(0xFFFFF1D1), borderRadius: BorderRadius.circular(99)),
-                    child: Text(k, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF6E4A22))),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF1D1),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(
+                      k,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF6E4A22),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -556,10 +782,22 @@ class _NoticingCard extends StatelessWidget {
                 children: [
                   const Padding(
                     padding: EdgeInsets.only(top: 6, right: 9),
-                    child: Icon(Icons.circle, size: 6, color: Color(0xFFD9A441)),
+                    child: Icon(
+                      Icons.circle,
+                      size: 6,
+                      color: Color(0xFFD9A441),
+                    ),
                   ),
                   Expanded(
-                    child: Text(n, style: const TextStyle(fontSize: 13.5, height: 1.45, fontWeight: FontWeight.w600, color: Color(0xFF483523))),
+                    child: Text(
+                      n,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        height: 1.45,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF483523),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -579,14 +817,23 @@ class _KeptCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ids = {for (final m in conversation.messages) 'chat:${m.id}'};
-    final mine = [for (final m in kept) if (m.isConfirmed && m.sourceRef != null && ids.contains(m.sourceRef)) m];
+    final mine = [
+      for (final m in kept)
+        if (m.isConfirmed && m.sourceRef != null && ids.contains(m.sourceRef))
+          m,
+    ];
     return _Card(
       title: 'Kept from this conversation',
       child: mine.isEmpty
           ? const Text(
               'Nothing kept yet. When you choose to keep a good moment, it shows up here.',
               key: ValueKey('breakdown-kept-empty'),
-              style: TextStyle(fontSize: 13, height: 1.45, fontWeight: FontWeight.w600, color: Color(0xFF8A7A61)),
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF8A7A61),
+              ),
             )
           : Column(
               key: const ValueKey('breakdown-kept'),
@@ -598,10 +845,22 @@ class _KeptCard extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.bookmark_rounded, size: 16, color: Color(0xFFD9A441)),
+                        const Icon(
+                          Icons.bookmark_rounded,
+                          size: 16,
+                          color: Color(0xFFD9A441),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(m.text, style: const TextStyle(fontSize: 13.5, height: 1.4, fontWeight: FontWeight.w600, color: Color(0xFF483523))),
+                          child: Text(
+                            m.text,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              height: 1.4,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF483523),
+                            ),
+                          ),
                         ),
                       ],
                     ),
