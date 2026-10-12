@@ -21,6 +21,15 @@ bool get _isTestEnvironment {
   }
 }
 
+/// The oversized page title used on Solace Care screens.
+const _masthead = TextStyle(
+  fontSize: 34,
+  fontWeight: FontWeight.w800,
+  letterSpacing: -0.8,
+  height: 1.1,
+  color: Color(0xFF3A3125),
+);
+
 /// The support screen reached when someone needs help right now.
 ///
 /// Deliberately short: every block is something the user can *do*. It carries
@@ -174,16 +183,31 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
           padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
           children: [
             _buildHeader(colors),
-            const SizedBox(height: 6),
-            const Text(
-              'Right now',
-              style: TextStyle(
-                fontSize: 27,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-                height: 1.15,
-                color: Color(0xFF3A3125),
-              ),
+            const SizedBox(height: 2),
+            // Page masthead: an oversized title with a warm under-glow, so the
+            // page opens with calm rather than a bare line of text.
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Positioned(
+                  top: -36,
+                  left: -30,
+                  child: IgnorePointer(
+                    child: SizedBox.square(
+                      dimension: 190,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [Color(0x40FFB534), Color(0x00FFB534)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const Text('Right now', style: _masthead),
+              ],
             ),
             const SizedBox(height: 5),
             const Text(
@@ -601,7 +625,8 @@ class _AddPersonCard extends StatelessWidget {
   }
 }
 
-/// Tap-to-dial line for the national emergency number.
+/// Tap-to-dial line for the national emergency number. Always present, calm
+/// and unmissable without shouting.
 class _DangerRow extends StatelessWidget {
   const _DangerRow({
     required this.number,
@@ -617,50 +642,103 @@ class _DangerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final emphasisedInk = const Color(0xFFB4522C);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             color: emphasised
                 ? const Color(0xFFFFE9DE)
                 : const Color(0xFFFFF7F0),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: emphasised
                   ? const Color(0xFFFFC7AC)
                   : const Color(0xFFF6E2D6),
             ),
+            boxShadow: emphasised
+                ? const [
+                    BoxShadow(
+                      color: Color(0x2ED2603A),
+                      blurRadius: 18,
+                      offset: Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           child: Row(
             children: [
-              const Icon(
-                Icons.emergency_outlined,
-                size: 20,
-                color: Color(0xFFD2603A),
+              // The emergency glyph sits in its own sunken disc, like a call
+              // button that happens to say "911".
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: emphasised
+                      ? const Color(0xFFFFD9C8)
+                      : const Color(0xFFFFF1EA),
+                  border: Border.all(color: const Color(0x33D2603A)),
+                ),
+                child: const Icon(
+                  Icons.emergency_outlined,
+                  size: 21,
+                  color: Color(0xFFD2603A),
+                ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 13),
               Expanded(
-                child: Text(
-                  number == null
-                      ? 'In immediate danger? Call your local emergency number'
-                      : 'In immediate danger? Call $number',
-                  style: TextStyle(
-                    fontSize: emphasised ? 14.5 : 13.5,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFFB4522C),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      number == null
+                          ? 'In immediate danger?'
+                          : 'In immediate danger? Call $number',
+                      style: TextStyle(
+                        fontSize: emphasised ? 14.5 : 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: emphasisedInk,
+                      ),
+                    ),
+                    if (number == null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Call your local emergency number',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: emphasisedInk.withValues(alpha: 0.75),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               if (number != null)
-                const Icon(
-                  Icons.call_rounded,
-                  size: 18,
-                  color: Color(0xFFD2603A),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFD2603A),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33D2603A),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.call_rounded,
+                    size: 17,
+                    color: Colors.white,
+                  ),
                 ),
             ],
           ),
@@ -680,79 +758,123 @@ class _HelplineCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFDF6),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFF6EFD9)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'SOMEONE TO TALK TO',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.3,
-              color: Color(0xFFB58A4C),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            helpline.name,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF3A3125),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            helpline.about,
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              height: 1.4,
-              color: Color(0xFF7B6A55),
-            ),
-          ),
-          Text(
-            helpline.hours,
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              height: 1.4,
-              color: Color(0xFF96620C),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: OutlinedButton.icon(
-              key: const ValueKey('call-helpline'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF96620C),
-                side: const BorderSide(color: Color(0xFFFFB534), width: 1.5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              onPressed: onCall,
-              icon: const Icon(Icons.call_rounded, size: 19),
-              label: Text(
-                'Call ${helpline.name}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14785C28),
+            blurRadius: 18,
+            offset: Offset(0, 5),
           ),
         ],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: onCall,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // A quiet dial disc at the left: the whole card is tappable,
+                // and the disc says so at a glance.
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFFF3DC),
+                    border: Border.all(color: const Color(0x33FFB534)),
+                  ),
+                  child: const Icon(
+                    Icons.headset_mic_rounded,
+                    size: 21,
+                    color: Color(0xFFB57A12),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        helpline.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF3A3125),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        helpline.about,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
+                          color: Color(0xFF7B6A55),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 13,
+                            color: Color(0xFF96620C),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              helpline.hours,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF96620C),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  key: const ValueKey('call-helpline'),
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFFB534),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33B57A12),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.call_rounded,
+                    size: 19,
+                    color: Color(0xFF3D2E14),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

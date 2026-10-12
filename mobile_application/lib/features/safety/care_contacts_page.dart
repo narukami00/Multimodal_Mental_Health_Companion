@@ -69,9 +69,11 @@ class CareContactsPage extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
+    // Same 22px inset as the main pages, so the masthead lines up app-wide.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 20, 8),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(22, 12, 22, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           IconButton(
             onPressed: () => Navigator.of(context).maybePop(),
@@ -86,30 +88,35 @@ class CareContactsPage extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 6),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Your people',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF3A3125),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'Numbers you add stay on this device.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF93887A),
-                  ),
-                ),
-              ],
+          const SizedBox(height: 10),
+          // Masthead: small kicker over the big title, as on Solace Care.
+          const Text(
+            'EMERGENCY CONTACTS',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.3,
+              color: Color(0xFFD08018),
+            ),
+          ),
+          const SizedBox(height: 3),
+          const Text(
+            'Your people',
+            style: TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF3A3125),
+              letterSpacing: -0.7,
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            'Numbers you add stay on this device.',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF7B6A55),
             ),
           ),
         ],
@@ -119,7 +126,7 @@ class CareContactsPage extends StatelessWidget {
 
   Widget _buildAddButton(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      padding: const EdgeInsets.fromLTRB(22, 8, 22, 20),
       child: SizedBox(
         width: double.infinity,
         height: 48,
@@ -270,12 +277,18 @@ class _ContactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The avatar's initial pairs with a soft hue; call-first gets the warm one.
+    final initial = contact.name.trim().isEmpty
+        ? '?'
+        : contact.name.trim()[0].toUpperCase();
+    final hue = contact.isIce ? const Color(0xFFFFB534) : const Color(0xFF8DBB9A);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 14, 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(23),
         border: Border.all(
           color: contact.isIce
               ? const Color(0xFFFFB534)
@@ -294,7 +307,42 @@ class _ContactCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Avatar disc: the initial on a soft gradient, warm when this is
+              // the call-first contact.
+              Container(
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      hue.withValues(alpha: 0.85),
+                      hue.withValues(alpha: 0.55),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: hue.withValues(alpha: 0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF3D2E14),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -304,7 +352,7 @@ class _ContactCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 15.5,
+                        fontSize: 16.5,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFF3B3327),
                       ),
@@ -312,6 +360,8 @@ class _ContactCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       contact.phone,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
@@ -321,7 +371,8 @@ class _ContactCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (contact.isIce)
+              if (contact.isIce) ...[
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 9,
@@ -330,6 +381,7 @@ class _ContactCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF3DC),
                     borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0x33FFB534)),
                   ),
                   child: const Text(
                     'Call first',
@@ -340,14 +392,15 @@ class _ContactCard extends StatelessWidget {
                     ),
                   ),
                 ),
+              ],
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: SizedBox(
-                  height: 42,
+                  height: 44,
                   child: ElevatedButton.icon(
                     key: ValueKey('call-${contact.id}'),
                     style: ElevatedButton.styleFrom(
@@ -355,7 +408,7 @@ class _ContactCard extends StatelessWidget {
                       foregroundColor: const Color(0xFF3D2E14),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(15),
                       ),
                     ),
                     onPressed: onCall,
@@ -377,10 +430,10 @@ class _ContactCard extends StatelessWidget {
                 icon: const Icon(Icons.edit_outlined, size: 19),
                 style: IconButton.styleFrom(
                   foregroundColor: const Color(0xFF8E8272),
-                  minimumSize: const Size(42, 42),
+                  minimumSize: const Size(44, 44),
                   backgroundColor: const Color(0xFFFFFDF6),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
@@ -390,10 +443,10 @@ class _ContactCard extends StatelessWidget {
                 icon: const Icon(Icons.delete_outline_rounded, size: 19),
                 style: IconButton.styleFrom(
                   foregroundColor: const Color(0xFFB4522C),
-                  minimumSize: const Size(42, 42),
+                  minimumSize: const Size(44, 44),
                   backgroundColor: const Color(0xFFFFF4EE),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),

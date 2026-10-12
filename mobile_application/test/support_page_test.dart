@@ -143,8 +143,9 @@ void main() {
 
       expect(find.text('Kaan Pete Roi'), findsNothing);
       expect(find.byKey(const ValueKey('call-helpline')), findsNothing);
+      expect(find.text('In immediate danger?'), findsOneWidget);
       expect(
-        find.text('In immediate danger? Call your local emergency number'),
+        find.text('Call your local emergency number'),
         findsOneWidget,
       );
       expect(find.textContaining('999'), findsNothing);
