@@ -30,6 +30,8 @@ class CompanionWebSocketService {
   String token;
 
   String? _sessionId;
+  String? _connectedHost;
+  int? _connectedPort;
   String? _threadId;
   String? _lastEventId;
 
@@ -203,6 +205,22 @@ class CompanionWebSocketService {
   Stream<Map<String, dynamic>> get emotionUpdateStream =>
       _emotionUpdateController.stream;
 
+  /// Where the camera-frame socket lives: the same host and port this call actually connected to, same session.
+  /// Null until connected.
+  Uri? get videoUri {
+    final host = _connectedHost;
+    final port = _connectedPort;
+    final session = _sessionId;
+    if (host == null || port == null || session == null) return null;
+    return Uri(
+      scheme: 'ws',
+      host: host,
+      port: port,
+      path: '/ws/v1/video',
+      queryParameters: {'session_id': session},
+    );
+  }
+
   static CompanionWebSocketService? _live;
 
   /// Quotes one good moment from a chat message over the live connection, or
@@ -330,6 +348,8 @@ class CompanionWebSocketService {
       }
 
       _reconnectAttempts = 0;
+      _connectedHost = candidateHost;
+      _connectedPort = candidatePort;
 
       _subscription = channel.stream.listen(
         _handleIncomingMessage,
