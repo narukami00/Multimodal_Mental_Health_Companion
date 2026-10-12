@@ -711,12 +711,21 @@ class _HelplineCard extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(
-            '${helpline.about} · ${helpline.hours}',
+            helpline.about,
             style: const TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
               height: 1.4,
               color: Color(0xFF7B6A55),
+            ),
+          ),
+          Text(
+            helpline.hours,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              height: 1.4,
+              color: Color(0xFF96620C),
             ),
           ),
           const SizedBox(height: 12),

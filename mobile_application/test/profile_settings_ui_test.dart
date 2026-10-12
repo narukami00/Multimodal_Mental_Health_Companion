@@ -81,6 +81,30 @@ void main() {
     expect(find.text('Welcome to Solace'), findsOneWidget);
   });
 
+  testWidgets('the settings sheet never overflows a real phone screen and the country is reachable', (
+    tester,
+  ) async {
+    await profileController.load();
+    tester.view.physicalSize = const Size(1080, 2400); // a Galaxy S21: 411 x 914 logical
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(harness());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.tune_rounded).first);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const ValueKey('country-ZZ')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('country-ZZ')));
+    await tester.pumpAndSettle();
+    expect(profileController.profile.countryCode, 'ZZ');
+    expect(tester.takeException(), isNull); // no "bottom overflowed" error
+  });
+
   testWidgets('app settings sheet exposes real palette choices', (
     tester,
   ) async {

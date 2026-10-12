@@ -964,7 +964,8 @@ class ProfilePage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              child,
+              // Scrolls: a taller form (more settings) must never overflow a phone-sized sheet.
+              Flexible(child: SingleChildScrollView(child: child)),
             ],
           ),
         );
