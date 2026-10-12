@@ -11,13 +11,58 @@ import '../checkin/check_in_mode_page.dart';
 import '../consent/emotion_consent_sheets.dart';
 import 'session_detail_page.dart';
 
-class JournalPage extends StatelessWidget {
+class JournalPage extends StatefulWidget {
   const JournalPage({required this.sessionController, super.key});
 
   final SessionController sessionController;
 
   static const _ink = Color(0xFF3A3125);
   static const _faint = Color(0xFFA68F68);
+
+  @override
+  State<JournalPage> createState() => _JournalPageState();
+}
+
+/// What the journal is narrowed to. Empty sets mean "everything".
+class JournalFilter {
+  const JournalFilter({this.moods = const {}, this.modes = const {}});
+
+  /// Display words (Upbeat, Calm, Even, Low, Tense) or [notRead].
+  final Set<String> moods;
+  final Set<CaptureMode> modes;
+
+  static const notRead = 'Not read yet';
+  static const moodWords = ['Upbeat', 'Calm', 'Even', 'Low', 'Tense'];
+
+  bool get isActive => moods.isNotEmpty || modes.isNotEmpty;
+
+  bool matches(SessionRecord s) {
+    if (modes.isNotEmpty && !modes.contains(s.mode)) return false;
+    if (moods.isEmpty) return true;
+    final mood = s.effectiveMood;
+    final word = mood == null ? notRead : Moods.display(mood);
+    return moods.contains(word);
+  }
+}
+
+class _JournalPageState extends State<JournalPage> {
+  JournalFilter _filter = const JournalFilter();
+
+  SessionController get sessionController => widget.sessionController;
+
+  static const _ink = JournalPage._ink;
+  static const _faint = JournalPage._faint;
+
+  Future<void> _openFilter() async {
+    final next = await showModalBottomSheet<JournalFilter>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFFFFFDF6),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      builder: (_) => _FilterSheet(initial: _filter, sessions: sessionController.sessions),
+    );
+    if (next != null && mounted) setState(() => _filter = next);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +77,8 @@ class JournalPage extends StatelessWidget {
           child: AnimatedBuilder(
             animation: sessionController,
             builder: (context, _) {
-              final sessions = sessionController.sessions;
+              final all = sessionController.sessions;
+              final sessions = all.where(_filter.matches).toList();
               return SafeArea(
                 child: CustomScrollView(
                   slivers: [
@@ -69,13 +115,19 @@ class JournalPage extends StatelessWidget {
                               ),
                             ),
                             IconButton(
-                              onPressed: () => _showFilterNote(context),
+                              key: const ValueKey('journal-filter'),
+                              onPressed: _openFilter,
                               tooltip: 'Filter entries',
-                              icon: const Icon(Icons.tune_rounded, size: 20),
+                              icon: Badge(
+                                isLabelVisible: _filter.isActive,
+                                smallSize: 9,
+                                backgroundColor: const Color(0xFFD9825B),
+                                child: const Icon(Icons.tune_rounded, size: 20),
+                              ),
                               style: IconButton.styleFrom(
                                 minimumSize: const Size(42, 42),
                                 maximumSize: const Size(42, 42),
-                                backgroundColor: const Color(0x21FFB534),
+                                backgroundColor: _filter.isActive ? const Color(0x55FFB534) : const Color(0x21FFB534),
                                 foregroundColor: const Color(0xFF8A7458),
                                 side: BorderSide(
                                   color: const Color(0x66D6AA50),
@@ -90,10 +142,15 @@ class JournalPage extends StatelessWidget {
                     SliverToBoxAdapter(
                       child: _UnreadEntriesBanner(sessionController: sessionController),
                     ),
-                    if (sessions.isEmpty)
+                    if (all.isEmpty)
                       const SliverFillRemaining(
                         hasScrollBody: false,
                         child: _EmptyJournal(),
+                      )
+                    else if (sessions.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _NothingMatches(onClear: () => setState(() => _filter = const JournalFilter())),
                       )
                     else
                       SliverPadding(
@@ -134,11 +191,160 @@ class JournalPage extends StatelessWidget {
     );
   }
 
-  void _showFilterNote(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Filters will arrive as more ways to check in become available.',
+}
+
+class _NothingMatches extends StatelessWidget {
+  const _NothingMatches({required this.onClear});
+
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      key: const ValueKey('journal-nothing-matches'),
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'No entries match this filter.',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: JournalPage._ink),
+            ),
+            const SizedBox(height: 6),
+            TextButton(
+              key: const ValueKey('journal-clear-filter'),
+              onPressed: onClear,
+              child: const Text('Show everything'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Pick moods and/or kinds of entry. Counts beside each word are of ALL entries, so the person can see
+/// what a filter would find before choosing it.
+class _FilterSheet extends StatefulWidget {
+  const _FilterSheet({required this.initial, required this.sessions});
+
+  final JournalFilter initial;
+  final List<SessionRecord> sessions;
+
+  @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  late Set<String> _moods = {...widget.initial.moods};
+  late Set<CaptureMode> _modes = {...widget.initial.modes};
+
+  int _countMood(String word) => widget.sessions.where((s) {
+        final m = s.effectiveMood;
+        return (m == null ? JournalFilter.notRead : Moods.display(m)) == word;
+      }).length;
+
+  int _countMode(CaptureMode mode) => widget.sessions.where((s) => s.mode == mode).length;
+
+  Widget _chip({
+    required Key key,
+    required String label,
+    required int count,
+    required bool selected,
+    required VoidCallback onTap,
+    Color? dot,
+  }) {
+    return FilterChip(
+      key: key,
+      selected: selected,
+      showCheckmark: false,
+      onSelected: (_) => onTap(),
+      avatar: dot == null ? null : Container(width: 10, height: 10, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+      label: Text('$label · $count'),
+      backgroundColor: const Color(0xFFFFF8E8),
+      selectedColor: const Color(0xFFFFE2B0),
+      side: BorderSide(color: selected ? const Color(0xFFD9A441) : const Color(0x66D6AA50)),
+      labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF3A3125)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const heading = TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1, color: Color(0xFF9C8B72));
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
+        child: Column(
+          key: const ValueKey('journal-filter-sheet'),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Filter your journal',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF3A3125))),
+            const SizedBox(height: 4),
+            const Text('Moods are how each entry read, not a label you chose.',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF8A7A61))),
+            const SizedBox(height: 16),
+            const Text('HOW IT READ', style: heading),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final word in [...JournalFilter.moodWords, JournalFilter.notRead])
+                  _chip(
+                    key: ValueKey('filter-mood-$word'),
+                    label: word,
+                    count: _countMood(word),
+                    selected: _moods.contains(word),
+                    dot: word == JournalFilter.notRead ? null : moodColors[Moods.values.firstWhere((m) => Moods.display(m) == word)],
+                    onTap: () => setState(() => _moods.contains(word) ? _moods.remove(word) : _moods.add(word)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Text('KIND OF ENTRY', style: heading),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final (mode, label) in [
+                  (CaptureMode.text, 'Text'),
+                  (CaptureMode.voice, 'Voice'),
+                  (CaptureMode.video, 'Video'),
+                ])
+                  _chip(
+                    key: ValueKey('filter-mode-${mode.name}'),
+                    label: label,
+                    count: _countMode(mode),
+                    selected: _modes.contains(mode),
+                    onTap: () => setState(() => _modes.contains(mode) ? _modes.remove(mode) : _modes.add(mode)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                TextButton(
+                  key: const ValueKey('filter-reset'),
+                  onPressed: () => setState(() {
+                    _moods = {};
+                    _modes = {};
+                  }),
+                  child: const Text('Reset'),
+                ),
+                const Spacer(),
+                FilledButton(
+                  key: const ValueKey('filter-apply'),
+                  onPressed: () => Navigator.of(context).pop(JournalFilter(moods: _moods, modes: _modes)),
+                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD9A441), foregroundColor: const Color(0xFF3A3125)),
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
