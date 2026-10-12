@@ -167,6 +167,7 @@ class ListenTurn:
     audio: bytearray
     speech_start_sample: int
     opened_at: float = field(default_factory=time.monotonic)
+    overlapped_assistant: bool = False  # began while Sol was audible: the audio may hold her voice, so it is not analysed for emotion
 
 
 class Listener:
@@ -837,6 +838,7 @@ class Session:
         turn_id = listener.next_turn_id()
         listener.turn = ListenTurn(
             turn_id=turn_id, base_sample=base, audio=audio, speech_start_sample=start_sample,
+            overlapped_assistant=audible,
         )
         if audible:
             await self._barge_in("user_speech")
@@ -884,7 +886,7 @@ class Session:
             self._dump_wav(turn.turn_id, pcm, listener.sample_rate)
         self._spawn(self._process_listen_turn(
             turn.turn_id, pcm, listener.sample_rate, event.speech_ms,
-            stopped_at, event.reason == "max_duration", self._call_gen,
+            stopped_at, event.reason == "max_duration", self._call_gen, turn.overlapped_assistant,
         ))
 
     async def _on_discard(self, event) -> None:
@@ -921,9 +923,10 @@ class Session:
         stopped_at: float,
         forced: bool,
         call_gen: int,
+        overlapped_assistant: bool = False,
     ) -> None:
         """Transcribe one endpointed turn, then answer it."""
-        if self._emotion_on() and sample_rate and len(pcm) >= 2 * sample_rate // 3:
+        if self._emotion_on() and not overlapped_assistant and sample_rate and len(pcm) >= 2 * sample_rate // 3:
             # Start the audio features NOW so they are ready by the time the transcript is (runs beside the speech-to-text).
             self._emotion_audio[turn_id] = self._spawn(self.emotion.start_audio(self.session_id, turn_id, pcm, sample_rate))
         async with self._stt_lock:

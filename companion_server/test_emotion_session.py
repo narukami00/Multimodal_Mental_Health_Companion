@@ -11,7 +11,7 @@ import pytest
 
 from emotion_client import EmotionClient
 from llm_service import EMOTION_CUE_MAX_CHARS, LlmService
-from test_session_logic import Call, FakeLlm
+from test_session_logic import Call, FakeLlm, silence_frame, speech_frame
 
 CUE = "(Private note, never mention it: their voice and words may suggest they feel low or tired. This is a weak guess, not a fact.)"
 
@@ -221,3 +221,19 @@ async def test_client_is_off_without_the_flag_and_breaks_the_circuit_when_the_se
     assert c.usable is False  # two failures open the breaker: further calls cost nothing for a while
     assert await c.text("s", "hello") is None
     await c.aclose()
+
+
+@pytest.mark.asyncio
+async def test_a_turn_that_overlaps_the_assistants_voice_is_not_analysed_for_emotion():
+    async with Call(["First thing.", "Second thing."], tts_ms=2000, barge_in=True) as call:
+        fake = with_emotion(call, FakeEmotion(result()), CueLlm())
+        await opt_in(call)
+        await call.speak()
+        await call.until("turn.latency")
+        assert len(fake.audio) == 1  # the first turn was the person alone: analysed
+        await call.stream(speech_frame(), 800)  # cuts in while Sol is audible
+        await call.stream(silence_frame(), 1100)
+        await call.until("transcript_final", count=2)
+        await call.until("llm_start", count=2)
+        assert len(fake.audio) == 1  # her voice may be in the second turn: no audio handed over
+        assert fake.finalized[-1]["use_audio"] is False  # words only
