@@ -111,9 +111,17 @@ class EmotionReadingCard extends StatelessWidget {
               ],
             ),
           ],
-          if (classes.isNotEmpty) ...[
+          if (classes.isNotEmpty && !(r.pattern ?? '').contains('A')) ...[
+            const SizedBox(height: 14),
+            const Text(
+              'Specific feelings are too uncertain to name from words alone, so only the heavy-or-light and energy reads are shown. A recording adds a rough guess at them.',
+              key: ValueKey('feelings-withheld'),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _soft, height: 1.4),
+            ),
+          ],
+          if (classes.isNotEmpty && (r.pattern ?? '').contains('A')) ...[
             const SizedBox(height: 18),
-            const Text('Closest feelings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _ink)),
+            const Text('Closest feelings (a rough guess)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _ink)),
             const SizedBox(height: 8),
             for (final e in classes.take(4)) _Bar(label: _plain(e.key), value: e.value),
             const SizedBox(height: 4),

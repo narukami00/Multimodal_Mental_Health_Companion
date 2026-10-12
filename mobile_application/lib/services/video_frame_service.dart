@@ -55,6 +55,10 @@ class VideoFrameService extends ChangeNotifier {
   final Duration handshakeTimeout;
   final WebSocketChannel Function(Uri uri) _connect;
 
+  /// The latest camera frame, for the on-screen self view (null while the camera is closed). Shown on
+  /// the phone only; what is sent to the server is throttled separately.
+  final ValueNotifier<Uint8List?> preview = ValueNotifier<Uint8List?>(null);
+
   VideoStreamState _state = VideoStreamState.off;
   bool? _lastUsable;
   int _sent = 0;
@@ -148,12 +152,14 @@ class VideoFrameService extends ChangeNotifier {
       } catch (_) {}
     }
     _awaitingAckSince = null;
+    preview.value = null;
     if (!refused) _setState(VideoStreamState.off);
   }
 
   void _onFrame(Uint8List jpeg) {
     final channel = _channel;
     if (channel == null || _state != VideoStreamState.streaming) return;
+    preview.value = jpeg;
     if (!consentGranted()) {
       unawaited(stop());
       return;

@@ -45,6 +45,13 @@ void main() {
       expect(find.textContaining('alence'), findsNothing); // the numbers' technical names never reach the screen
     });
 
+    testWidgets('from words alone the named feelings are withheld (they are unreliable), a recording shows a rough guess', (tester) async {
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: EmotionReadingCard(reading: reading(pattern: 'T'))))));
+      expect(find.byKey(const ValueKey('feelings-withheld')), findsOneWidget);
+      expect(find.text('Sad'), findsNothing);
+      expect(find.text('Heavy 70%'), findsOneWidget); // the dependable reads stay
+    });
+
     test('an unsure reading says nothing strong stood out; a hint says might', () {
       expect(EmotionReadingCard.headline(reading(mood: null, tier: null)), 'Nothing strong stood out: mostly even');
       expect(EmotionReadingCard.headline(reading(tier: 'hint')), 'This entry might have sounded a bit low or tired');

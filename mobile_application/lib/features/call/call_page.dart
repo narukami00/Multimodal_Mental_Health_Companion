@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -1206,7 +1207,7 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
             opacity: _camera ? 1 : 0,
             child: IgnorePointer(
               ignoring: !_camera,
-              child: const _SelfView(),
+              child: _SelfView(preview: _video?.preview),
             ),
           ),
         ),
@@ -2125,13 +2126,17 @@ class _CaptionText extends StatelessWidget {
 }
 
 class _SelfView extends StatelessWidget {
-  const _SelfView();
+  const _SelfView({this.preview});
+
+  /// The live camera frame; without it (camera still opening, or nothing wired) the soft placeholder shows.
+  final ValueListenable<Uint8List?>? preview;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 86,
       height: 116,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
@@ -2149,7 +2154,18 @@ class _SelfView extends StatelessWidget {
         ],
       ),
       child: Stack(
+        fit: StackFit.expand,
         children: [
+          if (preview != null)
+            ValueListenableBuilder<Uint8List?>(
+              valueListenable: preview!,
+              builder: (context, frame, _) => frame == null
+                  ? const SizedBox.shrink()
+                  : Transform.flip(
+                      flipX: true, // a selfie view is mirrored, like a mirror
+                      child: Image.memory(frame, key: const ValueKey('self-view'), fit: BoxFit.cover, gaplessPlayback: true),
+                    ),
+            ),
           Positioned(
             top: 8,
             right: 8,
