@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../../core/models/emotion_result.dart';
 import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
+import 'emotion_reading_card.dart';
 
-class SessionDetailPage extends StatelessWidget {
-  const SessionDetailPage({required this.session, this.onDelete, super.key});
+class SessionDetailPage extends StatefulWidget {
+  const SessionDetailPage({
+    required this.session,
+    this.onDelete,
+    this.onReanalyze,
+    super.key,
+  });
 
   final SessionRecord session;
 
@@ -13,32 +18,73 @@ class SessionDetailPage extends StatelessWidget {
   /// confirmed; the page closes afterwards.
   final Future<void> Function(SessionRecord session)? onDelete;
 
+  /// When given, an entry with no model reading (an older entry, or one made without the server) can be
+  /// read now. Returns the updated entry, or null when no reading could be made.
+  final Future<SessionRecord?> Function(SessionRecord session)? onReanalyze;
+
+  @override
+  State<SessionDetailPage> createState() => _SessionDetailPageState();
+}
+
+class _SessionDetailPageState extends State<SessionDetailPage> {
+  late SessionRecord session = widget.session;
+  bool _reading = false;
+
+  Future<void> Function(SessionRecord session)? get onDelete => widget.onDelete;
+
   static const _ink = Color(0xFF3A3125);
   static const _softInk = Color(0xFF8A7A61);
   static const _warm = Color(0xFFFFB534);
 
+  Widget _readingSection() {
+    final r = session.reading;
+    if (r != null) return EmotionReadingCard(reading: r);
+    final canRead = widget.onReanalyze != null && (session.text?.trim().isNotEmpty ?? false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const NoReadingCard(),
+        if (canRead)
+          TextButton(
+            key: const ValueKey('reanalyze'),
+            onPressed: _reading ? null : _reanalyze,
+            child: Text(_reading ? 'Reading…' : 'Read this entry now'),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _reanalyze() async {
+    setState(() => _reading = true);
+    final updated = await widget.onReanalyze!(session);
+    if (!mounted) return;
+    setState(() {
+      _reading = false;
+      if (updated != null) session = updated;
+    });
+    if (updated == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text("Couldn't read it: the companion server isn't reachable, or reading isn't switched on."),
+          behavior: SnackBarBehavior.floating,
+        ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final modeLabel = switch (session.mode) {
+      CaptureMode.text => 'Text check-in',
+      CaptureMode.voice => 'Voice check-in',
+      CaptureMode.video => 'Video check-in',
+    };
     final date = MaterialLocalizations.of(
       context,
     ).formatMediumDate(session.createdAt);
     final time = MaterialLocalizations.of(
       context,
     ).formatTimeOfDay(TimeOfDay.fromDateTime(session.createdAt));
-    final labels = session.emotionResults
-        .expand((result) => result.labels ?? const <EmotionLabel>[])
-        .toList();
-    final topLabel = labels
-        .map((item) => item.label)
-        .firstWhere(
-          (item) => item.isNotEmpty,
-          orElse: () => 'still getting to know this signal',
-        );
-    final modeLabel = switch (session.mode) {
-      CaptureMode.text => 'Text check-in',
-      CaptureMode.voice => 'Voice check-in',
-      CaptureMode.video => 'Video check-in',
-    };
 
     return Scaffold(
       backgroundColor: const Color(0xFFFEFCE8),
@@ -146,12 +192,7 @@ class SessionDetailPage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SummaryCard(
-                            label: topLabel,
-                            labels: labels,
-                            mood: session.mood,
-                            mode: session.mode,
-                          ),
+                          _readingSection(),
                           const SizedBox(height: 18),
                           if (session.text?.trim().isNotEmpty ?? false) ...[
                             const Text(
@@ -306,179 +347,5 @@ class SessionDetailPage extends StatelessWidget {
       CaptureMode.voice => Icons.graphic_eq_rounded,
       CaptureMode.video => Icons.videocam_outlined,
     };
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.label,
-    required this.labels,
-    required this.mood,
-    required this.mode,
-  });
-
-  final String label;
-  final List<EmotionLabel> labels;
-  final String? mood;
-  final CaptureMode mode;
-
-  @override
-  Widget build(BuildContext context) {
-    final modeLabel = switch (mode) {
-      CaptureMode.text => 'Text check-in',
-      CaptureMode.voice => 'Voice check-in',
-      CaptureMode.video => 'Video check-in',
-    };
-    final headline = label == 'steady'
-        ? 'Mostly steady, with pockets of ease'
-        : 'Mostly ${_humanize(label)}';
-
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF6),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0x4DE2C185)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0x1F96641E),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Container(height: 10, color: const Color(0xFF8FB083)),
-              ),
-              Expanded(
-                flex: 2,
-                child: Container(height: 10, color: const Color(0xFFFFB534)),
-              ),
-              Expanded(
-                flex: 1,
-                child: Container(height: 10, color: const Color(0xFFFF7F50)),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'OVERALL FEEL',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                    color: Color(0xFF9C8B72),
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  headline,
-                  style: const TextStyle(
-                    fontSize: 23,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF3A3125),
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'A soft summary from the signals available in this session.',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF8A7A61),
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final item in labels.take(2))
-                      _Pill(
-                        label: item.score != null
-                            ? '${_humanize(item.label)} ${(item.score! * 100).round()}%'
-                            : _humanize(item.label),
-                        color: _stateColor(item.label),
-                      ),
-                    _Pill(label: modeLabel, dashed: true),
-                    if (mood != null)
-                      _Pill(label: _humanize(mood!), dashed: true),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _stateColor(String value) {
-    if (const {'calm', 'steady', 'reflective'}.contains(value)) {
-      return const Color(0xFF6E8F63);
-    }
-    if (const {'tense', 'wobbly', 'hesitant'}.contains(value)) {
-      return const Color(0xFFC05B33);
-    }
-    return const Color(0xFFA97410);
-  }
-
-  String _humanize(String value) {
-    if (value.isEmpty) return value;
-    return '${value[0].toUpperCase()}${value.substring(1)}';
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.label, this.color, this.dashed = false});
-
-  final String label;
-  final Color? color;
-  final bool dashed;
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = color ?? const Color(0xFFA97410);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: ink.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(99),
-        border: dashed
-            ? Border.all(color: const Color(0xFFEBC98A), width: 1.5)
-            : null,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: ink, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 7),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: ink,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

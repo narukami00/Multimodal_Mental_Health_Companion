@@ -32,12 +32,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('What feels present right now?'), findsOneWidget);
 
-    await tester.tap(find.text('Steady'));
+    expect(find.text('A quick word for it'), findsNothing); // the mood is read from the entry, not picked
     await tester.enterText(find.byType(TextField), 'A little more settled than yesterday.');
+    await tester.pump();
     await tester.tap(find.text('Keep this moment'));
     await tester.pumpAndSettle();
 
-    expect(find.text('OVERALL FEEL'), findsOneWidget);
+    expect(find.byKey(const ValueKey('no-reading')), findsOneWidget); // the mock analyzer gives no real reading
     expect(find.text('A little more settled than yesterday.'), findsOneWidget);
     expect(sessionController.sessions, hasLength(1));
   });

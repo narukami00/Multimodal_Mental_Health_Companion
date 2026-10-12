@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
-import '../call/call_page.dart';
+import '../../data/repositories/in_memory_consent_repository.dart';
+import '../consent/consent_controller.dart';
+import '../journal/journal_capture_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../sessions/session_controller.dart';
 import 'text_check_in_page.dart';
 
 class CheckInModePage extends StatelessWidget {
+  /// What the person has agreed to; set once at start-up. Without it every recording asks again.
+  static ConsentController? consent;
+
   const CheckInModePage({
     required this.sessionController,
     required this.safetyController,
@@ -146,7 +151,7 @@ class CheckInModePage extends StatelessWidget {
                     title: 'Voice',
                     description: 'Say it out loud',
                     icon: Icons.mic_none_rounded,
-                    onTap: () => _openVoiceCall(context),
+                    onTap: () => _openJournal(context, CaptureMode.voice),
                   ),
                   const SizedBox(height: 16),
                   _ModeTile(
@@ -154,7 +159,7 @@ class CheckInModePage extends StatelessWidget {
                     title: 'Video',
                     description: 'See yourself as you speak',
                     icon: Icons.videocam_outlined,
-                    onTap: () => _openVoiceCall(context),
+                    onTap: () => _openJournal(context, CaptureMode.video),
                   ),
                   const SizedBox(height: 26),
                   Center(
@@ -217,12 +222,18 @@ class CheckInModePage extends StatelessWidget {
     );
   }
 
-  void _openVoiceCall(BuildContext context) {
+  /// Voice and video check-ins are JOURNAL entries: you talk to yourself, nobody replies, and the
+  /// recording becomes a transcript with its emotion reading. (The live conversation with Sol is
+  /// the separate Call, opened from chat.)
+  void _openJournal(BuildContext context, CaptureMode mode) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => CallPage(
+        builder: (_) => JournalCapturePage(
+          mode: mode,
+          sessionController: sessionController,
           safetyController: safetyController,
           profileController: profileController,
+          consentController: consent ?? ConsentController(repository: InMemoryConsentRepository()),
         ),
       ),
     );

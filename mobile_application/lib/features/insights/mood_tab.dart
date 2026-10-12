@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/moods.dart';
+
 import '../../core/day_key.dart';
 import '../../core/models/daily_features.dart';
 import '../../domain/insights/mood_insights.dart';
@@ -208,7 +210,7 @@ class _MoodGrid extends StatelessWidget {
     final color = day.mood == null ? null : moodColors[day.mood];
     final label =
         '${_weekdays[day.day.weekday - 1]} ${day.day.day} ${_months[day.day.month - 1]}'
-        ' · ${day.mood ?? 'no check-in'}';
+        ' · ${day.mood == null ? 'no check-in' : Moods.display(day.mood)}';
     return Tooltip(
       message: label,
       triggerMode: TooltipTriggerMode.tap,
@@ -258,7 +260,7 @@ class _Legend extends StatelessWidget {
             ),
             const SizedBox(width: 5),
             Text(
-              entry.key,
+              Moods.display(entry.key),
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,

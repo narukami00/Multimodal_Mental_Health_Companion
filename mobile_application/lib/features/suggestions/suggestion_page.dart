@@ -1075,7 +1075,7 @@ class _FeelNow extends StatelessWidget {
             for (final mood in Moods.values)
               ChoiceChip(
                 key: ValueKey('feel-$mood'),
-                label: Text(mood),
+                label: Text(Moods.display(mood)),
                 selected: selected == mood,
                 onSelected: (_) => onSelect(mood),
               ),

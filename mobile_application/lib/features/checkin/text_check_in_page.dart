@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/moods.dart';
 import '../../core/models/session_input.dart';
 import '../../core/models/safety_assessment.dart';
+import '../consent/emotion_consent_sheets.dart';
 import '../journal/session_detail_page.dart';
+import 'check_in_mode_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -33,7 +34,6 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
   static const _coral = Color(0xFFFF7F50);
 
   final _textController = TextEditingController();
-  String? _selectedMood;
   bool _isSaving = false;
   bool _safetyAcknowledged = false;
 
@@ -66,7 +66,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
   }
 
   bool get _canSave =>
-      _selectedMood != null || _textController.text.trim().isNotEmpty;
+      _textController.text.trim().isNotEmpty;
 
   Future<void> _save() async {
     if (!_canSave || _isSaving) return;
@@ -102,10 +102,15 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
       }
     }
 
+    // The words are read for emotion by the companion server only with the person's yes (asked once).
+    final consent = CheckInModePage.consent;
+    if (text != null && consent != null && mounted) {
+      await askEmotionConsent(context, consent);
+    }
+
     final session = await widget.sessionController.saveSession(
       mode: CaptureMode.text,
       text: text,
-      mood: _selectedMood?.toLowerCase(),
     );
 
     if (!mounted) return;
@@ -114,6 +119,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
         builder: (_) => SessionDetailPage(
           session: session,
           onDelete: (s) => widget.sessionController.deleteSession(s.id),
+          onReanalyze: widget.sessionController.reanalyze,
         ),
       ),
     );
@@ -211,7 +217,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'A word, a mood, or a few sentences are all enough.',
+                        'A word or a few sentences are all enough.',
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w600,
@@ -221,35 +227,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
                       ),
                       const SizedBox(height: 26),
                       const Text(
-                        'A quick word for it',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 9,
-                        runSpacing: 9,
-                        children: [
-                          for (final mood in Moods.values)
-                            _MoodPill(
-                              label: mood,
-                              selected: _selectedMood == mood,
-                              onTap: () {
-                                setState(
-                                  () => _selectedMood = _selectedMood == mood
-                                      ? null
-                                      : mood,
-                                );
-                              },
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 26),
-                      const Text(
-                        'Anything else?',
+                        'What is on your mind?',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -394,57 +372,6 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
                   ),
                 ),
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MoodPill extends StatelessWidget {
-  const _MoodPill({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            gradient: selected
-                ? const LinearGradient(
-                    colors: [Color(0xFFFFB534), Color(0xFFFF9F45)],
-                  )
-                : null,
-            color: selected ? null : const Color(0xFFFFFDF6),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? const Color(0x59FFB534)
-                  : const Color(0x38B28028),
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13.5,
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-              color: selected
-                  ? const Color(0xFF3A3125)
-                  : const Color(0xFF6E6252),
             ),
           ),
         ),

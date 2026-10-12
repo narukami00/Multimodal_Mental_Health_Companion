@@ -51,7 +51,7 @@ DailyFeatures? deriveInAppFeatures({
         : firstMinute - reminderMinutes,
     selfMoodMedian: _median([
       for (final session in todays)
-        if (Moods.score(session.mood) case final score?) score,
+        if (Moods.score(session.effectiveMood) case final score?) score,
     ]),
     journalWordCount: todays.fold<int>(
       0,

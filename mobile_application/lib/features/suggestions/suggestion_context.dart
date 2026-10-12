@@ -33,7 +33,7 @@ RecommendationContext buildRecommendationContext({
             .toList();
 
   return RecommendationContext(
-    currentState: latest?.mood,
+    currentState: latest?.effectiveMood,
     // What they wrote about, then anything they chose themselves when asked what
     // was going on. Each once.
     eventTags: [

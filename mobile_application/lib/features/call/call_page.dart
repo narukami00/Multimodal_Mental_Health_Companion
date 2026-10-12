@@ -19,6 +19,7 @@ import '../../services/tts_playback_service.dart';
 import '../../services/video_frame_service.dart';
 import '../chat/chat_controller.dart';
 import '../consent/consent_controller.dart';
+import '../consent/emotion_consent_sheets.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -850,21 +851,8 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
   /// The camera is a separate, explicit yes. Asked once here; the same switch lives in "What Sol remembers".
   Future<bool> _ensureFaceConsent() async {
     final consent = CallPage.consent;
-    if (consent == null || consent.isGranted(ConsentKey.faceFeatures)) return true;
-    final agreed = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => _FaceConsentSheet(
-        onAllow: () => Navigator.of(sheetContext).pop(true),
-        onDecline: () => Navigator.of(sheetContext).pop(false),
-      ),
-    );
-    if (agreed != true) return false;
-    if (!consent.isGranted(ConsentKey.emotionEstimate)) {
-      await consent.grant(ConsentKey.emotionEstimate);
-    }
-    await consent.grant(ConsentKey.faceFeatures);
-    return true;
+    if (consent == null) return true;
+    return askFaceConsent(context, consent);
   }
 
   @override
@@ -2638,68 +2626,6 @@ class _EndOverlay extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-
-/// Asked the first time the camera is turned on during a call.
-class _FaceConsentSheet extends StatelessWidget {
-  const _FaceConsentSheet({required this.onAllow, required this.onDecline});
-
-  final VoidCallback onAllow;
-  final VoidCallback onDecline;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFFBF2),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Let Sol read your face?',
-            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Color(0xFF3A3125)),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'While the camera is on, frames are sent live to the companion server '
-            'and read in memory to help judge whether you look tense or low. '
-            'They are never saved, and it only softens how Sol talks. Your words '
-            'still matter most. You can turn this off any time in What Sol remembers.',
-            style: TextStyle(fontSize: 14, height: 1.45, fontWeight: FontWeight.w600, color: Color(0xFF6E5D49)),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              key: const ValueKey('face-allow'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFB534),
-                foregroundColor: const Color(0xFF3D2E14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              ),
-              onPressed: onAllow,
-              child: const Text('Allow camera reading', style: TextStyle(fontWeight: FontWeight.w800)),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Center(
-            child: TextButton(
-              key: const ValueKey('face-decline'),
-              onPressed: onDecline,
-              child: const Text('Not now', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF8E7E6A))),
-            ),
-          ),
-        ],
       ),
     );
   }

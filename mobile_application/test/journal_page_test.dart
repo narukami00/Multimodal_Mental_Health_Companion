@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/models/session_input.dart';
 import 'package:solace_mobile/data/repositories/in_memory_onboarding_repository.dart';
@@ -34,7 +35,7 @@ void main() {
 
     await tester.tap(find.text('A note from today.'));
     await tester.pumpAndSettle();
-    expect(find.text('OVERALL FEEL'), findsOneWidget);
+    expect(find.byKey(const ValueKey('no-reading')), findsOneWidget);
     expect(find.text('A note from today.'), findsOneWidget);
   });
 }

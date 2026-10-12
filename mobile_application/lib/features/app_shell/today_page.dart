@@ -293,8 +293,9 @@ class TodayPage extends StatelessWidget {
       HomeCardType.support => onOpenSupport,
       HomeCardType.checkIn => onStartCheckIn,
       HomeCardType.onboarding => onContinueSetup,
-      // "Open a journal or conversation whenever you are ready."
-      HomeCardType.defaultAction => onOpenChat,
+      // After today's first entry the card invites another one: the same text / voice / video choice,
+      // and the new entry is added to today's journal.
+      HomeCardType.defaultAction => onStartCheckIn,
     };
   }
 
@@ -1220,10 +1221,10 @@ class _PrimaryCardContent {
           ctaTextColor: Color(0xFF8A5A16),
         ),
       HomeCardType.defaultAction => const _PrimaryCardContent(
-          eyebrow: 'SPACE TO REFLECT',
-          title: 'What feels present\nright now?',
-          subtitle: 'Open a journal or conversation whenever you are ready.',
-          action: 'Open journal',
+          eyebrow: "TODAY'S JOURNAL",
+          title: 'Got anything\nelse to say?',
+          subtitle: 'Add another entry to today whenever you like: text, voice or video.',
+          action: 'Add to today',
           icon: Icons.arrow_forward_rounded,
         ),
     };

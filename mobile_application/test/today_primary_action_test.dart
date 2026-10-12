@@ -91,7 +91,7 @@ void main() {
     expect(checkIn, isFalse);
   });
 
-  testWidgets('the default card opens a conversation', (tester) async {
+  testWidgets("after today's first entry the card invites another one, not a chat", (tester) async {
     var chat = false;
     var checkIn = false;
     await _pump(
@@ -101,10 +101,11 @@ void main() {
       onStartCheckIn: () => checkIn = true,
     );
 
-    await tester.tap(find.text('Open journal'));
+    expect(find.textContaining('Got anything'), findsOneWidget);
+    await tester.tap(find.text('Add to today'));
     await tester.pump();
 
-    expect(chat, isTrue);
-    expect(checkIn, isFalse);
+    expect(checkIn, isTrue);
+    expect(chat, isFalse);
   });
 }

@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/moods.dart';
+
 import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
 import '../../core/theme/solace_palette.dart';
 import '../sessions/session_controller.dart';
+import '../insights/mood_tab.dart' show moodColors;
+import '../checkin/check_in_mode_page.dart';
+import '../consent/emotion_consent_sheets.dart';
 import 'session_detail_page.dart';
 
 class JournalPage extends StatelessWidget {
@@ -82,6 +87,9 @@ class JournalPage extends StatelessWidget {
                         ),
                       ),
                     ),
+                    SliverToBoxAdapter(
+                      child: _UnreadEntriesBanner(sessionController: sessionController),
+                    ),
                     if (sessions.isEmpty)
                       const SliverFillRemaining(
                         hasScrollBody: false,
@@ -120,6 +128,7 @@ class JournalPage extends StatelessWidget {
         builder: (_) => SessionDetailPage(
           session: session,
           onDelete: (s) => sessionController.deleteSession(s.id),
+          onReanalyze: sessionController.reanalyze,
         ),
       ),
     );
@@ -284,8 +293,6 @@ class _StitchedEntry extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _calm = Color(0xFF8FB083);
-  static const _warm = Color(0xFFFFB534);
-  static const _tense = Color(0xFFFF7F50);
 
   @override
   Widget build(BuildContext context) {
@@ -300,8 +307,8 @@ class _StitchedEntry extends StatelessWidget {
     ).formatTimeOfDay(TimeOfDay.fromDateTime(session.createdAt));
     final snippet = session.text?.trim().isNotEmpty == true
         ? session.text!.trim()
-        : session.mood != null
-        ? 'You felt ${session.mood}.'
+        : session.effectiveMood != null
+        ? 'It read as ${Moods.display(session.effectiveMood).toLowerCase()}.'
         : 'A gentle check-in, kept here.';
 
     return IntrinsicHeight(
@@ -426,7 +433,7 @@ class _StitchedEntry extends StatelessWidget {
                                 const SizedBox(height: 10),
                                 Row(
                                   children: [
-                                    if (session.mood != null)
+                                    if (session.effectiveMood != null)
                                       Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 10,
@@ -441,7 +448,7 @@ class _StitchedEntry extends StatelessWidget {
                                           ),
                                         ),
                                         child: Text(
-                                          session.mood!,
+                                          Moods.display(session.effectiveMood),
                                           style: TextStyle(
                                             fontSize: 10.5,
                                             fontWeight: FontWeight.w800,
@@ -473,25 +480,14 @@ class _StitchedEntry extends StatelessWidget {
     );
   }
 
+  /// The bead takes the colour of how the entry READ (the model's mood), the same colours as the mood
+  /// strip in Insights. Older entries use the word that was picked at the time; with neither, a neutral bead.
   Color _beadColor() {
-    final mood = session.mood ?? '';
-    if (const {'calm', 'steady', 'quiet'}.contains(mood)) return _calm;
-    if (const {'bright', 'warm', 'sunny', 'tender'}.contains(mood)) {
-      return _warm;
-    }
-    if (const {'tense', 'wobbly'}.contains(mood)) return _tense;
-    return switch (session.mode) {
-      CaptureMode.text => _calm,
-      CaptureMode.voice => _warm,
-      CaptureMode.video => _tense,
-    };
+    final mood = session.effectiveMood;
+    return (mood == null ? null : moodColors[mood]) ?? _calm;
   }
 
-  Color _moodInk(Color bead) {
-    if (bead == _calm) return const Color(0xFF5F7A55);
-    if (bead == _warm) return const Color(0xFFA96A0D);
-    return const Color(0xFFC05B33);
-  }
+  Color _moodInk(Color bead) => HSLColor.fromColor(bead).withLightness(0.30).toColor();
 
   IconData _modeIcon(CaptureMode mode) {
     return switch (mode) {
@@ -553,7 +549,85 @@ List<_SessionDayGroup> _groupSessions(List<SessionRecord> sessions) {
     for (final key in keys)
       _SessionDayGroup(
         date: dates[key]!,
-        sessions: List.unmodifiable(groups[key]!),
+        // Within a day the entries read in the order they were made: the newest sits at the bottom.
+        sessions: List.unmodifiable(
+          groups[key]!..sort((a, b) => a.createdAt.compareTo(b.createdAt)),
+        ),
       ),
   ];
+}
+
+
+/// Offers to read earlier entries that have no emotion reading yet (made before readings existed, or
+/// without the server). Asks for the person's OK first, then reads them one by one and says how many.
+class _UnreadEntriesBanner extends StatefulWidget {
+  const _UnreadEntriesBanner({required this.sessionController});
+
+  final SessionController sessionController;
+
+  @override
+  State<_UnreadEntriesBanner> createState() => _UnreadEntriesBannerState();
+}
+
+class _UnreadEntriesBannerState extends State<_UnreadEntriesBanner> {
+  bool _busy = false;
+
+  Future<void> _read() async {
+    final consent = CheckInModePage.consent;
+    if (consent != null && !await askEmotionConsent(context, consent)) return;
+    if (!mounted) return;
+    setState(() => _busy = true);
+    final total = widget.sessionController.unread.length;
+    final read = await widget.sessionController.reanalyzeUnread();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(read == total
+            ? 'Read $read earlier ${read == 1 ? 'entry' : 'entries'}.'
+            : read == 0
+                ? "Couldn't read them: the companion server isn't reachable, or reading isn't switched on."
+                : 'Read $read of $total. The rest will need the server again.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.sessionController.unread.length;
+    if (count == 0) return const SizedBox.shrink();
+    return Container(
+      key: const ValueKey('unread-banner'),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF6E2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF6E4C8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$count earlier ${count == 1 ? 'entry hasn\'t' : 'entries haven\'t'} been read yet',
+            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Color(0xFF3A3125)),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Their words can be read for how they felt, so every entry has its own breakdown. Nothing about the entry changes.',
+            style: TextStyle(fontSize: 12.5, height: 1.4, fontWeight: FontWeight.w600, color: Color(0xFF8A7A61)),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              key: const ValueKey('read-earlier'),
+              onPressed: _busy ? null : _read,
+              child: Text(_busy ? 'Reading…' : 'Read them now'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

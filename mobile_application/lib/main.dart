@@ -24,6 +24,8 @@ import 'features/chat/chat_controller.dart';
 import 'features/checkin/check_in_mode_page.dart';
 import 'core/models/consent.dart';
 import 'features/call/call_page.dart';
+import 'providers/server/server_emotion_analyzer.dart';
+import 'services/journal_analysis_client.dart';
 import 'features/consent/consent_controller.dart';
 import 'features/footprint/in_app_feature_recorder.dart';
 import 'features/footprint/break_prompt_controller.dart';
@@ -37,7 +39,6 @@ import 'features/profile/habit_controller.dart';
 import 'features/safety/safety_controller.dart';
 import 'features/sessions/session_controller.dart';
 import 'features/suggestions/suggestion_controller.dart';
-import 'providers/mock/mock_providers.dart';
 import 'providers/safety/keyword_safety_screener.dart';
 import 'services/check_in_reminder_service.dart';
 import 'services/check_in_widget_service.dart';
@@ -53,9 +54,16 @@ import 'services/usage_collector_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences = await SharedPreferences.getInstance();
+  final journalClient = JournalAnalysisClient();
+  // Typed entries are read by the companion server's real emotion model (only with the person's consent;
+  // never an invented answer). The consent controller is created further down.
+  ConsentController? emotionConsent;
   final sessionController = SessionController(
     repository: SharedPreferencesSessionRepository(preferences),
-    emotionAnalyzer: const MockEmotionAnalyzer(),
+    emotionAnalyzer: ServerEmotionAnalyzer(
+      client: journalClient,
+      consentGranted: () => emotionConsent?.isGranted(ConsentKey.emotionEstimate) ?? false,
+    ),
   );
   await sessionController.load();
   final safetyController = SafetyController(
@@ -132,6 +140,7 @@ Future<void> main() async {
     repository: SharedPreferencesConsentRepository(preferences),
   );
   await consentController.load();
+  emotionConsent = consentController;
   final phonePatterns = PhonePatternsController(
     consent: consentController,
     collector: MethodChannelUsageCollector.instance,
@@ -198,7 +207,7 @@ Future<void> main() async {
         source: text.length > 80 ? MomentSource.journal : MomentSource.checkIn,
         createdAt: session.createdAt,
         sourceRef: session.id,
-        moodWord: session.mood,
+        moodWord: session.effectiveMood,
       ),
     );
   };
@@ -236,6 +245,7 @@ Future<void> main() async {
   CompanionWebSocketService.faceProvider = () =>
       consentController.isGranted(ConsentKey.faceFeatures);
   CallPage.consent = consentController;
+  CheckInModePage.consent = consentController;
 
   final navigatorKey = GlobalKey<NavigatorState>();
 

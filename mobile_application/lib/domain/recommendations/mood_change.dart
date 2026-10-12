@@ -21,7 +21,7 @@ String? moodBeforeFor({
   for (final session in sessions) {
     if (session.createdAt.isAfter(shownAt)) continue;
     if (shownAt.difference(session.createdAt) > window) continue;
-    if (Moods.score(session.mood) == null) continue;
+    if (Moods.score(session.effectiveMood) == null) continue;
     if (best == null || session.createdAt.isAfter(best.createdAt)) {
       best = session;
     }
