@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../services/app_permission_service.dart';
 import '../footprint/phone_patterns_controller.dart';
 import 'phone_patterns_card.dart';
@@ -160,19 +161,7 @@ class _PermissionsPageState extends State<PermissionsPage> {
   Widget _buildHeader(BuildContext context, SolaceColors colors) {
     return Row(
       children: [
-        IconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          tooltip: 'Back',
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
-          style: IconButton.styleFrom(
-            foregroundColor: const Color(0xFF3A3125),
-            minimumSize: const Size(44, 44),
-            backgroundColor: colors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
+        const PageBackButton(),
         const SizedBox(width: 8),
         const Text(
           'PERMISSIONS & DATA',

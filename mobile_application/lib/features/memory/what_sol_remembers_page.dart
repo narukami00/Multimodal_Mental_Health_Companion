@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/consent.dart';
 import '../../core/models/memory_moment.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../chat/chat_controller.dart';
 import '../consent/consent_controller.dart';
 import '../profile/profile_controller.dart';
@@ -55,6 +56,7 @@ class WhatSolRemembersPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
+        leading: const PageBackButton(),
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,

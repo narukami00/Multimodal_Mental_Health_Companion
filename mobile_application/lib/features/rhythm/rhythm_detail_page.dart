@@ -4,6 +4,7 @@ import '../../core/day_key.dart';
 import '../../core/models/activity.dart';
 import '../../core/models/session_record.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../data/contracts/activity_library_repository.dart';
 import '../../data/repositories/asset_activity_library_repository.dart';
 import '../../domain/rhythm/rhythm_summary.dart';
@@ -156,19 +157,7 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
   Widget _buildHeader(BuildContext context, SolaceColors colors) {
     return Row(
       children: [
-        IconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          tooltip: 'Back',
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
-          style: IconButton.styleFrom(
-            foregroundColor: const Color(0xFF3A3125),
-            minimumSize: const Size(44, 44),
-            backgroundColor: colors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
+        const PageBackButton(),
         const SizedBox(width: 6),
         const Expanded(
           child: Text(

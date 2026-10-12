@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/daily_features.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../chat/chat_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../memory/companion_memory_context.dart';
@@ -43,6 +44,7 @@ class EverythingKeptPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
+        leading: const PageBackButton(),
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,

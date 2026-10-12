@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/activity.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../domain/profile/behavioral_profile.dart';
 
 /// Whether phone patterns are being read, for the page to describe truthfully.
@@ -49,6 +50,7 @@ class ProfileInsightsPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
+        leading: const PageBackButton(),
         title: const Text('How Solace decides'),
         backgroundColor: Colors.transparent,
       ),

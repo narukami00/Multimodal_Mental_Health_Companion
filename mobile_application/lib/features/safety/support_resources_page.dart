@@ -7,6 +7,7 @@ import '../../core/models/country_resources.dart';
 import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../services/dialer_service.dart';
 import '../profile/profile_controller.dart';
 import 'breathing_pattern.dart';
@@ -268,19 +269,7 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
   Widget _buildHeader(SolaceColors colors) {
     return Row(
       children: [
-        IconButton(
-          onPressed: _close,
-          tooltip: 'Close',
-          icon: const Icon(Icons.close_rounded, size: 20),
-          style: IconButton.styleFrom(
-            foregroundColor: const Color(0xFF8E8272),
-            minimumSize: const Size(44, 44),
-            backgroundColor: colors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-        ),
+        PageBackButton(onPressed: _close, tooltip: 'Close'),
         const SizedBox(width: 8),
         const Text(
           'SOLACE CARE',

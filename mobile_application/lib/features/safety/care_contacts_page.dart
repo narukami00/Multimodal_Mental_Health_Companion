@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/emergency_contact.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../services/dialer_service.dart';
 import '../profile/profile_controller.dart';
 
@@ -31,6 +32,8 @@ class CareContactsPage extends StatelessWidget {
           backgroundColor: SolaceColors.from(context).background,
           body: SafeArea(
             child: Column(
+              // Left-aligned, so the masthead does not drift to the middle.
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildHeader(context),
                 Expanded(
@@ -75,19 +78,7 @@ class CareContactsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            tooltip: 'Back',
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
-            style: IconButton.styleFrom(
-              foregroundColor: const Color(0xFF3A3125),
-              minimumSize: const Size(44, 44),
-              backgroundColor: const Color(0xFFFFFDF6),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
+          const PageBackButton(),
           const SizedBox(height: 10),
           // Masthead: small kicker over the big title, as on Solace Care.
           const Text(

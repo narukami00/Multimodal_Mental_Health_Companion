@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'profile_controller.dart';
@@ -76,6 +77,7 @@ class _BaselineQuizPageState extends State<BaselineQuizPage> {
     final isComplete = _section == _sectionCount;
     return Scaffold(
       appBar: AppBar(
+        leading: const PageBackButton(),
         title: const Text('Your baseline'),
         backgroundColor: Colors.transparent,
       ),

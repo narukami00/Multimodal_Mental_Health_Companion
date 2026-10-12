@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
 import '../../core/models/safety_assessment.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../consent/emotion_consent_sheets.dart';
 import '../journal/session_detail_page.dart';
 import 'check_in_mode_page.dart';
@@ -175,25 +176,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
                       children: [
                       Row(
                         children: [
-                          IconButton(
-                            onPressed: () => Navigator.of(context).maybePop(),
-                            icon: const Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              size: 20,
-                              color: _ink,
-                            ),
-                            style: IconButton.styleFrom(
-                              minimumSize: const Size(44, 44),
-                              maximumSize: const Size(44, 44),
-                              backgroundColor: _cream.withValues(alpha: 0.8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(
-                                  color: _amber.withValues(alpha: 0.25),
-                                ),
-                              ),
-                            ),
-                          ),
+                          const PageBackButton(),
                           const SizedBox(width: 12),
                           const Text(
                             'Text check-in',

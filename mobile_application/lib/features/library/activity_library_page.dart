@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/activity.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../data/repositories/asset_activity_library_repository.dart';
 import '../suggestions/suggestion_controller.dart';
 
@@ -27,6 +28,7 @@ class _ActivityLibraryPageState extends State<ActivityLibraryPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const PageBackButton(),
         title: const Text('Activity library'),
         backgroundColor: Colors.transparent,
       ),

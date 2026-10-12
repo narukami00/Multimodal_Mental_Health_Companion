@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
+import '../../core/widgets/page_back_button.dart';
 import 'emotion_reading_card.dart';
 
 class SessionDetailPage extends StatefulWidget {
@@ -110,22 +111,7 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
                 padding: const EdgeInsets.fromLTRB(22, 8, 22, 4),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        size: 18,
-                        color: Color(0xFF8A6B33),
-                      ),
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size(40, 40),
-                        maximumSize: const Size(40, 40),
-                        backgroundColor: const Color(0xFFFFF6E0),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
+                    const PageBackButton(),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(

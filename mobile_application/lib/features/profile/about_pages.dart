@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/page_back_button.dart';
 
 /// The About group: what this app is, the legal pages, and the FAQ.
 ///
@@ -43,12 +44,7 @@ class _AboutScaffold extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(8, 8, 20, 4),
               child: Row(
                 children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    color: const Color(0xFF4A3728),
-                    tooltip: 'Back',
-                  ),
+                  const PageBackButton(),
                   Expanded(
                     child: Text(
                       title,

@@ -8,6 +8,7 @@ import '../../core/models/consent.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../services/journal_analysis_client.dart';
 import '../../services/pcm_audio_recorder_service.dart';
 import '../../services/platform_frame_source.dart';
@@ -262,12 +263,7 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
                 children: [
                   Row(
                     children: [
-                      IconButton(
-                        key: const ValueKey('journal-back'),
-                        tooltip: 'Back',
-                        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-                        onPressed: () => Navigator.of(context).maybePop(),
-                      ),
+                      PageBackButton(key: const ValueKey('journal-back')),
                       Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: _ink)),
                     ],
                   ),

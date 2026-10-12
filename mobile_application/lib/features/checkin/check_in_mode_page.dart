@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../data/repositories/in_memory_consent_repository.dart';
 import '../consent/consent_controller.dart';
 import '../journal/journal_capture_page.dart';
@@ -91,26 +92,7 @@ class CheckInModePage extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => Navigator.of(context).maybePop(),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              size: 20,
-                              color: Color(0xFF3A3125),
-                            ),
-                          ),
-                        ),
-                      ),
+                      const PageBackButton(),
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(

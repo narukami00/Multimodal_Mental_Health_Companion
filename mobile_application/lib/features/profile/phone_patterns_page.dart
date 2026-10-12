@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/daily_features.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../domain/footprint/day_rhythm.dart';
 import '../../domain/footprint/day_summary.dart';
 import '../footprint/day_rhythm_card.dart';
@@ -195,19 +196,7 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        IconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          tooltip: 'Back',
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
-          style: IconButton.styleFrom(
-            foregroundColor: _ink,
-            minimumSize: const Size(44, 44),
-            backgroundColor: colors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
+        const PageBackButton(),
         const SizedBox(height: 14),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4),

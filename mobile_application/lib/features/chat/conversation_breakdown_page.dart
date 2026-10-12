@@ -4,6 +4,7 @@ import '../../core/constants/moods.dart';
 import '../../core/models/chat_conversation_record.dart';
 import '../../core/models/memory_moment.dart';
 import '../../core/models/safety_assessment.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../domain/chat/conversation_breakdown.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../consent/emotion_consent_sheets.dart';
@@ -42,6 +43,7 @@ class ConversationBreakdownPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFFEFCE8),
       appBar: AppBar(
+        leading: const PageBackButton(),
         backgroundColor: const Color(0xFFFEFCE8),
         elevation: 0,
         scrolledUnderElevation: 0,

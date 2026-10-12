@@ -15,6 +15,7 @@ import '../../core/models/chat_message_record.dart';
 import '../../core/models/emotion_result.dart';
 import '../../core/models/memory_moment.dart';
 import '../../core/models/safety_assessment.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../services/companion_websocket_service.dart';
 import '../../services/journal_analysis_client.dart';
 import '../../services/pcm_audio_recorder_service.dart';
@@ -1137,18 +1138,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
       child: Row(
         children: [
-          IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
-            style: IconButton.styleFrom(
-              foregroundColor: _ink,
-              minimumSize: const Size(44, 44),
-              backgroundColor: const Color(0xFFFFFDF6),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
+          const PageBackButton(),
           const Spacer(),
           IconButton(
             onPressed: () {
