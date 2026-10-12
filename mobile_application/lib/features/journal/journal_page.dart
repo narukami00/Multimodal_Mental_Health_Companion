@@ -341,11 +341,16 @@ class _FilterSheetState extends State<_FilterSheet> {
                   child: const Text('Reset'),
                 ),
                 const Spacer(),
-                FilledButton(
-                  key: const ValueKey('filter-apply'),
-                  onPressed: () => Navigator.of(context).pop(JournalFilter(moods: _moods, modes: _modes)),
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD9A441), foregroundColor: const Color(0xFF3A3125)),
-                  child: const Text('Apply'),
+                // Bounded width: the theme's FilledButton is full-bleed
+                // (Size.fromHeight), which a Row cannot give it.
+                SizedBox(
+                  width: 118,
+                  child: FilledButton(
+                    key: const ValueKey('filter-apply'),
+                    onPressed: () => Navigator.of(context).pop(JournalFilter(moods: _moods, modes: _modes)),
+                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD9A441), foregroundColor: const Color(0xFF3A3125)),
+                    child: const Text('Apply'),
+                  ),
                 ),
               ],
             ),

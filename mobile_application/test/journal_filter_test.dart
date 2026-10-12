@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/models/session_input.dart';
+import 'package:solace_mobile/core/theme/app_theme.dart';
 import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
 import 'package:solace_mobile/features/journal/journal_page.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
@@ -29,7 +30,14 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: JournalPage(sessionController: sessions))));
+    await tester.pumpWidget(
+      MaterialApp(
+        // The real theme: its full-bleed FilledButton is what the sheet's
+        // footer has to lay out against.
+        theme: AppTheme.light(),
+        home: Scaffold(body: JournalPage(sessionController: sessions)),
+      ),
+    );
     await tester.pump();
   }
 
