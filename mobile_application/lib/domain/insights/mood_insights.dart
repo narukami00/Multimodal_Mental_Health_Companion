@@ -6,9 +6,15 @@ import '../footprint/personal_baseline.dart';
 
 /// One calendar day in the mood strip.
 class MoodDay {
-  const MoodDay({required this.day, this.mood, this.checkIns = 0});
+  const MoodDay({required this.day, this.mood, this.checkIns = 0, this.entries = const []});
 
   final DateTime day;
+
+  /// Every entry that day that has a mood, oldest first (the dot shows all of them, not only the top word).
+  final List<SessionRecord> entries;
+
+  /// The mood word of each entry in [entries], in the same order.
+  List<String> get moods => [for (final e in entries) e.effectiveMood!];
 
   /// The mood word chosen most often that day (the latest, on a tie). Null when
   /// no mood word was chosen: a gap is a gap, never filled in.
@@ -44,7 +50,7 @@ List<MoodDay> moodStrip(List<SessionRecord> sessions, DateTime now, {int days = 
           (m) => counts[m] == top && m.toLowerCase() == entries.last.effectiveMood!.trim().toLowerCase(),
           orElse: () => counts.entries.firstWhere((e) => e.value == top).key,
         );
-        return MoodDay(day: day, mood: word, checkIns: entries.length);
+        return MoodDay(day: day, mood: word, checkIns: entries.length, entries: List.unmodifiable(entries));
       }(),
   ];
 }
