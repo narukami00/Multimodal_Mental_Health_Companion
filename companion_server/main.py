@@ -14,6 +14,8 @@ from session import LIVE_SESSIONS, RECORDINGS_DIR, Session
 from stt_service import SttService
 from tts_engine import get_tts_engine
 from video_socket import serve_video
+from journal_api import build_router as build_journal_router
+from emotion_client import default_client
 
 logging.basicConfig(
     level=logging.INFO,
@@ -159,6 +161,9 @@ async def websocket_session(
     The protocol and the turn-taking live in `session.Session`.
     """
     await Session(websocket, stt=stt, llm=llm, tts=tts, session_id=session_id).run()
+
+
+app.include_router(build_journal_router(stt, default_client()))  # journal check-ins: transcribe + read the emotion, no chat model
 
 
 @app.websocket("/ws/v1/video")

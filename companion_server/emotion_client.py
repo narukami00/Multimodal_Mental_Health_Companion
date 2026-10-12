@@ -66,20 +66,21 @@ class EmotionClient:
             return None
 
     # ---- API --------------------------------------------------------------------------------------------------------
-    async def start_audio(self, session_id: str, turn_id: str, pcm: bytes, sample_rate: int) -> bool:
+    async def start_audio(self, session_id: str, turn_id: str, pcm: bytes, sample_rate: int, chunk_s: float = 0.0) -> bool:
         """Hand over one finished turn of mono int16 PCM so its features are computed while speech-to-text runs."""
-        r = await self._post("/v1/emotion/audio", "audio", timeout=1.0, params={"session_id": session_id, "turn_id": turn_id, "sample_rate": sample_rate}, content=pcm)
+        r = await self._post("/v1/emotion/audio", "audio", timeout=1.0 if not chunk_s else 5.0,
+                       params={"session_id": session_id, "turn_id": turn_id, "sample_rate": sample_rate, **({"chunk_s": chunk_s} if chunk_s else {})}, content=pcm)
         return bool(r and r.get("accepted"))
 
     async def finalize(self, session_id: str, turn_id: str, text: str, use_audio: bool = True, max_audio_wait_ms: int = 500,
-                       face_window: Optional[List[float]] = None) -> Optional[Dict[str, Any]]:
+                       face_window: Optional[List[float]] = None, timeout_s: Optional[float] = None) -> Optional[Dict[str, Any]]:
         """The service waits at most [max_audio_wait_ms] for the turn's audio features, then answers from the text alone.
         [face_window] = [t0, t1] on the clock of `frame` calls: the camera frames inside it are pooled into the estimate."""
         body: Dict[str, Any] = {"session_id": session_id, "turn_id": turn_id, "text": text, "use_audio": use_audio,
                                 "max_audio_wait_ms": max_audio_wait_ms}
         if face_window:
             body["face_window"] = [float(face_window[0]), float(face_window[1])]
-        return await self._post("/v1/emotion/finalize", "finalize", json=body)
+        return await self._post("/v1/emotion/finalize", "finalize", timeout=timeout_s, json=body)
 
     async def frame(self, session_id: str, t: float, jpeg: bytes) -> Optional[Dict[str, Any]]:
         """One upright JPEG frame taken at [t] (this process's monotonic clock). Droppable: None on any problem."""
