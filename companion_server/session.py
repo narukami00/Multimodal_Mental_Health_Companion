@@ -20,6 +20,7 @@ The explicit `input.start` / `input.end` and `audio_start` / `audio_end` turns
 from __future__ import annotations
 
 import asyncio
+from emotion_client import EmotionClient, default_client
 import json
 import logging
 import os
@@ -37,6 +38,7 @@ from uuid import uuid4
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+import safety_gate
 from conversation_memory import clean_summary, sanitize_resume, sanitize_turns
 from llm_service import LlmService, sanitize_memory
 from stt_service import VAD_WINDOW, SttService, StreamingVad
@@ -70,6 +72,12 @@ DEFAULT_VAD_CONFIG: Dict[str, Any] = {
 _LEGACY_VAD_KEYS = {"min_silence_ms": "endpoint_ms"}
 
 FRAME_HEADER = struct.Struct("<II")  # uint32 stream_id, uint32 sequence
+LOG_TEXT = os.environ.get("SOLACE_LOG_TEXT") == "1"  # development only: the user's words are not written to the log otherwise
+
+
+def _logged(text: str) -> str:
+    """What may appear in a log line for a piece of user text: its size, unless text logging was switched on for development."""
+    return f'"{text}"' if LOG_TEXT else f"<{len(text.split())} words>"
 TTS_FRAME_MS = 100
 INTER_CLAUSE_PAUSE_MS = 80
 TTS_PREFETCH = 2               # clauses synthesised ahead of the one being sent
@@ -148,6 +156,8 @@ class Reply:
     t_user_stopped: Optional[float] = None
     stt_ms: Optional[int] = None
     t_first_token: Optional[float] = None
+    emotion_cue: str = ""  # optional hedged tone note for this reply (see emotion_client.py); empty = none
+    fixed_text: str = ""  # safety: when set, this exact text is the reply and the language model is not called
 
 
 @dataclass
@@ -227,12 +237,19 @@ class Session:
         llm: LlmService,
         tts: BaseTtsEngine,
         session_id: Optional[str] = None,
+        emotion: Optional[EmotionClient] = None,
     ) -> None:
         self.ws = websocket
         self.stt = stt
         self.llm = llm
         self.tts = tts
         self.session_id = session_id or f"sess_{uuid4().hex[:8]}"
+        # Optional emotion service (audio + text -> a hedged tone note). Off unless SOLACE_EMOTION=1 AND the app opts in with
+        # session.configure {"emotion": {"enabled": true}}. Any failure means 'no cue': a call never depends on it.
+        self.emotion = emotion if emotion is not None else default_client()
+        self._pending_cue = ""  # the cue computed for the turn that is about to be answered (also covers continuation holds)
+        self._safety_cooldown = 0  # turns left after an urgent one in which no emotion cue is sent
+        self._emotion_audio: Dict[str, "asyncio.Task[bool]"] = {}  # turn_id -> the upload of that turn's audio to the service
 
         self.history: List[Dict[str, str]] = []
         self.vad_config: Dict[str, Any] = dict(DEFAULT_VAD_CONFIG)
@@ -244,6 +261,7 @@ class Session:
             "mic_sample_rate": 16000,
             "playback_sample_rate": tts.default_sample_rate,
             "codec": "pcm_s16le",
+            "emotion": False,
         }
         self.phase = CallPhase.IDLE
         self._stream_ids = iter(range(2001, 1 << 31))
@@ -322,6 +340,49 @@ class Session:
         for task in list(self._tasks):
             task.cancel()
         self.listener = None
+        if self.config.get("emotion"):  # forget this session's smoothing state; fire and forget, never blocks the shutdown
+            asyncio.ensure_future(self.emotion.reset(self.session_id))
+
+    # ------------------------------------------------------------------- emotion cue (optional)
+
+    def _emotion_on(self) -> bool:
+        return bool(self.config.get("emotion")) and self.emotion.usable
+
+    async def _emotion_cue(self, turn_id: str, text: str, use_audio: bool) -> str:
+        """Ask the emotion service about this turn and return the hedged cue ('' = none).
+
+        Bounded by the client's timeout, never raises. Also tells an opted-in app what was inferred (`emotion.update`).
+        (Crisis language is NOT handled here: `safety_gate` in `_start_reply` is independent of this service.)"""
+        upload = self._emotion_audio.pop(turn_id, None)
+        if not self._emotion_on():
+            return ""
+        try:
+            if use_audio:
+                # Make the order deterministic: the audio upload must have reached the service before the result is requested,
+                # otherwise the service could answer from the text alone. The upload is tiny (local) and has run beside the STT.
+                accepted = False
+                if upload is not None:
+                    try:
+                        accepted = bool(await asyncio.wait_for(asyncio.shield(upload), 1.5))
+                    except Exception:
+                        accepted = False
+                res = await self.emotion.finalize(self.session_id, turn_id, text, use_audio=accepted)
+            else:
+                res = await self.emotion.text(self.session_id, text)
+        except Exception as e:  # the client already swallows errors; this is belt and braces
+            logger.warning(f"emotion cue failed: {e}")
+            return ""
+        if not res or not res.get("decision"):
+            return ""
+        d, cue = res["decision"], res.get("cue") or ""
+        est = res.get("estimate") or {}
+        await self._send({
+            "type": "emotion.update", "turn_id": turn_id, "source": "voice" if use_audio else "text",
+            "model_version": res.get("model_version"), "pattern": d.get("pattern"), "mood": d.get("mood"), "tier": d.get("tier"),
+            "valence": d.get("valence"), "arousal": d.get("arousal"), "cue_used": bool(cue), "suppressed": d.get("suppressed"),
+            "estimate": {"lv": est.get("lv"), "la": est.get("la"), "l7": est.get("l7")},
+        })
+        return cue  # crisis language is handled by safety_gate in _start_reply, not here
 
     def _spawn(self, coro: Awaitable[None]) -> "asyncio.Task[None]":
         task = asyncio.ensure_future(coro)
@@ -429,6 +490,8 @@ class Session:
 
     async def _h_configure(self, data: Dict[str, Any]) -> None:
         self.config["mode"] = data.get("mode", self.config["mode"])
+        if isinstance(data.get("country"), str) and data["country"].strip():
+            self.config["country"] = data["country"].strip().upper()[:2]  # selects the local crisis resources; absent = default (BD)
         # The person's own consented memory block. Authoritative on every
         # configure: absent means none, so withdrawing consent takes effect on
         # the next configure. Held for this connection only, never logged.
@@ -475,12 +538,18 @@ class Session:
             self.stt.vad_min_speech_ms = int(self.vad_config["min_speech_ms"])
             logger.info(f"Session VAD config: {self.vad_config}")
 
-        await self._send({
+        ready: Dict[str, Any] = {
             "type": "session.ready",
             "mode": self.config["mode"],
             "tts": self._tts_info(),
             "vad": self.vad_config,
-        })
+        }
+        emotion_opts = data.get("emotion")
+        if isinstance(emotion_opts, dict):
+            # Opt-in per session (consent is the app's call); effective only if the service is switched on server-side.
+            self.config["emotion"] = bool(emotion_opts.get("enabled")) and self.emotion.enabled
+            ready["emotion"] = {"enabled": self.config["emotion"], "server_enabled": self.emotion.enabled}
+        await self._send(ready)
 
     async def _h_ping(self, data: Dict[str, Any]) -> None:
         await self._send({
@@ -606,11 +675,12 @@ class Session:
     async def _h_text_message(self, data: Dict[str, Any]) -> None:
         turn_id = data.get("turn_id", f"turn_{uuid4().hex[:6]}")
         user_text = data.get("text", "")
-        logger.info(f"Received text message [{turn_id}]: {user_text}")
+        logger.info(f"Received text message [{turn_id}]: {_logged(user_text)}")
         await self._send({"type": "echo", "turn_id": turn_id, "text": f"Echo: {user_text}"})
         if user_text.strip():
+            cue = await self._emotion_cue(turn_id, user_text.strip(), use_audio=False)
             await self._start_reply(user_turn_id=turn_id, text=user_text.strip(),
-                                    spoken=False, voice_turn=False)
+                                    spoken=False, voice_turn=False, emotion_cue=cue)
 
     # ------------------------------------------------------- continuous call stream
 
@@ -853,8 +923,12 @@ class Session:
         call_gen: int,
     ) -> None:
         """Transcribe one endpointed turn, then answer it."""
+        if self._emotion_on() and sample_rate and len(pcm) >= 2 * sample_rate // 3:
+            # Start the audio features NOW so they are ready by the time the transcript is (runs beside the speech-to-text).
+            self._emotion_audio[turn_id] = self._spawn(self.emotion.start_audio(self.session_id, turn_id, pcm, sample_rate))
         async with self._stt_lock:
             if self._closed or call_gen != self._call_gen:
+                self._emotion_audio.pop(turn_id, None)
                 return
             await self._send({"type": "turn.processing", "turn_id": turn_id,
                               "stage": "stt", "elapsed_ms": 0})
@@ -871,6 +945,7 @@ class Session:
         if self._closed or call_gen != self._call_gen:
             return  # the call ended while this was being transcribed
         if not text:
+            self._emotion_audio.pop(turn_id, None)
             logger.info(f"Discarding turn {turn_id}: unintelligible")
             await self._send({"type": "transcript_failed", "turn_id": turn_id,
                               "reason": "unintelligible", "confidence": round(confidence, 2)})
@@ -880,12 +955,13 @@ class Session:
             await self._after_empty_turn("unintelligible")
             return
 
-        logger.info(f'Transcribed turn {turn_id}: "{text}" (conf={confidence:.2f}, stt={stt_ms}ms)')
+        logger.info(f"Transcribed turn {turn_id}: {_logged(text)} (conf={confidence:.2f}, stt={stt_ms}ms)")
         await self._send({
             "type": "transcript_final", "turn_id": turn_id, "text": text, "stable": True,
             "language": language, "confidence": round(confidence, 2),
             "audio_ms": int(len(pcm) / 2 / sample_rate * 1000),
         })
+        self._pending_cue = await self._emotion_cue(turn_id, text, use_audio=True)
 
         # A thought continued after a pause is one turn, not two.
         if self._carry_text:
@@ -912,7 +988,7 @@ class Session:
         self._cancel_carry()
         self._carry_text = text
         hold_s = int(self.vad_config["carry_hold_ms"]) / 1000.0
-        logger.info(f'Holding unfinished turn {turn_id} for {hold_s:.1f}s: "{text}"')
+        logger.info(f"Holding unfinished turn {turn_id} for {hold_s:.1f}s: {_logged(text)}")
         self._carry_task = self._spawn(self._carry_timeout(turn_id, hold_s, stopped_at, stt_ms))
 
     async def _carry_timeout(self, turn_id: str, hold_s: float, stopped_at: float, stt_ms: int) -> None:
@@ -1081,6 +1157,8 @@ class Session:
             await self._send({"type": "turn.processing", "turn_id": turn_id,
                               "stage": "stt", "elapsed_ms": 0})
 
+        if self._emotion_on() and ch == 1 and sr and len(raw_pcm) >= 2 * sr // 3:
+            self._emotion_audio[turn_id] = self._spawn(self.emotion.start_audio(self.session_id, turn_id, raw_pcm, sr))  # runs beside the STT
         async with self._stt_lock:
             t0 = time.monotonic()
             text, confidence, language, _eot, vad_speech_ms = await asyncio.to_thread(
@@ -1089,6 +1167,7 @@ class Session:
             stt_ms = int((time.monotonic() - t0) * 1000)
 
         if not text:
+            self._emotion_audio.pop(turn_id, None)
             reason = "silence" if not (probabilities or vad_speech_ms) else "unintelligible"
             logger.info(f"Discarding turn {turn_id}: {reason}")
             await self._send({"type": "transcript_failed", "turn_id": turn_id,
@@ -1099,15 +1178,16 @@ class Session:
                 await self._set_phase(CallPhase.IDLE, reason)
             return
 
-        logger.info(f'Transcribed turn {turn_id}: "{text}" (conf={confidence:.2f}, lang={language})')
+        logger.info(f"Transcribed turn {turn_id}: {_logged(text)} (conf={confidence:.2f}, lang={language})")
         await self._send({
             "type": "transcript_final", "turn_id": turn_id, "text": text, "stable": True,
             "language": language, "confidence": round(confidence, 2),
             "audio_ms": int(duration_sec * 1000),
         })
+        cue = await self._emotion_cue(turn_id, text, use_audio=(ch == 1))
         await self._start_reply(
             user_turn_id=turn_id, text=text, spoken=is_duplex, voice_turn=True,
-            t_user_stopped=time.monotonic(), stt_ms=stt_ms,
+            t_user_stopped=time.monotonic(), stt_ms=stt_ms, emotion_cue=cue,
         )
         if is_duplex:
             await self._set_phase(CallPhase.THINKING, "transcript_final")
@@ -1152,8 +1232,28 @@ class Session:
         voice_turn: bool,
         t_user_stopped: Optional[float] = None,
         stt_ms: Optional[int] = None,
+        emotion_cue: Optional[str] = None,
     ) -> None:
-        """Begin answering [text], superseding any answer still in flight."""
+        """Begin answering [text], superseding any answer still in flight.
+
+        [emotion_cue]: the optional hedged tone note for this reply; None = use the cue computed for the most recent voice turn
+        (this also covers an unfinished sentence that was held and is answered later)."""
+        cue = emotion_cue if emotion_cue is not None else self._pending_cue
+        self._pending_cue = ""
+        # Safety gate: the one place every answered text passes (typed, spoken, merged or held). It does not depend on the
+        # emotion service, and it never reads an emotion estimate.
+        level = safety_gate.assess(text)
+        fixed_text = ""
+        if level == safety_gate.URGENT:
+            self._safety_cooldown = safety_gate.COOLDOWN_TURNS
+            fixed_text = safety_gate.crisis_reply(self.config.get("country"), spoken=spoken)
+        if level or self._safety_cooldown > 0:
+            cue = ""
+            if level != safety_gate.URGENT and self._safety_cooldown > 0:
+                self._safety_cooldown -= 1
+        if level:
+            logger.warning(f"Safety gate: {level} on turn {user_turn_id}")  # level only, never the words
+            await self._send({"type": "safety.alert", "level": level, "turn_id": user_turn_id})
         previous = self.reply
         if previous is not None and (
             not previous.finished or time.monotonic() < previous.audible_until
@@ -1163,7 +1263,8 @@ class Session:
             await self._notify_tts_cancelled(previous, "superseded_by_new_turn")
 
         reply = Reply(user_turn_id=user_turn_id, user_text=text, spoken=spoken,
-                      voice_turn=voice_turn, t_user_stopped=t_user_stopped, stt_ms=stt_ms)
+                      voice_turn=voice_turn, t_user_stopped=t_user_stopped, stt_ms=stt_ms, emotion_cue=cue or "",
+                      fixed_text=fixed_text)
         self.reply = reply
         if spoken:
             self._unanswered = (text, time.monotonic())
@@ -1171,6 +1272,14 @@ class Session:
         self._tasks.add(reply.task)
         reply.task.add_done_callback(self._tasks.discard)
         reply.task.add_done_callback(self._log_task_failure)
+
+    async def _reply_stream(self, reply: Reply, messages: List[Dict[str, str]], max_tokens: int):
+        """The reply text as a stream: the fixed safety text when the gate set one, else the language model."""
+        if reply.fixed_text:
+            yield reply.fixed_text
+            return
+        async for chunk in self.llm.generate_stream_async(messages, max_new_tokens=max_tokens, cancel=reply.llm_cancel):
+            yield chunk
 
     async def _run_reply(self, reply: Reply) -> None:
         cfg = self.config
@@ -1186,12 +1295,16 @@ class Session:
         if synthesize:
             reply.audio_stream_id = self._next_stream_id()
 
-        messages = self.llm.build_messages(
+        extra = {"emotion_cue": reply.emotion_cue} if reply.emotion_cue else {}  # only when there is a cue: older LLM stand-ins keep working
+        if reply.emotion_cue:
+            logger.info(f"Emotion cue attached to reply {reply.turn_id} ({len(reply.emotion_cue)} chars)")  # never log the cue text
+        messages = [] if reply.fixed_text else self.llm.build_messages(  # a fixed safety reply never reaches the language model
             reply.user_text,
             history=self.history,
             memory=cfg.get("memory"),
             summary=cfg.get("summary", ""),
             spoken=reply.spoken,
+            **extra,
         )
         await self._send({
             "type": "llm_start", "turn_id": reply.turn_id, "utterance_id": reply.utterance_id,
@@ -1220,9 +1333,7 @@ class Session:
         parts: List[str] = []
         max_tokens = VOICE_MAX_TOKENS if reply.spoken else CHAT_MAX_TOKENS
         try:
-            async for chunk in self.llm.generate_stream_async(
-                messages, max_new_tokens=max_tokens, cancel=reply.llm_cancel
-            ):
+            async for chunk in self._reply_stream(reply, messages, max_tokens):
                 if reply.t_first_token is None:
                     reply.t_first_token = time.monotonic()
                 parts.append(chunk)

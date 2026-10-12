@@ -119,6 +119,8 @@ SPOKEN_STYLE_ADDENDUM = (
     "natural spoken sentences. No lists, no emojis, no stage directions."
 )
 
+EMOTION_CUE_MAX_CHARS = 420  # the optional emotion note stays one short plain line (a 0.5B chat model needs a short prompt)
+
 CT2_MODELS_DIR = Path(__file__).resolve().parent / "models" / "llm"
 _STOP_TOKENS = ("<|im_end|>", "<|endoftext|>")
 
@@ -391,16 +393,23 @@ class LlmService:
         memory: Optional[Dict[str, Any]] = None,
         summary: str = "",
         spoken: bool = False,
+        emotion_cue: str = "",
     ) -> List[Dict[str, str]]:
         """Construct the prompt message list with system prompt and prior conversation turns.
 
         `memory` is an already-sanitized block (see `sanitize_memory`). It is
         per connection and never stored by the server. `spoken` adds the
         voice-call style rule so replies are short enough to say aloud.
+        `emotion_cue` is the optional short, hedged note from the emotion
+        service (tone only, never a statement of fact); it is flattened to one
+        plain line and capped so it can neither overrun the prompt nor smuggle
+        in instructions.
         """
         system = self.system_prompt + memory_prompt_block(memory, summary)
         if spoken:
             system += SPOKEN_STYLE_ADDENDUM
+        if emotion_cue:
+            system += "\n" + " ".join(str(emotion_cue).split())[:EMOTION_CUE_MAX_CHARS]
         messages: List[Dict[str, str]] = [{"role": "system", "content": system}]
 
         if history:

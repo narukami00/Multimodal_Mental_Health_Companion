@@ -1,0 +1,57 @@
+{
+  "_comment": "Single source for the deterministic crisis-language floor. Matching: lowercase, drop everything except letters/digits/space/apostrophe, collapse spaces, substring test (same rule as the app's keyword_safety_screener.dart). The app list should be generated from THIS file. A floor, not a clinical detector; reviewed classifier and more languages needed before external testing.",
+  "urgent": [
+    "kill myself",
+    "killing myself",
+    "end my life",
+    "ending my life",
+    "end my own life",
+    "take my own life",
+    "taking my own life",
+    "want to die",
+    "wanted to die",
+    "wanna die",
+    "wish i were dead",
+    "wish i was dead",
+    "hurt myself",
+    "hurting myself",
+    "harm myself",
+    "harming myself",
+    "self harm",
+    "selfharm",
+    "suicide",
+    "suicidal",
+    "no reason to live",
+    "any reason to live",
+    "not safe with myself",
+    "don't want to live",
+    "dont want to live",
+    "don't want to be here",
+    "dont want to be here",
+    "don't want to be alive",
+    "dont want to be alive",
+    "better off dead",
+    "better off without me"
+  ],
+  "support": [
+    "not safe",
+    "cannot keep myself safe",
+    "can't keep myself safe",
+    "cant keep myself safe",
+    "hopeless",
+    "panic attack",
+    "completely overwhelmed"
+  ],
+  "default_country": "BD",
+  "generic": {
+    "reply": "I'm really glad you told me, and I'm sorry it feels this heavy right now. Your safety matters most. If you might act on these thoughts, please call your local emergency number or a crisis line right now, or reach someone you trust and ask them to stay with you. I'm here with you too.",
+    "spoken": "I'm really glad you told me, and I'm sorry it feels this heavy right now. Your safety matters most. If you might act on these thoughts, please call your local emergency number or a crisis line right now, or reach someone you trust and ask them to stay with you. I'm here with you too."
+  },
+  "countries": {
+    "BD": {
+      "_source": "Numbers checked 2026-10-12: 999 national emergency service; Kaan Pete Roi helpline from kaanpeteroi.org/helpline-service (3 PM to 3 AM daily). Re-verify before every release; clinical review of the wording is still needed.",
+      "reply": "I'm really glad you told me, and I'm sorry it feels this heavy right now. Your safety matters most. If you might act on these thoughts, please call 999 right now, or go to the nearest hospital emergency department. You can also call Kaan Pete Roi, a free and confidential listening line, on 09612-119911, every day from 3 PM to 3 AM. And please reach someone you trust and ask them to stay with you. I'm here with you too.",
+      "spoken": "I'm really glad you told me, and I'm sorry it feels this heavy right now. Your safety matters most. If you might act on these thoughts, please call nine nine nine right now, or go to the nearest hospital emergency department. You can also call Kaan Pete Roi, a free and confidential listening line, on zero nine six one two, one one nine nine one one, every day from three P M to three A M. And please reach someone you trust and ask them to stay with you. I'm here with you too."
+    }
+  }
+}

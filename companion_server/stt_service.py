@@ -300,7 +300,7 @@ class SttService:
         confidence = float(np.mean(confidences)) if confidences else float(info.language_probability)
         logger.info(
             f"Transcribed {len(pcm_bytes)} B in {(time.time() - t0) * 1000:.0f}ms on "
-            f"{self._device}: \"{text}\" (conf: {confidence:.2f})"
+            f"{self._device}: {len(text.split())} words (conf: {confidence:.2f})"  # words are not logged (privacy); see SOLACE_LOG_TEXT in session.py
         )
         return text, confidence, info.language or "en"
 
