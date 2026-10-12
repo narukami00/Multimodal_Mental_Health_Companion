@@ -186,6 +186,10 @@ class _MessageReadingCardState extends State<MessageReadingCard> {
             style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: _soft),
           ),
         ],
+        if (r.classes != null && r.classes!.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          FeelingsSection(classes: r.classes!, fromVoice: (r.pattern ?? '').contains('A')),
+        ],
         const SizedBox(height: 8),
         Text(
           'A guess from $basis${r.inContext ? ', with your earlier messages in mind' : ''}. Only you know how you felt.',

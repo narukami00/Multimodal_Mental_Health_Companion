@@ -110,6 +110,15 @@ void main() {
       expect(await c.attachToLatestUserMessage(reading(mood: 'upbeat')), isFalse);
     });
 
+    test('a reading that arrives before the message is saved waits and is given to it', () async {
+      final c = await controllerWith([solMsg('g', 'Hello')]);
+      expect(await c.attachToLatestUserMessage(reading(mood: 'tense or upset', pattern: 'ATV')), isFalse);
+      await c.addMessage(userMsg('call1', 'spoken in a call'));
+      final stored = c.activeConversation!.messages.last;
+      expect(stored.reading?.pattern, 'ATV');
+      expect(stored.reading?.mood, 'tense or upset');
+    });
+
     test('a stale reading is not attached to an old message', () async {
       final old = DateTime.now().subtract(const Duration(minutes: 30));
       final c = await controllerWith([userMsg('u1', 'long ago', at: old)]);
@@ -289,8 +298,14 @@ void main() {
       expect(find.text('Low'), findsOneWidget);
       expect(find.textContaining('earlier messages in mind'), findsOneWidget);
       expect(find.textContaining('Heavy 70%'), findsOneWidget);
+      // named feelings from words alone: tucked away, but one tap shows them with a warning
+      expect(find.text('Sad'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('feelings-toggle')));
+      await tester.pump();
+      expect(find.textContaining('huge grain of salt'), findsOneWidget);
+      expect(find.text('Sad'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('message-reading-scrim')));
+      await tester.tapAt(const Offset(4, 4));
       await tester.pump();
       expect(find.byKey(const ValueKey('message-reading')), findsNothing);
     });
@@ -301,7 +316,7 @@ void main() {
       await tester.longPress(find.text('long ago I said this'));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.byKey(const ValueKey('message-reading-none')), findsOneWidget); // no reader wired: says why, shows nothing made up
-      await tester.tap(find.byKey(const ValueKey('message-reading-scrim')));
+      await tester.tapAt(const Offset(4, 4));
       await tester.pump();
 
       c.messageReader = (m, before) async => reading(mood: 'calm or content', neg: 0.1, pos: 0.6);

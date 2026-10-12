@@ -111,27 +111,83 @@ class EmotionReadingCard extends StatelessWidget {
               ],
             ),
           ],
-          if (classes.isNotEmpty && !(r.pattern ?? '').contains('A')) ...[
+          if (classes.isNotEmpty) ...[
             const SizedBox(height: 14),
-            const Text(
-              'Specific feelings are too uncertain to name from words alone, so only the heavy-or-light and energy reads are shown. A recording adds a rough guess at them.',
-              key: ValueKey('feelings-withheld'),
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _soft, height: 1.4),
-            ),
-          ],
-          if (classes.isNotEmpty && (r.pattern ?? '').contains('A')) ...[
-            const SizedBox(height: 18),
-            const Text('Closest feelings (a rough guess)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _ink)),
-            const SizedBox(height: 8),
-            for (final e in classes.take(4)) _Bar(label: _plain(e.key), value: e.value),
-            const SizedBox(height: 4),
-            const Text(
-              'Spread across several feelings is normal: the model rarely picks just one.',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _soft, height: 1.4),
-            ),
+            FeelingsSection(classes: r.classes!, fromVoice: (r.pattern ?? '').contains('A'), startOpen: true),
           ],
         ],
       ),
+    );
+  }
+}
+
+/// The seven class probabilities as bars, with an honest warning. From a recording (voice) they are a
+/// rough guess and shown straight away; from words alone they are very unreliable, so they sit behind a
+/// button the person chooses to press, with a stronger warning. Never hidden outright.
+class FeelingsSection extends StatefulWidget {
+  const FeelingsSection({required this.classes, required this.fromVoice, this.startOpen = false, super.key});
+
+  final Map<String, double> classes;
+  final bool fromVoice;
+
+  /// Whether a voice-based reading starts expanded (words-only readings always start collapsed).
+  final bool startOpen;
+
+  @override
+  State<FeelingsSection> createState() => _FeelingsSectionState();
+}
+
+class _FeelingsSectionState extends State<FeelingsSection> {
+  late bool _open = widget.fromVoice && widget.startOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = widget.classes.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    const soft = Color(0xFF8A7A61);
+    final warning = widget.fromVoice
+        ? 'A rough guess. Spread across several feelings is normal: the model rarely picks just one.'
+        : 'From words alone these are very unreliable. Take them with a huge grain of salt: they can be plain wrong.';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          key: const ValueKey('feelings-toggle'),
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() => _open = !_open),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _open
+                        ? 'Closest feelings'
+                        : widget.fromVoice
+                            ? 'Show closest feelings (a rough guess)'
+                            : 'Show specific feelings anyway (unreliable)',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF3A3125)),
+                  ),
+                ),
+                Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 20, color: soft),
+              ],
+            ),
+          ),
+        ),
+        if (!_open && !widget.fromVoice)
+          const Text(
+            'Specific feelings from words alone are unreliable, so they are tucked away until you ask.',
+            key: ValueKey('feelings-withheld'),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: soft, height: 1.4),
+          ),
+        if (_open) ...[
+          const SizedBox(height: 6),
+          Text(warning,
+              key: const ValueKey('feelings-warning'),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFB4651F), height: 1.4)),
+          const SizedBox(height: 8),
+          for (final e in entries.take(4)) _Bar(label: EmotionReadingCard._plain(e.key), value: e.value),
+        ],
+      ],
     );
   }
 }

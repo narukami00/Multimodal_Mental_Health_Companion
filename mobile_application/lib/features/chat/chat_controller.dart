@@ -235,6 +235,7 @@ class ChatController extends ChangeNotifier {
     await _saveToPrefs();
     notifyListeners();
     if (message.isUser && !message.isVoice) onUserMessage?.call(message);
+    if (message.isUser) await _givePendingReading(message);
   }
 
   /// Update an existing message (e.g. adding transcription or finishing LLM stream).
@@ -310,20 +311,39 @@ class ChatController extends ChangeNotifier {
     }
   }
 
-  /// A live reading from the server arrives just after the person's turn: it belongs to the newest
-  /// message of theirs that has none yet (within [within] of it, so a stray late reading is dropped).
-  Future<bool> attachToLatestUserMessage(EmotionResult reading, {Duration within = const Duration(minutes: 2)}) async {
+  EmotionResult? _pendingReading;
+  DateTime? _pendingAt;
+
+  /// A live reading from the server (typed text, a voice message, or a call turn read with voice and
+  /// face) arrives just after the person's turn: it belongs to the newest message of theirs that has none
+  /// yet, if that message is recent. If the message is not saved yet (a call turn's words can land a
+  /// moment after the reading) the reading waits briefly and is given to the next message of theirs.
+  Future<bool> attachToLatestUserMessage(EmotionResult reading, {Duration within = const Duration(seconds: 20)}) async {
     final conv = activeConversation;
-    if (conv == null) return false;
-    for (var i = conv.messages.length - 1; i >= 0; i--) {
-      final m = conv.messages[i];
-      if (!m.isUser) continue;
-      if (m.reading != null) return false;
-      if (DateTime.now().difference(m.timestamp) > within) return false;
-      await setReading(m.id, reading);
-      return true;
+    if (conv != null) {
+      for (var i = conv.messages.length - 1; i >= 0; i--) {
+        final m = conv.messages[i];
+        if (!m.isUser) continue;
+        if (m.reading == null && DateTime.now().difference(m.timestamp) <= within) {
+          await setReading(m.id, reading);
+          return true;
+        }
+        break;
+      }
     }
+    _pendingReading = reading;
+    _pendingAt = DateTime.now();
     return false;
+  }
+
+  Future<void> _givePendingReading(ChatMessageRecord message) async {
+    final reading = _pendingReading;
+    final at = _pendingAt;
+    if (reading == null || at == null || !message.isUser || message.reading != null) return;
+    _pendingReading = null;
+    _pendingAt = null;
+    if (DateTime.now().difference(at) > const Duration(seconds: 20)) return;
+    await setReading(message.id, reading);
   }
 
   /// Reads one message now, with the messages before it as context. Returns the reading, or null.
