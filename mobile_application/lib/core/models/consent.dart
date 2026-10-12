@@ -80,12 +80,24 @@ class ConsentKey {
     currentVersion: '1.0',
   );
 
+  /// Letting the camera, during a video call, help that estimate: frames are sent live to the
+  /// companion server, read for the face in memory and never saved. Separate from voice and text, and
+  /// only counts while [emotionEstimate] is also granted.
+  static const faceFeatures = ConsentKey._(
+    category: 'faceFeatures',
+    modality: 'video',
+    purpose: 'emotionExtraction',
+    currentVersion: '1.0',
+    parent: emotionEstimate,
+  );
+
   static const all = [
     usageFootprint,
     topAppNames,
     profileSnippet,
     memoryMoments,
     emotionEstimate,
+    faceFeatures,
   ];
 
   static ConsentKey? fromKey(String key) {

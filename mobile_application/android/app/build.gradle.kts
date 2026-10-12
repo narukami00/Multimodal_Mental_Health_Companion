@@ -46,6 +46,11 @@ android {
 dependencies {
     // Backports java.time for flutter_local_notifications on older Android.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // Front-camera frames for the optional emotion module (see CameraFrameCapture.kt).
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
 }
 
 flutter {

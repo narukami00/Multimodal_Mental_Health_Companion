@@ -9,12 +9,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/companion_server_config.dart';
 import '../../core/models/chat_message_record.dart';
+import '../../core/models/consent.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../services/audio_processor.dart';
 import '../../services/companion_websocket_service.dart';
 import '../../services/pcm_audio_recorder_service.dart';
+import '../../services/platform_frame_source.dart';
 import '../../services/tts_playback_service.dart';
+import '../../services/video_frame_service.dart';
 import '../chat/chat_controller.dart';
+import '../consent/consent_controller.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -29,8 +33,16 @@ class CallPage extends StatefulWidget {
     this.audioRecorderService,
     this.ttsPlaybackService,
     this.chatController,
+    this.videoFrameService,
     super.key,
   });
+
+  /// What the person has agreed to; set once at start-up. Without it the camera button stays a plain
+  /// on-screen toggle that opens no camera and sends nothing.
+  static ConsentController? consent;
+
+  /// Streams camera frames to the server. Built on demand from the phone camera; tests pass a fake.
+  final VideoFrameService? videoFrameService;
 
   final SafetyController safetyController;
   final ProfileController? profileController;
@@ -54,7 +66,7 @@ class _CaptionLine {
   int shown = 0;
 }
 
-class _CallPageState extends State<CallPage> {
+class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
   static const _ink = Color(0xFF4A3B2A);
   static const _softInk = Color(0xFF6E5D49);
   static const _timerInk = Color(0xFF8E7E6A);
@@ -141,6 +153,7 @@ class _CallPageState extends State<CallPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_ended || _paused || !mounted) return;
       setState(() => _seconds++);
@@ -589,6 +602,9 @@ class _CallPageState extends State<CallPage> {
     _ticker?.cancel();
     _handTimer?.cancel();
     _moodTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _video?.removeListener(_onVideoChanged);
+    _video?.dispose();
     _commitAssistantTurn();
 
     for (final sub in _subs) {
@@ -763,9 +779,106 @@ class _CallPageState extends State<CallPage> {
     });
   }
 
-  void _toggleCamera() {
+  VideoFrameService? _video;
+
+  /// The camera pipeline, or null when nothing is wired (then the button is only an on-screen toggle).
+  VideoFrameService? _videoService() {
+    if (_video != null) return _video;
+    final injected = widget.videoFrameService;
+    final consent = CallPage.consent;
+    final ws = _wsService;
+    if (injected != null) {
+      _video = injected;
+    } else if (consent != null && ws != null) {
+      _video = VideoFrameService(
+        source: PlatformFrameSource(),
+        uriProvider: () => ws.videoUri,
+        consentGranted: () => consent.isGranted(ConsentKey.faceFeatures),
+      );
+    }
+    _video?.addListener(_onVideoChanged);
+    return _video;
+  }
+
+  void _onVideoChanged() {
+    if (!mounted) return;
+    final video = _video;
+    setState(() {
+      // The camera closing for any reason (consent withdrawn, server refusal, error) turns the button off.
+      if (_camera && video != null && !video.streaming) _camera = false;
+    });
+  }
+
+  Future<void> _toggleCamera() async {
     if (_ended) return;
-    setState(() => _camera = !_camera);
+    if (_camera) {
+      await _stopCamera();
+      return;
+    }
+    final video = _videoService();
+    if (video == null) {
+      setState(() => _camera = true);
+      return;
+    }
+    if (!await _ensureFaceConsent()) return;
+    // The server learns about the new consent before the first frame arrives.
+    _wsService?.sendSessionConfigure(mode: 'duplex_call', ttsEnabled: true);
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    var ok = await video.start();
+    if (!ok && video.refusedReason == 'no_consent') {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      ok = await video.start();
+    }
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _camera = true);
+    } else {
+      final why = video.refusedReason == null
+          ? "Couldn't open the camera."
+          : "The server isn't set up to read the camera yet.";
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(why), behavior: SnackBarBehavior.floating));
+    }
+  }
+
+  Future<void> _stopCamera() async {
+    await _video?.stop();
+    if (mounted) setState(() => _camera = false);
+  }
+
+  /// The camera is a separate, explicit yes. Asked once here; the same switch lives in "What Sol remembers".
+  Future<bool> _ensureFaceConsent() async {
+    final consent = CallPage.consent;
+    if (consent == null || consent.isGranted(ConsentKey.faceFeatures)) return true;
+    final agreed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _FaceConsentSheet(
+        onAllow: () => Navigator.of(sheetContext).pop(true),
+        onDecline: () => Navigator.of(sheetContext).pop(false),
+      ),
+    );
+    if (agreed != true) return false;
+    if (!consent.isGranted(ConsentKey.emotionEstimate)) {
+      await consent.grant(ConsentKey.emotionEstimate);
+    }
+    await consent.grant(ConsentKey.faceFeatures);
+    return true;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Leaving the app closes the camera; coming back never reopens it by itself.
+    if (state == AppLifecycleState.paused && _camera) unawaited(_stopCamera());
+  }
+
+  String get _cameraLabel {
+    if (!_camera) return 'VOICE ONLY · CAMERA OFF';
+    final video = _video;
+    if (video == null) return 'CAMERA ON';
+    if (video.lastUsable == false) return "CAMERA ON · CAN'T SEE YOUR FACE";
+    return 'CAMERA ON · ANALYSED LIVE, NEVER SAVED';
   }
 
   void _endSession() {
@@ -1191,7 +1304,7 @@ class _CallPageState extends State<CallPage> {
             const SizedBox(width: 7),
             Flexible(
               child: Text(
-                _camera ? 'CAMERA ON · YOU ARE VISIBLE' : 'VOICE ONLY · CAMERA OFF',
+                _cameraLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -2525,6 +2638,68 @@ class _EndOverlay extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+/// Asked the first time the camera is turned on during a call.
+class _FaceConsentSheet extends StatelessWidget {
+  const _FaceConsentSheet({required this.onAllow, required this.onDecline});
+
+  final VoidCallback onAllow;
+  final VoidCallback onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFFBF2),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Let Sol read your face?',
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Color(0xFF3A3125)),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'While the camera is on, frames are sent live to the companion server '
+            'and read in memory to help judge whether you look tense or low. '
+            'They are never saved, and it only softens how Sol talks. Your words '
+            'still matter most. You can turn this off any time in What Sol remembers.',
+            style: TextStyle(fontSize: 14, height: 1.45, fontWeight: FontWeight.w600, color: Color(0xFF6E5D49)),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              key: const ValueKey('face-allow'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFB534),
+                foregroundColor: const Color(0xFF3D2E14),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              ),
+              onPressed: onAllow,
+              child: const Text('Allow camera reading', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: TextButton(
+              key: const ValueKey('face-decline'),
+              onPressed: onDecline,
+              child: const Text('Not now', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF8E7E6A))),
+            ),
+          ),
+        ],
       ),
     );
   }

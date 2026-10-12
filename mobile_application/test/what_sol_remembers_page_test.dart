@@ -98,6 +98,30 @@ void main() {
     expect(consent.isGranted(ConsentKey.emotionEstimate), isFalse);
   });
 
+  testWidgets('reading my face is its own switch, and turning it on also turns on noticing how I sound', (
+    tester,
+  ) async {
+    await pump(tester);
+    expect(consent.isGranted(ConsentKey.faceFeatures), isFalse);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('face-switch')));
+    await tester.tap(find.byKey(const ValueKey('face-switch')));
+    await tester.pumpAndSettle();
+    expect(consent.isGranted(ConsentKey.faceFeatures), isTrue);
+    expect(consent.isGranted(ConsentKey.emotionEstimate), isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('face-switch')));
+    await tester.pumpAndSettle();
+    expect(consent.isGranted(ConsentKey.faceFeatures), isFalse);
+    expect(consent.isGranted(ConsentKey.emotionEstimate), isTrue); // the voice and text consent is untouched
+
+    // Withdrawing the parent also ends the camera consent: a sub-grant needs its parent.
+    await tester.tap(find.byKey(const ValueKey('face-switch')));
+    await tester.pumpAndSettle();
+    await consent.revoke(ConsentKey.emotionEstimate);
+    expect(consent.isGranted(ConsentKey.faceFeatures), isFalse);
+  });
+
   testWidgets('lists every moment, and its menu keeps, sets aside, and deletes', (
     tester,
   ) async {

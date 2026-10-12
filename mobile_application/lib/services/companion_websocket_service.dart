@@ -699,7 +699,8 @@ class CompanionWebSocketService {
       memory: memoryProvider?.call(),
       resume: resume,
       country: countryProvider?.call(),
-      emotion: emotionProvider?.call() ?? false,
+      emotion: emotionProvider?.call(),
+      face: faceProvider?.call() ?? false,
     );
     _sendJson(payload);
   }
@@ -718,6 +719,9 @@ class CompanionWebSocketService {
   /// withdrawing the consent reaches the server on the next one. Set once at start-up.
   static bool Function()? emotionProvider;
 
+  /// Whether the person also agreed to the camera being read during calls (a separate consent).
+  static bool Function()? faceProvider;
+
   /// The `session.configure` message. Pure, so what goes on the wire can be
   /// tested without a socket.
   @visibleForTesting
@@ -734,7 +738,8 @@ class CompanionWebSocketService {
     Map<String, Object?>? memory,
     Map<String, Object?>? resume,
     String? country,
-    bool emotion = false,
+    bool? emotion,
+    bool face = false,
   }) {
     return {
       'v': 1,
@@ -755,7 +760,9 @@ class CompanionWebSocketService {
       if (memory != null) 'memory': memory,
       if (resume != null) 'resume': resume,
       if (country != null && country.isNotEmpty) 'country': country,
-      if (emotion) 'emotion': {'enabled': true},
+      // Sent whenever the app knows the answer, so withdrawing consent reaches the server on the very next configure.
+      if (emotion != null)
+        'emotion': {'enabled': emotion, if (emotion && face) 'face_features': true},
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
   }

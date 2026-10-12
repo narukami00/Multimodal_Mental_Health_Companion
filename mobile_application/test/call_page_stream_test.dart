@@ -3,7 +3,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/models/consent.dart';
+import 'package:solace_mobile/data/repositories/in_memory_consent_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_safety_event_repository.dart';
+import 'package:solace_mobile/features/consent/consent_controller.dart';
 import 'package:solace_mobile/features/call/call_page.dart';
 import 'package:solace_mobile/features/safety/support_resources_page.dart';
 import 'package:solace_mobile/features/safety/safety_controller.dart';
@@ -11,6 +14,7 @@ import 'package:solace_mobile/providers/safety/keyword_safety_screener.dart';
 import 'package:solace_mobile/services/companion_websocket_service.dart';
 import 'package:solace_mobile/services/pcm_audio_recorder_service.dart';
 import 'package:solace_mobile/services/tts_playback_service.dart';
+import 'package:solace_mobile/services/video_frame_service.dart';
 
 /// A connected-looking socket that records what the call page puts on the wire
 /// and lets the test play the server's part.
@@ -145,6 +149,52 @@ class _LoudRecorder extends PcmAudioRecorderService {
 
   @override
   Future<bool> isHeadsetConnected() async => headset;
+}
+
+class _NoSource implements FrameSource {
+  @override
+  Stream<Uint8List> get frames => const Stream.empty();
+  @override
+  Future<bool> start() async => true;
+  @override
+  Future<void> stop() async {}
+}
+
+/// A camera pipeline whose state the test decides.
+class _FakeVideo extends VideoFrameService {
+  _FakeVideo({this.opens = true})
+      : super(source: _NoSource(), uriProvider: () => null, consentGranted: () => true);
+
+  final bool opens;
+
+  bool on = false;
+  bool? usable;
+  int starts = 0;
+  int stops = 0;
+
+  @override
+  Future<bool> start() async {
+    starts++;
+    on = opens;
+    notifyListeners();
+    return opens;
+  }
+
+  @override
+  Future<void> stop({bool refused = false}) async {
+    stops++;
+    on = false;
+    notifyListeners();
+  }
+
+  @override
+  bool get streaming => on;
+
+  @override
+  bool? get lastUsable => usable;
+
+  @override
+  String? get refusedReason => null;
 }
 
 bool _silent(Uint8List frame) => frame.every((b) => b == 0);
@@ -432,5 +482,102 @@ void main() {
     ws.serverEmotion(null, null);
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byKey(const ValueKey('mood-note')), findsNothing);
+  });
+
+  group('the camera button', () {
+    late ConsentController consent;
+    late _FakeVideo video;
+
+    Future<void> pumpWith(WidgetTester tester, _FakeVideo fake) async {
+      consent = ConsentController(repository: InMemoryConsentRepository());
+      await consent.load();
+      CallPage.consent = consent;
+      addTearDown(() => CallPage.consent = null);
+      video = fake;
+      ws = _CallWs();
+      recorder = _LoudRecorder();
+      tts = TtsPlaybackService(webSocketService: ws, isMock: true);
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+        tts.dispose();
+        recorder.dispose();
+        ws.dispose();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CallPage(
+            safetyController: createSafety(),
+            webSocketService: ws,
+            audioRecorderService: recorder,
+            ttsPlaybackService: tts,
+            videoFrameService: video,
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+    }
+
+    testWidgets('asks first, and "not now" opens nothing', (tester) async {
+      await pumpWith(tester, _FakeVideo());
+      expect(find.text('VOICE ONLY · CAMERA OFF'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.videocam_outlined).last);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Let Sol read your face?'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('face-decline')));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(video.starts, 0);
+      expect(consent.isGranted(ConsentKey.faceFeatures), isFalse);
+      expect(find.text('VOICE ONLY · CAMERA OFF'), findsOneWidget);
+    });
+
+    testWidgets('allowing records both consents, tells the server and opens the camera', (
+      tester,
+    ) async {
+      await pumpWith(tester, _FakeVideo());
+      final configuresBefore = ws.sent.where((m) => m == 'configure:duplex_call').length;
+
+      await tester.tap(find.byIcon(Icons.videocam_outlined).last);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.byKey(const ValueKey('face-allow')));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 800));
+
+      expect(consent.isGranted(ConsentKey.emotionEstimate), isTrue);
+      expect(consent.isGranted(ConsentKey.faceFeatures), isTrue);
+      expect(video.starts, 1);
+      expect(ws.sent.where((m) => m == 'configure:duplex_call').length, greaterThan(configuresBefore));
+      expect(find.text('CAMERA ON · ANALYSED LIVE, NEVER SAVED'), findsOneWidget);
+
+      video.usable = false;
+      video.notifyListeners();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text("CAMERA ON · CAN'T SEE YOUR FACE"), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.videocam_outlined).last);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(video.stops, greaterThan(0));
+      expect(find.text('VOICE ONLY · CAMERA OFF'), findsOneWidget);
+    });
+
+    testWidgets('a camera that will not open says so and stays off', (tester) async {
+      await pumpWith(tester, _FakeVideo(opens: false));
+      await consent.grant(ConsentKey.emotionEstimate);
+      await consent.grant(ConsentKey.faceFeatures); // already agreed: no sheet this time
+
+      await tester.tap(find.byIcon(Icons.videocam_outlined).last);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 800));
+
+      expect(find.text('Let Sol read your face?'), findsNothing);
+      expect(find.text("Couldn't open the camera."), findsOneWidget);
+      expect(find.text('VOICE ONLY · CAMERA OFF'), findsOneWidget);
+    });
   });
 }

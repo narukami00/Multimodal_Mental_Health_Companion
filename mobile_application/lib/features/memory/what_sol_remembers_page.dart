@@ -86,6 +86,8 @@ class WhatSolRemembersPage extends StatelessWidget {
                   _momentsToldCard(context),
                   _label('HOW YOU SOUND'),
                   _emotionCard(context),
+                  const SizedBox(height: 10),
+                  _faceCard(context),
                   _label('YOUR MOMENTS'),
                   _momentList(context),
                   const SizedBox(height: 10),
@@ -269,6 +271,30 @@ class WhatSolRemembersPage extends StatelessWidget {
             dim: !on,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _faceCard(BuildContext context) {
+    final on = consent.isGranted(ConsentKey.faceFeatures);
+    return _card(
+      child: _switchRow(
+        key: const ValueKey('face-switch'),
+        title: 'Let Sol read my face on video calls',
+        subtitle: 'Only while the camera is on in a call. Frames are analysed '
+            'live on the companion server to help judge how you sound, and '
+            'are never saved. Turning this on also turns on noticing how you sound.',
+        value: on,
+        onChanged: (v) async {
+          if (v) {
+            if (!consent.isGranted(ConsentKey.emotionEstimate)) {
+              await consent.grant(ConsentKey.emotionEstimate);
+            }
+            await consent.grant(ConsentKey.faceFeatures);
+          } else {
+            await consent.revoke(ConsentKey.faceFeatures);
+          }
+        },
       ),
     );
   }
