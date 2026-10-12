@@ -11,9 +11,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/companion_server_config.dart';
 import '../../core/models/chat_message_record.dart';
 import '../../core/models/consent.dart';
+import '../../core/models/emotion_result.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../services/audio_processor.dart';
 import '../../services/companion_websocket_service.dart';
+import '../../services/journal_analysis_client.dart';
 import '../../services/pcm_audio_recorder_service.dart';
 import '../../services/platform_frame_source.dart';
 import '../../services/tts_playback_service.dart';
@@ -442,6 +444,14 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
       _showMoodNote(
         moodNoteFor(data['mood'] as String?, data['tier'] as String?),
       );
+      // The full reading of this turn (voice, words and, with consent, face) goes onto the person's
+      // message, so its long-press card and the conversation breakdown can show it.
+      final reading = JournalAnalysis(transcript: '', emotion: data)
+          .toResults(sessionId: data['turn_id'] as String? ?? '')
+          .firstOrNull
+          ?.copyWith(origin: EmotionOrigin.chat, inContext: true);
+      final chat = widget.chatController;
+      if (reading != null && chat != null) unawaited(chat.attachToLatestUserMessage(reading));
     });
 
     _on(_wsService?.safetyAlertStream, (Map<String, dynamic> data) {

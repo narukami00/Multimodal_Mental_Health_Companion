@@ -324,7 +324,8 @@ class ChatController extends ChangeNotifier {
       for (var i = conv.messages.length - 1; i >= 0; i--) {
         final m = conv.messages[i];
         if (!m.isUser) continue;
-        if (m.reading == null && DateTime.now().difference(m.timestamp) <= within) {
+        if (m.reading != null) return false; // already read (another listener got there first)
+        if (DateTime.now().difference(m.timestamp) <= within) {
           await setReading(m.id, reading);
           return true;
         }
