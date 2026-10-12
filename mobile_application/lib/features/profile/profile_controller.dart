@@ -163,6 +163,12 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
+  /// Saves where the person is based; Support then shows that country's resources.
+  Future<void> setCountry(String code) async {
+    _profile = _profile.copyWith(countryCode: code.trim().toUpperCase());
+    await _persist();
+  }
+
   /// Records that the user chose not to give sleep hours. That is an answer,
   /// not a gap, so the setup meter counts it as done.
   Future<void> skipSleepHours() async {

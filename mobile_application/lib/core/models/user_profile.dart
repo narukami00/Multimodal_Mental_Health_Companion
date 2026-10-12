@@ -1,3 +1,4 @@
+import 'country_resources.dart';
 import 'emergency_contact.dart';
 import 'sleep_window.dart';
 
@@ -39,6 +40,7 @@ class UserProfile {
     this.featureRetentionDays = defaultFeatureRetentionDays,
     this.patternPromptsMuted = false,
     this.momentPromptsMuted = false,
+    this.countryCode = CountryResources.defaultCode,
   });
 
   /// How long derived daily features are kept, unless the user changes it.
@@ -142,6 +144,10 @@ class UserProfile {
   /// default for the asking, never for the remembering: nothing is kept unasked.
   final bool momentPromptsMuted;
 
+  /// Where the person is based (ISO 3166-1 alpha-2, `ZZ` = somewhere else). Decides the
+  /// local emergency number and listening line in Support. Bangladesh until changed.
+  final String countryCode;
+
   /// Whether the user has given usual sleep hours.
   bool get sleepHoursSet => sleepStartMinutes != null && sleepEndMinutes != null;
 
@@ -220,6 +226,7 @@ class UserProfile {
     int? featureRetentionDays,
     bool? patternPromptsMuted,
     bool? momentPromptsMuted,
+    String? countryCode,
   }) {
     return UserProfile(
       preferredActivities: preferredActivities ?? this.preferredActivities,
@@ -259,6 +266,7 @@ class UserProfile {
       featureRetentionDays: featureRetentionDays ?? this.featureRetentionDays,
       patternPromptsMuted: patternPromptsMuted ?? this.patternPromptsMuted,
       momentPromptsMuted: momentPromptsMuted ?? this.momentPromptsMuted,
+      countryCode: countryCode ?? this.countryCode,
     );
   }
 
@@ -300,6 +308,7 @@ class UserProfile {
       'featureRetentionDays': featureRetentionDays,
       'patternPromptsMuted': patternPromptsMuted,
       'momentPromptsMuted': momentPromptsMuted,
+      'countryCode': countryCode,
     };
   }
 
@@ -347,6 +356,9 @@ class UserProfile {
       featureRetentionDays: _retentionDays(map['featureRetentionDays']),
       patternPromptsMuted: map['patternPromptsMuted'] as bool? ?? false,
       momentPromptsMuted: map['momentPromptsMuted'] as bool? ?? false,
+      countryCode:
+          _nonEmpty(map['countryCode'])?.toUpperCase() ??
+          CountryResources.defaultCode,
     );
   }
 

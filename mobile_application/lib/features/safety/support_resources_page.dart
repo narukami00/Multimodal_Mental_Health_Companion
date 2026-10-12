@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/models/country_resources.dart';
 import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/theme/solace_palette.dart';
@@ -120,6 +121,10 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
     return contacts.first;
   }
 
+  /// The person's own country decides the emergency number and listening lines.
+  CountryResources get _country =>
+      CountryResources.byCode(widget.profileController?.profile.countryCode);
+
   bool get _isUrgent =>
       widget.assessment?.level == SafetyLevel.urgentSupport;
 
@@ -140,6 +145,11 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
           behavior: SnackBarBehavior.floating,
         ),
       );
+  }
+
+  void _dialEmergency() {
+    final number = _country.emergencyNumber;
+    if (number != null) _dial(number);
   }
 
   Future<void> _openContacts() async {
@@ -191,11 +201,9 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
                 // For an acute flag, the emergency number comes before anything.
                 if (_isUrgent) ...[
                   _DangerRow(
-                    number: SupportResourcesPage.emergencyNumber,
+                    number: _country.emergencyNumber,
                     emphasised: true,
-                    onTap: () => _dial(
-                      SupportResourcesPage.emergencyNumber,
-                    ),
+                    onTap: _dialEmergency,
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -203,16 +211,19 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
                 _buildPersonBlock(),
                 const SizedBox(height: 14),
 
+                for (final line in _country.helplines) ...[
+                  _HelplineCard(helpline: line, onCall: () => _dial(line.phone)),
+                  const SizedBox(height: 14),
+                ],
+
                 _buildBreathCard(colors),
 
                 if (!_isUrgent) ...[
                   const SizedBox(height: 16),
                   _DangerRow(
-                    number: SupportResourcesPage.emergencyNumber,
+                    number: _country.emergencyNumber,
                     emphasised: false,
-                    onTap: () => _dial(
-                      SupportResourcesPage.emergencyNumber,
-                    ),
+                    onTap: _dialEmergency,
                   ),
                 ],
 
@@ -602,7 +613,9 @@ class _DangerRow extends StatelessWidget {
     required this.emphasised,
   });
 
-  final String number;
+  /// Null when no emergency number is verified for the country: the row then only
+  /// reminds the person to call their local one.
+  final String? number;
   final VoidCallback onTap;
   final bool emphasised;
 
@@ -635,7 +648,9 @@ class _DangerRow extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'In immediate danger? Call $number',
+                  number == null
+                      ? 'In immediate danger? Call your local emergency number'
+                      : 'In immediate danger? Call $number',
                   style: TextStyle(
                     fontSize: emphasised ? 14.5 : 13.5,
                     fontWeight: FontWeight.w800,
@@ -643,14 +658,91 @@ class _DangerRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const Icon(
-                Icons.call_rounded,
-                size: 18,
-                color: Color(0xFFD2603A),
-              ),
+              if (number != null)
+                const Icon(
+                  Icons.call_rounded,
+                  size: 18,
+                  color: Color(0xFFD2603A),
+                ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A listening line for the person's country, with one-tap dialling.
+class _HelplineCard extends StatelessWidget {
+  const _HelplineCard({required this.helpline, required this.onCall});
+
+  final Helpline helpline;
+  final VoidCallback onCall;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFDF6),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF6EFD9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'SOMEONE TO TALK TO',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.3,
+              color: Color(0xFFB58A4C),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            helpline.name,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF3A3125),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            '${helpline.about} · ${helpline.hours}',
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+              color: Color(0xFF7B6A55),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              key: const ValueKey('call-helpline'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF96620C),
+                side: const BorderSide(color: Color(0xFFFFB534), width: 1.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              onPressed: onCall,
+              icon: const Icon(Icons.call_rounded, size: 19),
+              label: Text(
+                'Call ${helpline.name}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

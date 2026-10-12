@@ -37,6 +37,7 @@ import 'permissions_page.dart';
 import 'phone_patterns_page.dart';
 import 'profile_controller.dart';
 import 'profile_insights_page.dart';
+import 'country_picker.dart';
 import 'sleep_hours_settings.dart';
 import 'therapist_controller.dart';
 import 'habit_controller.dart';
@@ -1738,6 +1739,18 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
             ),
         ],
         SleepHoursSettings(controller: _controller),
+        const SizedBox(height: 14),
+        const Text(
+          'WHERE YOU ARE BASED',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+            color: Color(0xFFBCAC8E),
+          ),
+        ),
+        const SizedBox(height: 8),
+        CountryPicker(controller: _controller),
         const SizedBox(height: 14),
         const Text(
           'COLOR PALETTE',

@@ -664,6 +664,7 @@ class CompanionWebSocketService {
       vad: vad,
       memory: memoryProvider?.call(),
       resume: resume,
+      country: countryProvider?.call(),
     );
     _sendJson(payload);
   }
@@ -673,6 +674,10 @@ class CompanionWebSocketService {
   /// Returning null sends nothing, which is also how withdrawn consent reaches
   /// the server: it treats an absent block as "none" on each configure.
   static Map<String, Object?>? Function()? memoryProvider;
+
+  /// Where the person is based (ISO alpha-2), sent with every `session.configure` so the server
+  /// can name the right local emergency resources if it ever has to. Set once at start-up.
+  static String? Function()? countryProvider;
 
   /// The `session.configure` message. Pure, so what goes on the wire can be
   /// tested without a socket.
@@ -689,6 +694,7 @@ class CompanionWebSocketService {
     Map<String, dynamic>? vad,
     Map<String, Object?>? memory,
     Map<String, Object?>? resume,
+    String? country,
   }) {
     return {
       'v': 1,
@@ -708,6 +714,7 @@ class CompanionWebSocketService {
       if (vad != null) 'vad': vad,
       if (memory != null) 'memory': memory,
       if (resume != null) 'resume': resume,
+      if (country != null && country.isNotEmpty) 'country': country,
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
   }

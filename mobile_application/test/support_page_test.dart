@@ -122,6 +122,38 @@ void main() {
       expect(find.text('Solace is not an emergency service.'), findsOneWidget);
     });
 
+    testWidgets('Bangladesh shows its one verified listening line and dials it', (
+      tester,
+    ) async {
+      final dialer = await pumpPage(tester);
+
+      expect(find.text('Kaan Pete Roi'), findsOneWidget);
+      expect(find.textContaining('3 PM to 3 AM'), findsOneWidget);
+
+      await tester.ensureVisible(find.byKey(const ValueKey('call-helpline')));
+      await tester.tap(find.byKey(const ValueKey('call-helpline')));
+      await tester.pumpAndSettle();
+      expect(dialer.dialed, ['09612119911']);
+    });
+
+    testWidgets('another country gets no invented numbers', (tester) async {
+      await profileController.load();
+      await profileController.setCountry('ZZ');
+      final dialer = await pumpPage(tester);
+
+      expect(find.text('Kaan Pete Roi'), findsNothing);
+      expect(find.byKey(const ValueKey('call-helpline')), findsNothing);
+      expect(
+        find.text('In immediate danger? Call your local emergency number'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('999'), findsNothing);
+
+      await tester.tap(find.textContaining('local emergency number'));
+      await tester.pumpAndSettle();
+      expect(dialer.dialed, isEmpty);
+    });
+
     testWidgets('invites the user to save someone when none exists', (
       tester,
     ) async {

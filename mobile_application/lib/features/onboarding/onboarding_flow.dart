@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/contracts/onboarding_repository.dart';
+import '../profile/country_picker.dart';
 import '../profile/profile_controller.dart';
 import '../profile/sleep_hours_settings.dart';
 
@@ -24,7 +25,7 @@ class OnboardingFlow extends StatefulWidget {
 }
 
 class _OnboardingFlowState extends State<OnboardingFlow> {
-  static const _pageCount = 5;
+  static const _pageCount = 6;
 
   /// Where the sleep question sits. Pages before it keep their old indices, so
   /// a half-finished onboarding resumes where it left off.
@@ -121,6 +122,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                         const _WaysToCheckInPage(),
                         const _PermissionPage(),
                         _SleepPage(controller: widget.profileController),
+                        _CountryPage(controller: widget.profileController),
                         const _SupportPage(),
                       ],
                     ),
@@ -701,6 +703,29 @@ class _SleepPage extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _CountryPage extends StatelessWidget {
+  const _CountryPage({required this.controller});
+
+  final ProfileController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _OnboardingPage(
+      illustration: const _OnboardingIllustration(
+        icon: Icons.public_rounded,
+        secondaryIcon: Icons.favorite_border_rounded,
+        accent: AppColors.coral,
+      ),
+      eyebrow: 'So help is local',
+      title: 'Where are you\nbased?',
+      body:
+          'This only decides which emergency number and support line Solace '
+          'shows you. It stays on this phone, and you can change it in Settings.',
+      extra: CountryPicker(controller: controller),
     );
   }
 }

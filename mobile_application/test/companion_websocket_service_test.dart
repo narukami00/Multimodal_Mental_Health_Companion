@@ -59,6 +59,20 @@ void main() {
       expect(payload['type'], 'session.configure');
     });
 
+    test('carries the country so the server names the right local help', () {
+      final withCountry = CompanionWebSocketService.buildSessionConfigurePayload(
+        sessionId: 's1',
+        mode: 'chat_voice_playback',
+        country: 'BD',
+      );
+      expect(withCountry['country'], 'BD');
+      final without = CompanionWebSocketService.buildSessionConfigurePayload(
+        sessionId: 's1',
+        mode: 'chat_voice_playback',
+      );
+      expect(without.containsKey('country'), isFalse);
+    });
+
     test('carries the snippet and moments exactly as given', () {
       final payload = CompanionWebSocketService.buildSessionConfigurePayload(
         sessionId: 's1',

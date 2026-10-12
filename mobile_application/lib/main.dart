@@ -227,6 +227,8 @@ Future<void> main() async {
   // Every connection to the companion carries exactly what the person agreed to
   // share, and the same object feeds the "What Sol remembers" preview.
   CompanionWebSocketService.memoryProvider = memory.payload;
+  CompanionWebSocketService.countryProvider = () =>
+      profileController.profile.countryCode;
 
   final navigatorKey = GlobalKey<NavigatorState>();
 
