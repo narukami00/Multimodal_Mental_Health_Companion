@@ -27,12 +27,13 @@ class RailLastMessage {
   final String when;
 }
 
-/// Journal and conversations: two cards, each saying something about its
-/// contents rather than naming a destination.
+/// Journal and the last conversation: two half-width tiles sitting side by
+/// side, each small enough to leave the primary card in charge of the page.
 ///
-/// The journal card draws its own stack of pages that fills in as you add
-/// entries; the conversation card is a preview of where you left off, so
-/// tapping it reads as "carry on" rather than "open a list".
+/// The journal tile keeps the piling-pages art but puts the count in front of
+/// it; the last-chat tile is an animated wash of the app's accent colours over
+/// which a single quiet label sits, so tapping it reads as "carry on" rather
+/// than opening another block of text.
 class HomeRail extends StatelessWidget {
   const HomeRail({
     required this.journalCount,
@@ -52,19 +53,23 @@ class HomeRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        _JournalCard(
-          key: const ValueKey('rail-journal'),
-          count: journalCount,
-          onTap: onJournal,
+        Expanded(
+          child: _JournalCard(
+            key: const ValueKey('rail-journal'),
+            count: journalCount,
+            onTap: onJournal,
+          ),
         ),
-        const SizedBox(height: 14),
-        _ContinueCard(
-          key: const ValueKey('rail-conversations'),
-          message: lastMessage,
-          onTap: onConversations,
+        const SizedBox(width: 12),
+        Expanded(
+          child: _ContinueCard(
+            key: const ValueKey('rail-conversations'),
+            message: lastMessage,
+            onTap: onConversations,
+          ),
         ),
       ],
     );
@@ -133,9 +138,9 @@ class _JournalCardState extends State<_JournalCard>
   Widget build(BuildContext context) {
     final count = widget.count;
     final label = switch (count) {
-      0 => 'Your first page is waiting',
-      1 => 'page of you, written down',
-      _ => 'pages of you, written down',
+      0 => 'Start writing',
+      1 => 'one page',
+      _ => 'pages',
     };
     return Semantics(
       button: true,
@@ -169,6 +174,8 @@ class _JournalCardState extends State<_JournalCard>
                 onTap: widget.onTap,
                 child: Stack(
                   children: [
+                    // The piling-pages art fills the tile as a backdrop now,
+                    // owned by it entirely rather than pushed to a corner.
                     Positioned.fill(
                       child: RepaintBoundary(
                         child: CustomPaint(
@@ -179,45 +186,34 @@ class _JournalCardState extends State<_JournalCard>
                         ),
                       ),
                     ),
+                    // The count sits in front; the art dims behind it so the
+                    // number stays readable at every moment of the loop.
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 150, 16),
+                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text(
-                            'JOURNAL',
-                            style: TextStyle(
-                              fontSize: 11,
+                          Text(
+                            count == 0 ? 'Start writing' : '$count',
+                            style: const TextStyle(
+                              fontSize: 34,
+                              height: 1.05,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: 1.8,
-                              color: Color(0xFF9A5B14),
+                              letterSpacing: -1.2,
+                              color: Color(0xFF4A2F10),
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          if (count > 0)
-                            Text(
-                              '$count',
-                              style: const TextStyle(
-                                fontSize: 44,
-                                height: 1.05,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -1.5,
-                                color: Color(0xFF4A2F10),
-                              ),
-                            ),
                           Text(
                             label,
-                            maxLines: 2,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: count == 0 ? 18 : 12.5,
-                              height: 1.25,
-                              fontWeight: count == 0
-                                  ? FontWeight.w800
-                                  : FontWeight.w600,
-                              letterSpacing: count == 0 ? -0.3 : 0,
-                              color: const Color(0xFF6B4A22),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              height: 1.16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF6B4A22),
                             ),
                           ),
                         ],
@@ -234,8 +230,8 @@ class _JournalCardState extends State<_JournalCard>
   }
 }
 
-/// Pages scattered across the card, one more for every journal up to six, with
-/// a line of handwriting laid down on the topmost and nothing on the rest.
+/// Pages piling up across the whole tile, one more for every journal up to six,
+/// with a line of handwriting laid down on the topmost and nothing on the rest.
 class _PagesPainter extends CustomPainter {
   _PagesPainter({required this.animation, required this.pages})
     : super(repaint: animation);
@@ -247,12 +243,12 @@ class _PagesPainter extends CustomPainter {
   // The last entry is the one in front, which is also the one that is written
   // on, so it is always present and the others fill in behind it.
   static const _slots = [
-    (-58.0, 12.0, -0.46),
-    (-20.0, -22.0, 0.34),
-    (-34.0, 26.0, -0.14),
-    (24.0, -14.0, 0.50),
-    (26.0, 24.0, -0.30),
-    (0.0, 0.0, 0.05),
+    (-46.0, 18.0, -0.42),
+    (-14.0, -24.0, 0.30),
+    (-30.0, 30.0, -0.12),
+    (22.0, -16.0, 0.46),
+    (28.0, 22.0, -0.28),
+    (6.0, 0.0, 0.05),
   ];
 
   static const _shades = [
@@ -268,20 +264,20 @@ class _PagesPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final t = animation.value;
     final sway = math.sin(t * 2 * math.pi) * 0.012;
-    final base = Offset(size.width - 66, size.height * 0.44);
+    final base = Offset(size.width * 0.68, size.height * 0.38);
 
     // Warm sun behind the pages.
     canvas.drawCircle(
       base,
-      78,
+      64,
       Paint()
         ..shader = const RadialGradient(
-          colors: [Color(0x66FFC24F), Color(0x00FFC24F)],
-        ).createShader(Rect.fromCircle(center: base, radius: 78)),
+          colors: [Color(0x59FFC24F), Color(0x00FFC24F)],
+        ).createShader(Rect.fromCircle(center: base, radius: 64)),
     );
 
-    const pageW = 54.0;
-    const pageH = 72.0;
+    const pageW = 44.0;
+    const pageH = 58.0;
     final behind = pages - 1;
     // Background slots, then the front page last.
     final order = [for (var i = 0; i < behind; i++) i, _slots.length - 1];
@@ -293,7 +289,7 @@ class _PagesPainter extends CustomPainter {
       canvas.rotate(angle + sway * (i + 1));
       final rect = RRect.fromRectAndRadius(
         Rect.fromCenter(center: Offset.zero, width: pageW, height: pageH),
-        const Radius.circular(7),
+        const Radius.circular(6),
       );
       canvas.drawShadow(
         Path()..addRRect(rect),
@@ -319,13 +315,13 @@ class _PagesPainter extends CustomPainter {
     final progress = (t / 0.7).clamp(0.0, 1.0);
     final fade = t > 0.88 ? ((1 - t) / 0.12).clamp(0.0, 1.0) : 1.0;
     const lines = 5;
-    final left = -w / 2 + 9;
-    final right = w / 2 - 9;
-    final top = -h / 2 + 14;
+    final left = -w / 2 + 8;
+    final right = w / 2 - 8;
+    final top = -h / 2 + 12;
     final pen = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 1.8
+      ..strokeWidth = 1.6
       ..color = const Color(0xFFC2622F).withValues(alpha: 0.75 * fade);
     Offset? tip;
     for (var i = 0; i < lines; i++) {
@@ -333,7 +329,7 @@ class _PagesPainter extends CustomPainter {
       if (lineProgress <= 0) continue;
       // Last line is shorter, like the end of a paragraph.
       final end = i == lines - 1 ? left + (right - left) * 0.55 : right;
-      final y = top + i * 10.0;
+      final y = top + i * 9.0;
       final path = Path()..moveTo(left, y);
       const step = 4.0;
       for (var x = left + step; x <= end; x += step) {
@@ -349,7 +345,7 @@ class _PagesPainter extends CustomPainter {
     if (tip != null && progress < 1.0) {
       canvas.drawCircle(
         tip,
-        3.2,
+        3.0,
         Paint()..color = const Color(0xFFE86034).withValues(alpha: 0.9 * fade),
       );
     }
@@ -360,7 +356,7 @@ class _PagesPainter extends CustomPainter {
 }
 
 // ---------------------------------------------------------------------------
-// Continue conversation
+// Last chat
 // ---------------------------------------------------------------------------
 
 class _ContinueCard extends StatefulWidget {
@@ -376,29 +372,24 @@ class _ContinueCard extends StatefulWidget {
 class _ContinueCardState extends State<_ContinueCard>
     with SingleTickerProviderStateMixin, _LoopMixin<_ContinueCard> {
   @override
-  Duration get loopDuration => const Duration(milliseconds: 2400);
+  Duration get loopDuration => const Duration(milliseconds: 6000);
 
   @override
   Widget build(BuildContext context) {
     final message = widget.message;
-    final hasMessage = message != null && message.text.isNotEmpty;
-    final fromUser = message?.fromUser ?? false;
+    final hasThread = message != null;
 
     return Semantics(
       button: true,
-      label: hasMessage
+      label: hasThread
           ? 'Continue your last conversation. '
-                '${fromUser ? 'You' : 'Sol'} said: ${message.text}'
+                '${message.fromUser ? 'You' : 'Sol'} said: ${message.text}'
           : 'Start a conversation with Sol.',
       child: ExcludeSemantics(
         child: Container(
+          height: 120,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFF6F2FF), Color(0xFFE9E3FA)],
-            ),
             border: Border.all(color: const Color(0x336A63A8)),
             boxShadow: const [
               BoxShadow(
@@ -414,114 +405,59 @@ class _ContinueCardState extends State<_ContinueCard>
               color: Colors.transparent,
               child: InkWell(
                 onTap: widget.onTap,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Two accent blobs drifting over a cool surface: the
+                    // animation lives in the colours, so the tile stays quiet
+                    // about content and never generically icon-like.
+                    RepaintBoundary(
+                      child: CustomPaint(
+                        painter: _WashPainter(animation: loop),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // A live dot, so the card feels like an open thread.
-                          AnimatedBuilder(
-                            animation: loop,
-                            builder: (context, _) {
-                              final pulse = Curves.easeInOut.transform(
-                                (math.sin(loop.value * 2 * math.pi) + 1) / 2,
-                              );
-                              return Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFF6A63A8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFF6A63A8,
-                                      ).withValues(alpha: 0.35 * pulse),
-                                      blurRadius: 3 + 6 * pulse,
-                                      spreadRadius: 1 + 2 * pulse,
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              hasMessage
-                                  ? 'Continue your last conversation'
-                                  : 'Talk it through with Sol',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.2,
-                                color: Color(0xFF2F2A55),
-                              ),
+                          const Text(
+                            'LAST CHAT',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.6,
+                              color: Color(0xFF4A4470),
                             ),
                           ),
-                          const Text(
-                            '→',
-                            style: TextStyle(
-                              fontSize: 18,
+                          const SizedBox(height: 2),
+                          Text(
+                            hasThread ? message.when : 'Start one',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              height: 1.1,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF6A63A8),
+                              color: Color(0xFF2F2A55),
+                            ),
+                          ),
+                          Text(
+                            hasThread ? 'Tap to pick it back up' : 'with Sol',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              height: 1.16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF4A4470),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      _Bubble(
-                        fromUser: fromUser,
-                        child: hasMessage
-                            ? Text(
-                                message.text,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  height: 1.4,
-                                  fontWeight: FontWeight.w600,
-                                  color: fromUser
-                                      ? const Color(0xFFFFFFFF)
-                                      : const Color(0xFF3A3560),
-                                ),
-                              )
-                            : const Text(
-                                'A quiet, private space to speak or write '
-                                'whatever is on your mind.',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  height: 1.4,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF3A3560),
-                                ),
-                              ),
-                      ),
-                      if (hasMessage) ...[
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: fromUser
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Text(
-                              '${fromUser ? 'You' : 'Sol'} · ${message.when}',
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF6B6690),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -532,41 +468,71 @@ class _ContinueCardState extends State<_ContinueCard>
   }
 }
 
-/// A chat bubble whose small square corner points at whoever spoke, so a quick
-/// glance tells you whether you or Sol had the last word.
-class _Bubble extends StatelessWidget {
-  const _Bubble({required this.fromUser, required this.child});
+/// A slow wash of the app's accent colours that never repeats visibly: each
+/// blob wanders its own ellipse on its own phase, so the pair does not meet in
+/// the same arrangement twice in any short stretch.
+class _WashPainter extends CustomPainter {
+  _WashPainter({required this.animation}) : super(repaint: animation);
 
-  final bool fromUser;
-  final Widget child;
+  final Animation<double> animation;
 
   @override
-  Widget build(BuildContext context) {
-    const big = Radius.circular(18);
-    const small = Radius.circular(5);
-    return Align(
-      alignment: fromUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 120),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.only(
-            topLeft: big,
-            topRight: big,
-            bottomLeft: fromUser ? big : small,
-            bottomRight: fromUser ? small : big,
+  void paint(Canvas canvas, Size size) {
+    final t = animation.value;
+
+    // Cool surface the accents wash over.
+    final surface = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: const [Color(0xFFF3F0FA), Color(0xFFE7E1F6)],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, surface);
+
+    // Each accent blob wanders its own ellipse on its own speed, so the wash
+    // never repeats visibly and never lands on the same arrangement twice.
+    final w = size.width;
+    final blobs =
+        <({double r, Offset anchor, Offset wander, double speed, Color color})>[
+          (
+            r: 0.62 * w,
+            anchor: Offset(0.30 * w, 0.36 * w),
+            wander: Offset(0.30 * w, 0.22 * w),
+            speed: 1.0,
+            color: const Color(0x66FFB534),
           ),
-          gradient: fromUser
-              ? const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF7D75C2), Color(0xFF5E579D)],
-                )
-              : null,
-          color: fromUser ? null : Colors.white.withValues(alpha: 0.85),
-        ),
-        child: child,
-      ),
-    );
+          (
+            r: 0.56 * w,
+            anchor: Offset(0.74 * w, 0.66 * w),
+            wander: Offset(0.24 * w, 0.30 * w),
+            speed: 1.3,
+            color: const Color(0x59FF7F50),
+          ),
+          (
+            r: 0.50 * w,
+            anchor: Offset(0.18 * w, 0.78 * w),
+            wander: Offset(0.30 * w, 0.18 * w),
+            speed: 2.1,
+            color: const Color(0x4D6A63A8),
+          ),
+        ];
+    for (final (:r, :anchor, :wander, :speed, :color) in blobs) {
+      final angle = t * 2 * math.pi * speed;
+      final center = Offset(
+        anchor.dx + math.cos(angle) * wander.dx,
+        anchor.dy + math.sin(angle * 2) * wander.dy,
+      );
+      canvas.drawCircle(
+        center,
+        r,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [color, color.withValues(alpha: 0)],
+          ).createShader(Rect.fromCircle(center: center, radius: r)),
+      );
+    }
   }
+
+  @override
+  bool shouldRepaint(covariant _WashPainter old) => false;
 }
