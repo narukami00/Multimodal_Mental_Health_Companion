@@ -503,7 +503,7 @@ class ProfilePage extends StatelessWidget {
                       title: 'Activity library',
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => const ActivityLibraryPage(),
+                          builder: (_) => ActivityLibraryPage(suggestionController: suggestionController),
                         ),
                       ),
                     ),

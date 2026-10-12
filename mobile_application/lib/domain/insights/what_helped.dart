@@ -82,3 +82,17 @@ List<HelpedKind> whatHelped(
     });
   return result;
 }
+
+/// How many before-and-after answers each kind of activity has so far, counting only the tries that
+/// [whatHelped] counts. The Helps tab shows this as progress toward the [minTries] it waits for.
+Map<ActivityType, int> helpsProgress(List<SuggestionRecord> history, List<Activity> library) {
+  final typeOf = {for (final a in library) a.id: a.type};
+  final counts = {for (final t in ActivityType.values) t: 0};
+  for (final record in history) {
+    if (record.done != true) continue;
+    if (moodChange(record.moodBefore, record.moodAfter) == null) continue;
+    final type = typeOf[record.activityId];
+    if (type != null) counts[type] = counts[type]! + 1;
+  }
+  return counts;
+}
