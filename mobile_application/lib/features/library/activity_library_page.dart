@@ -303,7 +303,7 @@ class _IdeaTile extends StatelessWidget {
                         SizedBox(
                           width: 54,
                           height: 54,
-                          child: ActivityArt(type: activity.type, animate: false, progress: 0.3, circle: true),
+                          child: ActivityArt(type: activity.type, animate: false, progress: 0.1 + (activity.id.hashCode.abs() % 80) / 100, circle: true),
                         ),
                       if (!open) const SizedBox(width: 12),
                       Expanded(

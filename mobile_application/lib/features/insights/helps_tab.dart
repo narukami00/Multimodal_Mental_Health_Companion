@@ -237,6 +237,7 @@ class _ProgressGrid extends StatelessWidget {
     return InsightCard(
       key: const ValueKey('helps-progress'),
       child: Wrap(
+        alignment: WrapAlignment.spaceEvenly,
         spacing: 12,
         runSpacing: 14,
         children: [
