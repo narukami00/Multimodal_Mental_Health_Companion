@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'emotion_result.dart';
+
 /// Represents a single message in a chat conversation.
 class ChatMessageRecord {
   const ChatMessageRecord({
@@ -13,6 +15,7 @@ class ChatMessageRecord {
     this.waveform,
     this.turnId,
     this.transcription,
+    this.reading,
   });
 
   final String id;
@@ -26,6 +29,16 @@ class ChatMessageRecord {
   final String? turnId;
   final String? transcription;
 
+  /// How the model read this message (only ever set on the person's own messages, and only with their
+  /// OK). Null on older messages and while a reading is pending.
+  final EmotionResult? reading;
+
+  /// What the person actually said: the transcription of a voice message, else the typed text.
+  String get spokenText {
+    final t = transcription?.trim();
+    return isVoice && t != null && t.isNotEmpty ? t : text.trim();
+  }
+
   ChatMessageRecord copyWith({
     String? text,
     String? voiceDuration,
@@ -33,6 +46,7 @@ class ChatMessageRecord {
     List<double>? waveform,
     String? turnId,
     String? transcription,
+    EmotionResult? reading,
   }) {
     return ChatMessageRecord(
       id: id,
@@ -45,6 +59,7 @@ class ChatMessageRecord {
       waveform: waveform ?? this.waveform,
       turnId: turnId ?? this.turnId,
       transcription: transcription ?? this.transcription,
+      reading: reading ?? this.reading,
     );
   }
 
@@ -60,6 +75,7 @@ class ChatMessageRecord {
       'waveform': waveform,
       'turnId': turnId,
       'transcription': transcription,
+      if (reading != null) 'reading': reading!.toMap(),
     };
   }
 
@@ -78,6 +94,9 @@ class ChatMessageRecord {
           .toList(),
       turnId: map['turnId'] as String?,
       transcription: map['transcription'] as String?,
+      reading: map['reading'] is Map
+          ? EmotionResult.fromMap(Map<String, dynamic>.from(map['reading'] as Map))
+          : null,
     );
   }
 

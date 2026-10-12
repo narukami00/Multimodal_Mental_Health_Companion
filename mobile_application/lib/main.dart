@@ -21,6 +21,8 @@ import 'data/repositories/shared_preferences_session_repository.dart';
 import 'data/repositories/shared_preferences_suggestion_repository.dart';
 import 'domain/rhythm/reminder_lapse_policy.dart';
 import 'features/chat/chat_controller.dart';
+import 'features/chat/chat_message_reader.dart';
+import 'features/chat/chat_page.dart';
 import 'features/checkin/check_in_mode_page.dart';
 import 'core/models/consent.dart';
 import 'features/call/call_page.dart';
@@ -246,6 +248,12 @@ Future<void> main() async {
       consentController.isGranted(ConsentKey.faceFeatures);
   CallPage.consent = consentController;
   CheckInModePage.consent = consentController;
+  // Messages the live socket did not read (older chats, a server that was away) are read on request.
+  chatController.messageReader = ChatMessageReader(
+    client: journalClient,
+    consentGranted: () => consentController.isGranted(ConsentKey.emotionEstimate),
+  ).call;
+  ChatPage.keptMoments = () => moments.confirmed;
 
   final navigatorKey = GlobalKey<NavigatorState>();
 

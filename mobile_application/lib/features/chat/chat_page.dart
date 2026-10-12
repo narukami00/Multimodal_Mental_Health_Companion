@@ -12,8 +12,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/companion_server_config.dart';
 import '../../core/models/chat_message_record.dart';
+import '../../core/models/emotion_result.dart';
+import '../../core/models/memory_moment.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../services/companion_websocket_service.dart';
+import '../../services/journal_analysis_client.dart';
 import '../../services/pcm_audio_recorder_service.dart';
 import '../../services/tts_playback_service.dart';
 import '../call/call_page.dart';
@@ -21,7 +24,9 @@ import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'chat_controller.dart';
+import 'conversation_breakdown_page.dart';
 import 'conversation_history.dart';
+import 'message_reading_popover.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -44,6 +49,9 @@ class ChatPage extends StatefulWidget {
   final PcmAudioRecorderService? audioRecorderService;
   final TtsPlaybackService? ttsPlaybackService;
   final bool autoConnect;
+
+  /// The moments the person chose to keep, shown on the conversation breakdown. Set once in main.dart.
+  static List<MemoryMoment> Function()? keptMoments;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -174,6 +182,7 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription<Map<String, dynamic>>? _wsStartSub;
   StreamSubscription<Map<String, dynamic>>? _wsChunkSub;
   StreamSubscription<Map<String, dynamic>>? _wsDoneSub;
+  StreamSubscription<Map<String, dynamic>>? _wsEmotionSub;
 
   late final PcmAudioRecorderService _audioRecorder;
   StreamSubscription<Uint8List>? _audioFrameSub;
@@ -509,6 +518,16 @@ class _ChatPageState extends State<ChatPage> {
       _scrollDown();
     });
 
+    // The server reads each turn as it happens (with its running memory of the conversation) when the
+    // person has agreed; that reading belongs to the message they just sent.
+    _wsEmotionSub = _wsService.emotionUpdateStream.listen((data) {
+      final reading = JournalAnalysis(transcript: '', emotion: data)
+          .toResults(sessionId: data['turn_id'] as String? ?? '')
+          .firstOrNull
+          ?.copyWith(origin: EmotionOrigin.chat, inContext: true);
+      if (reading != null) _chatController.attachToLatestUserMessage(reading);
+    });
+
     _input.addListener(() => setState(() {}));
 
     _loadSavedServerConfig();
@@ -708,6 +727,8 @@ class _ChatPageState extends State<ChatPage> {
     _wsStartSub?.cancel();
     _wsChunkSub?.cancel();
     _wsDoneSub?.cancel();
+    _wsEmotionSub?.cancel();
+    _closeReading();
     if (widget.webSocketService == null) {
       _wsService.dispose();
     }
@@ -968,13 +989,44 @@ class _ChatPageState extends State<ChatPage> {
     _scrollDown();
   }
 
-  Future<void> _openSupport() async {
-    await Navigator.of(context).push(
+  OverlayEntry? _readingPopover;
+
+  void _closeReading() {
+    final entry = _readingPopover;
+    _readingPopover = null;
+    if (entry != null && entry.mounted) entry.remove();
+  }
+
+  /// Long-press on one of the person's messages: a small card saying how that message read, in the
+  /// context of the conversation. A message with no reading yet is read now (needs the server and the OK).
+  void _showReading(String messageId, Rect anchor) {
+    final conv = _chatController.activeConversation;
+    if (conv == null) return;
+    final index = conv.messages.indexWhere((m) => m.id == messageId);
+    if (index < 0) return;
+    final message = conv.messages[index];
+    _closeReading();
+    HapticFeedback.mediumImpact();
+    _readingPopover = showMessageReading(
+      context: context,
+      anchor: anchor,
+      message: message,
+      read: _chatController.canReadMessages ? () => _chatController.readMessage(conv.id, messageId) : null,
+    );
+  }
+
+  void _openBreakdown() {
+    final conv = _chatController.activeConversation;
+    if (conv == null) return;
+    _closeReading();
+    Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => SupportResourcesPage(
+        builder: (_) => ConversationBreakdownPage(
+          chatController: _chatController,
+          conversationId: conv.id,
           safetyController: widget.safetyController,
           profileController: widget.profileController,
-          assessment: const SafetyAssessment.clear(),
+          keptMoments: ChatPage.keptMoments,
         ),
       ),
     );
@@ -1043,6 +1095,9 @@ class _ChatPageState extends State<ChatPage> {
                               return _Bubble(
                                 msg: msg,
                                 isSpeaking: isSpeaking,
+                                onLongPress: msg.isUser && msg.id != null && !msg.isStreaming
+                                    ? (anchor) => _showReading(msg.id!, anchor)
+                                    : null,
                                 onCancelVoice: () => _ttsPlayback.cancelVoice(
                                   utteranceId: msg.utteranceId,
                                 ),
@@ -1185,9 +1240,10 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ),
           IconButton(
-            onPressed: _openSupport,
-            tooltip: 'Support resources',
-            icon: const Icon(Icons.health_and_safety_outlined, size: 22),
+            key: const ValueKey('chat-breakdown'),
+            onPressed: _openBreakdown,
+            tooltip: 'How this conversation felt',
+            icon: const Icon(Icons.mood_rounded, size: 23),
             style: IconButton.styleFrom(
               foregroundColor: _coral,
               minimumSize: const Size(40, 44),
@@ -2378,12 +2434,16 @@ class _Bubble extends StatelessWidget {
     this.isSpeaking = false,
     this.onCancelVoice,
     this.onReplayVoice,
+    this.onLongPress,
   });
 
   final _Msg msg;
   final bool isSpeaking;
   final VoidCallback? onCancelVoice;
   final VoidCallback? onReplayVoice;
+
+  /// Long-press on the bubble, with the bubble's place on screen (only given for the person's own messages).
+  final void Function(Rect anchor)? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -2402,7 +2462,19 @@ class _Bubble extends StatelessWidget {
         crossAxisAlignment:
             isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Container(
+          Builder(
+            builder: (bubbleContext) => GestureDetector(
+              key: onLongPress == null ? null : ValueKey('bubble-${msg.id}'),
+              behavior: HitTestBehavior.translucent,
+              onLongPress: onLongPress == null
+                  ? null
+                  : () {
+                      final box = bubbleContext.findRenderObject() as RenderBox?;
+                      if (box == null || !box.attached) return;
+                      onLongPress!(box.localToGlobal(Offset.zero) & box.size);
+                    },
+              child:
+Container(
             constraints: const BoxConstraints(maxWidth: 256),
             padding: EdgeInsets.symmetric(
               horizontal: isVoice ? 12 : 15,
@@ -2478,6 +2550,8 @@ class _Bubble extends StatelessWidget {
                       letterSpacing: -0.1,
                     ),
                   ),
+          ),
+            ),
           ),
           if (!isUser && isSpeaking) ...[
             const SizedBox(height: 6),

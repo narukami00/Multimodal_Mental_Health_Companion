@@ -46,6 +46,7 @@ class EmotionResult {
     this.mood,
     this.tier,
     this.pattern,
+    this.inContext = false,
   });
 
   final String sessionId;
@@ -73,6 +74,29 @@ class EmotionResult {
   final String? tier;
   final String? pattern;
 
+  /// True when the earlier messages of the conversation were taken into account (a short message such as
+  /// "ok" says little alone), or the server's running read of the conversation was used.
+  final bool inContext;
+
+  EmotionResult copyWith({EmotionOrigin? origin, bool? inContext}) => EmotionResult(
+        sessionId: sessionId,
+        modality: modality,
+        timestamp: timestamp,
+        modelVersion: modelVersion,
+        origin: origin ?? this.origin,
+        valence: valence,
+        arousal: arousal,
+        labels: labels,
+        confidence: confidence,
+        classes: classes,
+        valenceProbs: valenceProbs,
+        arousalProbs: arousalProbs,
+        mood: mood,
+        tier: tier,
+        pattern: pattern,
+        inContext: inContext ?? this.inContext,
+      );
+
   Map<String, Object?> toMap() {
     return {
       'sessionId': sessionId,
@@ -90,6 +114,7 @@ class EmotionResult {
       if (mood != null) 'mood': mood,
       if (tier != null) 'tier': tier,
       if (pattern != null) 'pattern': pattern,
+      if (inContext) 'inContext': true,
     };
   }
 
@@ -125,6 +150,7 @@ class EmotionResult {
       mood: map['mood'] as String?,
       tier: map['tier'] as String?,
       pattern: map['pattern'] as String?,
+      inContext: map['inContext'] as bool? ?? false,
     );
   }
 
