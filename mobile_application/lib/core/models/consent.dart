@@ -75,7 +75,7 @@ class ConsentKey {
   /// in memory and never kept.
   static const emotionEstimate = ConsentKey._(
     category: 'emotionEstimate',
-    modality: 'voiceText',
+    modality: 'fused',
     purpose: 'chatCompanion',
     currentVersion: '1.0',
   );
