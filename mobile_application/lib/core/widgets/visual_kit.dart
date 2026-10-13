@@ -102,22 +102,27 @@ class _PageHeroState extends State<PageHero> with SingleTickerProviderStateMixin
     final p = _paletteOf(widget.scene);
     final top = MediaQuery.of(context).padding.top;
     final width = MediaQuery.of(context).size.width;
-    return SizedBox(
-      height: widget.height + top,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(34)),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            RepaintBoundary(
+    // Bigger text widens the title column; the header then grows with its content instead of clipping it.
+    final scale = MediaQuery.textScalerOf(context).scale(1.0);
+    final titleWidth = width * (scale > 1.25 ? 0.9 : 0.58);
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(34)),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: RepaintBoundary(
               child: AnimatedBuilder(
                 animation: _c,
                 builder: (context, _) => CustomPaint(painter: HeroPainter(widget.scene, widget.progress ?? _c.value)),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(16, top + 8, 16, 18),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, top + 8, 16, 18),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: widget.height - 26),
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
@@ -127,29 +132,34 @@ class _PageHeroState extends State<PageHero> with SingleTickerProviderStateMixin
                       if (widget.trailing != null) widget.trailing!,
                     ],
                   ),
-                  const Spacer(),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: width * 0.58),
-                    child: Text(
-                      widget.title,
-                      style: TextStyle(fontSize: 28, height: 1.08, fontWeight: FontWeight.w800, letterSpacing: -0.8, color: p.ink),
-                    ),
-                  ),
-                  if (widget.subtitle != null) ...[
-                    const SizedBox(height: 6),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: width * 0.56),
-                      child: Text(
-                        widget.subtitle!,
-                        style: TextStyle(fontSize: 13, height: 1.35, fontWeight: FontWeight.w600, color: p.ink.withValues(alpha: 0.75)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 14),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: titleWidth),
+                        child: Text(
+                          widget.title,
+                          style: TextStyle(fontSize: 28, height: 1.08, fontWeight: FontWeight.w800, letterSpacing: -0.8, color: p.ink),
+                        ),
                       ),
-                    ),
-                  ],
+                      if (widget.subtitle != null) ...[
+                        const SizedBox(height: 6),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: titleWidth),
+                          child: Text(
+                            widget.subtitle!,
+                            style: TextStyle(fontSize: 13, height: 1.35, fontWeight: FontWeight.w600, color: p.ink.withValues(alpha: 0.75)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -671,12 +681,18 @@ class RingGauge extends StatelessWidget {
         builder: (context, f, _) => CustomPaint(
           painter: _RingPainter(f, color, track ?? color.withValues(alpha: 0.16)),
           child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(centre, style: TextStyle(fontSize: size * 0.24, height: 1.0, fontWeight: FontWeight.w800, color: kitInk)),
-                if (caption != null) Text(caption!, style: TextStyle(fontSize: size * 0.1, fontWeight: FontWeight.w700, color: kitSoft)),
-              ],
+            child: Padding(
+              padding: EdgeInsets.all(size * 0.17),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(centre, style: TextStyle(fontSize: size * 0.24, height: 1.0, fontWeight: FontWeight.w800, color: kitInk)),
+                    if (caption != null) Text(caption!, style: TextStyle(fontSize: size * 0.1, fontWeight: FontWeight.w700, color: kitSoft)),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -725,8 +741,9 @@ class MiniBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxV = values.whereType<double>().fold<double>(0, math.max);
+    final scale = MediaQuery.textScalerOf(context).scale(1.0);
     return SizedBox(
-      height: height + 46,
+      height: height + 52 + (scale > 1 ? (scale - 1) * 50 : 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
