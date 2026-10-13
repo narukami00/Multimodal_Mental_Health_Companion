@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/emergency_contact.dart';
 import '../../core/theme/solace_palette.dart';
-import '../../core/widgets/page_back_button.dart';
+import '../../core/widgets/visual_kit.dart';
 import '../../services/dialer_service.dart';
 import '../profile/profile_controller.dart';
 
@@ -31,11 +31,16 @@ class CareContactsPage extends StatelessWidget {
         return Scaffold(
           backgroundColor: SolaceColors.from(context).background,
           body: SafeArea(
+            top: false,
             child: Column(
-              // Left-aligned, so the masthead does not drift to the middle.
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildHeader(context),
+                const PageHero(
+                  scene: HeroScene.contacts,
+                  title: 'Your people',
+                  subtitle: 'Numbers you add stay on this device.',
+                  height: 190,
+                ),
                 Expanded(
                   child: contacts.isEmpty
                       ? const _EmptyContacts()
@@ -68,50 +73,6 @@ class CareContactsPage extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    // Same 22px inset as the main pages, so the masthead lines up app-wide.
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 12, 22, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const PageBackButton(),
-          const SizedBox(height: 10),
-          // Masthead: small kicker over the big title, as on Solace Care.
-          const Text(
-            'EMERGENCY CONTACTS',
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.3,
-              color: Color(0xFFD08018),
-            ),
-          ),
-          const SizedBox(height: 3),
-          const Text(
-            'Your people',
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF3A3125),
-              letterSpacing: -0.7,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'Numbers you add stay on this device.',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF7B6A55),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -206,18 +167,26 @@ class _EmptyContacts extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DecoratedBox(
-              decoration: const BoxDecoration(
-                color: Color(0x24FFB534),
-                shape: BoxShape.circle,
-              ),
-              child: const Padding(
-                padding: EdgeInsets.all(18),
-                child: Icon(
-                  Icons.people_outline_rounded,
-                  size: 32,
-                  color: Color(0xFFB26E0F),
-                ),
+            SizedBox(
+              height: 64,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  for (final (i, color) in const [Color(0xFF8DBB9A), Color(0xFFFFB534), Color(0xFFEBA3A8)].indexed)
+                    Transform.translate(
+                      offset: Offset((i - 1) * 38.0, 0),
+                      child: Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color.withValues(alpha: 0.35),
+                          border: Border.all(color: Colors.white, width: 3),
+                        ),
+                        child: Icon(Icons.person_rounded, size: 28, color: color),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 16),

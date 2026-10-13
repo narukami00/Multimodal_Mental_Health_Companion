@@ -7,7 +7,7 @@ import '../../core/models/country_resources.dart';
 import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/theme/solace_palette.dart';
-import '../../core/widgets/page_back_button.dart';
+import '../../core/widgets/visual_kit.dart';
 import '../../services/dialer_service.dart';
 import '../profile/profile_controller.dart';
 import 'breathing_pattern.dart';
@@ -21,15 +21,6 @@ bool get _isTestEnvironment {
     return false;
   }
 }
-
-/// The oversized page title used on Solace Care screens.
-const _masthead = TextStyle(
-  fontSize: 34,
-  fontWeight: FontWeight.w800,
-  letterSpacing: -0.8,
-  height: 1.1,
-  color: Color(0xFF3A3125),
-);
 
 /// The support screen reached when someone needs help right now.
 ///
@@ -178,48 +169,23 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
 
     return Scaffold(
       backgroundColor: colors.background,
-      body: SafeArea(
-        child: ListView(
-          // Same 22px inset as the main pages, so cards line up app-wide.
-          padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
-          children: [
-            _buildHeader(colors),
-            const SizedBox(height: 2),
-            // Page masthead: an oversized title with a warm under-glow, so the
-            // page opens with calm rather than a bare line of text.
-            Stack(
-              clipBehavior: Clip.none,
+      body: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          // Calm on arrival, and short when it is urgent so the emergency number is on screen at once.
+          PageHero(
+            scene: HeroScene.support,
+            title: 'Right now',
+            subtitle: 'One of these is enough.',
+            height: _isUrgent ? 150 : 200,
+            onBack: _close,
+            backTooltip: 'Close',
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Positioned(
-                  top: -36,
-                  left: -30,
-                  child: IgnorePointer(
-                    child: SizedBox.square(
-                      dimension: 190,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [Color(0x40FFB534), Color(0x00FFB534)],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const Text('Right now', style: _masthead),
-              ],
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              'One of these is enough.',
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF7B6A55),
-              ),
-            ),
-            const SizedBox(height: 18),
 
             // For an acute flag, the emergency number comes before anything.
             if (_isUrgent) ...[
@@ -260,27 +226,11 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
                 color: Color(0xFFA2988A),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(SolaceColors colors) {
-    return Row(
-      children: [
-        PageBackButton(onPressed: _close, tooltip: 'Close'),
-        const SizedBox(width: 8),
-        const Text(
-          'SOLACE CARE',
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.4,
-            color: Color(0xFFB9A98C),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -458,35 +408,46 @@ class _PersonCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            contact.isIce ? 'YOUR CALL-FIRST PERSON' : 'YOUR PERSON',
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.3,
-              color: Color(0xFFB58A4C),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            contact.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.3,
-              color: Color(0xFF3A3125),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            contact.phone,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF8A7A62),
-            ),
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(colors: [Color(0xFFFFC85A), Color(0xFFFF9A6A)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  boxShadow: [BoxShadow(color: const Color(0xFFFF9A6A).withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 5))],
+                ),
+                child: Text(
+                  contact.name.trim().isEmpty ? '?' : contact.name.trim()[0].toUpperCase(),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      contact.isIce ? 'YOUR CALL-FIRST PERSON' : 'YOUR PERSON',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.3, color: Color(0xFFB58A4C)),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      contact.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3, color: Color(0xFF3A3125)),
+                    ),
+                    Text(
+                      contact.phone,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF8A7A62)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           SizedBox(

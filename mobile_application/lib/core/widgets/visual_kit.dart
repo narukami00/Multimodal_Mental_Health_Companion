@@ -67,6 +67,8 @@ class PageHero extends StatefulWidget {
     this.progress,
     this.showBack = true,
     this.trailing,
+    this.onBack,
+    this.backTooltip = 'Back',
     super.key,
   });
 
@@ -77,6 +79,10 @@ class PageHero extends StatefulWidget {
   final double? progress;
   final bool showBack;
   final Widget? trailing;
+
+  /// Replaces the default pop, e.g. to record that a page was seen before leaving.
+  final VoidCallback? onBack;
+  final String backTooltip;
 
   @override
   State<PageHero> createState() => _PageHeroState();
@@ -127,7 +133,7 @@ class _PageHeroState extends State<PageHero> with SingleTickerProviderStateMixin
                 children: [
                   Row(
                     children: [
-                      if (widget.showBack) const PageBackButton(),
+                      if (widget.showBack) PageBackButton(onPressed: widget.onBack, tooltip: widget.backTooltip),
                       const Spacer(),
                       if (widget.trailing != null) widget.trailing!,
                     ],
