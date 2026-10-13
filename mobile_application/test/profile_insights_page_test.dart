@@ -179,6 +179,31 @@ void main() {
     expect(find.textContaining('too hard'), findsOneWidget);
   });
 
+  testWidgets('the demo changes what is favoured as the pretend day changes', (tester) async {
+    await _pump(tester, _profile());
+
+    Text text(String key) => tester.widget<Text>(find.byKey(ValueKey(key)));
+    expect(text('demo-length').data, 'Any length');
+    expect(text('demo-effort').data, 'Any effort');
+    expect(text('demo-kinds-note').data, 'No kind is leaned towards.');
+
+    await tester.tap(find.byKey(const ValueKey('demo-low')));
+    await tester.pump();
+    expect(text('demo-length').data, 'Up to 8 min');
+    expect(text('demo-effort').data, 'Gentle effort only');
+    expect(text('demo-kinds-note').data, contains('small lean'));
+
+    await tester.tap(find.byKey(const ValueKey('demo-medium')));
+    await tester.pump();
+    expect(text('demo-length').data, 'Up to 15 min');
+    expect(text('demo-effort').data, 'Any effort');
+
+    // a recent "Too hard" caps effort even when energy is fine
+    await tester.tap(find.byKey(const ValueKey('demo-hard')));
+    await tester.pump();
+    expect(text('demo-effort').data, 'Gentle effort only');
+  });
+
   testWidgets('the You tab row opens the page', (tester) async {
     tester.view.physicalSize = const Size(1080, 3000);
     tester.view.devicePixelRatio = 2.0;
