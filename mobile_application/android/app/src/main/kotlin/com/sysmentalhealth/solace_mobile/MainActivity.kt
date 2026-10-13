@@ -177,6 +177,13 @@ class MainActivity : FlutterActivity() {
                     ) == PackageManager.PERMISSION_GRANTED
                     result.success(granted)
                 }
+                "cameraGranted" -> {
+                    val granted = ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.CAMERA
+                    ) == PackageManager.PERMISSION_GRANTED
+                    result.success(granted)
+                }
                 "openAppSettings" -> {
                     try {
                         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {

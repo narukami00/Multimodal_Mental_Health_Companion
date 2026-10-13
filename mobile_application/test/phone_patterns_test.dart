@@ -46,6 +46,9 @@ class _NoPermissions extends AppPermissionService {
 
   @override
   Future<bool> microphoneGranted() async => false;
+
+  @override
+  Future<bool> cameraGranted() async => false;
 }
 
 void main() {
