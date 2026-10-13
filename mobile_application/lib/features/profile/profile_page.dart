@@ -17,6 +17,7 @@ import '../../core/models/safety_assessment.dart';
 import '../../core/models/therapist_contact.dart';
 import '../../core/models/habit_reminder.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/visual_kit.dart';
 import '../../domain/home/baseline_progress.dart';
 import '../../domain/profile/behavioral_profile.dart';
 import '../../domain/rhythm/reminder_schedule.dart';
@@ -503,7 +504,9 @@ class ProfilePage extends StatelessWidget {
                       title: 'Activity library',
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => ActivityLibraryPage(suggestionController: suggestionController),
+                          builder: (_) => ActivityLibraryPage(
+                            suggestionController: suggestionController,
+                          ),
                         ),
                       ),
                     ),
@@ -1774,20 +1777,8 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
       children: [
         Row(
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3DC),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.tune_rounded,
-                size: 20,
-                color: Color(0xFFB57A12),
-              ),
-            ),
-            const SizedBox(width: 12),
+            const IconTile(icon: Icons.tune_rounded, color: kitAmber, size: 44),
+            const SizedBox(width: 14),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1795,17 +1786,18 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
                   Text(
                     'App settings',
                     style: TextStyle(
-                      fontSize: 16.5,
+                      fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF3B3327),
+                      letterSpacing: -0.3,
+                      color: kitInk,
                     ),
                   ),
                   Text(
-                    'Sensory & gentle interaction preferences',
+                    'Make Solace feel like yours',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF93887A),
+                      color: kitMuted,
                     ),
                   ),
                 ],
@@ -1813,122 +1805,124 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
             ),
           ],
         ),
-        const SizedBox(height: 18),
-        _SettingToggle(
-          key: const ValueKey('toggle-haptics'),
-          title: 'Gentle Haptics',
-          subtitle: 'Subtle vibrational cues on taps and sliders',
-          value: profile.hapticsEnabled,
-          onChanged: _setHaptics,
-        ),
-        _SettingToggle(
-          key: const ValueKey('toggle-ambient-audio'),
-          title: 'Soft Ambient Breath Audio',
-          subtitle: 'Plays a calm soundscape during grounding pauses',
-          value: profile.ambientAudioEnabled,
-          onChanged: _setAmbientAudio,
-        ),
-        _ReminderSetting(
-          key: const ValueKey('setting-reminder'),
-          enabled: profile.reminderEnabled,
-          timeLabel: reminderTimeLabel,
-          nextFireLabel: nextFireLabel,
-          onToggle: _setReminder,
-          onPickTime: _pickReminderTime,
-          onSendTest: _sendTestReminder,
-        ),
-        _SettingToggle(
-          key: const ValueKey('toggle-idea-push'),
-          title: 'Nudge me about ideas',
-          subtitle: 'A quiet note that a gentle idea is waiting',
-          value: profile.ideaPushEnabled,
-          onChanged: _setIdeaPush,
-        ),
-        if (profile.ideaPushEnabled) ...[
-          _SettingToggle(
-            key: const ValueKey('toggle-quiet-hours'),
-            title: 'Quiet hours',
-            subtitle:
-                'No idea nudges while you sleep. Your check-in reminder '
-                'still arrives when you set it.',
-            value: profile.quietHoursEnabled,
-            onChanged: (on) => _controller.setQuietHours(enabled: on),
-          ),
-          if (profile.quietHoursEnabled)
-            Row(
-              children: [
-                TextButton(
-                  key: const ValueKey('quiet-start'),
-                  onPressed: () => _pickQuietTime(start: true),
-                  child: Text(
-                    'From ${TimeOfDay(hour: profile.quietStartMinutes ~/ 60, minute: profile.quietStartMinutes % 60).format(context)}',
-                  ),
-                ),
-                TextButton(
-                  key: const ValueKey('quiet-end'),
-                  onPressed: () => _pickQuietTime(start: false),
-                  child: Text(
-                    'Until ${TimeOfDay(hour: profile.quietEndMinutes ~/ 60, minute: profile.quietEndMinutes % 60).format(context)}',
-                  ),
-                ),
-              ],
-            ),
-        ],
-        SleepHoursSettings(controller: _controller),
-        const SizedBox(height: 14),
-        const Text(
-          'WHERE YOU ARE BASED',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.2,
-            color: Color(0xFFBCAC8E),
-          ),
-        ),
-        const SizedBox(height: 8),
-        CountryPicker(controller: _controller),
-        const SizedBox(height: 14),
-        const Text(
-          'COLOR PALETTE',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.2,
-            color: Color(0xFFBCAC8E),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
+        const KitLabel('FEEL'),
+        _SettingsGroup(
           children: [
-            for (final palette in SolacePaletteId.values) ...[
-              if (palette != SolacePaletteId.values.first)
-                const SizedBox(width: 8),
-              _PaletteChip(
-                key: ValueKey('palette-${palette.id}'),
-                palette: palette,
-                selected: palette == activePalette,
-                onTap: () => _setPalette(palette),
+            _SettingToggle(
+              key: const ValueKey('toggle-haptics'),
+              icon: Icons.vibration_rounded,
+              color: kitAmber,
+              title: 'Gentle Haptics',
+              subtitle: 'Subtle vibrational cues on taps and sliders',
+              value: profile.hapticsEnabled,
+              onChanged: _setHaptics,
+            ),
+            _SettingToggle(
+              key: const ValueKey('toggle-ambient-audio'),
+              icon: Icons.graphic_eq_rounded,
+              color: const Color(0xFF6E73C8),
+              title: 'Soft Ambient Breath Audio',
+              subtitle: 'A calm soundscape during grounding pauses',
+              value: profile.ambientAudioEnabled,
+              onChanged: _setAmbientAudio,
+            ),
+          ],
+        ),
+        const KitLabel('REMINDERS'),
+        _SettingsGroup(
+          children: [
+            _ReminderSetting(
+              key: const ValueKey('setting-reminder'),
+              enabled: profile.reminderEnabled,
+              timeLabel: reminderTimeLabel,
+              nextFireLabel: nextFireLabel,
+              onToggle: _setReminder,
+              onPickTime: _pickReminderTime,
+              onSendTest: _sendTestReminder,
+            ),
+            _SettingToggle(
+              key: const ValueKey('toggle-idea-push'),
+              icon: Icons.notifications_none_rounded,
+              color: const Color(0xFF4F9D76),
+              title: 'Nudge me about ideas',
+              subtitle: 'A quiet note that a gentle idea is waiting',
+              value: profile.ideaPushEnabled,
+              onChanged: _setIdeaPush,
+            ),
+            if (profile.ideaPushEnabled) ...[
+              _SettingToggle(
+                key: const ValueKey('toggle-quiet-hours'),
+                icon: Icons.bedtime_outlined,
+                color: const Color(0xFF6E73C8),
+                title: 'Quiet hours',
+                subtitle:
+                    'No idea nudges while you sleep. Your check-in reminder '
+                    'still arrives when you set it.',
+                value: profile.quietHoursEnabled,
+                onChanged: (on) => _controller.setQuietHours(enabled: on),
               ),
+              if (profile.quietHoursEnabled)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _TimePill(
+                      key: const ValueKey('quiet-start'),
+                      label:
+                          'From ${TimeOfDay(hour: profile.quietStartMinutes ~/ 60, minute: profile.quietStartMinutes % 60).format(context)}',
+                      onTap: () => _pickQuietTime(start: true),
+                    ),
+                    _TimePill(
+                      key: const ValueKey('quiet-end'),
+                      label:
+                          'Until ${TimeOfDay(hour: profile.quietEndMinutes ~/ 60, minute: profile.quietEndMinutes % 60).format(context)}',
+                      onTap: () => _pickQuietTime(start: false),
+                    ),
+                  ],
+                ),
             ],
           ],
         ),
-        const SizedBox(height: 20),
+        const KitLabel('YOUR DAY'),
+        _SettingsGroup(children: [SleepHoursSettings(controller: _controller)]),
+        const KitLabel('WHERE YOU ARE BASED'),
+        _SettingsGroup(children: [CountryPicker(controller: _controller)]),
+        const KitLabel('LOOK'),
+        _SettingsGroup(
+          children: [
+            Row(
+              children: [
+                for (final palette in SolacePaletteId.values) ...[
+                  if (palette != SolacePaletteId.values.first)
+                    const SizedBox(width: 8),
+                  _PaletteChip(
+                    key: ValueKey('palette-${palette.id}'),
+                    palette: palette,
+                    selected: palette == activePalette,
+                    onTap: () => _setPalette(palette),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
         SizedBox(
           width: double.infinity,
-          height: 44,
+          height: 50,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFFB534),
               foregroundColor: const Color(0xFF3D2E14),
               elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
               ),
             ),
             onPressed: () => Navigator.of(context).pop(),
             child: const Text(
               'Done',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
             ),
           ),
         ),
@@ -1937,9 +1931,75 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
   }
 }
 
-/// Settings row with a working switch.
+/// A white card that groups related settings, with hairlines between rows.
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return KitCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const Divider(height: 1, color: kitLine),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: children[i],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A small tappable time chip.
+class _TimePill extends StatelessWidget {
+  const _TimePill({required this.label, required this.onTap, super.key});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFFFF3DC),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.schedule_rounded, size: 15, color: kitAmber),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF8A6A1C),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings row with an icon tile and a working switch.
 class _SettingToggle extends StatelessWidget {
   const _SettingToggle({
+    required this.icon,
+    required this.color,
     required this.title,
     required this.subtitle,
     required this.value,
@@ -1947,6 +2007,8 @@ class _SettingToggle extends StatelessWidget {
     super.key,
   });
 
+  final IconData icon;
+  final Color color;
   final String title;
   final String subtitle;
   final bool value;
@@ -1954,40 +2016,41 @@ class _SettingToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF3B3327),
-                  ),
+    return Row(
+      children: [
+        IconTile(icon: icon, color: color, size: 38),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: kitInk,
                 ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF93887A),
-                  ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  height: 1.3,
+                  fontWeight: FontWeight.w600,
+                  color: kitMuted,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Switch(
-            value: value,
-            activeColor: const Color(0xFFFFB534),
-            onChanged: onChanged,
-          ),
-        ],
-      ),
+        ),
+        Switch(
+          value: value,
+          activeColor: const Color(0xFFFFB534),
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }
@@ -2026,13 +2089,19 @@ class _ReminderSetting extends StatelessWidget {
         children: [
           Row(
             children: [
+              IconTile(
+                icon: Icons.alarm_rounded,
+                color: enabled ? kitAmber : kitMuted,
+                size: 38,
+              ),
+              const SizedBox(width: 12),
               const Expanded(
                 child: Text(
                   'Daily check-in reminder',
                   style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF3B3327),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: kitInk,
                   ),
                 ),
               ),
@@ -2043,63 +2112,79 @@ class _ReminderSetting extends StatelessWidget {
               ),
             ],
           ),
-          GestureDetector(
-            onTap: onPickTime,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: enabled
-                    ? const Color(0xFFFFF9EE)
-                    : const Color(0xFFF4F1E7),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: enabled ? const Color(0xFFFFB534) : Colors.transparent,
+          Padding(
+            padding: const EdgeInsets.only(left: 50),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: onPickTime,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: enabled
+                          ? const Color(0xFFFFF9EE)
+                          : const Color(0xFFF4F1E7),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: enabled
+                            ? const Color(0xFFFFB534)
+                            : Colors.transparent,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.schedule_rounded, size: 15, color: accent),
+                        const SizedBox(width: 7),
+                        Text(
+                          timeLabel,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: accent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.schedule_rounded, size: 15, color: accent),
-                  const SizedBox(width: 7),
-                  Text(
-                    timeLabel,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                      color: accent,
+                const SizedBox(height: 4),
+                Text(
+                  enabled ? 'Next reminder: $nextFireLabel.' : _offCopy,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                    color: Color(0xFF93887A),
+                  ),
+                ),
+                if (enabled) ...[
+                  const SizedBox(height: 2),
+                  TextButton(
+                    key: const ValueKey('send-test-reminder'),
+                    onPressed: onSendTest,
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF96620C),
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Send a test reminder',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            enabled ? 'Next reminder: $nextFireLabel.' : _offCopy,
-            style: const TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              height: 1.4,
-              color: Color(0xFF93887A),
-            ),
-          ),
-          if (enabled) ...[
-            const SizedBox(height: 2),
-            TextButton(
-              key: const ValueKey('send-test-reminder'),
-              onPressed: onSendTest,
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF96620C),
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 32),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text(
-                'Send a test reminder',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -2125,48 +2210,61 @@ class _PaletteChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = SolaceColors.of(palette);
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFFFF9EE) : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFFFFB534)
-                  : const Color(0xFFF2ECDD),
-              width: selected ? 1.5 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [colors.amber, colors.coral],
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                ),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: palette.label,
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFFFFF9EE) : Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected ? const Color(0xFFFFB534) : kitLine,
+                width: selected ? 1.8 : 1,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
+            ),
+            child: Column(
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [colors.amber, colors.coral],
+                        ),
+                      ),
+                    ),
+                    if (selected)
+                      const Icon(
+                        Icons.check_rounded,
+                        size: 22,
+                        color: Colors.white,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
                   palette.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: selected
-                        ? const Color(0xFFB57A12)
-                        : const Color(0xFF887D6E),
+                    color: selected ? kitInk : kitMuted,
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
