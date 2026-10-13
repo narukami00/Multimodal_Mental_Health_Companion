@@ -83,6 +83,8 @@ void main() {
     await tester.pump();
     final continueButton = find.text('Continue to questions');
     await tester.scrollUntilVisible(continueButton, 300);
+    await tester.ensureVisible(continueButton);
+    await tester.pumpAndSettle();
     await tester.tap(continueButton);
     await tester.pumpAndSettle();
 

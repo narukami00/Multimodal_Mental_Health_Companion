@@ -80,6 +80,26 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
+  /// Clears the baseline so it can be taken again: every questionnaire answer, any "skipped" mark and the
+  /// completion date. With [includePreferences] what fits the person (activities, constraints, tone, never
+  /// suggest) is cleared too; otherwise it stays. Nothing else in the profile is touched.
+  Future<void> resetBaseline({bool includePreferences = false}) async {
+    final quizNames = {for (final block in QuizBlock.values) block.name};
+    _profile = _profile.copyWith(
+      erqSAnswers: const {},
+      gad7Answers: const {},
+      phq9Answers: const {},
+      skippedBlocks: [for (final b in _profile.skippedBlocks) if (!quizNames.contains(b)) b],
+      clearBaselineCompletedAt: true,
+      preferencesCompleted: includePreferences ? false : _profile.preferencesCompleted,
+      preferredActivities: includePreferences ? const [] : _profile.preferredActivities,
+      constraints: includePreferences ? const [] : _profile.constraints,
+      interactionPreferences: includePreferences ? const [] : _profile.interactionPreferences,
+      neverSuggest: includePreferences ? const [] : _profile.neverSuggest,
+    );
+    await _persist();
+  }
+
   /// Records the first launch time once, so the You tab can show a real
   /// "member since" date instead of a hardcoded one.
   Future<void> ensureFirstRun() async {
