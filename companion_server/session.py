@@ -41,6 +41,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 import safety_gate
 from conversation_memory import clean_summary, sanitize_resume, sanitize_turns
 from llm_service import LlmService, sanitize_memory
+from moment_extraction import clean_context
 from stt_service import VAD_WINDOW, SttService, StreamingVad
 from text_chunker import TextChunker
 from tts_engine import BaseTtsEngine
@@ -587,9 +588,10 @@ class Session:
         request_id = str(data.get("request_id", ""))[:64]
         text = data.get("text")
         text = text if isinstance(text, str) else ""
+        context = clean_context(data.get("context"))
 
         async def _extract() -> None:
-            moment = await self.llm.extract_moment_async(text)
+            moment = await self.llm.extract_moment_async(text, context)
             await self._send({"type": "moment.proposal", "request_id": request_id, "text": moment})
 
         self._spawn(_extract())

@@ -1,3 +1,4 @@
+import '../domain/memory/moment_extractor.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -226,9 +227,12 @@ class CompanionWebSocketService {
   /// Quotes one good moment from a chat message over the live connection, or
   /// null when no connection is live. Lets code that does not own a connection
   /// (such as the moments controller) use whichever one is open.
-  static Future<String?> Function(String text)? get liveMomentRequester {
+  static Future<String?> Function(String text, List<MomentContextLine> context)?
+  get liveMomentRequester {
     final live = _live;
-    return live == null ? null : (text) => live.requestMoment(text);
+    return live == null
+        ? null
+        : (text, context) => live.requestMoment(text, context: context);
   }
 
   void _updateStatus(CompanionConnectionStatus newStatus) {
@@ -827,6 +831,7 @@ class CompanionWebSocketService {
   /// throws. The server validates its answer; the caller validates it again.
   Future<String?> requestMoment(
     String text, {
+    List<MomentContextLine> context = const [],
     Duration timeout = const Duration(seconds: 12),
   }) async {
     if (_channel == null || text.trim().isEmpty) return null;
@@ -838,6 +843,10 @@ class CompanionWebSocketService {
       'type': 'moment.extract',
       'request_id': requestId,
       'text': text,
+      'context': [
+        for (final line in context)
+          {'role': line.fromPerson ? 'user' : 'assistant', 'text': line.text},
+      ],
       'ts': DateTime.now().millisecondsSinceEpoch,
     });
     try {

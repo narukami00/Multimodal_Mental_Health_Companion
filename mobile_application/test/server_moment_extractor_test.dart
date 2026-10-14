@@ -48,7 +48,7 @@ void main() {
   group('ServerMomentExtractor', () {
     test('uses the server for chat and carries the usual fields', () async {
       final extractor = ServerMomentExtractor(
-        requesterProvider: () => (text) async => _quote,
+        requesterProvider: () => (text, context) async => _quote,
       );
       final proposal = (await extractor.extract(_candidate(_original)))!;
 
@@ -61,7 +61,7 @@ void main() {
     test('never sends a journal entry or a check-in to the server', () async {
       var asked = false;
       final extractor = ServerMomentExtractor(
-        requesterProvider: () => (text) async {
+        requesterProvider: () => (text, context) async {
           asked = true;
           return _quote;
         },
@@ -88,10 +88,10 @@ void main() {
       );
 
       for (final r in <MomentRequester>[
-        (text) async => null,
-        (text) async => throw StateError('socket closed'),
-        (text) => Future.delayed(const Duration(seconds: 2), () => _quote),
-        (text) async => 'A completely different sentence that was never said anywhere.',
+        (text, context) async => null,
+        (text, context) async => throw StateError('socket closed'),
+        (text, context) => Future.delayed(const Duration(seconds: 2), () => _quote),
+        (text, context) async => 'A completely different sentence that was never said anywhere.',
       ]) {
         reply = r;
         final proposal = await extractor.extract(_candidate(_original));
@@ -102,7 +102,7 @@ void main() {
 
     test('a sensitive message yields nothing from either reader', () async {
       final extractor = ServerMomentExtractor(
-        requesterProvider: () => (text) async => _quote,
+        requesterProvider: () => (text, context) async => _quote,
       );
       final proposal = await extractor.extract(
         _candidate('My grandmother died last week. $_original'),

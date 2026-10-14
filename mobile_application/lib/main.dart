@@ -220,14 +220,27 @@ Future<void> main() async {
   // Deleting an entry deletes the moments that came from it.
   sessionController.onDeleted = (session) =>
       unawaited(moments.deleteForSource(session.id));
-  chatController.onUserMessage = (message) => offerMoment(
-    MomentCandidate(
-      text: message.text,
-      source: MomentSource.chat,
-      createdAt: message.timestamp,
-      sourceRef: 'chat:${message.id}',
-    ),
-  );
+  chatController.onUserMessage = (message) {
+    // The last few lines before this message, so "that was a great idea" is
+    // kept as what it was about instead of as a fragment.
+    final all = chatController.activeConversation?.messages ?? const [];
+    final cut = all.indexWhere((m) => m.id == message.id);
+    final before = cut < 0 ? all : all.sublist(0, cut);
+    final earlier = <MomentContextLine>[
+      for (final m in before.skip(before.length > 4 ? before.length - 4 : 0))
+        if (m.text.trim().isNotEmpty)
+          MomentContextLine(fromPerson: m.isUser, text: m.text.trim()),
+    ];
+    offerMoment(
+      MomentCandidate(
+        text: message.text,
+        source: MomentSource.chat,
+        createdAt: message.timestamp,
+        sourceRef: 'chat:${message.id}',
+        context: earlier,
+      ),
+    );
+  };
 
   final memory = CompanionMemoryContext(
     consent: consentController,

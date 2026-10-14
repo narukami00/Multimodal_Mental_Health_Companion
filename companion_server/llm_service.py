@@ -22,7 +22,17 @@ register_cuda_dll_dirs()
 
 import torch  # noqa: E402
 from conversation_memory import clean_summary, extractive_summary, summary_messages
-from moment_extraction import extraction_messages, validate_moment
+from moment_extraction import (
+    _STOP as STOP_WORDS,
+    _words as extraction_words,
+    compose_with_referent,
+    extraction_messages,
+    referent_messages,
+    topic_from_context,
+    validate_moment,
+    validate_referent,
+    wants_referent,
+)
 from transformers import (  # noqa: E402
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -71,6 +81,22 @@ def sanitize_memory(raw: Any) -> Optional[Dict[str, Any]]:
     if not snippet and not facts:
         return None
     return {"profile_snippet": snippet, "memory_facts": facts}
+
+
+def rank_memory_facts(memory: Optional[Dict[str, Any]], user_message: str) -> Optional[Dict[str, Any]]:
+    """The memory block with the kept moments that share words with what the
+    person just said listed first, so the model sees the relevant ones first and
+    the unrelated ones last. Nothing is added or dropped; ties keep their order
+    (newest first, as the app sends them)."""
+    if not memory or not memory.get("memory_facts"):
+        return memory
+    wanted = {w for w in extraction_words(user_message) if w not in STOP_WORDS}
+    if not wanted:
+        return memory
+    facts = list(memory["memory_facts"])
+    scored = [(-len(wanted & set(extraction_words(f))), i, f) for i, f in enumerate(facts)]
+    scored.sort()
+    return {**memory, "memory_facts": [f for _, _, f in scored]}
 
 
 def memory_prompt_block(memory: Optional[Dict[str, Any]], summary: str = "") -> str:
@@ -408,6 +434,7 @@ class LlmService:
         plain line and capped so it can neither overrun the prompt nor smuggle
         in instructions.
         """
+        memory = rank_memory_facts(memory, user_message)
         system = self.system_prompt + memory_prompt_block(memory, summary)
         if spoken:
             system += SPOKEN_STYLE_ADDENDUM
@@ -496,22 +523,52 @@ class LlmService:
             # Reached on normal end, on aclose() and on task cancellation alike.
             stop.set()
 
-    async def extract_moment_async(self, text: str) -> Optional[str]:
-        """One good moment quoted from [text], or None. Never raises.
+    async def extract_moment_async(
+        self, text: str, context: Optional[List[Dict[str, str]]] = None
+    ) -> Optional[str]:
+        """One good moment from [text], or None. Never raises.
 
-        The model is only asked to copy a sentence; `validate_moment` then checks
-        the copy is faithful, short, and not about a sensitive topic, so a
-        paraphrase, an invention or a hard subject all end as None.
+        Two steps, because the model is small. First it is asked to copy one good
+        sentence. If that sentence says nothing on its own ("that was a great
+        idea"), and [context] (the last few turns before it) is given, the model
+        is asked only to copy a few words from the earlier lines naming what it
+        was about, and the memory is put together here: "About working again:
+        That was a great idea." The model never writes the memory, and
+        `validate_moment` checks the result is short, made of words from the
+        conversation, not vague and not about a sensitive topic, so an invention,
+        a fragment or a hard subject all end as None.
         """
         if not self.is_ready or not text or not text.strip():
             return None
         try:
             parts: List[str] = []
+            # Near-greedy: copying words is not a task that wants variety.
             async for chunk in self.generate_stream_async(
-                extraction_messages(text), max_new_tokens=60
+                extraction_messages(text), max_new_tokens=60, temperature=0.05, top_p=0.5
             ):
                 parts.append(chunk)
-            return validate_moment(text, "".join(parts))
+            quoted = validate_moment(text, "".join(parts), context)
+            if quoted:
+                return quoted
+            if not context or not wants_referent(text):
+                return None
+            # What both sides were just talking about needs no model at all;
+            # the model only names the topic when they share none.
+            referent = topic_from_context(context)
+            if not referent:
+                parts = []
+                async for chunk in self.generate_stream_async(
+                    referent_messages(text, context),
+                    max_new_tokens=16,
+                    temperature=0.05,
+                    top_p=0.5,
+                ):
+                    parts.append(chunk)
+                referent = validate_referent("".join(parts), context)
+            if not referent:
+                return None
+            composed = compose_with_referent(referent, text)
+            return validate_moment(text, composed, context) if composed else None
         except Exception as e:  # noqa: BLE001 - extraction must never break a chat
             logger.warning(f"Moment extraction failed: {e}")
             return None
