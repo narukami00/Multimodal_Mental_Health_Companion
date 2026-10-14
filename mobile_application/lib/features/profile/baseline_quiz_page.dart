@@ -685,7 +685,7 @@ class _CompletionView extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         const Text(
-          'These totals are private baseline context. Questionnaire licensing and clinical review are required before external use.',
+          'Private to this phone. Not a clinical result.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.mutedInk, fontSize: 11, height: 1.4),
         ),

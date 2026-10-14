@@ -90,14 +90,14 @@ class EverythingKeptPage extends StatelessWidget {
         children: [
           StatTile(
             value: '$entries',
-            label: 'entries',
+            label: entries == 1 ? 'entry' : 'entries',
             color: kitAmber,
             icon: Icons.edit_note_rounded,
           ),
           const SizedBox(width: 8),
           StatTile(
             value: '${conversations.length}',
-            label: 'chats',
+            label: conversations.length == 1 ? 'chat' : 'chats',
             color: const Color(0xFF6E73C8),
             icon: Icons.chat_bubble_outline_rounded,
           ),
@@ -105,7 +105,7 @@ class EverythingKeptPage extends StatelessWidget {
             const SizedBox(width: 8),
             StatTile(
               value: '$kept',
-              label: 'moments',
+              label: kept == 1 ? 'moment' : 'moments',
               color: kitCoral,
               icon: Icons.bookmark_added_outlined,
             ),
@@ -114,7 +114,7 @@ class EverythingKeptPage extends StatelessWidget {
             const SizedBox(width: 8),
             StatTile(
               value: '$days',
-              label: 'days',
+              label: days == 1 ? 'day' : 'days',
               color: const Color(0xFF4F9D76),
               icon: Icons.phone_android_rounded,
             ),

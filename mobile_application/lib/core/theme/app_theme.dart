@@ -54,6 +54,12 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w600,
         ),
       ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF96620C),
+          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
       switchTheme: SwitchThemeData(
         thumbColor: const WidgetStatePropertyAll(Colors.white),
         trackColor: WidgetStateProperty.resolveWith(
