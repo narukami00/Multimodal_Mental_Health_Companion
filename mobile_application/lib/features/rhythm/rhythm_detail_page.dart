@@ -206,6 +206,21 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (rows.isNotEmpty)
+            Row(
+              children: [
+                const SizedBox(width: 58),
+                for (final day in rows.first)
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'MTWTFSS'[day.date.weekday - 1],
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: kitMuted),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           for (final row in rows) ...[
             if (row != rows.first) const SizedBox(height: 10),
             Row(
@@ -213,7 +228,7 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
                 SizedBox(
                   width: 58,
                   child: Text(
-                    MaterialLocalizations.of(context).formatShortDate(row.first.date),
+                    _shortDate(row.first.date),
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: kitMuted),
                   ),
                 ),
@@ -237,6 +252,10 @@ class _RhythmDetailPageState extends State<RhythmDetailPage> {
       ),
     );
   }
+
+  static const _monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  static String _shortDate(DateTime d) => '${_monthNames[d.month - 1]} ${d.day}';
 
   Widget _buildWeekdays(RhythmSummary summary) {
     final counts = List<double>.filled(7, 0);

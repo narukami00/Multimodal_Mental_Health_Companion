@@ -82,7 +82,7 @@ void main() {
   testWidgets('renders session chrome and toggles mic state', (tester) async {
     await pumpCall(tester);
 
-    expect(find.text('Solace Voice'), findsOneWidget);
+    expect(find.text('Sol'), findsOneWidget);
     expect(find.text('MIC ON'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.mic_none_rounded), warnIfMissed: false);
@@ -143,7 +143,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Solace Voice'), findsOneWidget);
+    expect(find.text('Sol'), findsOneWidget);
     expect(find.text('Take your time. Silence is welcome here.'), findsOneWidget);
   });
 

@@ -1088,7 +1088,7 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Solace Voice',
+                  'Sol',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
