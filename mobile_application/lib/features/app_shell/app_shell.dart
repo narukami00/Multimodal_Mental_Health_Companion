@@ -343,6 +343,7 @@ class _AppShellState extends State<AppShell> {
                 index: _selectedTab.index,
                 children: [
               TodayPage(
+                name: widget.profileController.profile.displayName,
                 chatController: _chatController,
                 ambientAudioEnabled:
                     widget.profileController.profile.ambientAudioEnabled,

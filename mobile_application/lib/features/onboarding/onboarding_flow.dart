@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/visual_kit.dart';
+import '../art/checkin_art.dart';
 import '../../data/contracts/onboarding_repository.dart';
 import '../profile/country_picker.dart';
 import '../profile/profile_controller.dart';
@@ -25,14 +28,18 @@ class OnboardingFlow extends StatefulWidget {
 }
 
 class _OnboardingFlowState extends State<OnboardingFlow> {
-  static const _pageCount = 6;
+  static const _pageCount = 7;
 
   /// Where the sleep question sits. Pages before it keep their old indices, so
   /// a half-finished onboarding resumes where it left off.
   static const _sleepPage = 3;
 
+  /// The optional "what should I call you" step, just before the safety page.
+  static const _namePage = 5;
+
   late final PageController _pageController;
   late int _currentPage;
+  final _name = TextEditingController();
 
   @override
   void initState() {
@@ -44,6 +51,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   @override
   void dispose() {
     _pageController.dispose();
+    _name.dispose();
     super.dispose();
   }
 
@@ -58,6 +66,15 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       duration: const Duration(milliseconds: 420),
       curve: Curves.easeOutCubic,
     );
+  }
+
+  /// Keeps the name if they typed one, then moves on. Leaving it empty is fine.
+  Future<void> _saveName() async {
+    final name = _name.text.trim();
+    if (name.isNotEmpty) {
+      await widget.profileController.saveIdentity(displayName: name);
+    }
+    if (mounted) await _next();
   }
 
   Future<void> _chooseMedia(bool enabled) async {
@@ -123,6 +140,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                         const _PermissionPage(),
                         _SleepPage(controller: widget.profileController),
                         _CountryPage(controller: widget.profileController),
+                        _NamePage(field: _name, onDone: _saveName),
                         const _SupportPage(),
                       ],
                     ),
@@ -131,6 +149,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                     currentPage: _currentPage,
                     pageCount: _pageCount,
                     sleepPage: _sleepPage,
+                    namePage: _namePage,
+                    onSaveName: _saveName,
                     onNext: _next,
                     onChooseMedia: _chooseMedia,
                     onChooseSleep: _chooseSleep,
@@ -354,6 +374,8 @@ class _BottomControls extends StatelessWidget {
     required this.currentPage,
     required this.pageCount,
     required this.sleepPage,
+    required this.namePage,
+    required this.onSaveName,
     required this.onNext,
     required this.onChooseMedia,
     required this.onChooseSleep,
@@ -363,6 +385,8 @@ class _BottomControls extends StatelessWidget {
   final int currentPage;
   final int pageCount;
   final int sleepPage;
+  final int namePage;
+  final VoidCallback onSaveName;
   final VoidCallback onNext;
   final ValueChanged<bool> onChooseMedia;
   final VoidCallback onChooseSleep;
@@ -425,6 +449,12 @@ class _BottomControls extends StatelessWidget {
                   ),
                 ),
               ],
+            )
+          else if (currentPage == namePage)
+            _PrimaryCtaButton(
+              label: 'Continue',
+              icon: Icons.arrow_forward_rounded,
+              onPressed: onSaveName,
             )
           else if (currentPage == sleepPage)
             Column(
@@ -604,16 +634,11 @@ class _WaysToCheckInPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _OnboardingPage(
-      illustration: const _OnboardingIllustration(
-        icon: Icons.forum_rounded,
-        secondaryIcon: Icons.graphic_eq_rounded,
-        accent: AppColors.coral,
-      ),
+    return const _OnboardingPage(
+      illustration: _ModeChoices(),
       eyebrow: 'Three ways to check in',
       title: 'Check in your way.',
-      body: 'Share what feels right. Solace listens through only what you choose to share.',
-      extra: const _ModeChoices(),
+      body: 'Share what feels right, and only as much as you choose.',
     );
   }
 }
@@ -623,37 +648,22 @@ class _PermissionPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _OnboardingPage(
-      illustration: const _OnboardingIllustration(
-        icon: Icons.shield_rounded,
-        secondaryIcon: Icons.favorite_rounded,
-        accent: AppColors.amber,
-      ),
+    return const _OnboardingPage(
+      illustration: _Scene(HeroScene.permissions),
       eyebrow: 'Your choice, always',
       title: 'Camera & mic are\nalways optional.',
       body: 'Voice and video add another way to be heard. Text is always enough.',
-      extra: const Column(
+      extra: Column(
         children: [
           _PromiseRow(
             icon: Icons.mic_none_rounded,
-            text: 'Never required. Choose text, voice, or video session by session.',
+            text: 'Never required. Pick text, voice or video each time.',
           ),
           SizedBox(height: 10),
           _PromiseRow(
             icon: Icons.lock_outline_rounded,
-            text: 'You can change this anytime in Settings — no questions asked.',
+            text: 'Asked only when a mode needs it. Change it in Settings.',
             accent: AppColors.coral,
-          ),
-          SizedBox(height: 12),
-          Text(
-            'Permissions will only be requested when you choose a mode that needs them.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.mutedInk,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              height: 1.4,
-            ),
           ),
         ],
       ),
@@ -669,16 +679,10 @@ class _SleepPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _OnboardingPage(
-      illustration: const _OnboardingIllustration(
-        icon: Icons.bedtime_rounded,
-        secondaryIcon: Icons.wb_twilight_rounded,
-        accent: AppColors.amber,
-      ),
+      illustration: const _Scene(HeroScene.rhythm),
       eyebrow: 'Your own rhythm',
       title: 'When do you usually\nsleep?',
-      body:
-          'So ideas can fit how much energy you probably have. It stays on '
-          'this phone, and you can change or remove it anytime in Settings.',
+      body: 'So ideas can fit your energy. It stays on this phone and you can change it in Settings.',
       extra: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
@@ -715,17 +719,58 @@ class _CountryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _OnboardingPage(
-      illustration: const _OnboardingIllustration(
-        icon: Icons.public_rounded,
-        secondaryIcon: Icons.favorite_border_rounded,
-        accent: AppColors.coral,
-      ),
+      illustration: const _Scene(HeroScene.contacts),
       eyebrow: 'So help is local',
       title: 'Where are you\nbased?',
-      body:
-          'This only decides which emergency number and support line Solace '
-          'shows you. It stays on this phone, and you can change it in Settings.',
+      body: 'This only decides which emergency number and support line you see. It stays on this phone.',
       extra: CountryPicker(controller: controller),
+    );
+  }
+}
+
+/// An optional name, only used to say hello. Nothing is required.
+class _NamePage extends StatelessWidget {
+  const _NamePage({required this.field, required this.onDone});
+
+  final TextEditingController field;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    return _OnboardingPage(
+      illustration: const _Scene(HeroScene.about),
+      eyebrow: 'Just between us',
+      title: 'What should I\ncall you?',
+      body: 'Only used to greet you. Stays on this phone, and you can leave it blank.',
+      extra: TextField(
+        key: const ValueKey('onboarding-name'),
+        controller: field,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.done,
+        maxLength: 24,
+        onSubmitted: (_) => onDone(),
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
+        decoration: InputDecoration(
+          hintText: 'Your name or a nickname',
+          counterText: '',
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: const BorderSide(color: Color(0xFFEBDCC0)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: const BorderSide(color: Color(0xFFEBDCC0)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: const BorderSide(color: AppColors.amber, width: 1.8),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -735,16 +780,12 @@ class _SupportPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _OnboardingPage(
-      illustration: const _OnboardingIllustration(
-        icon: Icons.volunteer_activism_rounded,
-        secondaryIcon: Icons.favorite_border_rounded,
-        accent: AppColors.coral,
-      ),
+    return const _OnboardingPage(
+      illustration: _Scene(HeroScene.support),
       eyebrow: 'A quiet safety net',
       title: 'Support is always nearby.',
-      body: 'Support resources will live in the You tab — private, calm, and there whenever you need them.',
-      extra: const _SupportPreview(),
+      body: 'Private, calm, and there whenever you need it. Solace is a space for reflection, not medical care.',
+      extra: _SupportPreview(),
     );
   }
 }
@@ -768,43 +809,60 @@ class _OnboardingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 6, 24, 12),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.maxHeight - 18,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                illustration,
-                const SizedBox(height: 16),
-                _KickerPillBadge(label: eyebrow),
-                const SizedBox(height: 14),
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        height: 1.2,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.2,
+        // The page settles in: the picture first, then the words.
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 650),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, _) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 6, 22, 12),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: (constraints.maxHeight - 18).clamp(0.0, double.infinity)),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Opacity(
+                    opacity: t,
+                    child: Transform.scale(scale: 0.94 + 0.06 * t, child: illustration),
+                  ),
+                  const SizedBox(height: 18),
+                  Opacity(
+                    opacity: t,
+                    child: Transform.translate(
+                      offset: Offset(0, 14 * (1 - t)),
+                      child: Column(
+                        children: [
+                          _KickerPillBadge(label: eyebrow),
+                          const SizedBox(height: 14),
+                          Text(
+                            title,
+                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                  height: 1.15,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.4,
+                                ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            body,
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: AppColors.mutedInk,
+                                  height: 1.45,
+                                  fontSize: 14.5,
+                                ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (extra != null) ...[
+                            const SizedBox(height: 20),
+                            extra!,
+                          ],
+                        ],
                       ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  body,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppColors.mutedInk,
-                        height: 1.5,
-                        fontSize: 14.5,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                if (extra != null) ...[
-                  const SizedBox(height: 20),
-                  extra!,
+                    ),
+                  ),
                 ],
-              ],
+              ),
             ),
           ),
         );
@@ -813,77 +871,55 @@ class _OnboardingPage extends StatelessWidget {
   }
 }
 
-class _OnboardingIllustration extends StatelessWidget {
-  const _OnboardingIllustration({
-    required this.icon,
-    required this.secondaryIcon,
-    required this.accent,
-  });
+/// A painted, gently moving scene from the app's own picture set, in a soft frame.
+class _Scene extends StatefulWidget {
+  const _Scene(this.scene);
 
-  final IconData icon;
-  final IconData secondaryIcon;
-  final Color accent;
+  final HeroScene scene;
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 180,
-      width: double.infinity,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 172,
-            height: 172,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: accent.withValues(alpha: 0.10),
-            ),
-          ),
-          Container(
-            width: 128,
-            height: 128,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [accent.withValues(alpha: 0.28), accent.withValues(alpha: 0.04)],
-              ),
-            ),
-            child: Icon(icon, size: 62, color: accent),
-          ),
-          Positioned(
-            top: 22,
-            right: 68,
-            child: Icon(secondaryIcon, size: 26, color: AppColors.coral.withValues(alpha: 0.72)),
-          ),
-          Positioned(
-            bottom: 22,
-            left: 72,
-            child: _Dot(color: AppColors.amber.withValues(alpha: 0.72), size: 12),
-          ),
-          Positioned(
-            bottom: 38,
-            right: 76,
-            child: _Dot(color: AppColors.coral.withValues(alpha: 0.55), size: 8),
-          ),
-        ],
-      ),
-    );
-  }
+  State<_Scene> createState() => _SceneState();
 }
 
-class _Dot extends StatelessWidget {
-  const _Dot({required this.color, required this.size});
+class _SceneState extends State<_Scene> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(seconds: 10));
 
-  final Color color;
-  final double size;
+  @override
+  void initState() {
+    super.initState();
+    if (!_still) _c.repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  static bool get _still {
+    try {
+      return Platform.environment.containsKey('FLUTTER_TEST');
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      height: 190,
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: const [BoxShadow(color: Color(0x1FB0782A), blurRadius: 24, spreadRadius: -8, offset: Offset(0, 12))],
+      ),
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (context, _) => CustomPaint(painter: HeroPainter(widget.scene, _still ? 0.35 : _c.value)),
+        ),
+      ),
     );
   }
 }
@@ -894,33 +930,36 @@ class _ModeChoices extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const modes = [
-      (Icons.chat_bubble_outline_rounded, 'Text', 'Type it out'),
-      (Icons.mic_none_rounded, 'Voice', 'Say what is there'),
-      (Icons.videocam_outlined, 'Video', 'Be seen too'),
+      (CheckInKind.text, 'Text', 'Type it out'),
+      (CheckInKind.voice, 'Voice', 'Say what is there'),
+      (CheckInKind.video, 'Video', 'Be seen too'),
     ];
-
     return Row(
       children: [
         for (var index = 0; index < modes.length; index++) ...[
-          if (index > 0) const SizedBox(width: 8),
+          if (index > 0) const SizedBox(width: 10),
           Expanded(
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 6),
-                child: Column(
-                  children: [
-                    Icon(modes[index].$1, color: index == 1 ? AppColors.coral : AppColors.amber),
-                    const SizedBox(height: 8),
-                    Text(modes[index].$2, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 3),
-                    Text(
-                      modes[index].$3,
-                      style: const TextStyle(fontSize: 10, color: AppColors.mutedInk),
-                      textAlign: TextAlign.center,
+            child: Column(
+              children: [
+                AspectRatio(
+                  aspectRatio: 0.82,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(26),
+                      boxShadow: const [BoxShadow(color: Color(0x1FB0782A), blurRadius: 16, spreadRadius: -6, offset: Offset(0, 8))],
                     ),
-                  ],
+                    child: CheckInArt(kind: modes[index].$1, radius: 26),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 10),
+                Text(modes[index].$2, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                const SizedBox(height: 2),
+                Text(
+                  modes[index].$3,
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.mutedInk),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
         ],
@@ -992,9 +1031,11 @@ class _SupportPreview extends StatelessWidget {
               children: [
                 Icon(Icons.schedule_rounded, size: 16, color: AppColors.coral),
                 SizedBox(width: 6),
-                Text(
-                  'Available whenever you need it',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                Flexible(
+                  child: Text(
+                    'Available whenever you need it',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
                 ),
               ],
             ),
@@ -1011,9 +1052,11 @@ class _SupportPreview extends StatelessWidget {
                   children: [
                     Icon(Icons.favorite_border_rounded, size: 16, color: AppColors.coral),
                     SizedBox(width: 7),
-                    Text(
-                      'You tab  →  Support',
-                      style: TextStyle(color: AppColors.coral, fontWeight: FontWeight.w800),
+                    Flexible(
+                      child: Text(
+                        'You tab  →  Support',
+                        style: TextStyle(color: AppColors.coral, fontWeight: FontWeight.w800),
+                      ),
                     ),
                   ],
                 ),

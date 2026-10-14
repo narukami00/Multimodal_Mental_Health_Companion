@@ -39,6 +39,10 @@ void main() {
 
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
+    expect(find.textContaining('What should I'), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
     expect(find.text('Support is always nearby.'), findsOneWidget);
 
     await tester.tap(find.text('Start checking in'));
@@ -66,6 +70,7 @@ void main() {
 
   _sleepPageTests();
   _countryPageTests();
+  _namePageTests();
 }
 
 Future<ProfileController> _reachSleepPage(
@@ -192,5 +197,41 @@ void _countryPageTests() {
     await tester.tap(find.byKey(const ValueKey('country-BD')));
     await tester.pumpAndSettle();
     expect(profile.profile.countryCode, 'BD');
+  });
+}
+
+void _namePageTests() {
+  Future<ProfileController> reach(WidgetTester tester) async {
+    final repository = InMemoryOnboardingRepository();
+    final profile = ProfileController(repository: InMemoryProfileRepository());
+    await profile.load();
+    await repository.setCurrentPage(5);
+    await tester.pumpWidget(
+      SolaceApp(
+        onboardingRepository: repository,
+        sessionController: _testSessionController(),
+        profileController: profile,
+      ),
+    );
+    await tester.pumpAndSettle();
+    return profile;
+  }
+
+  testWidgets('a name typed here is kept, and moves on to the safety page', (tester) async {
+    final profile = await reach(tester);
+    expect(find.textContaining('What should I'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('onboarding-name')), '  Rafsan ');
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(profile.profile.displayName, 'Rafsan');
+    expect(find.text('Support is always nearby.'), findsOneWidget);
+  });
+
+  testWidgets('leaving the name blank, or skipping, keeps nothing and is fine', (tester) async {
+    final profile = await reach(tester);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(profile.profile.displayName, anyOf(isNull, isEmpty));
+    expect(find.text('Support is always nearby.'), findsOneWidget);
   });
 }

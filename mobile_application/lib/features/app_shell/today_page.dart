@@ -41,6 +41,7 @@ class TodayPage extends StatelessWidget {
     this.onContinueSetup,
     this.setupProgressBadge,
     this.currentTime,
+    this.name,
     this.chatController,
     this.ambientAudioEnabled = true,
     this.rhythmCard,
@@ -104,6 +105,9 @@ class TodayPage extends StatelessWidget {
   final VoidCallback? onBlobTap;
 
   final DateTime? currentTime;
+
+  /// What to call the person, if they said. Shown after the greeting.
+  final String? name;
   final ChatController? chatController;
 
   /// Whether the user has allowed ambient audio in Settings.
@@ -132,7 +136,10 @@ class TodayPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = currentTime ?? DateTime.now();
-    final greeting = greetingForHour(now.hour);
+    final given = name?.trim().split(RegExp(r'\s+')).first;
+    final greeting = given == null || given.isEmpty
+        ? greetingForHour(now.hour)
+        : '${greetingForHour(now.hour)}, $given';
     final date = MaterialLocalizations.of(context).formatMediumDate(now);
     final card = _PrimaryCardContent.fromType(primaryCard);
 
@@ -276,6 +283,8 @@ class TodayPage extends StatelessWidget {
         Expanded(
           child: Text(
             greeting,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 21,
               fontWeight: FontWeight.w700,
