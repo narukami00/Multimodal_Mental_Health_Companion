@@ -45,6 +45,8 @@ import '../suggestions/suggestion_page.dart';
 import 'setup_progress_badge.dart';
 import 'check_in_task_card.dart';
 import 'home_rail.dart';
+import 'today_footer.dart';
+import '../../domain/insights/what_helped.dart';
 import 'home_suggestion_card.dart';
 import 'nav_pill.dart';
 import 'today_page.dart';
@@ -441,6 +443,20 @@ class _AppShellState extends State<AppShell> {
                         onStopAsking: () =>
                             widget.profileController.setMomentPromptsMuted(true),
                       ),
+                footer: ListenableBuilder(
+                  listenable: Listenable.merge([
+                    widget.suggestionController,
+                    ?widget.moments,
+                  ]),
+                  builder: (context, _) => TodayFooter(
+                    helped: whatHelped(
+                      widget.suggestionController.history,
+                      widget.suggestionController.library,
+                    ),
+                    keptMoments: widget.moments?.forInsights ?? const [],
+                    now: DateTime.now(),
+                  ),
+                ),
                 onTaskOpen: () => _openSuggestionDetails(suggestionChoice),
                 onTaskAccept: () => _acceptSuggestion(suggestionChoice!),
                 onTaskDecline: _declineSuggestion,

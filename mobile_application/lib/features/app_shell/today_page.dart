@@ -31,6 +31,7 @@ class TodayPage extends StatelessWidget {
     this.patternPrompt,
     this.dayRhythm,
     this.momentPrompt,
+    this.footer,
     this.onTaskOpen,
     this.onTaskAccept,
     this.onTaskDecline,
@@ -86,6 +87,9 @@ class TodayPage extends StatelessWidget {
 
   /// "Want me to remember this?", when a good moment is waiting for an answer.
   final Widget? momentPrompt;
+
+  /// One quiet card and the sky, filling the space under everything else.
+  final Widget? footer;
   final VoidCallback? onTaskOpen;
 
   /// The day's task, offered inside the check-in card rather than as a second
@@ -233,6 +237,11 @@ class TodayPage extends StatelessWidget {
                 ],
               ),
             ),
+            if (footer != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                child: footer!,
+              ),
             const SizedBox(height: 30),
           ],
         ),
