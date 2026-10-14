@@ -9,9 +9,11 @@ import android.graphics.YuvImage
 import android.os.SystemClock
 import android.util.Log
 import android.util.Size
+import android.view.Surface
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -32,6 +34,7 @@ import java.util.concurrent.Executors
 class CameraFrameCapture(
     private val owner: LifecycleOwner,
     private val context: android.content.Context,
+    private val textures: io.flutter.view.TextureRegistry?,
     private val onFrame: (ByteArray) -> Unit,
 ) {
     private companion object {
@@ -46,6 +49,25 @@ class CameraFrameCapture(
     private var analysis: ImageAnalysis? = null
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private var lastFrameAt = 0L
+
+    // The self view. A separate CameraX preview rendered into a Flutter texture at the camera's own frame
+    // rate, so the person sees themselves smoothly; the 5 fps analysis above is only what the server is sent.
+    private var previewEntry: io.flutter.view.TextureRegistry.SurfaceTextureEntry? = null
+    @Volatile private var previewWidth = 0
+    @Volatile private var previewHeight = 0
+    @Volatile private var previewRotation = 270 // a front sensor is usually mounted at 270 until CameraX says
+
+    /** Where to find the live self view, or null when there is none (no engine, or the camera is closed). */
+    fun previewInfo(): Map<String, Any>? {
+        val entry = previewEntry ?: return null
+        if (previewWidth == 0) return null
+        return mapOf(
+            "textureId" to entry.id(),
+            "width" to previewWidth,
+            "height" to previewHeight,
+            "rotation" to previewRotation,
+        )
+    }
 
     @Volatile
     var running = false
@@ -75,7 +97,14 @@ class CameraFrameCapture(
                     .build()
                 imageAnalysis.setAnalyzer(executor) { image -> analyze(image) }
                 cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(owner, CameraSelector.DEFAULT_FRONT_CAMERA, imageAnalysis)
+                val previewUseCase = buildPreview()
+                if (previewUseCase != null) {
+                    cameraProvider.bindToLifecycle(
+                        owner, CameraSelector.DEFAULT_FRONT_CAMERA, imageAnalysis, previewUseCase,
+                    )
+                } else {
+                    cameraProvider.bindToLifecycle(owner, CameraSelector.DEFAULT_FRONT_CAMERA, imageAnalysis)
+                }
                 provider = cameraProvider
                 analysis = imageAnalysis
                 running = true
@@ -88,6 +117,37 @@ class CameraFrameCapture(
         }, ContextCompat.getMainExecutor(context))
     }
 
+    private fun buildPreview(): Preview? {
+        val registry = textures ?: return null
+        return try {
+            val main = ContextCompat.getMainExecutor(context)
+            val entry = registry.createSurfaceTexture()
+            previewEntry = entry
+            val selector = ResolutionSelector.Builder()
+                .setResolutionStrategy(
+                    ResolutionStrategy(Size(1280, 960), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
+                )
+                .build()
+            Preview.Builder().setResolutionSelector(selector).build().also { preview ->
+                preview.setSurfaceProvider(main) { request ->
+                    val size = request.resolution
+                    val texture = entry.surfaceTexture()
+                    texture.setDefaultBufferSize(size.width, size.height)
+                    val surface = Surface(texture)
+                    request.setTransformationInfoListener(main) { info -> previewRotation = info.rotationDegrees }
+                    request.provideSurface(surface, main) { surface.release() }
+                    previewWidth = size.width
+                    previewHeight = size.height
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "self view unavailable: $e")
+            previewEntry?.release()
+            previewEntry = null
+            null
+        }
+    }
+
     fun stop() {
         running = false
         try {
@@ -97,6 +157,10 @@ class CameraFrameCapture(
             Log.w(TAG, "stopping the camera: $e")
         }
         analysis = null
+        previewEntry?.release()
+        previewEntry = null
+        previewWidth = 0
+        previewHeight = 0
     }
 
     fun release() {

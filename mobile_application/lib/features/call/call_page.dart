@@ -20,6 +20,7 @@ import '../../services/pcm_audio_recorder_service.dart';
 import '../../services/platform_frame_source.dart';
 import '../../services/tts_playback_service.dart';
 import '../../services/video_frame_service.dart';
+import '../camera/self_view.dart';
 import '../chat/chat_controller.dart';
 import '../consent/consent_controller.dart';
 import '../consent/emotion_consent_sheets.dart';
@@ -1221,7 +1222,7 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
             opacity: _camera ? 1 : 0,
             child: IgnorePointer(
               ignoring: !_camera,
-              child: _SelfView(preview: _video?.preview),
+              child: _SelfView(preview: _video?.preview, source: _video?.source, active: _camera),
             ),
           ),
         ),
@@ -2142,7 +2143,11 @@ class _CaptionText extends StatelessWidget {
 }
 
 class _SelfView extends StatelessWidget {
-  const _SelfView({this.preview});
+  const _SelfView({this.preview, this.source, this.active = false});
+
+  /// Where the live preview comes from, and whether the camera is on.
+  final FrameSource? source;
+  final bool active;
 
   /// The live camera frame; without it (camera still opening, or nothing wired) the soft placeholder shows.
   final ValueListenable<Uint8List?>? preview;
@@ -2172,15 +2177,14 @@ class _SelfView extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
+          // A selfie view is mirrored, like a mirror, and runs at the camera's own
+          // frame rate: only what is sent to the server is thinned to a few a second.
           if (preview != null)
-            ValueListenableBuilder<Uint8List?>(
-              valueListenable: preview!,
-              builder: (context, frame, _) => frame == null
-                  ? const SizedBox.shrink()
-                  : Transform.flip(
-                      flipX: true, // a selfie view is mirrored, like a mirror
-                      child: Image.memory(frame, key: const ValueKey('self-view'), fit: BoxFit.cover, gaplessPlayback: true),
-                    ),
+            SelfView(
+              source: source,
+              active: active,
+              fallbackListenable: preview,
+              fallbackKey: const ValueKey('self-view'),
             ),
           Positioned(
             top: 8,

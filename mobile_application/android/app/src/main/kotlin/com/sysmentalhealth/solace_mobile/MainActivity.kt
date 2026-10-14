@@ -48,7 +48,7 @@ class MainActivity : FlutterActivity() {
     private var cameraSink: EventChannel.EventSink? = null
     private var pendingCameraResult: MethodChannel.Result? = null
     private val camera: CameraFrameCapture by lazy {
-        CameraFrameCapture(this, this) { jpeg -> mainHandler.post { cameraSink?.success(jpeg) } }
+        CameraFrameCapture(this, this, flutterEngine?.renderer) { jpeg -> mainHandler.post { cameraSink?.success(jpeg) } }
     }
     private val mainHandler = Handler(Looper.getMainLooper())
     private val audioManager by lazy {
@@ -150,6 +150,8 @@ class MainActivity : FlutterActivity() {
                     camera.stop()
                     result.success(true)
                 }
+                // Where the smooth self view is (a Flutter texture), or null when there is none.
+                "previewInfo" -> result.success(camera.previewInfo())
                 else -> result.notImplemented()
             }
         }

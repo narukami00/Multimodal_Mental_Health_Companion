@@ -1,3 +1,4 @@
+import '../camera/self_view.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -367,9 +368,13 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
           gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFE0B2), Color(0xFFFFC79B)]),
           border: Border.all(color: Colors.white, width: 2),
         ),
-        child: _preview == null
-            ? const Center(child: Icon(Icons.videocam_outlined, size: 44, color: Color(0xFFB57A12)))
-            : Image.memory(_preview!, key: const ValueKey('journal-preview'), fit: BoxFit.cover, gaplessPlayback: true),
+        child: SelfView(
+          source: _frames,
+          active: _phase == _Phase.recording,
+          fallbackFrame: _preview,
+          fallbackKey: const ValueKey('journal-preview'),
+          placeholder: const Center(child: Icon(Icons.videocam_outlined, size: 44, color: Color(0xFFB57A12))),
+        ),
       );
     }
     final size = 120 + 60 * _level;
