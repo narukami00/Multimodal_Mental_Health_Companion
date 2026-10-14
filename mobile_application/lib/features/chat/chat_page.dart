@@ -1154,7 +1154,7 @@ class _ChatPageState extends State<ChatPage> {
             tooltip: 'Past conversations',
             icon: const Icon(Icons.history_rounded, size: 22),
             style: IconButton.styleFrom(
-              foregroundColor: _ink,
+              foregroundColor: const Color(0xFF6C5E50),
               minimumSize: const Size(40, 44),
             ),
           ),
@@ -1187,7 +1187,7 @@ class _ChatPageState extends State<ChatPage> {
             tooltip: 'Call Sol',
             icon: const Icon(Icons.phone_in_talk_rounded, size: 21),
             style: IconButton.styleFrom(
-              foregroundColor: const Color(0xFFC08A1E),
+              foregroundColor: const Color(0xFF6C5E50),
               minimumSize: const Size(40, 44),
             ),
           ),
@@ -1235,7 +1235,7 @@ class _ChatPageState extends State<ChatPage> {
             tooltip: 'How this conversation felt',
             icon: const Icon(Icons.mood_rounded, size: 23),
             style: IconButton.styleFrom(
-              foregroundColor: _coral,
+              foregroundColor: const Color(0xFF6C5E50),
               minimumSize: const Size(40, 44),
             ),
           ),
@@ -1293,7 +1293,7 @@ class _ChatPageState extends State<ChatPage> {
                       Icon(Icons.hub_outlined, color: _coral, size: 22),
                       SizedBox(width: 8),
                       Text(
-                        'Companion Backend Settings',
+                        'Connection',
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
@@ -1304,7 +1304,7 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Connect to the Python Solace companion engine for live WebSocket communication & STT/LLM streaming.',
+                    'The server that powers Sol. Change this only if you moved it.',
                     style:
                         TextStyle(fontSize: 12, color: _softInk, height: 1.4),
                   ),
@@ -1357,7 +1357,7 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'Quick Presets:',
+                    'Quick picks',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -1530,7 +1530,7 @@ class _ChatPageState extends State<ChatPage> {
                   if (_ttsEnabled) ...[
                     const SizedBox(height: 6),
                     const Text(
-                      'Voice Persona:',
+                      'Voice',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -1840,7 +1840,7 @@ class _ChatPageState extends State<ChatPage> {
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: EdgeInsets.symmetric(vertical: 16),
-                  hintText: 'Speak or type what\u2019s here…',
+                  hintText: 'Say or type anything…',
                   hintStyle: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

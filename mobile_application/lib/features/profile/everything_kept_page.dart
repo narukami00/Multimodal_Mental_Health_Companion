@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/daily_features.dart';
 import '../../core/theme/solace_palette.dart';
-import '../../core/widgets/page_back_button.dart';
+import '../../core/widgets/visual_kit.dart';
 import '../chat/chat_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../memory/companion_memory_context.dart';
@@ -12,10 +12,10 @@ import '../sessions/session_controller.dart';
 import 'phone_patterns_page.dart';
 import 'profile_controller.dart';
 
-const _ink = Color(0xFF3A3125);
-const _soft = Color(0xFF6C5E50);
-const _muted = Color(0xFFA69883);
-const _line = Color(0x143B2F26);
+const _ink = kitInk;
+const _soft = kitSoft;
+const _muted = kitMuted;
+const _line = kitLine;
 
 /// One place that says what Solace keeps, how much of it, and where to look at
 /// or delete each kind. Counts come straight from the stores, so the page cannot
@@ -43,32 +43,31 @@ class EverythingKeptPage extends StatelessWidget {
     final colors = SolaceColors.from(context);
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(
-        leading: const PageBackButton(),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        foregroundColor: _ink,
-        title: const Text(
-          'Everything Solace keeps',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-        ),
-      ),
-      body: SafeArea(
-        child: ListenableBuilder(
-          listenable: Listenable.merge([
-            sessionController,
-            ?chatController,
-            ?moments,
-            ?phonePatterns,
-          ]),
-          builder: (context, _) => FutureBuilder<List<DailyFeatures>>(
-            future: phonePatterns?.storedDays(),
-            builder: (context, snapshot) => ListView(
-              // Same 22px inset as the main pages, so cards line up app-wide.
-              padding: const EdgeInsets.fromLTRB(22, 4, 22, 32),
-              children: _rows(context, snapshot.data ?? const []),
-            ),
+      body: ListenableBuilder(
+        listenable: Listenable.merge([
+          sessionController,
+          ?chatController,
+          ?moments,
+          ?phonePatterns,
+        ]),
+        builder: (context, _) => FutureBuilder<List<DailyFeatures>>(
+          future: phonePatterns?.storedDays(),
+          builder: (context, snapshot) => ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              const PageHero(
+                scene: HeroScene.privacy,
+                title: 'Everything Solace keeps',
+                subtitle: 'All on your phone. You decide what stays.',
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _rows(context, snapshot.data ?? const []),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -87,44 +86,69 @@ class EverythingKeptPage extends StatelessWidget {
     final days = phoneRows.where((r) => r.hasUsage).length;
 
     return [
-      const Padding(
-        padding: EdgeInsets.fromLTRB(4, 0, 4, 16),
-        child: Text(
-          'All of this is on your phone. Nothing is sent anywhere unless you '
-          'switch it on in What Sol remembers, and each kind can be looked at '
-          'or deleted where it says.',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            height: 1.5,
-            color: _soft,
+      Row(
+        children: [
+          StatTile(
+            value: '$entries',
+            label: 'entries',
+            color: kitAmber,
+            icon: Icons.edit_note_rounded,
           ),
-        ),
+          const SizedBox(width: 8),
+          StatTile(
+            value: '${conversations.length}',
+            label: 'chats',
+            color: const Color(0xFF6E73C8),
+            icon: Icons.chat_bubble_outline_rounded,
+          ),
+          if (moments != null) ...[
+            const SizedBox(width: 8),
+            StatTile(
+              value: '$kept',
+              label: 'moments',
+              color: kitCoral,
+              icon: Icons.bookmark_added_outlined,
+            ),
+          ],
+          if (phonePatterns != null) ...[
+            const SizedBox(width: 8),
+            StatTile(
+              value: '$days',
+              label: 'days',
+              color: const Color(0xFF4F9D76),
+              icon: Icons.phone_android_rounded,
+            ),
+          ],
+        ],
       ),
+      const KitLabel('LOOK AT OR DELETE'),
       _card([
         _Row(
           key: const ValueKey('kept-entries'),
           icon: Icons.edit_note_rounded,
+          color: kitAmber,
           title: 'Check-ins and journal',
           detail: entries == 0
               ? 'Nothing yet.'
-              : '$entries ${entries == 1 ? 'entry' : 'entries'}. Open the Journal tab, then an entry, to delete it.',
+              : '$entries ${entries == 1 ? 'entry' : 'entries'}. Delete one from the Journal tab.',
         ),
         _Row(
           key: const ValueKey('kept-chats'),
           icon: Icons.chat_bubble_outline_rounded,
+          color: const Color(0xFF6E73C8),
           title: 'Conversations with Sol',
           detail: conversations.isEmpty
               ? 'Nothing yet.'
               : '${conversations.length} '
                     '${conversations.length == 1 ? 'conversation' : 'conversations'}'
                     '${notes == 0 ? '' : ', $notes with a short note'}. '
-                    'Delete one from the conversation list.',
+                    'Delete one from the list.',
         ),
         if (moments != null)
           _Row(
             key: const ValueKey('kept-moments'),
             icon: Icons.bookmark_added_outlined,
+            color: kitCoral,
             title: 'Moments',
             detail: kept == 0 && waiting == 0
                 ? 'Nothing kept.'
@@ -148,6 +172,7 @@ class EverythingKeptPage extends StatelessWidget {
           _Row(
             key: const ValueKey('kept-phone'),
             icon: Icons.phone_android_rounded,
+            color: const Color(0xFF4F9D76),
             title: 'Phone patterns',
             detail: days == 0
                 ? 'Nothing stored.'
@@ -166,8 +191,8 @@ class EverythingKeptPage extends StatelessWidget {
       const Padding(
         padding: EdgeInsets.fromLTRB(4, 14, 4, 0),
         child: Text(
-          'Your choices, such as sleep hours and preferences, are kept too. '
-          'They are in the baseline and settings on this page.',
+          'Your choices, like sleep hours and preferences, are kept too. '
+          'Nothing leaves unless you switch it on in What Sol remembers.',
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
@@ -179,16 +204,12 @@ class EverythingKeptPage extends StatelessWidget {
     ];
   }
 
-  Widget _card(List<Widget> rows) => Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _line),
-    ),
+  Widget _card(List<Widget> rows) => KitCard(
+    padding: EdgeInsets.zero,
     child: Column(
       children: [
         for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) const Divider(height: 1, indent: 62, color: _line),
+          if (i > 0) const Divider(height: 1, indent: 70, color: _line),
           rows[i],
         ],
       ],
@@ -199,6 +220,7 @@ class EverythingKeptPage extends StatelessWidget {
 class _Row extends StatelessWidget {
   const _Row({
     required this.icon,
+    required this.color,
     required this.title,
     required this.detail,
     this.onTap,
@@ -206,6 +228,7 @@ class _Row extends StatelessWidget {
   });
 
   final IconData icon;
+  final Color color;
   final String title;
   final String detail;
   final VoidCallback? onTap;
@@ -214,21 +237,13 @@ class _Row extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(24),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3DC),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, size: 18, color: const Color(0xFFB57A12)),
-            ),
+            IconTile(icon: icon, color: color, size: 40),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -237,7 +252,7 @@ class _Row extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 14.5,
                       fontWeight: FontWeight.w800,
                       color: _ink,
                     ),
@@ -248,7 +263,7 @@ class _Row extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      height: 1.45,
+                      height: 1.4,
                       color: _soft,
                     ),
                   ),
@@ -257,7 +272,7 @@ class _Row extends StatelessWidget {
             ),
             if (onTap != null)
               const Padding(
-                padding: EdgeInsets.only(top: 6),
+                padding: EdgeInsets.only(top: 8),
                 child: Icon(Icons.chevron_right_rounded, color: _muted),
               ),
           ],

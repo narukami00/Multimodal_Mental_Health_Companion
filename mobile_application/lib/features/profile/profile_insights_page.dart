@@ -836,9 +836,8 @@ class _TryItState extends State<_TryIt> {
             ],
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               for (final type in ActivityType.values)
                 _KindDot(
@@ -1008,8 +1007,8 @@ class _KindDot extends StatelessWidget {
               : ''}',
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        width: 44,
-        height: 44,
+        width: 38,
+        height: 38,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: color.withValues(alpha: out ? 0.08 : 0.16),
@@ -1020,7 +1019,7 @@ class _KindDot extends StatelessWidget {
         ),
         child: Icon(
           _typeIcon(type),
-          size: 20,
+          size: 18,
           color: out ? kitMuted.withValues(alpha: 0.4) : kitAmber,
         ),
       ),

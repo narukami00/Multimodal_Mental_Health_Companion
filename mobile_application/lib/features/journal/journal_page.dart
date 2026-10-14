@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/widgets/visual_kit.dart';
 
 import '../../core/constants/moods.dart';
 
@@ -17,7 +18,6 @@ class JournalPage extends StatefulWidget {
   final SessionController sessionController;
 
   static const _ink = Color(0xFF3A3125);
-  static const _faint = Color(0xFFA68F68);
 
   @override
   State<JournalPage> createState() => _JournalPageState();
@@ -51,7 +51,6 @@ class _JournalPageState extends State<JournalPage> {
   SessionController get sessionController => widget.sessionController;
 
   static const _ink = JournalPage._ink;
-  static const _faint = JournalPage._faint;
 
   Future<void> _openFilter() async {
     final next = await showModalBottomSheet<JournalFilter>(
@@ -61,8 +60,11 @@ class _JournalPageState extends State<JournalPage> {
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: const Color(0xFFFFFDF6),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
-      builder: (_) => _FilterSheet(initial: _filter, sessions: sessionController.sessions),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (_) =>
+          _FilterSheet(initial: _filter, sessions: sessionController.sessions),
     );
     if (next != null && mounted) setState(() => _filter = next);
   }
@@ -96,22 +98,23 @@ class _JournalPageState extends State<JournalPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Journal',
-                                    style: TextStyle(
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.w800,
-                                      color: _ink,
-                                      height: 1.1,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 7),
-                                  const Text(
                                     'YOUR DAYS, GENTLY KEPT',
                                     style: TextStyle(
                                       fontSize: 11.5,
                                       fontWeight: FontWeight.w800,
-                                      letterSpacing: 1.5,
-                                      color: _faint,
+                                      letterSpacing: 1.2,
+                                      color: Color(0xFFD08018),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text(
+                                    'Journal',
+                                    style: TextStyle(
+                                      fontSize: 29,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.5,
+                                      color: _ink,
+                                      height: 1.1,
                                     ),
                                   ),
                                 ],
@@ -128,14 +131,18 @@ class _JournalPageState extends State<JournalPage> {
                                 child: const Icon(Icons.tune_rounded, size: 20),
                               ),
                               style: IconButton.styleFrom(
-                                minimumSize: const Size(42, 42),
-                                maximumSize: const Size(42, 42),
-                                backgroundColor: _filter.isActive ? const Color(0x55FFB534) : const Color(0x21FFB534),
-                                foregroundColor: const Color(0xFF8A7458),
-                                side: BorderSide(
-                                  color: const Color(0x66D6AA50),
+                                minimumSize: const Size(40, 40),
+                                maximumSize: const Size(40, 40),
+                                backgroundColor: _filter.isActive
+                                    ? const Color(0x55FFB534)
+                                    : const Color(0xB8FFFFFF),
+                                foregroundColor: const Color(0xFF6C5E50),
+                                side: const BorderSide(
+                                  color: Color(0x143B2F26),
                                 ),
-                                shape: const CircleBorder(),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                               ),
                             ),
                           ],
@@ -143,7 +150,9 @@ class _JournalPageState extends State<JournalPage> {
                       ),
                     ),
                     SliverToBoxAdapter(
-                      child: _UnreadEntriesBanner(sessionController: sessionController),
+                      child: _UnreadEntriesBanner(
+                        sessionController: sessionController,
+                      ),
                     ),
                     if (all.isEmpty)
                       const SliverFillRemaining(
@@ -153,7 +162,10 @@ class _JournalPageState extends State<JournalPage> {
                     else if (sessions.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
-                        child: _NothingMatches(onClear: () => setState(() => _filter = const JournalFilter())),
+                        child: _NothingMatches(
+                          onClear: () =>
+                              setState(() => _filter = const JournalFilter()),
+                        ),
                       )
                     else
                       SliverPadding(
@@ -193,7 +205,6 @@ class _JournalPageState extends State<JournalPage> {
       ),
     );
   }
-
 }
 
 class _NothingMatches extends StatelessWidget {
@@ -212,7 +223,11 @@ class _NothingMatches extends StatelessWidget {
           children: [
             const Text(
               'No entries match this filter.',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: JournalPage._ink),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: JournalPage._ink,
+              ),
             ),
             const SizedBox(height: 6),
             TextButton(
@@ -244,11 +259,12 @@ class _FilterSheetState extends State<_FilterSheet> {
   late Set<CaptureMode> _modes = {...widget.initial.modes};
 
   int _countMood(String word) => widget.sessions.where((s) {
-        final m = s.effectiveMood;
-        return (m == null ? JournalFilter.notRead : Moods.display(m)) == word;
-      }).length;
+    final m = s.effectiveMood;
+    return (m == null ? JournalFilter.notRead : Moods.display(m)) == word;
+  }).length;
 
-  int _countMode(CaptureMode mode) => widget.sessions.where((s) => s.mode == mode).length;
+  int _countMode(CaptureMode mode) =>
+      widget.sessions.where((s) => s.mode == mode).length;
 
   Widget _chip({
     required Key key,
@@ -263,18 +279,35 @@ class _FilterSheetState extends State<_FilterSheet> {
       selected: selected,
       showCheckmark: false,
       onSelected: (_) => onTap(),
-      avatar: dot == null ? null : Container(width: 10, height: 10, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+      avatar: dot == null
+          ? null
+          : Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+            ),
       label: Text('$label · $count'),
       backgroundColor: const Color(0xFFFFF8E8),
       selectedColor: const Color(0xFFFFE2B0),
-      side: BorderSide(color: selected ? const Color(0xFFD9A441) : const Color(0x66D6AA50)),
-      labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF3A3125)),
+      side: BorderSide(
+        color: selected ? const Color(0xFFD9A441) : const Color(0x66D6AA50),
+      ),
+      labelStyle: const TextStyle(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF3A3125),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    const heading = TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1, color: Color(0xFF9C8B72));
+    const heading = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 1.1,
+      color: Color(0xFF9C8B72),
+    );
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
@@ -285,11 +318,23 @@ class _FilterSheetState extends State<_FilterSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Filter your journal',
-                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF3A3125))),
+            const Text(
+              'Filter your journal',
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF3A3125),
+              ),
+            ),
             const SizedBox(height: 4),
-            const Text('Moods are how each entry read, not a label you chose.',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF8A7A61))),
+            const Text(
+              'Moods are how each entry read, not a label you chose.',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF8A7A61),
+              ),
+            ),
             const SizedBox(height: 16),
             const Text('HOW IT READ', style: heading),
             const SizedBox(height: 8),
@@ -297,14 +342,25 @@ class _FilterSheetState extends State<_FilterSheet> {
               spacing: 8,
               runSpacing: 6,
               children: [
-                for (final word in [...JournalFilter.moodWords, JournalFilter.notRead])
+                for (final word in [
+                  ...JournalFilter.moodWords,
+                  JournalFilter.notRead,
+                ])
                   _chip(
                     key: ValueKey('filter-mood-$word'),
                     label: word,
                     count: _countMood(word),
                     selected: _moods.contains(word),
-                    dot: word == JournalFilter.notRead ? null : moodColors[Moods.values.firstWhere((m) => Moods.display(m) == word)],
-                    onTap: () => setState(() => _moods.contains(word) ? _moods.remove(word) : _moods.add(word)),
+                    dot: word == JournalFilter.notRead
+                        ? null
+                        : moodColors[Moods.values.firstWhere(
+                            (m) => Moods.display(m) == word,
+                          )],
+                    onTap: () => setState(
+                      () => _moods.contains(word)
+                          ? _moods.remove(word)
+                          : _moods.add(word),
+                    ),
                   ),
               ],
             ),
@@ -325,7 +381,11 @@ class _FilterSheetState extends State<_FilterSheet> {
                     label: label,
                     count: _countMode(mode),
                     selected: _modes.contains(mode),
-                    onTap: () => setState(() => _modes.contains(mode) ? _modes.remove(mode) : _modes.add(mode)),
+                    onTap: () => setState(
+                      () => _modes.contains(mode)
+                          ? _modes.remove(mode)
+                          : _modes.add(mode),
+                    ),
                   ),
               ],
             ),
@@ -347,8 +407,13 @@ class _FilterSheetState extends State<_FilterSheet> {
                   width: 118,
                   child: FilledButton(
                     key: const ValueKey('filter-apply'),
-                    onPressed: () => Navigator.of(context).pop(JournalFilter(moods: _moods, modes: _modes)),
-                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD9A441), foregroundColor: const Color(0xFF3A3125)),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).pop(JournalFilter(moods: _moods, modes: _modes)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFD9A441),
+                      foregroundColor: const Color(0xFF3A3125),
+                    ),
                     child: const Text('Apply'),
                   ),
                 ),
@@ -703,7 +768,8 @@ class _StitchedEntry extends StatelessWidget {
     return (mood == null ? null : moodColors[mood]) ?? _calm;
   }
 
-  Color _moodInk(Color bead) => HSLColor.fromColor(bead).withLightness(0.30).toColor();
+  Color _moodInk(Color bead) =>
+      HSLColor.fromColor(bead).withLightness(0.30).toColor();
 
   IconData _modeIcon(CaptureMode mode) {
     return switch (mode) {
@@ -773,7 +839,6 @@ List<_SessionDayGroup> _groupSessions(List<SessionRecord> sessions) {
   ];
 }
 
-
 /// Offers to read earlier entries that have no emotion reading yet (made before readings existed, or
 /// without the server). Asks for the person's OK first, then reads them one by one and says how many.
 class _UnreadEntriesBanner extends StatefulWidget {
@@ -799,14 +864,18 @@ class _UnreadEntriesBannerState extends State<_UnreadEntriesBanner> {
     setState(() => _busy = false);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(read == total
-            ? 'Read $read earlier ${read == 1 ? 'entry' : 'entries'}.'
-            : read == 0
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            read == total
+                ? 'Read $read earlier ${read == 1 ? 'entry' : 'entries'}.'
+                : read == 0
                 ? "Couldn't read them: the companion server isn't reachable, or reading isn't switched on."
-                : 'Read $read of $total. The rest will need the server again.'),
-        behavior: SnackBarBehavior.floating,
-      ));
+                : 'Read $read of $total. The rest will need the server again.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override
@@ -816,31 +885,54 @@ class _UnreadEntriesBannerState extends State<_UnreadEntriesBanner> {
     return Container(
       key: const ValueKey('unread-banner'),
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF6E2),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFF6E4C8)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            '$count earlier ${count == 1 ? 'entry hasn\'t' : 'entries haven\'t'} been read yet',
-            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: Color(0xFF3A3125)),
+          const IconTile(
+            icon: Icons.auto_awesome_outlined,
+            color: kitAmber,
+            size: 38,
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Their words can be read for how they felt, so every entry has its own breakdown. Nothing about the entry changes.',
-            style: TextStyle(fontSize: 12.5, height: 1.4, fontWeight: FontWeight.w600, color: Color(0xFF8A7A61)),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              key: const ValueKey('read-earlier'),
-              onPressed: _busy ? null : _read,
-              child: Text(_busy ? 'Reading…' : 'Read them now'),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$count earlier ${count == 1 ? 'entry is' : 'entries are'} not read yet',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF3A3125),
+                  ),
+                ),
+                const Text(
+                  'Read them to see how each felt.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF8A7A61),
+                  ),
+                ),
+              ],
             ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonal(
+            key: const ValueKey('read-earlier'),
+            onPressed: _busy ? null : _read,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFFFE2A6),
+              foregroundColor: const Color(0xFF7A4E10),
+              minimumSize: const Size(0, 38),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+            ),
+            child: Text(_busy ? 'Reading…' : 'Read now'),
           ),
         ],
       ),
