@@ -54,6 +54,15 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w600,
         ),
       ),
+      switchTheme: SwitchThemeData(
+        thumbColor: const WidgetStatePropertyAll(Colors.white),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? const Color(0xFFFFB534)
+              : const Color(0xFFD9CFBE),
+        ),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
       cardTheme: CardThemeData(
         color: palette.surface.withValues(alpha: 0.82),
         elevation: 0,

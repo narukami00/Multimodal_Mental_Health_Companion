@@ -1509,7 +1509,6 @@ class _ChatPageState extends State<ChatPage> {
                       ),
                       Switch(
                         value: _ttsEnabled,
-                        activeColor: _coral,
                         onChanged: (val) async {
                           _ttsEnabled = val;
                           final prefs = await SharedPreferences.getInstance();

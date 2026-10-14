@@ -376,8 +376,6 @@ class WhatSolRemembersPage extends StatelessWidget {
         key: key,
         value: value,
         onChanged: onChanged,
-        activeTrackColor: kitAmber,
-        thumbColor: const WidgetStatePropertyAll(Colors.white),
       ),
     ],
   );

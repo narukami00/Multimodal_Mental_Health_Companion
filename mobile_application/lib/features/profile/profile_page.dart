@@ -2047,7 +2047,6 @@ class _SettingToggle extends StatelessWidget {
         ),
         Switch(
           value: value,
-          activeColor: const Color(0xFFFFB534),
           onChanged: onChanged,
         ),
       ],
@@ -2107,7 +2106,6 @@ class _ReminderSetting extends StatelessWidget {
               ),
               Switch(
                 value: enabled,
-                activeColor: const Color(0xFFFFB534),
                 onChanged: onToggle,
               ),
             ],
@@ -3210,7 +3208,6 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
           const SizedBox(width: 8),
           Switch(
             value: reminder.enabled,
-            activeColor: const Color(0xFFFFB534),
             onChanged: (_) => widget.controller.toggleEnabled(reminder.id),
           ),
           PopupMenuButton<String>(

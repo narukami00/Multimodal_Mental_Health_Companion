@@ -18,7 +18,6 @@ const _ink = kitInk;
 const _soft = Color(0xFF6C5E50);
 const _muted = kitMuted;
 const _line = kitLine;
-const _amber = kitAmber;
 const _night = Color(0xFF7C8DB8);
 const _categoryColors = [
   Color(0xFFFFB534),
@@ -780,8 +779,6 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
           key: switchKey,
           value: value,
           onChanged: onChanged,
-          activeTrackColor: _amber,
-          thumbColor: const WidgetStatePropertyAll(Colors.white),
         ),
       ],
     );

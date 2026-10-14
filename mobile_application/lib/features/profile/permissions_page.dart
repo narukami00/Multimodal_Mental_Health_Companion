@@ -202,8 +202,6 @@ class _ConsentCard extends StatelessWidget {
             trailing: Switch(
               key: ValueKey('agree-${key.key}'),
               value: consent.isGranted(key),
-              activeTrackColor: kitAmber,
-              thumbColor: const WidgetStatePropertyAll(Colors.white),
               onChanged: (v) => v ? consent.grant(key) : consent.revoke(key),
             ),
           );

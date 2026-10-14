@@ -561,7 +561,6 @@ class _ContactEditorSheetState extends State<_ContactEditorSheet> {
               ),
               Switch(
                 value: _ice,
-                activeColor: const Color(0xFFFFB534),
                 onChanged: (value) => setState(() => _ice = value),
               ),
             ],
