@@ -59,13 +59,11 @@ void main() {
     }
   });
 
-  testWidgets('shows what lifted them when there is something, above the sky', (tester) async {
+  testWidgets('shows what lifted them when there is something', (tester) async {
     await _pump(tester, TodayFooter(helped: [_kind(ActivityType.nature, 4, 3)], keptMoments: [_moment('A good walk.')], now: now));
     expect(find.byKey(const ValueKey('today-lifted')), findsOneWidget);
     expect(find.text('Time outside tends to lift you'), findsOneWidget);
     expect(find.byKey(const ValueKey('today-moment')), findsNothing);
-    expect(find.byKey(const ValueKey('today-sky')), findsOneWidget);
-    expect(find.text('Evening. You can slow down.'), findsOneWidget);
   });
 
   testWidgets('falls back to a kept moment, then to a breathing minute', (tester) async {
@@ -82,5 +80,16 @@ void main() {
     expect(tester.takeException(), isNull);
     await _pump(tester, TodayFooter(helped: const [], keptMoments: const [], now: now), scale: 2.0);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the sky is a backdrop with no card, and paints at every hour', (tester) async {
+    for (final hour in [2.0, 6.5, 11.0, 15.5, 18.5, 22.0]) {
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: Stack(children: [Positioned(left: 0, right: 0, bottom: 0, child: SkyBackdrop(hour: hour))]))),
+      );
+      expect(find.byKey(const ValueKey('today-sky')), findsOneWidget);
+      expect(find.byType(Card), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
   });
 }

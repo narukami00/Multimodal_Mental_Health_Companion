@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'today_footer.dart';
 
 import '../../core/theme/solace_palette.dart';
 import '../../domain/home/home_card_priority.dart';
@@ -150,7 +151,18 @@ class TodayPage extends StatelessWidget {
           stops: const [0.0, 0.45, 1.0],
         ),
       ),
-      child: SafeArea(
+      child: Stack(
+        children: [
+          // The sky is part of the page: anchored to the bottom of the screen,
+          // fading upward into the background, with the content scrolling over it.
+          if (footer != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SkyBackdrop(hour: now.hour + now.minute / 60),
+            ),
+          SafeArea(
         // No horizontal padding here: several sections below are deliberately
         // full-bleed, and a single padded column is what made the page read as
         // one stack of identical slabs.
@@ -216,15 +228,15 @@ class TodayPage extends StatelessWidget {
               ),
             if (patternPrompt != null)
               Padding(
-                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
                 child: patternPrompt!,
               ),
             if (momentPrompt != null)
               Padding(
-                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
                 child: momentPrompt!,
               ),
-            const SizedBox(height: 26),
+            SizedBox(height: footer == null ? 26 : 0),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Column(
@@ -245,6 +257,8 @@ class TodayPage extends StatelessWidget {
             const SizedBox(height: 30),
           ],
         ),
+      ),
+        ],
       ),
     );
   }

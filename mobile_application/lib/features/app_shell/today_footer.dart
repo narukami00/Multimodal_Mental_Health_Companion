@@ -19,8 +19,8 @@ bool get _quiet {
   }
 }
 
-/// What the Today page puts in the space below its cards: one quiet card, and
-/// a painted sky that follows the hour.
+/// What the Today page puts in the space below its cards: one quiet card. The
+/// painted sky behind the bottom of the page is [SkyBackdrop].
 ///
 /// The card is chosen by what is true for this person, never by a quota:
 /// what has lifted them (from their own before-and-after answers), otherwise a
@@ -82,14 +82,7 @@ class TodayFooter extends StatelessWidget {
     } else {
       card = const _BreatheCard();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        card,
-        const SizedBox(height: 14),
-        SkyScene(hour: now.hour + now.minute / 60),
-      ],
-    );
+    return card;
   }
 }
 
@@ -102,12 +95,12 @@ class _LiftedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return KitCard(
       key: const ValueKey('today-lifted'),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       child: Row(
         children: [
           SizedBox(
-            width: 64,
-            height: 64,
+            width: 54,
+            height: 54,
             child: ActivityArt(
               type: kind.type,
               circle: true,
@@ -340,42 +333,27 @@ class _BreatheCardState extends State<_BreatheCard>
   }
 }
 
-/// A small painted landscape whose sky follows the hour, with one line of
-/// caption. It carries no information and asks for nothing.
-class SkyScene extends StatelessWidget {
-  const SkyScene({required this.hour, super.key});
+/// The sky behind the bottom of the Today page: no card, no edge. It is anchored
+/// to the bottom of the screen and fades upward into the page background, so as
+/// the content scrolls over it, it reads as part of the page itself.
+class SkyBackdrop extends StatelessWidget {
+  const SkyBackdrop({required this.hour, this.height = 300, super.key});
 
   /// 0 to 24, with minutes as a fraction.
   final double hour;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     final (_, caption) = TodayFooter.periodFor(hour.floor());
-    return Semantics(
-      label: caption,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+    return IgnorePointer(
+      child: Semantics(
+        label: caption,
         child: SizedBox(
           key: const ValueKey('today-sky'),
-          height: 150,
-          child: Stack(
-            children: [
-              Positioned.fill(child: CustomPaint(painter: SkyPainter(hour))),
-              Positioned(
-                left: 18,
-                bottom: 14,
-                right: 18,
-                child: Text(
-                  caption,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: SkyPainter.inkFor(hour),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          width: double.infinity,
+          height: height,
+          child: CustomPaint(painter: SkyPainter(hour)),
         ),
       ),
     );
@@ -389,119 +367,84 @@ class SkyPainter extends CustomPainter {
 
   static bool _isNight(double h) => h < 5 || h >= 20;
 
-  static Color inkFor(double h) =>
-      _isNight(h) ? const Color(0xFFE9E4FF) : const Color(0xFF5E4423);
-
-  /// Top and bottom sky colours for the hour.
+  /// Top and bottom sky colours for the hour. Pastel, so the page stays light
+  /// even at night.
   static (Color, Color) skyFor(double h) {
-    if (h < 5) return (const Color(0xFF1F2350), const Color(0xFF4B4F9A));
-    if (h < 8) return (const Color(0xFFFFC9A8), const Color(0xFFFFEBC9));
-    if (h < 17) return (const Color(0xFFBFE3F5), const Color(0xFFFFF4D6));
-    if (h < 20) return (const Color(0xFFFFA874), const Color(0xFFFFDFA8));
-    return (const Color(0xFF1F2350), const Color(0xFF4B4F9A));
+    if (h < 5) return (const Color(0xFF8C90D6), const Color(0xFFB9A8E6));
+    if (h < 8) return (const Color(0xFFFFC9A8), const Color(0xFFFFE2B8));
+    if (h < 17) return (const Color(0xFFBFE3F5), const Color(0xFFFFF0C8));
+    if (h < 20) return (const Color(0xFFFFA874), const Color(0xFFFFD79A));
+    return (const Color(0xFF8C90D6), const Color(0xFFB9A8E6));
   }
 
   @override
   void paint(Canvas canvas, Size size) {
     final (top, bottom) = skyFor(hour);
+    // Transparent at the top, so it melts into whatever the page is.
     canvas.drawRect(
       Offset.zero & size,
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [top, bottom],
+          colors: [
+            top.withValues(alpha: 0),
+            top.withValues(alpha: 0.35),
+            bottom.withValues(alpha: 0.9),
+          ],
+          stops: const [0.0, 0.45, 1.0],
         ).createShader(Offset.zero & size),
     );
 
     final night = _isNight(hour);
-    // The sun crosses from left to right between 6 and 19; the moon between 19
-    // and 6. Both ride a shallow arc.
-    final span = night
-        ? ((hour >= 20 ? hour - 20 : hour + 4) / 10.0)
-        : ((hour - 5) / 15.0);
+    // The sun crosses from left to right between 5 and 20; the moon between 20
+    // and 5. Both ride a shallow arc in the lower half of the backdrop.
+    final span = night ? ((hour >= 20 ? hour - 20 : hour + 4) / 9.0) : ((hour - 5) / 15.0);
     final t = span.clamp(0.0, 1.0);
-    final cx = size.width * (0.12 + 0.76 * t);
-    final cy = size.height * (0.62 - 0.42 * math.sin(math.pi * t));
+    final cx = size.width * (0.14 + 0.72 * t);
+    final cy = size.height * (0.78 - 0.30 * math.sin(math.pi * t));
 
     if (night) {
-      final star = Paint()
-        ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.8);
+      final star = Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.75);
       final r = math.Random(7);
-      for (var i = 0; i < 18; i++) {
+      for (var i = 0; i < 16; i++) {
         canvas.drawCircle(
-          Offset(
-            r.nextDouble() * size.width,
-            r.nextDouble() * size.height * 0.55,
-          ),
-          0.6 + r.nextDouble() * 1.1,
+          Offset(r.nextDouble() * size.width, size.height * (0.35 + r.nextDouble() * 0.3)),
+          0.6 + r.nextDouble() * 1.0,
           star,
         );
       }
-      canvas.drawCircle(
-        Offset(cx, cy),
-        15,
-        Paint()..color = const Color(0xFFFFF3C9),
-      );
-      canvas.drawCircle(
-        Offset(cx + 6, cy - 3),
-        13,
-        Paint()..color = top.withValues(alpha: 0.95),
-      );
+      canvas.drawCircle(Offset(cx, cy), 26, Paint()..color = const Color(0xFFFFF3C9).withValues(alpha: 0.25));
+      canvas.drawCircle(Offset(cx, cy), 14, Paint()..color = const Color(0xFFFFF3C9));
+      canvas.drawCircle(Offset(cx + 5, cy - 3), 12, Paint()..color = top.withValues(alpha: 0.9));
     } else {
-      final sunColor = hour < 8 || hour >= 17
-          ? const Color(0xFFFFB066)
-          : const Color(0xFFFFD35C);
-      canvas.drawCircle(
-        Offset(cx, cy),
-        34,
-        Paint()..color = sunColor.withValues(alpha: 0.22),
-      );
-      canvas.drawCircle(Offset(cx, cy), 20, Paint()..color = sunColor);
+      final sunColor = hour < 8 || hour >= 17 ? const Color(0xFFFFB066) : const Color(0xFFFFD35C);
+      canvas.drawCircle(Offset(cx, cy), 46, Paint()..color = sunColor.withValues(alpha: 0.18));
+      canvas.drawCircle(Offset(cx, cy), 30, Paint()..color = sunColor.withValues(alpha: 0.28));
+      canvas.drawCircle(Offset(cx, cy), 18, Paint()..color = sunColor);
     }
 
-    // Two soft hills in front.
+    // Two soft hills along the bottom edge.
     final hill1 = Path()
-      ..moveTo(0, size.height * 0.78)
-      ..quadraticBezierTo(
-        size.width * 0.28,
-        size.height * 0.56,
-        size.width * 0.58,
-        size.height * 0.76,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.82,
-        size.height * 0.88,
-        size.width,
-        size.height * 0.7,
-      )
+      ..moveTo(0, size.height * 0.88)
+      ..quadraticBezierTo(size.width * 0.3, size.height * 0.74, size.width * 0.6, size.height * 0.87)
+      ..quadraticBezierTo(size.width * 0.84, size.height * 0.95, size.width, size.height * 0.83)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
     final hill2 = Path()
-      ..moveTo(0, size.height * 0.9)
-      ..quadraticBezierTo(
-        size.width * 0.4,
-        size.height * 0.7,
-        size.width,
-        size.height * 0.92,
-      )
+      ..moveTo(0, size.height * 0.95)
+      ..quadraticBezierTo(size.width * 0.4, size.height * 0.84, size.width, size.height * 0.96)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
     canvas.drawPath(
       hill1,
-      Paint()
-        ..color = night
-            ? const Color(0xFF3A3E86)
-            : const Color(0xFFE6B982).withValues(alpha: 0.7),
+      Paint()..color = night ? const Color(0xFF7A7ECB).withValues(alpha: 0.55) : const Color(0xFFE6B982).withValues(alpha: 0.45),
     );
     canvas.drawPath(
       hill2,
-      Paint()
-        ..color = night
-            ? const Color(0xFF2B2F6B)
-            : const Color(0xFFD99F66).withValues(alpha: 0.75),
+      Paint()..color = night ? const Color(0xFF6A6EBB).withValues(alpha: 0.6) : const Color(0xFFD99F66).withValues(alpha: 0.5),
     );
   }
 

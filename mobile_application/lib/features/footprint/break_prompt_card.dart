@@ -50,6 +50,7 @@ class BreakPromptCard extends StatelessWidget {
 
     return Container(
       key: const ValueKey('break-prompt'),
+      margin: const EdgeInsets.only(top: 14),
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),

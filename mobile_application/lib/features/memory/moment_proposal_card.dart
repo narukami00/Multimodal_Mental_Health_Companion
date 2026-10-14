@@ -65,6 +65,7 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
 
     return Container(
       key: const ValueKey('moment-consent'),
+      margin: const EdgeInsets.only(top: 14),
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -167,6 +168,7 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
 
         return Container(
           key: const ValueKey('moment-proposal'),
+          margin: const EdgeInsets.only(top: 14),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(26),
