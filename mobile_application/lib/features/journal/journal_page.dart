@@ -400,19 +400,19 @@ class _FilterSheetState extends State<_FilterSheet> {
                   }),
                   child: const Text('Reset'),
                 ),
-                const Spacer(),
-                // Bounded width: the theme's FilledButton is full-bleed
-                // (Size.fromHeight), which a Row cannot give it.
-                SizedBox(
-                  width: 118,
+                const SizedBox(width: 12),
+                Expanded(
                   child: FilledButton(
                     key: const ValueKey('filter-apply'),
                     onPressed: () => Navigator.of(
                       context,
                     ).pop(JournalFilter(moods: _moods, modes: _modes)),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFD9A441),
-                      foregroundColor: const Color(0xFF3A3125),
+                      backgroundColor: const Color(0xFFFFB534),
+                      foregroundColor: const Color(0xFF3D2E14),
+                      minimumSize: const Size.fromHeight(50),
+                      shape: const StadiumBorder(),
+                      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
                     ),
                     child: const Text('Apply'),
                   ),
