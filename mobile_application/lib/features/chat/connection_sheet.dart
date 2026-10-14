@@ -143,7 +143,10 @@ class _ConnectionSheetViewState extends State<ConnectionSheetView> {
 
   Widget _header() {
     final (label, color) = switch (widget.status) {
-      CompanionConnectionStatus.connected => ('Live · ${widget.latencyMs ?? 0} ms', const Color(0xFF4F9D76)),
+      CompanionConnectionStatus.connected => (
+        (widget.latencyMs ?? 0) > 0 ? 'Live · ${widget.latencyMs} ms' : 'Live',
+        const Color(0xFF4F9D76),
+      ),
       CompanionConnectionStatus.connecting => ('Connecting', const Color(0xFFD69E2E)),
       CompanionConnectionStatus.error => ("Can't reach it", const Color(0xFFD2603A)),
       _ => ('Offline', kitMuted),
