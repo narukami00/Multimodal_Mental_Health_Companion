@@ -72,32 +72,53 @@ class JournalBreakdownCard extends StatelessWidget {
                 children: [
                   Container(width: 9, height: 9, decoration: BoxDecoration(color: colorForWord(dominant), shape: BoxShape.circle)),
                   const SizedBox(width: 7),
-                  Text(
-                    'Mostly ${dominant.toLowerCase()}',
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: insightInk),
+                  Flexible(
+                    child: Text(
+                      'Mostly ${dominant.toLowerCase()}',
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: insightInk),
+                    ),
                   ),
                 ],
               ),
             ),
           ],
           const SizedBox(height: 16),
-          Row(
-            children: [
-              for (final mode in CaptureMode.values) ...[
-                if (mode != CaptureMode.values.first) const SizedBox(width: 8),
-                Expanded(
-                  child: _ModeTile(
+          // Three side by side, or stacked full width when the text is enlarged (they would be too narrow to read).
+          if (MediaQuery.textScalerOf(context).scale(10) > 11.5)
+            Column(
+              children: [
+                for (final mode in CaptureMode.values) ...[
+                  if (mode != CaptureMode.values.first) const SizedBox(height: 8),
+                  _ModeTile(
                     key: ValueKey('journal-mode-${mode.name}'),
                     icon: modeIcon(mode),
                     name: modeName(mode),
                     count: b.byMode[mode] ?? 0,
                     share: maxMode == 0 ? 0 : (b.byMode[mode] ?? 0) / maxMode,
                     lean: b.leanByMode[mode],
+                    wide: true,
                   ),
-                ),
+                ],
               ],
-            ],
-          ),
+            )
+          else
+            Row(
+              children: [
+                for (final mode in CaptureMode.values) ...[
+                  if (mode != CaptureMode.values.first) const SizedBox(width: 8),
+                  Expanded(
+                    child: _ModeTile(
+                      key: ValueKey('journal-mode-${mode.name}'),
+                      icon: modeIcon(mode),
+                      name: modeName(mode),
+                      count: b.byMode[mode] ?? 0,
+                      share: maxMode == 0 ? 0 : (b.byMode[mode] ?? 0) / maxMode,
+                      lean: b.leanByMode[mode],
+                    ),
+                  ),
+                ],
+              ],
+            ),
           const SizedBox(height: 18),
           const Text(
             'HOW THEY READ',
@@ -164,6 +185,7 @@ class _ModeTile extends StatelessWidget {
     required this.count,
     required this.share,
     required this.lean,
+    this.wide = false,
     super.key,
   });
 
@@ -172,6 +194,9 @@ class _ModeTile extends StatelessWidget {
   final int count;
   final double share;
   final String? lean;
+
+  /// Full-width layout for enlarged text: the name on the left, the count on the right.
+  final bool wide;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -184,11 +209,22 @@ class _ModeTile extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: insightMuted),
             const SizedBox(width: 6),
-            Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: insightSoft)),
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: insightSoft),
+              ),
+            ),
+            if (wide)
+              Text('$count', style: const TextStyle(fontSize: 22, height: 1.1, fontWeight: FontWeight.w800, color: insightInk)),
           ],
         ),
-        const SizedBox(height: 6),
-        Text('$count', style: const TextStyle(fontSize: 24, height: 1.1, fontWeight: FontWeight.w800, color: insightInk)),
+        if (!wide) ...[
+          const SizedBox(height: 6),
+          Text('$count', style: const TextStyle(fontSize: 24, height: 1.1, fontWeight: FontWeight.w800, color: insightInk)),
+        ],
         const SizedBox(height: 8),
         ClipRRect(
           borderRadius: BorderRadius.circular(99),
@@ -199,15 +235,16 @@ class _ModeTile extends StatelessWidget {
             color: const Color(0xFFD9A441),
           ),
         ),
+        // Three tiles side by side keep one fixed line for this, so their bars line up; stacked, it takes what it needs.
         SizedBox(
-          height: 18,
+          height: wide ? null : 18,
           child: lean == null
               ? null
               : Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     'reads ${lean!.toLowerCase()}',
-                    maxLines: 1,
+                    maxLines: wide ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: insightMuted),
                   ),
