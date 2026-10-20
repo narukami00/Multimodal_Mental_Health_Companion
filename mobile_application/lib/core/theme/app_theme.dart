@@ -34,6 +34,14 @@ abstract final class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: palette.background,
+      // Pages slide in solid. The default Android transition fades the new page in over the old one, so for a
+      // moment the page looks like a ghostly overlay before it appears, which read as lag on heavier pages.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       fontFamily: 'Nunito',
       extensions: [palette],
       textTheme: TextTheme(

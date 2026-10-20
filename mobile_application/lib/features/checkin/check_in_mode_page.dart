@@ -233,11 +233,12 @@ class _Enter extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 420 + index * 120),
+      // Quick, so the cards are there as the page settles instead of arriving after it.
+      duration: Duration(milliseconds: 240 + index * 50),
       curve: Curves.easeOutCubic,
       builder: (context, t, child) => Opacity(
-        opacity: t,
-        child: Transform.translate(offset: Offset(0, (1 - t) * 24), child: child),
+        opacity: 0.35 + 0.65 * t,
+        child: Transform.translate(offset: Offset(0, (1 - t) * 10), child: child),
       ),
       child: child,
     );

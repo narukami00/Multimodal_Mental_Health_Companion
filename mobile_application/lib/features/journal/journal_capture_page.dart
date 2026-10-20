@@ -1,5 +1,6 @@
 import '../camera/self_view.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -20,6 +21,7 @@ import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
+import 'journal_ui.dart';
 import 'session_detail_page.dart';
 
 enum _Phase { ready, recording, analysing, done, failed }
@@ -254,39 +256,42 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
     final title = _video ? 'Video journal' : 'Voice journal';
     return Scaffold(
       backgroundColor: const Color(0xFFFEFCE8),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      PageBackButton(key: const ValueKey('journal-back')),
-                      Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: _ink)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Just you. Nobody replies. It is written down and kept in your journal.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.4, color: _soft),
-                  ),
-                  Expanded(child: _body()),
-                  if (_message.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        _message,
-                        key: const ValueKey('journal-message'),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, height: 1.4, color: Color(0xFFB4522C)),
-                      ),
+      body: JournalBackdrop(
+        tint: _video ? JournalTint.video : JournalTint.voice,
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        PageBackButton(key: const ValueKey('journal-back')),
+                        Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: _ink)),
+                      ],
                     ),
-                  _controls(),
-                ],
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Just you. Nobody replies. It is written down and kept in your journal.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.4, color: _soft),
+                    ),
+                    Expanded(child: _body()),
+                    if (_message.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          _message,
+                          key: const ValueKey('journal-message'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, height: 1.4, color: Color(0xFFB4522C)),
+                        ),
+                      ),
+                    _controls(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -298,21 +303,41 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
   Widget _body() {
     switch (_phase) {
       case _Phase.ready:
-        return Center(child: _stage(idle: true));
-      case _Phase.recording:
         return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _stage(idle: false),
-              const SizedBox(height: 18),
-              Text(_clockLabel, key: const ValueKey('journal-clock'), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: _ink)),
-              const SizedBox(height: 6),
-              Text(
-                _video && _faceAllowed && _faceUsable == false ? "Can't see your face clearly" : 'Listening. Take your time.',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _soft),
-              ),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _stage(idle: true),
+                const SizedBox(height: 22),
+                const TalkPromptLine(),
+              ],
+            ),
+          ),
+        );
+      case _Phase.recording:
+        final trouble = _video && _faceAllowed && _faceUsable == false;
+        final line = encouragement(seconds: _seconds, faceTrouble: trouble);
+        return Center(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _stage(idle: false),
+                const SizedBox(height: 14),
+                Text(_clockLabel, key: const ValueKey('journal-clock'), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: _ink)),
+                const SizedBox(height: 8),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 500),
+                  child: Text(
+                    line,
+                    key: ValueKey(line),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, height: 1.4, fontWeight: FontWeight.w700, color: trouble ? const Color(0xFFB4522C) : _soft),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       case _Phase.analysing:
@@ -320,8 +345,8 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: _warm),
-              SizedBox(height: 18),
+              SoftDots(),
+              SizedBox(height: 22),
               Text('Writing it down…', key: ValueKey('journal-analysing'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _ink)),
             ],
           ),
@@ -329,22 +354,33 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
       case _Phase.done:
         return SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.only(top: 18),
+            padding: const EdgeInsets.only(top: 22),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Icon(_video ? Icons.videocam_outlined : Icons.graphic_eq_rounded, size: 18, color: _warm),
-                    const SizedBox(width: 8),
-                    const Text('Saved to your journal', key: ValueKey('journal-saved'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _ink)),
-                  ],
+                const Center(child: SettleCheck()),
+                const SizedBox(height: 14),
+                const Center(
+                  child: Text('Saved to your journal', key: ValueKey('journal-saved'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _ink)),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
+                const Center(
+                  child: Text(
+                    'That was a moment for yourself. Thank you for showing up.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13.5, height: 1.4, fontWeight: FontWeight.w600, color: _soft),
+                  ),
+                ),
+                const SizedBox(height: 18),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFF2ECDD))),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: const Color(0xFFF2ECDD)),
+                    boxShadow: const [BoxShadow(color: Color(0x14B0782A), blurRadius: 18, spreadRadius: -8, offset: Offset(0, 8))],
+                  ),
                   child: Text(_transcript, key: const ValueKey('journal-transcript'), style: const TextStyle(fontSize: 15, height: 1.5, fontWeight: FontWeight.w600, color: _ink)),
                 ),
               ],
@@ -356,38 +392,54 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
     }
   }
 
-  /// The orb (voice) or the live self view (video).
+  /// The warm voice orb, or the live self view in a soft frame with a guide for the face.
   Widget _stage({required bool idle}) {
-    if (_video) {
-      return Container(
-        width: 210,
-        height: 280,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFE0B2), Color(0xFFFFC79B)]),
-          border: Border.all(color: Colors.white, width: 2),
-        ),
-        child: SelfView(
-          source: _frames,
-          active: _phase == _Phase.recording,
-          fallbackFrame: _preview,
-          fallbackKey: const ValueKey('journal-preview'),
-          placeholder: const Center(child: Icon(Icons.videocam_outlined, size: 44, color: Color(0xFFB57A12))),
-        ),
-      );
-    }
-    final size = 120 + 60 * _level;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      width: size,
-      height: size,
+    if (!_video) return VoiceOrb(recording: !idle, level: _level);
+
+    final trouble = !idle && _faceAllowed && _faceUsable == false;
+    final ring = trouble ? const Color(0xFFE5896A) : Colors.white;
+    return Container(
+      width: 236,
+      height: 312,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [idle ? const Color(0xFFFFD98A) : const Color(0xFFFF9A6A), const Color(0xFFFFB534)]),
-        boxShadow: const [BoxShadow(color: Color(0x55FFB534), blurRadius: 36)],
+        borderRadius: BorderRadius.circular(34),
+        boxShadow: [BoxShadow(color: (trouble ? const Color(0xFFE5896A) : _warm).withValues(alpha: idle ? 0.28 : 0.4), blurRadius: 38, spreadRadius: 2)],
       ),
-      child: const Icon(Icons.mic_rounded, size: 44, color: Colors.white),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(34),
+            child: Container(
+              decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFE0B2), Color(0xFFFFC79B)])),
+              child: SelfView(
+                source: _frames,
+                active: _phase == _Phase.recording,
+                fallbackFrame: _preview,
+                fallbackKey: const ValueKey('journal-preview'),
+                placeholder: const Center(child: Icon(Icons.videocam_outlined, size: 44, color: Color(0xFFB57A12))),
+              ),
+            ),
+          ),
+          IgnorePointer(child: CustomPaint(painter: _FaceGuidePainter(color: ring.withValues(alpha: idle ? 0.85 : 0.5), dashed: idle || trouble))),
+          IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(34), border: Border.all(color: ring, width: 2.5)),
+            ),
+          ),
+          if (idle)
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 16,
+              child: Text(
+                'Centre your face in the oval',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Colors.white, shadows: [Shadow(color: Color(0x66000000), blurRadius: 6)]),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -429,21 +481,60 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
   }
 
   Widget _primary(String label, IconData icon, VoidCallback onTap, Key key) {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: ElevatedButton.icon(
-        key: key,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _warm,
-          foregroundColor: const Color(0xFF3D2E14),
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [_warm, Color(0xFFFF8F5A)]),
+        borderRadius: BorderRadius.circular(27),
+        boxShadow: const [BoxShadow(color: Color(0x40FF8F5A), blurRadius: 16, offset: Offset(0, 6))],
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 54,
+        child: ElevatedButton.icon(
+          key: key,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
+          ),
+          onPressed: onTap,
+          icon: Icon(icon, size: 20),
+          label: Text(label, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
         ),
-        onPressed: onTap,
-        icon: Icon(icon, size: 20),
-        label: Text(label, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
       ),
     );
   }
+}
+
+/// A soft oval to line a face up with, dashed while getting ready.
+class _FaceGuidePainter extends CustomPainter {
+  _FaceGuidePainter({required this.color, required this.dashed});
+
+  final Color color;
+  final bool dashed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromCenter(center: Offset(size.width / 2, size.height * 0.45), width: size.width * 0.6, height: size.height * 0.58);
+    final path = Path()..addOval(rect);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+    if (!dashed) {
+      canvas.drawPath(path, paint);
+      return;
+    }
+    for (final metric in path.computeMetrics()) {
+      for (double d = 0; d < metric.length; d += 15) {
+        canvas.drawPath(metric.extractPath(d, math.min(d + 8, metric.length)), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FaceGuidePainter old) => old.color != color || old.dashed != dashed;
 }

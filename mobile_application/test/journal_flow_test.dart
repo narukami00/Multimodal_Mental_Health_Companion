@@ -171,6 +171,18 @@ void main() {
       await tester.pump();
     }
 
+    testWidgets('before starting it offers something to talk about, not a blank screen', (tester) async {
+      await pump(tester);
+
+      expect(find.text('YOU COULD START WITH'), findsOneWidget);
+    });
+
+    testWidgets('the video page guides the face into the frame', (tester) async {
+      await pump(tester, mode: CaptureMode.video);
+
+      expect(find.text('Centre your face in the oval'), findsOneWidget);
+    });
+
     testWidgets('records, writes it down, saves it as a voice entry with its own reading, and nobody replies', (tester) async {
       await pump(tester);
       expect(find.text('Voice journal'), findsOneWidget);
