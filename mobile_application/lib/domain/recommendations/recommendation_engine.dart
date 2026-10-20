@@ -331,8 +331,18 @@ class RecommendationEngine {
         .toList(growable: false);
     // If the only starter options are the type just shown, show the type again
     // rather than going silent.
+    final pool = varied.isEmpty ? starterCandidates : varied;
+
+    // A tour should wander: take the kind the person has seen least, then the
+    // least-seen idea of that kind. With a big library, ties alone would keep
+    // landing on the same few kinds.
+    int typeExposure(ActivityType type) => records
+        .where((record) => typeOf[record.activityId] == type)
+        .where((record) => !(record.status == SuggestionStatus.skipped && record.skipReason == SuggestionSkipReason.notNow))
+        .length;
+    final fewest = pool.map((a) => typeExposure(a.type)).reduce((a, b) => a < b ? a : b);
     return _leastExposed(
-      varied.isEmpty ? starterCandidates : varied,
+      pool.where((a) => typeExposure(a.type) == fewest).toList(growable: false),
       records,
     );
   }

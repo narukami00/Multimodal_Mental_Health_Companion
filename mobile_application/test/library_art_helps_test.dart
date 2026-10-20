@@ -119,13 +119,15 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       await tester.pumpWidget(const MaterialApp(home: ActivityLibraryPage()));
+      // The page loads the library from the asset bundle in real time; the spinner ticks until it has.
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
       await tester.pumpAndSettle();
     }
 
     testWidgets('lists the ideas by name, filters by kind, and opens one to show its scene and details', (tester) async {
       await pump(tester);
       expect(find.byKey(const ValueKey('library-summary')), findsOneWidget);
-      expect(find.text('40'), findsOneWidget); // the whole reviewed catalogue
+      expect(find.text('152'), findsOneWidget); // the whole reviewed catalogue
 
       await tester.tap(find.byKey(const ValueKey('kind-Move')));
       await tester.pumpAndSettle();
@@ -135,7 +137,7 @@ void main() {
         return k.value.startsWith('idea-') && k.value != 'idea-art' && k.value != 'idea-details' && k.value != 'idea-untried';
       });
       expect(tiles, findsWidgets);
-      expect(tiles.evaluate().length, lessThan(40));
+      expect(tiles.evaluate().length, lessThan(152));
 
       await tester.tap(tiles.first);
       await tester.pumpAndSettle();
