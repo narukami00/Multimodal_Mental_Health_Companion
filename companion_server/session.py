@@ -45,6 +45,7 @@ from moment_extraction import clean_context
 from stt_service import VAD_WINDOW, SttService, StreamingVad
 from text_chunker import TextChunker
 from tts_engine import BaseTtsEngine
+from tts_text import normalize_for_speech
 from turn_detector import TurnDetector
 
 logger = logging.getLogger("solace_companion.session")
@@ -82,7 +83,11 @@ def _logged(text: str) -> str:
     """What may appear in a log line for a piece of user text: its size, unless text logging was switched on for development."""
     return f'"{text}"' if LOG_TEXT else f"<{len(text.split())} words>"
 TTS_FRAME_MS = 100
-INTER_CLAUSE_PAUSE_MS = 80
+INTER_CLAUSE_PAUSE_MS = 80  # for a clause that does not end in punctuation
+# The breath after a clause depends on how it ended, as in the voice sample the user chose: short at a comma, longer at a full stop.
+CLAUSE_PAUSE_MS = {",": 160, ";": 220, ":": 200, ".": 360, "!": 360, "?": 400}
+DEFAULT_VOICE_ID = "af_bella"  # Kokoro's Bella, chosen by ear from the samples
+DEFAULT_VOICE_SPEED = 1.0
 TTS_PREFETCH = 2               # clauses synthesised ahead of the one being sent
 CLIENT_PLAYBACK_LAG_MS = 250   # arrival at the phone -> sound from the speaker
 VOICE_MAX_TOKENS = 80
@@ -260,8 +265,8 @@ class Session:
         self.config: Dict[str, Any] = {
             "mode": "chat_voice_playback",
             "tts_enabled": True,
-            "voice_id": "af_heart",
-            "speed": 0.96,
+            "voice_id": DEFAULT_VOICE_ID,
+            "speed": DEFAULT_VOICE_SPEED,
             "mic_sample_rate": 16000,
             "playback_sample_rate": tts.default_sample_rate,
             "codec": "pcm_s16le",
@@ -1325,8 +1330,8 @@ class Session:
             (cfg.get("tts_enabled", True) or call_mode or reply.voice_turn)
             and engine is not None and engine.is_ready
         )
-        voice_id = cfg.get("voice_id", "af_heart")
-        speed = float(cfg.get("speed", 0.96))
+        voice_id = cfg.get("voice_id", DEFAULT_VOICE_ID)
+        speed = float(cfg.get("speed", DEFAULT_VOICE_SPEED))
         sample_rate = engine.default_sample_rate if engine else 24000
         if synthesize:
             reply.audio_stream_id = self._next_stream_id()
@@ -1453,7 +1458,8 @@ class Session:
 
         def synth(text: str) -> "asyncio.Future[Any]":
             return asyncio.ensure_future(
-                asyncio.to_thread(engine.synthesize, text=text, voice_id=voice_id, speed=speed)
+                # Numbers, taka and lakh, times and short forms are spelled out first; the text sent to the app is untouched.
+                asyncio.to_thread(engine.synthesize, text=normalize_for_speech(text), voice_id=voice_id, speed=speed)
             )
 
         try:
@@ -1525,12 +1531,13 @@ class Session:
                 seg_idx += 1
 
                 # A short breath between clauses, part of the playback timeline.
-                pause_bytes = int(sample_rate * 2 * INTER_CLAUSE_PAUSE_MS / 1000) // 2 * 2
+                pause_ms = CLAUSE_PAUSE_MS.get(text.rstrip()[-1:], INTER_CLAUSE_PAUSE_MS)
+                pause_bytes = int(sample_rate * 2 * pause_ms / 1000) // 2 * 2
                 await self._send_bytes(FRAME_HEADER.pack(stream_id, seq) + bytes(pause_bytes))
                 seq += 1
-                timeline_ms += INTER_CLAUSE_PAUSE_MS
+                timeline_ms += pause_ms
                 reply.sent_ms = timeline_ms
-                reply.audible_until += INTER_CLAUSE_PAUSE_MS / 1000.0
+                reply.audible_until += pause_ms / 1000.0
 
             if not reply.tts_cancel.is_set():
                 reply.tts_end_sent = True

@@ -95,6 +95,8 @@ echo  [4/4] Companion server on port 8000 (first start loads the models, about 3
 echo        health: http://127.0.0.1:8000/healthz     Tailscale: ws://100.88.46.59:8000/ws/v1/session
 echo.
 title Solace companion server
+rem The voice (Kokoro, 350 MB) lives off the synced project folder; without it the server falls back to the small Piper voice.
+if exist "F:\__Downloads\envs\tts_models\kokoro-multi-lang-v1_0\model.onnx" set SOLACE_KOKORO_DIR=F:\__Downloads\envs\tts_models\kokoro-multi-lang-v1_0
 cd /d "%ROOT%companion_server"
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 echo.

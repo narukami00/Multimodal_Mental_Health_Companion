@@ -51,7 +51,7 @@ def synth_by_clause(engine, text: str, voice: Optional[str], speed: float, rate:
     return np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
 
 
-def build_engine(kind: str, models_dir: Path):
+def build_engine(kind: str, models_dir: Path, kokoro_dir: Path):
     from tts_engine import SherpaOnnxTtsEngine
 
     if kind == "piper":
@@ -60,10 +60,9 @@ def build_engine(kind: str, models_dir: Path):
             data_dir=models_dir / "espeak-ng-data", is_kokoro=False,
         )
     else:
-        kdir = models_dir / "kokoro-multi-lang-v1_0"
         engine = SherpaOnnxTtsEngine(
-            model_path=kdir / "model.onnx", tokens_path=kdir / "tokens.txt", voices_path=kdir / "voices.bin",
-            data_dir=kdir / "espeak-ng-data", is_kokoro=True,
+            model_path=kokoro_dir / "model.onnx", tokens_path=kokoro_dir / "tokens.txt", voices_path=kokoro_dir / "voices.bin",
+            data_dir=kokoro_dir / "espeak-ng-data", lexicon_path=kokoro_dir / "lexicon-us-en.txt", is_kokoro=True,
         )
     if not engine.initialize():
         raise SystemExit(f"Could not load the {kind} engine from {models_dir}")
@@ -75,10 +74,15 @@ def main() -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--engine", default="piper", choices=["piper", "kokoro", "both"])
     parser.add_argument("--models-dir", default=str(Path(__file__).resolve().parent / "models" / "tts"))
-    parser.add_argument("--voices", default="af_heart,af_bella,af_sarah,am_michael")
+    parser.add_argument("--kokoro-dir", default="F:/__Downloads/envs/tts_models/kokoro-multi-lang-v1_0")
+    parser.add_argument("--voices", default="af_heart,af_bella,af_sarah,af_nicole,af_sky,am_michael,am_adam")
     parser.add_argument("--speeds", default="1.0,0.92")
+    parser.add_argument("--styles", default="whole,clauses")
+    parser.add_argument("--rebuild", action="store_true", help="only rebuild index.html from clips already made")
     args = parser.parse_args()
 
+    if args.rebuild:
+        return rebuild(Path(args.out))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     models = Path(args.models_dir)
@@ -88,12 +92,12 @@ def main() -> int:
 
     groups: Dict[str, List[tuple]] = {}
     for kind in kinds:
-        engine = build_engine(kind, models)
+        engine = build_engine(kind, models, Path(args.kokoro_dir))
         rate = engine.default_sample_rate
         voice_list = voices if kind == "kokoro" else [None]
         for voice in voice_list:
             for speed in speeds:
-                for style in ("whole", "clauses"):
+                for style in args.styles.split(","):
                     label = f"{kind}{'-' + voice if voice else ''} | speed {speed} | {style}"
                     folder = out / label.replace(" | ", "_").replace(" ", "")
                     folder.mkdir(exist_ok=True)
@@ -105,18 +109,65 @@ def main() -> int:
                         groups.setdefault(f"{label}  ({rate} Hz)", []).append((key, text, path.relative_to(out).as_posix()))
         print(f"{kind}: done ({rate} Hz)")
 
+    write_index(out, groups)
+    print(f"{sum(len(c) for c in groups.values())} clips in {out}\nOpen {out / 'index.html'}")
+    return 0
+
+
+def audio_data_uri(wav_path: Path) -> str:
+    """The clip as a data: URI, so the page plays anywhere, even as a snapshot that cannot reach the files beside it.
+    Compressed to MP3 when ffmpeg is available (about a tenth of the size), otherwise embedded as the WAV."""
+    import base64
+    import shutil
+    import subprocess
+    import tempfile
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        with tempfile.TemporaryDirectory() as tmp:
+            mp3 = Path(tmp) / "clip.mp3"
+            done = subprocess.run([ffmpeg, "-loglevel", "error", "-y", "-i", str(wav_path), "-codec:a", "libmp3lame", "-b:a", "96k", str(mp3)])
+            if done.returncode == 0 and mp3.exists():
+                return "data:audio/mpeg;base64," + base64.b64encode(mp3.read_bytes()).decode()
+    return "data:audio/wav;base64," + base64.b64encode(wav_path.read_bytes()).decode()
+
+
+def clip_seconds(wav_path: Path) -> float:
+    with wave.open(str(wav_path)) as w:
+        return w.getnframes() / w.getframerate()
+
+
+def write_index(out: Path, groups: Dict[str, List[tuple]]) -> None:
     rows = []
     for label, clips in groups.items():
         rows.append(f"<h3>{html.escape(label)}</h3>")
         for key, text, rel in clips:
-            rows.append(f"<p><b>{html.escape(key)}</b>: {html.escape(text)}<br><audio controls preload='none' src='{html.escape(rel)}'></audio></p>")
+            wav = out / rel
+            rows.append(
+                f"<p><b>{html.escape(key)}</b> <small>({clip_seconds(wav):.1f} s)</small>: {html.escape(text)}<br>"
+                f"<audio controls preload='metadata' src='{audio_data_uri(wav)}'></audio></p>"
+            )
     (out / "index.html").write_text(
         "<!doctype html><meta charset='utf-8'><title>Sol voice samples</title>"
-        "<style>body{font-family:system-ui;max-width:760px;margin:24px auto;padding:0 16px;line-height:1.4}audio{width:100%}</style>"
+        "<style>body{font-family:system-ui;max-width:760px;margin:24px auto;padding:0 16px;line-height:1.4}audio{width:100%}h3{margin-top:28px}</style>"
         "<h1>Sol voice samples</h1><p>Listen on the same speakers you will use. Note the setting that sounds best.</p>" + "".join(rows),
         encoding="utf-8",
     )
-    print(f"{sum(len(c) for c in groups.values())} clips in {out}\nOpen {out / 'index.html'}")
+
+
+def rebuild(out: Path) -> int:
+    """Rebuilds index.html from clips already made (no synthesis), for when only the page needs to change."""
+    groups: Dict[str, List[tuple]] = {}
+    texts = dict(SENTENCES)
+    for folder in sorted(p for p in out.iterdir() if p.is_dir()):
+        rate = wave.open(str(next(folder.glob("*.wav")))).getframerate()
+        label = folder.name.replace("_", " | ", 1).replace("_", " | ")
+        for key, _ in SENTENCES:
+            wav = folder / f"{key}.wav"
+            if wav.exists():
+                groups.setdefault(f"{label}  ({rate} Hz)", []).append((key, texts[key], wav.relative_to(out).as_posix()))
+    write_index(out, groups)
+    print(f"rebuilt {out / 'index.html'} from {sum(len(c) for c in groups.values())} clips")
     return 0
 
 

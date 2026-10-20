@@ -37,6 +37,9 @@ _ABBREVIATIONS = {
     "vs", "etc", "eg", "ie", "approx", "dept", "est",
 }
 
+# A reply's first clause may end at a comma once it has this many characters (about two seconds of speech).
+FIRST_COMMA_MIN_CHARS = 20
+
 # Strong sentence boundaries: . ! ? … \n
 _STRONG_ENDINGS = {".", "!", "?", "…", "\n"}
 # Weak clause boundaries: , ; : — -
@@ -195,8 +198,10 @@ class TextChunker:
                 self._buffer = text[end_idx:].lstrip()
                 return chunk
 
-            # 2. Weak punctuation (comma, semicolon, dash): only if buffer >= comma_min_chars
-            if char in _WEAK_ENDINGS and idx >= self.comma_min_chars:
+            # 2. Weak punctuation (comma, semicolon, dash): only if buffer >= comma_min_chars. The FIRST chunk of a reply
+            # may split at an early comma, so a long opening sentence does not make the person wait for all of it to be spoken.
+            comma_min = FIRST_COMMA_MIN_CHARS if self._is_first_chunk else self.comma_min_chars
+            if char in _WEAK_ENDINGS and idx >= comma_min:
                 # Don't split inside a word like hyphenated-word if followed immediately by letter
                 if char == "-" and idx + 1 < n and text[idx + 1].isalpha():
                     continue

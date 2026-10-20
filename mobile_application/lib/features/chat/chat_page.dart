@@ -205,7 +205,7 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription<Map<String, String>>? _ttsAudioReadySub;
 
   bool _ttsEnabled = true;
-  String _selectedVoiceId = 'af_heart';
+  String _selectedVoiceId = 'af_bella';
   double _ttsSpeed = 0.96;
 
   CompanionConnectionStatus _wsStatus = CompanionConnectionStatus.disconnected;
@@ -676,7 +676,7 @@ class _ChatPageState extends State<ChatPage> {
       final savedPort = prefs.getInt(CompanionServerConfig.prefKeyPort);
       _ttsEnabled = prefs.getBool('companion_tts_enabled') ?? true;
       _selectedVoiceId =
-          prefs.getString('companion_tts_voice_id') ?? 'af_heart';
+          prefs.getString('companion_tts_voice_id') ?? 'af_bella';
       _ttsSpeed = prefs.getDouble('companion_tts_speed') ?? 0.96;
 
       // Auto-migrate from old local Wi-Fi / localhost IPs to Tailscale

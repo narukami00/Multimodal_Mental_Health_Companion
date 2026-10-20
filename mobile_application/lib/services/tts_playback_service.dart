@@ -124,7 +124,7 @@ class TtsPlaybackService {
     _activeUtteranceId = data['utterance_id'] as String?;
     _activeStreamId = data['audio_stream_id'] as int?;
     _activeSampleRate = data['sample_rate'] as int? ?? 24000;
-    _activeVoiceId = data['voice_id'] as String? ?? 'af_heart';
+    _activeVoiceId = data['voice_id'] as String? ?? 'af_bella';
 
     _currentSegmentPcm.clear();
     _fullUtterancePcm.clear();

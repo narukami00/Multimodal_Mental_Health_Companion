@@ -679,7 +679,7 @@ class CompanionWebSocketService {
   Future<void> sendSessionConfigure({
     required String mode,
     bool ttsEnabled = true,
-    String voiceId = 'af_heart',
+    String voiceId = 'af_bella',
     double speed = 0.96,
     int micSampleRate = 16000,
     int playbackSampleRate = 24000,
@@ -733,7 +733,7 @@ class CompanionWebSocketService {
     required String? sessionId,
     required String mode,
     bool ttsEnabled = true,
-    String voiceId = 'af_heart',
+    String voiceId = 'af_bella',
     double speed = 0.96,
     int micSampleRate = 16000,
     int playbackSampleRate = 24000,
