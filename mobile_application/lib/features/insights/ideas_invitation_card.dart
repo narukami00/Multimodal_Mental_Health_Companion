@@ -175,7 +175,7 @@ class _IdeasInvitationCardState extends State<IdeasInvitationCard> with SingleTi
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: soft),
                     ),
                   ],
-                  const SizedBox(height: 120),
+                  const SizedBox(height: 104),
                   if (doing)
                     Row(
                       children: [
@@ -285,78 +285,201 @@ class _ScenePainter extends CustomPainter {
     DayPart.night: Color(0xFFFFF3D6),
   };
 
+  static const _cloud = {
+    DayPart.dawn: Color(0xFFFFE9DA),
+    DayPart.day: Color(0xFFFFFFFF),
+    DayPart.dusk: Color(0xFFFFDCD2),
+    DayPart.night: Color(0xFFB9B2E0),
+  };
+
   /// Lighter and flatter when gentle, so the scene never competes with a hard day.
   Color _soften(Color c) => scene.gentle ? Color.lerp(c, const Color(0xFFF7EFE6), 0.28)! : c;
+
+  static double _sin(double x) => math.sin(x * 2 * math.pi);
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    final (top, bottom) = _sky[scene.part]!;
+    final part = scene.part;
+    final night = part == DayPart.night;
+    final (top, bottom) = _sky[part]!;
     final rect = Offset.zero & size;
+    final drift = t * scene.pace;
+    final gentle = scene.gentle;
+
+    // Sky.
     canvas.drawRect(
       rect,
       Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [_soften(top), _soften(bottom)]).createShader(rect),
     );
 
-    final night = scene.part == DayPart.night;
-    final speed = scene.pace;
-    final drift = t * speed;
-
-    // Stars, a few, twinkling.
+    // Stars, twinkling, and now and then a shooting star.
     if (night) {
       final r = math.Random(7);
-      for (var i = 0; i < 22; i++) {
-        final x = r.nextDouble() * w, y = r.nextDouble() * h * 0.55;
-        final tw = 0.35 + 0.65 * (0.5 + 0.5 * math.sin((drift * 2 + i * 0.37) * 2 * math.pi));
+      for (var i = 0; i < 26; i++) {
+        final x = r.nextDouble() * w, y = r.nextDouble() * h * 0.5;
+        final tw = 0.35 + 0.65 * (0.5 + 0.5 * _sin(drift * 2 + i * 0.37));
         canvas.drawCircle(Offset(x, y), 0.8 + r.nextDouble() * 1.1, Paint()..color = Colors.white.withValues(alpha: 0.55 * tw));
+      }
+      final shoot = (t - 0.3) / 0.08;
+      if (shoot > 0 && shoot < 1) {
+        final head = Offset(w * (0.12 + 0.4 * shoot), h * (0.08 + 0.22 * shoot));
+        final tail = Offset(head.dx - 46, head.dy - 20);
+        canvas.drawLine(
+          tail,
+          head,
+          Paint()
+            ..shader = LinearGradient(colors: [Colors.white.withValues(alpha: 0), Colors.white.withValues(alpha: 0.9 * (1 - shoot))]).createShader(Rect.fromPoints(tail, head))
+            ..strokeWidth = 1.6
+            ..strokeCap = StrokeCap.round,
+        );
       }
     }
 
-    // The sun or moon crosses the sky with the hour.
+    // The sun or moon crosses the sky with the hour, with a halo and slow rays.
     final hour = scene.hour;
     final p = night ? (((hour >= 20 ? hour - 20 : hour + 4) / 10).clamp(0.0, 1.0)) : (((hour - 5) / 15).clamp(0.0, 1.0));
-    final c = Offset(w * (0.12 + 0.76 * p), h * (0.62 - 0.38 * math.sin(math.pi * p)));
-    final bodyColor = _body[scene.part]!;
-    final breathe = 1 + 0.04 * math.sin(drift * 2 * math.pi);
+    final c = Offset(w * (0.12 + 0.76 * p), h * (0.56 - 0.34 * math.sin(math.pi * p)));
+    final bodyColor = _body[part]!;
+    final breathe = 1 + 0.04 * _sin(drift);
     canvas.drawCircle(
       c,
-      70 * breathe,
-      Paint()..shader = RadialGradient(colors: [bodyColor.withValues(alpha: scene.gentle ? 0.35 : 0.5), bodyColor.withValues(alpha: 0)]).createShader(Rect.fromCircle(center: c, radius: 70 * breathe)),
+      86 * breathe,
+      Paint()..shader = RadialGradient(colors: [bodyColor.withValues(alpha: gentle ? 0.4 : 0.55), bodyColor.withValues(alpha: 0)]).createShader(Rect.fromCircle(center: c, radius: 86 * breathe)),
     );
-    canvas.drawCircle(c, 17, Paint()..color = _soften(bodyColor));
-
-    // Hills, drifting very slowly.
-    Path hill(double base, double amp, double phase, double freq) {
-      final path = Path()..moveTo(0, h);
-      for (double x = 0; x <= w; x += 4) {
-        final y = base + amp * math.sin((x / w * freq + phase + drift * 0.5) * 2 * math.pi);
-        path.lineTo(x, y);
+    if (!night) {
+      for (var i = 0; i < 12; i++) {
+        final a = i * 2 * math.pi / 12 + drift * 0.6;
+        const r1 = 26.0;
+        final r2 = 96.0 * breathe;
+        final path = Path()
+          ..moveTo(c.dx + r1 * math.cos(a - 0.045), c.dy + r1 * math.sin(a - 0.045))
+          ..lineTo(c.dx + r2 * math.cos(a), c.dy + r2 * math.sin(a))
+          ..lineTo(c.dx + r1 * math.cos(a + 0.045), c.dy + r1 * math.sin(a + 0.045))
+          ..close();
+        canvas.drawPath(path, Paint()..color = bodyColor.withValues(alpha: gentle ? 0.10 : 0.16));
       }
-      return path..lineTo(w, h)..close();
+    }
+    canvas.drawCircle(c, 17, Paint()..color = _soften(bodyColor));
+    if (night) {
+      // A crescent: a second disc in the sky colour takes a bite out of the moon.
+      canvas.drawCircle(c + const Offset(7, -3), 15, Paint()..color = Color.lerp(top, bottom, 0.25)!);
+    }
+
+    // Soft clouds drifting at different speeds.
+    final cloud = _cloud[part]!;
+    final cloudPaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
+    for (var i = 0; i < (gentle ? 2 : 3); i++) {
+      final speed = 0.35 + i * 0.18;
+      final x = ((drift * speed + i * 0.37) % 1.4 - 0.2) * w;
+      final y = h * (0.14 + i * 0.1);
+      cloudPaint.color = cloud.withValues(alpha: night ? 0.22 : (0.5 - i * 0.08));
+      final k = 1.0 + i * 0.25;
+      canvas.drawOval(Rect.fromCenter(center: Offset(x, y), width: 74 * k, height: 20 * k), cloudPaint);
+      canvas.drawOval(Rect.fromCenter(center: Offset(x + 22 * k, y - 8 * k), width: 52 * k, height: 18 * k), cloudPaint);
+      canvas.drawOval(Rect.fromCenter(center: Offset(x - 24 * k, y + 3 * k), width: 46 * k, height: 14 * k), cloudPaint);
     }
 
     final deep = Color.lerp(bottom, night ? const Color(0xFF211F3D) : const Color(0xFF8A5A3C), night ? 0.5 : 0.28)!;
+
+    // Distant mountains, ridged and faint.
+    final range = Path()..moveTo(0, h);
+    for (double x = 0; x <= w; x += 3) {
+      final u = x / w;
+      final ridge = (1 - _sin(u * 1.6 + 0.1).abs()) * 0.6 + (1 - _sin(u * 3.1 + 0.4).abs()) * 0.4;
+      range.lineTo(x, h * 0.66 - ridge * h * 0.17);
+    }
+    range
+      ..lineTo(w, h)
+      ..close();
+    canvas.drawPath(range, Paint()..color = _soften(Color.lerp(bottom, deep, 0.35)!).withValues(alpha: 0.6));
+
+    // Birds by day, wings flapping.
+    if (!night) {
+      final birds = gentle ? 1 : 3;
+      for (var i = 0; i < birds; i++) {
+        final bx = ((drift * 0.7 + i * 0.33) % 1.3 - 0.15) * w;
+        final by = h * (0.3 + 0.07 * i) + 5 * _sin(drift * 3 + i);
+        final flap = 3 + 3 * _sin(drift * 14 + i);
+        final bird = Path()
+          ..moveTo(bx - 7, by - flap)
+          ..quadraticBezierTo(bx - 3, by - flap - 2, bx, by)
+          ..quadraticBezierTo(bx + 3, by - flap - 2, bx + 7, by - flap);
+        canvas.drawPath(
+          bird,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.4
+            ..strokeCap = StrokeCap.round
+            ..color = const Color(0xFF5A4636).withValues(alpha: 0.5),
+        );
+      }
+    }
+
+    // Hills, drifting very slowly.
+    double hillY(double x, double base, double amp, double phase, double freq) => base + amp * _sin(x / w * freq + phase + drift * 0.5);
+    Path hill(double base, double amp, double phase, double freq) {
+      final path = Path()..moveTo(0, h);
+      for (double x = 0; x <= w; x += 4) {
+        path.lineTo(x, hillY(x, base, amp, phase, freq));
+      }
+      return path
+        ..lineTo(w, h)
+        ..close();
+    }
+
     canvas.drawPath(hill(h * 0.74, 7, 0.0, 1.1), Paint()..color = _soften(Color.lerp(bottom, deep, 0.45)!));
     canvas.drawPath(hill(h * 0.82, 9, 0.35, 0.9), Paint()..color = _soften(Color.lerp(bottom, deep, 0.75)!));
     canvas.drawPath(hill(h * 0.9, 6, 0.7, 1.4), Paint()..color = _soften(deep));
 
-    // A few motes rising, fewer when gentle.
-    final motes = scene.gentle ? 6 : 12;
-    final mr = math.Random(3);
-    for (var i = 0; i < motes; i++) {
-      final x = mr.nextDouble() * w;
-      final prog = (drift * 0.6 + mr.nextDouble()) % 1.0;
-      final y = h * (0.95 - prog * 0.8);
-      canvas.drawCircle(Offset(x + 6 * math.sin((prog + i) * 2 * math.pi), y), 1.6, Paint()..color = Colors.white.withValues(alpha: 0.5 * math.sin(prog * math.pi)));
+    // Small pines on the near hill, swaying a little.
+    final treeColor = _soften(Color.lerp(deep, const Color(0xFF1E1B2E), night ? 0.55 : 0.4)!);
+    for (var i = 0; i < 8; i++) {
+      final left = i < 4;
+      final u = left ? 0.04 + 0.06 * i : 0.74 + 0.07 * (i - 4);
+      final x = w * u + 1.5 * _sin(drift * 2 + i * 0.6);
+      final base = hillY(w * u, h * 0.9, 6, 0.7, 1.4) + 2;
+      final th = 24.0 + (i % 3) * 8;
+      final tree = Path()
+        ..moveTo(x, base - th)
+        ..lineTo(x - 7, base - th * 0.45)
+        ..lineTo(x - 3, base - th * 0.45)
+        ..lineTo(x - 9, base - 2)
+        ..lineTo(x + 9, base - 2)
+        ..lineTo(x + 3, base - th * 0.45)
+        ..lineTo(x + 7, base - th * 0.45)
+        ..close();
+      canvas.drawPath(tree, Paint()..color = treeColor);
     }
 
-    // One small light on the nearest hill for every idea finished, up to eight.
+    // Fireflies at dusk and at night, wandering and glowing; pollen in the light by day.
+    if (part == DayPart.dusk || night) {
+      final fr = math.Random(11);
+      for (var i = 0; i < (gentle ? 6 : 10); i++) {
+        final bx = fr.nextDouble() * w, by = h * (0.5 + fr.nextDouble() * 0.28);
+        final pos = Offset(bx + 14 * _sin(drift * 0.9 + i * 0.21), by + 9 * _sin(drift * 1.3 + i * 0.37));
+        final glow = 0.4 + 0.6 * (0.5 + 0.5 * _sin(drift * 3 + i * 0.5));
+        canvas.drawCircle(pos, 6, Paint()..color = const Color(0xFFFFE9A8).withValues(alpha: 0.22 * glow));
+        canvas.drawCircle(pos, 1.6, Paint()..color = const Color(0xFFFFF3C4).withValues(alpha: 0.9 * glow));
+      }
+    } else {
+      final mr = math.Random(3);
+      for (var i = 0; i < (gentle ? 6 : 12); i++) {
+        final x = mr.nextDouble() * w;
+        final prog = (drift * 0.6 + mr.nextDouble()) % 1.0;
+        final y = h * (0.95 - prog * 0.8);
+        canvas.drawCircle(Offset(x + 6 * _sin(prog + i * 0.1), y), 1.6, Paint()..color = Colors.white.withValues(alpha: 0.5 * math.sin(prog * math.pi)));
+      }
+    }
+
+    // One small lantern along the far ridge for every idea finished, up to eight. Above the buttons, which
+    // sit across the bottom of the card, so the two never overlap.
     final lights = math.min(scene.tries, 8);
     for (var i = 0; i < lights; i++) {
       final x = w * (0.1 + 0.8 * (i + 0.5) / 8);
-      final y = h * 0.9 - 6 + 4 * math.sin((x / w * 1.4 + 0.7 + drift * 0.5) * 2 * math.pi);
-      final glow = 0.75 + 0.25 * math.sin((drift * 3 + i * 0.5) * 2 * math.pi);
-      canvas.drawCircle(Offset(x, y), 9, Paint()..color = const Color(0xFFFFD98A).withValues(alpha: 0.28 * glow));
+      final y = hillY(x, h * 0.74, 7, 0.0, 1.1) - 4;
+      final glow = 0.75 + 0.25 * _sin(drift * 3 + i * 0.5);
+      canvas.drawCircle(Offset(x, y), 10, Paint()..color = const Color(0xFFFFD98A).withValues(alpha: 0.3 * glow));
       canvas.drawCircle(Offset(x, y), 3, Paint()..color = const Color(0xFFFFE9B0).withValues(alpha: 0.95));
     }
   }

@@ -888,7 +888,9 @@ class _ActionButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => SizedBox(width: double.infinity, child: _button(context));
+
+  Widget _button(BuildContext context) {
     final radius = BorderRadius.circular(18);
     if (filled) {
       return DecoratedBox(
@@ -1453,7 +1455,9 @@ class _MoodChips extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        for (final mood in Moods.values)
+        // The same order as everywhere else the five words appear: Upbeat, Calm, Even, Low, Tense.
+        for (final mood in const ['Bright', 'Steady', 'Quiet', 'Tender', 'Wobbly'])
+          if (Moods.values.contains(mood))
           ChoiceChip(
             key: ValueKey('feel-$mood'),
             avatar: Container(
