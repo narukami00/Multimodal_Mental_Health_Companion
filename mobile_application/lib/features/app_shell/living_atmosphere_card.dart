@@ -662,20 +662,17 @@ class _SanctuaryDioramaPainter extends CustomPainter {
         }
       }
 
-      // Sun Sphere
-      final sunPaint = Paint()..color = sunColor;
-      canvas.drawCircle(Offset(sunX, sunY), sunR, sunPaint);
-
-      // Moon Crescent Cutout (Smooth fade, zero pop-in)
+      // Sun sphere, or at night a crescent. The bite is cut out of the disc (not a sky-coloured disc painted over
+      // it, which showed as a second circle wherever the sky gradient differed), and grows in with the moon.
       final moonWeight = (fromConfig.isMoon ? 1 - t : 0.0) + (toConfig.isMoon ? t : 0.0);
+      final body = Path()..addOval(Rect.fromCircle(center: Offset(sunX, sunY), radius: sunR));
+      Path shape = body;
       if (moonWeight > 0.02) {
-        final moonShadowPaint = Paint()..color = skyTop.withValues(alpha: moonWeight);
-        canvas.drawCircle(
-          Offset(sunX - sunR * 0.42, sunY - sunR * 0.22),
-          math.max(1.0, sunR * 0.85),
-          moonShadowPaint,
-        );
+        final bite = Path()
+          ..addOval(Rect.fromCircle(center: Offset(sunX - sunR * 0.42, sunY - sunR * 0.22), radius: math.max(1.0, sunR * 0.85 * moonWeight)));
+        shape = Path.combine(PathOperation.difference, body, bite);
       }
+      canvas.drawPath(shape, Paint()..color = sunColor);
 
       // 6. SVG Soaring Cranes (Smooth cross-fade)
       final craneWeight = (fromConfig.hasCranes ? 1 - t : 0.0) + (toConfig.hasCranes ? t : 0.0);
