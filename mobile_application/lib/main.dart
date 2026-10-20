@@ -49,6 +49,7 @@ import 'data/repositories/shared_preferences_moment_repository.dart';
 import 'domain/memory/moment_extractor.dart';
 import 'domain/memory/server_moment_extractor.dart';
 import 'features/memory/companion_memory_context.dart';
+import 'features/memory/keep_moment.dart';
 import 'features/memory/moments_controller.dart';
 import 'services/companion_websocket_service.dart';
 import 'services/usage_collector_service.dart';
@@ -194,6 +195,8 @@ Future<void> main() async {
     ),
   );
   await moments.load();
+  // Lets a journal entry or a chat message offer "keep as a moment".
+  KeepMoment.controller = moments;
   void offerMoment(MomentCandidate candidate) {
     if (profileController.profile.momentPromptsMuted) return;
     if (safetyController.hasActiveFlag) return;

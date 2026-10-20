@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/day_key.dart';
+import '../../core/models/emotion_result.dart';
 import '../../core/models/memory_moment.dart';
 import '../../data/contracts/moment_repository.dart';
 import '../../domain/memory/moment_extractor.dart';
@@ -139,6 +140,59 @@ class MomentsController extends ChangeNotifier {
     );
     await _save(moment);
     return moment;
+  }
+
+  /// Keeps something the person chose from one of their own entries or messages. Theirs to choose, so it is kept
+  /// at once, whatever the topic, and is not subject to the limit on questions waiting for an answer.
+  ///
+  /// [reading] is how the model read that entry, if it did: what it used (voice, words, face) and its top guess
+  /// are stored beside the text, labelled as the model's and never as the person's. A reading that is clearly
+  /// heavy keeps the moment as a hard one, so it is never listed in Insights. Keeping the same words from the
+  /// same entry twice returns the first.
+  Future<MemoryMoment> keepFromEntry({
+    required String text,
+    required MomentSource source,
+    required String sourceRef,
+    DateTime? at,
+    String? moodWord,
+    EmotionResult? reading,
+    bool edited = false,
+  }) async {
+    final line = _cap(text.trim());
+    final same = _moments.where((m) => m.sourceRef == sourceRef && _sameThing(m.text, line)).firstOrNull;
+    if (same != null) {
+      if (same.state == MomentState.confirmed) return same;
+      final confirmed = same.copyWith(state: MomentState.confirmed, updatedAt: _clock());
+      await _save(confirmed);
+      return confirmed;
+    }
+    final now = _clock();
+    final top = _top(reading?.classes);
+    final heavy = (reading?.valenceProbs?['negative'] ?? 0) >= 0.55;
+    final moment = MemoryMoment(
+      id: _newId(now),
+      text: line,
+      createdAt: now,
+      occurredOn: dayKey(at ?? now),
+      source: source,
+      state: MomentState.confirmed,
+      tone: heavy ? MomentTone.heavy : MomentTone.warm,
+      moodWord: moodWord,
+      emotionClass: top?.key,
+      emotionConfidence: top?.value,
+      editedByUser: edited,
+      sourceRef: sourceRef,
+      updatedAt: now,
+      signals: reading?.pattern,
+      lookedClass: _top(reading?.faceClasses)?.key,
+    );
+    await _save(moment);
+    return moment;
+  }
+
+  static MapEntry<String, double>? _top(Map<String, double>? classes) {
+    if (classes == null || classes.isEmpty) return null;
+    return classes.entries.reduce((a, b) => a.value >= b.value ? a : b);
   }
 
   /// Yes, remember it. [text] is the person's own edit, if they changed it.

@@ -8,6 +8,7 @@ Provides synchronous and asynchronous token-by-token streaming via TextIteratorS
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import shutil
@@ -27,6 +28,7 @@ from moment_extraction import (
     _words as extraction_words,
     compose_with_referent,
     extraction_messages,
+    parse_extraction,
     referent_messages,
     topic_from_context,
     validate_moment,
@@ -153,6 +155,10 @@ EMOTION_CUE_MAX_CHARS = 420  # the optional emotion note stays one short plain l
 CT2_MODELS_DIR = Path(__file__).resolve().parent / "models" / "llm"
 _STOP_TOKENS = ("<|im_end|>", "<|endoftext|>")
 
+# The llama.cpp backend talks to a local `llama-server` (started by start_solace.bat) over its OpenAI-style API.
+LLAMACPP_URL_ENV = "SOLACE_LLAMACPP_URL"
+DEFAULT_LLAMACPP_URL = "http://127.0.0.1:8081"
+
 
 class LlmService:
     """Manages the causal LM, its tokenizer and streaming text generation.
@@ -180,6 +186,8 @@ class LlmService:
         self._tokenizer: Optional[AutoTokenizer] = None
         self._model: Optional[AutoModelForCausalLM] = None
         self._ct2_generator: Any = None
+        self._llama_url: Optional[str] = None
+        self.model_label: Optional[str] = None  # what to call the model in reports; `model_id` stays the built-in model's id
         self._is_ready: bool = False
         self._load_lock = threading.Lock()
         self.backend: str = "unloaded"
@@ -201,7 +209,16 @@ class LlmService:
             if self._is_ready:
                 return True
             t0 = time.time()
-            if self._backend_pref in ("auto", "ct2"):
+            if self._backend_pref in ("auto", "llamacpp"):
+                try:
+                    self._initialize_llamacpp()
+                    logger.info(f"LLM ready in {time.time() - t0:.2f}s (llama.cpp server at {self._llama_url})")
+                    return True
+                except Exception as e:
+                    self._llama_url = None
+                    log = logger.warning if self._backend_pref == "llamacpp" else logger.info
+                    log(f"llama.cpp server not available ({e}); trying the next backend.")
+            if self._backend_pref in ("auto", "ct2", "llamacpp"):
                 try:
                     self._initialize_ct2()
                     logger.info(
@@ -216,6 +233,74 @@ class LlmService:
                     )
                     self._ct2_generator = None
             return self._initialize_hf(t0)
+
+    # -- llama.cpp backend ---------------------------------------------------
+
+    def _initialize_llamacpp(self) -> None:
+        """Use a running `llama-server`. Raises if there is none, so the next backend is tried."""
+        import httpx
+
+        url = os.environ.get(LLAMACPP_URL_ENV, DEFAULT_LLAMACPP_URL).rstrip("/")
+        reply = httpx.get(url + "/health", timeout=2.0)
+        reply.raise_for_status()
+        if reply.json().get("status") != "ok":
+            raise RuntimeError("the server is up but its model is not loaded yet")
+        self._llama_url = url
+        try:  # the server names the model it loaded (its file name); this is only for the health report
+            listed = httpx.get(url + "/v1/models", timeout=2.0).json().get("data") or []
+            if listed and listed[0].get("id"):
+                self.model_label = str(listed[0]["id"]).replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".gguf")
+        except Exception:  # noqa: BLE001 - a label is not worth failing for
+            pass
+        self.backend = "llamacpp"
+        self.device = "llama.cpp"
+        self._is_ready = True
+
+    def _generate_llamacpp(
+        self,
+        messages: List[Dict[str, str]],
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        cancel: Optional[threading.Event],
+    ) -> Iterator[str]:
+        """Stream a reply from the llama.cpp server, in the model's non-thinking mode.
+
+        Leaving the request closes the connection, which makes the server stop decoding.
+        """
+        import httpx
+
+        payload = {
+            "messages": messages,
+            "stream": True,
+            "max_tokens": max_new_tokens,
+            "temperature": temperature,
+            "top_p": top_p,
+            "top_k": 20,
+            # Qwen3.5 answers directly instead of writing out its reasoning first.
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        timeout = httpx.Timeout(60.0, connect=3.0)
+        with httpx.Client(timeout=timeout) as client:
+            with client.stream("POST", self._llama_url + "/v1/chat/completions", json=payload) as reply:
+                reply.raise_for_status()
+                for line in reply.iter_lines():
+                    if cancel is not None and cancel.is_set():
+                        break
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        choice = (json.loads(data).get("choices") or [{}])[0]
+                    except ValueError:
+                        continue
+                    piece = (choice.get("delta") or {}).get("content")
+                    if piece:
+                        yield piece
+                    if choice.get("finish_reason"):
+                        break
 
     # -- CTranslate2 backend -------------------------------------------------
 
@@ -467,6 +552,24 @@ class LlmService:
             if not self._is_ready:
                 yield "I am currently preparing my thoughts. Please try again in a moment."
                 return
+        if self._llama_url is not None:
+            started = False
+            try:
+                for piece in self._generate_llamacpp(messages, max_new_tokens, temperature, top_p, cancel):
+                    started = True
+                    yield piece
+                return
+            except Exception as e:  # noqa: BLE001 - the server went away: carry on with the built-in model
+                if started:
+                    logger.warning(f"llama.cpp stream ended early: {e}")
+                    return
+                logger.warning(f"llama.cpp server unreachable ({e}); switching to the built-in model.")
+                self._llama_url = None
+                self._is_ready = False
+                self._backend_pref = "ct2"
+                if not self.initialize():
+                    yield "I am currently preparing my thoughts. Please try again in a moment."
+                    return
         if self._ct2_generator is not None:
             yield from self._generate_ct2(messages, max_new_tokens, temperature, top_p, cancel)
         else:
@@ -544,10 +647,10 @@ class LlmService:
             parts: List[str] = []
             # Near-greedy: copying words is not a task that wants variety.
             async for chunk in self.generate_stream_async(
-                extraction_messages(text), max_new_tokens=60, temperature=0.05, top_p=0.5
+                extraction_messages(text), max_new_tokens=90, temperature=0.05, top_p=0.5
             ):
                 parts.append(chunk)
-            quoted = validate_moment(text, "".join(parts), context)
+            quoted = validate_moment(text, parse_extraction("".join(parts)), context)
             if quoted:
                 return quoted
             if not context or not wants_referent(text):

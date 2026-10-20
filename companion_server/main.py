@@ -85,7 +85,7 @@ async def healthz():
         "stt_ready": stt.is_ready,
         "stt_device": stt.device,
         "llm_ready": llm.is_ready,
-        "llm_model": llm.model_id,
+        "llm_model": (llm.model_label or llm.model_id) if llm.backend == "llamacpp" else llm.model_id,
         "llm_device": llm.device,
         "llm_backend": llm.backend,
         "tts_ready": tts.is_ready,

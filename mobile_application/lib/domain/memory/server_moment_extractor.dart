@@ -83,6 +83,10 @@ String? acceptQuotedMoment(
   // a topic and the person's own sentence; its lead word is not theirs.
   final mine = _words(line.replaceFirst(RegExp(r'^about\b', caseSensitive: false), ''));
   if (mine.length < 4) return null;
+  // Starting mid-sentence ("which felt really good.") is a fragment that cannot be read back later.
+  if (_fragmentStarts.contains(mine.first)) return null;
+  // A praise word followed by a complaint is sarcasm, not a good moment.
+  if (_sarcasm.hasMatch(line.toLowerCase()) || _sarcasm.hasMatch(original.toLowerCase())) return null;
   if (momentIsVague(line)) return null;
   final theirs = _words(original).toSet();
   final known = {...theirs, for (final c in context) ..._words(c.text)};
@@ -97,6 +101,15 @@ String? acceptQuotedMoment(
   if (mine.toSet().where(theirs.contains).length < 2) return null;
   return line;
 }
+
+const _fragmentStarts = {'which', 'who', 'whose', 'and', 'but', 'because', 'although', 'though', 'whereas'};
+
+// Mirrors the server's own sarcasm check.
+final _sarcasm = RegExp(
+  r'\b(?:great|wonderful|perfect|fantastic|brilliant|lovely|nice|amazing)\b[,!.]*\s+(?:another|more of|just what)\b'
+  r"|\byeah,? right\b|\boh,? (?:great|wonderful|perfect|fabulous)\b|\bcould have been an e-?mail\b|\bjust what i needed\b"
+  r'|\bas if\b|\bthanks a lot\b',
+);
 
 List<String> _words(String text) => [
   for (final m in RegExp(r"[a-z0-9']+").allMatches(text.toLowerCase())) m.group(0)!,

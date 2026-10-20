@@ -15,6 +15,7 @@ MomentCandidate _candidate(String text, {MomentSource source = MomentSource.chat
     );
 
 void main() {
+  _newGuardTests();
   group('acceptQuotedMoment', () {
     test('accepts a faithful quote and tidies quotes and spaces', () {
       expect(acceptQuotedMoment(_original, _quote), _quote);
@@ -108,6 +109,28 @@ void main() {
         _candidate('My grandmother died last week. $_original'),
       );
       expect(proposal, isNull);
+    });
+  });
+}
+
+void _newGuardTests() {
+  group('the phone agrees with the server about fragments and sarcasm', () {
+    test('a fragment that starts mid-sentence is not kept', () {
+      const original = 'I managed to get out of bed early and made pancakes, which felt really good.';
+      expect(acceptQuotedMoment(original, 'which felt really good.'), isNull);
+      expect(acceptQuotedMoment(original, original), original);
+    });
+
+    test('praise that is a complaint is not kept', () {
+      const sarcastic = 'Great, another meeting that could have been an email. Really wonderful.';
+      expect(acceptQuotedMoment(sarcastic, sarcastic), isNull);
+      const genuine = 'The meeting ended early and we all had a lovely walk.';
+      expect(acceptQuotedMoment(genuine, genuine), genuine);
+    });
+
+    test('contractions around praise still read as saying nothing', () {
+      expect(momentIsVague("Nice, I'm happy with that."), isTrue);
+      expect(momentIsVague("I'm proud of the painting."), isFalse);
     });
   });
 }

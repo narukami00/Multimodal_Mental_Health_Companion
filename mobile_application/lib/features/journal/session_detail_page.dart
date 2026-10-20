@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/models/memory_moment.dart';
 import '../../core/models/session_input.dart';
+import '../../domain/memory/moment_entry.dart';
+import '../memory/keep_moment.dart';
 import '../../core/models/session_record.dart';
 import '../../core/widgets/page_back_button.dart';
 import 'emotion_reading_card.dart';
@@ -233,6 +236,10 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
                             ],
                           ),
                         ),
+                        if (KeepMoment.available) ...[
+                          const SizedBox(height: 12),
+                          _keepButton(context),
+                        ],
                         const SizedBox(height: 18),
                       ],
                       Container(
@@ -293,6 +300,44 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Offers to keep something from this entry as a moment: no model involved, so it cannot fail.
+  Widget _keepButton(BuildContext context) {
+    final text = session.text!.trim();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        key: const ValueKey('keep-moment'),
+        onPressed: () async {
+          await KeepMoment.open(
+            context,
+            MomentEntry(
+              text: text,
+              source: text.length > 80 ? MomentSource.journal : MomentSource.checkIn,
+              sourceRef: session.id,
+              at: session.createdAt,
+              moodWord: session.effectiveMood,
+              reading: session.reading,
+            ),
+          );
+          if (mounted) setState(() {});
+        },
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF96620C),
+          side: const BorderSide(color: Color(0x66FFB534)),
+          shape: const StadiumBorder(),
+        ),
+        icon: Icon(
+          KeepMoment.isKept(session.id) ? Icons.check_rounded : Icons.auto_awesome_rounded,
+          size: 17,
+        ),
+        label: Text(
+          KeepMoment.isKept(session.id) ? 'Kept as a moment. Keep another' : 'Keep as a moment',
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
     );

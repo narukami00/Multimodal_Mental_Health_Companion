@@ -217,3 +217,63 @@ def test_extract_moment_uses_the_model_but_validates_it():
 
 def test_extract_moment_without_a_model_is_none_not_an_error():
     assert asyncio.run(LlmService().extract_moment_async(ORIGINAL)) is None
+
+
+# ---- a model that can decide: JSON answers, and the guards that do not depend on it ----------------------------------------------
+
+def test_the_models_json_answer_is_read_and_null_means_nothing():
+    from moment_extraction import parse_extraction
+    assert parse_extraction('{"moment": "I had coffee with a friend and it was really nice."}') == QUOTE
+    assert parse_extraction('Here you go: {"moment": "I had coffee with a friend and it was really nice."} done') == QUOTE
+    assert parse_extraction('{"moment": null}') is None
+    assert parse_extraction('{"moment": ""}') is None
+    assert parse_extraction("{not json}") is None
+    # a smaller model that answers in plain text is still understood, and the checks decide
+    assert parse_extraction(QUOTE) == QUOTE
+    assert parse_extraction("NONE") == "NONE"
+    assert parse_extraction("") is None
+
+
+def test_the_pipeline_accepts_a_json_answer_and_still_rejects_what_the_checks_reject():
+    class Fake(LlmService):
+        is_ready = True
+        reply = ""
+
+        async def generate_stream_async(self, messages, max_new_tokens=120, temperature=0.7, top_p=0.9):
+            yield self.reply
+
+    service = Fake()
+    service.reply = '{"moment": "I had coffee with a friend and it was really nice."}'
+    assert asyncio.run(service.extract_moment_async(ORIGINAL)) == QUOTE
+    service.reply = '{"moment": "A completely made up sentence about something else entirely."}'
+    assert asyncio.run(service.extract_moment_async(ORIGINAL)) is None
+    service.reply = '{"moment": null}'
+    assert asyncio.run(service.extract_moment_async(ORIGINAL)) is None
+
+
+def test_a_fragment_that_starts_mid_sentence_is_never_kept():
+    original = "I managed to get out of bed early and made pancakes, which felt really good."
+    assert validate_moment(original, "which felt really good.") is None
+    assert validate_moment(original, "and made pancakes, which felt really good.") is None
+    assert validate_moment(original, original) == original
+
+
+def test_praise_that_is_a_complaint_is_never_kept():
+    sarcastic = "Great, another meeting that could have been an email. Really wonderful."
+    assert validate_moment(sarcastic, sarcastic) is None
+    assert validate_moment("Oh great, the train is late again and I am soaked.", "Oh great, the train is late again and I am soaked.") is None
+    assert validate_moment("Yeah right, that went really well for me today.", "Yeah right, that went really well for me today.") is None
+    genuine = "The meeting ended early and we all had a lovely walk."
+    assert validate_moment(genuine, genuine) == genuine
+
+
+def test_contractions_do_not_make_an_empty_line_look_like_it_says_something():
+    assert is_vague("Nice, I'm happy with that.")
+    assert is_vague("That's great, I'm glad.")
+    assert is_vague("Yeah that really helped.")
+    assert not is_vague("I'm proud of the painting.")  # a thing is named
+
+
+def test_the_instruction_asks_for_what_happened_and_for_null_when_there_is_nothing():
+    prompt = extraction_messages("I had a good day.")[0]["content"]
+    assert "null" in prompt and "WHAT happened" in prompt and "JSON" in prompt

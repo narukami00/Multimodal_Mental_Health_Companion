@@ -16,6 +16,7 @@ OverlayEntry showMessageReading({
   required Rect anchor,
   required ChatMessageRecord message,
   required Future<EmotionResult?> Function()? read,
+  void Function(EmotionResult? reading)? onKeep,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
   late final OverlayEntry entry;
@@ -27,7 +28,7 @@ OverlayEntry showMessageReading({
     builder: (ctx) {
       final media = MediaQuery.of(ctx);
       const width = 268.0;
-      const cardHeight = 200.0;
+      final cardHeight = onKeep == null ? 200.0 : 246.0;
       final left = (anchor.right - width).clamp(12.0, media.size.width - width - 12);
       final above = anchor.top - cardHeight - 10 > media.padding.top + 8;
       return Stack(
@@ -46,7 +47,16 @@ OverlayEntry showMessageReading({
             top: above ? null : anchor.bottom + 10,
             bottom: above ? media.size.height - anchor.top + 10 : null,
             width: width,
-            child: MessageReadingCard(message: message, read: read),
+            child: MessageReadingCard(
+              message: message,
+              read: read,
+              onKeep: onKeep == null
+                  ? null
+                  : (reading) {
+                      close();
+                      onKeep(reading);
+                    },
+            ),
           ),
         ],
       );
@@ -57,10 +67,13 @@ OverlayEntry showMessageReading({
 }
 
 class MessageReadingCard extends StatefulWidget {
-  const MessageReadingCard({required this.message, required this.read, super.key});
+  const MessageReadingCard({required this.message, required this.read, this.onKeep, super.key});
 
   final ChatMessageRecord message;
   final Future<EmotionResult?> Function()? read;
+
+  /// When given, the card offers to keep this message as a moment, with the reading it shows (if any).
+  final void Function(EmotionResult? reading)? onKeep;
 
   @override
   State<MessageReadingCard> createState() => _MessageReadingCardState();
@@ -110,7 +123,28 @@ class _MessageReadingCardState extends State<MessageReadingCard> {
           border: Border.all(color: const Color(0x66E2C185)),
           boxShadow: const [BoxShadow(color: Color(0x3396641E), blurRadius: 24, offset: Offset(0, 10))],
         ),
-        child: _working ? _busy() : (_reading == null ? _none() : _card(_reading!)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _working ? _busy() : (_reading == null ? _none() : _card(_reading!)),
+            if (widget.onKeep != null && widget.message.spokenText.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              TextButton.icon(
+                key: const ValueKey('message-keep-moment'),
+                onPressed: () => widget.onKeep!(_reading),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF96620C),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.auto_awesome_rounded, size: 16),
+                label: const Text('Keep as a moment', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

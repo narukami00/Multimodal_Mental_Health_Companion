@@ -14,6 +14,8 @@ import '../../core/constants/companion_server_config.dart';
 import '../../core/models/chat_message_record.dart';
 import '../../core/models/emotion_result.dart';
 import '../../core/models/memory_moment.dart';
+import '../../domain/memory/moment_entry.dart';
+import '../memory/keep_moment.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/widgets/page_back_button.dart';
 import '../../services/companion_websocket_service.dart';
@@ -1013,6 +1015,18 @@ class _ChatPageState extends State<ChatPage> {
       anchor: anchor,
       message: message,
       read: _chatController.canReadMessages ? () => _chatController.readMessage(conv.id, messageId) : null,
+      onKeep: KeepMoment.available
+          ? (reading) => KeepMoment.open(
+              context,
+              MomentEntry(
+                text: message.spokenText,
+                source: MomentSource.chat,
+                sourceRef: 'chat:${message.id}',
+                at: message.timestamp,
+                reading: reading ?? message.reading,
+              ),
+            )
+          : null,
     );
   }
 

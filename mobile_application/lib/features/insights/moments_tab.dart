@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/memory_moment.dart';
+import '../../domain/memory/moment_entry.dart';
 import '../memory/moments_controller.dart';
 import 'insight_widgets.dart';
 import 'moments_sky_card.dart';
@@ -209,29 +210,34 @@ class _MomentCard extends StatelessWidget {
   }
 }
 
-/// A sheet for writing a moment of your own: one sentence, in your own words, kept at once.
-Future<void> showAddMomentSheet(BuildContext context, MomentsController moments, {String? prefill}) {
+/// A sheet for writing a moment of your own: one sentence, in your own words, kept at once. With an [entry] (one of
+/// their journal entries or chat messages) it offers the person's own best sentence from it to keep, to trim or
+/// change first, and keeps the moment tied to that entry together with how the model read it.
+Future<void> showAddMomentSheet(BuildContext context, MomentsController moments, {String? prefill, MomentEntry? entry}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: const Color(0xFFFFFDF7),
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-    builder: (sheetContext) => _AddMomentSheet(moments: moments, prefill: prefill),
+    builder: (sheetContext) => _AddMomentSheet(moments: moments, prefill: prefill, entry: entry),
   );
 }
 
 class _AddMomentSheet extends StatefulWidget {
-  const _AddMomentSheet({required this.moments, this.prefill});
+  const _AddMomentSheet({required this.moments, this.prefill, this.entry});
 
   final MomentsController moments;
   final String? prefill;
+  final MomentEntry? entry;
 
   @override
   State<_AddMomentSheet> createState() => _AddMomentSheetState();
 }
 
 class _AddMomentSheetState extends State<_AddMomentSheet> {
-  late final _controller = TextEditingController(text: widget.prefill ?? '');
+  late final _controller = TextEditingController(
+    text: widget.entry != null ? suggestMomentText(widget.entry!.text) : widget.prefill ?? '',
+  );
   bool _saving = false;
 
   @override
@@ -251,7 +257,20 @@ class _AddMomentSheetState extends State<_AddMomentSheet> {
     setState(() => _saving = true);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
-    await widget.moments.addManual(_controller.text);
+    final entry = widget.entry;
+    if (entry == null) {
+      await widget.moments.addManual(_controller.text);
+    } else {
+      await widget.moments.keepFromEntry(
+        text: _controller.text,
+        source: entry.source,
+        sourceRef: entry.sourceRef,
+        at: entry.at,
+        moodWord: entry.moodWord,
+        reading: entry.reading,
+        edited: _controller.text.trim() != entry.text.trim(),
+      );
+    }
     navigator.pop();
     messenger
       ..hideCurrentSnackBar()
@@ -279,11 +298,16 @@ class _AddMomentSheetState extends State<_AddMomentSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Add a moment', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: insightInk)),
+            Text(
+              widget.entry == null ? 'Add a moment' : 'Keep this as a moment',
+              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: insightInk),
+            ),
             const SizedBox(height: 4),
-            const Text(
-              'Something good, however small. One sentence, in your own words.',
-              style: TextStyle(fontSize: 13, height: 1.45, fontWeight: FontWeight.w600, color: insightSoft),
+            Text(
+              widget.entry == null
+                  ? 'Something good, however small. One sentence, in your own words.'
+                  : 'Trim it to the part you want to keep. It stays in your own words, and only you decide.',
+              style: const TextStyle(fontSize: 13, height: 1.45, fontWeight: FontWeight.w600, color: insightSoft),
             ),
             const SizedBox(height: 14),
             TextField(

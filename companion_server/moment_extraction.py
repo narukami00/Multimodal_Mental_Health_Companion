@@ -12,6 +12,7 @@ thrown away, so the worst outcome is "no proposal".
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, Dict, List, Optional
 
@@ -22,23 +23,58 @@ MAX_CONTEXT_TURNS = 4
 MAX_CONTEXT_CHARS = 240
 
 EXTRACT_INSTRUCTION = (
-    "From the person's message, copy ONE sentence in which they say something "
-    "good happened to them or that they enjoyed. Copy it exactly as written, "
-    "without changing any words. If there is no such sentence, reply with the "
-    "single word NONE."
+    "You help someone keep the good moments of their life. Read their message and decide whether "
+    "they describe something good that happened to them, or something they really enjoyed.\n"
+    "If they do, copy the words that say it, exactly as written and without changing a single word: "
+    "one or two sentences, at most 140 characters, that say WHAT happened and, when they say it, how it felt. "
+    "Never start in the middle of a sentence.\n"
+    "If they do not, answer null. Answer null when: nothing good happened; they did not enjoy it; the good word "
+    "is sarcastic or negated; it is only praise that says nothing about what happened; or it is about illness, "
+    "loss, money trouble or harm.\n"
+    'Reply with JSON only: {"moment": "<their exact words>"} or {"moment": null}.\n'
+    "Examples.\n"
+    'Message: Tired today. The only nice part was lunch with Priya, we sat in the park and it was lovely.\n'
+    '{"moment": "The only nice part was lunch with Priya, we sat in the park and it was lovely."}\n'
+    "Message: I didn't enjoy the party at all, I just wanted to go home.\n"
+    '{"moment": null}\n'
+    "Message: That was so good, I loved it.\n"
+    '{"moment": null}\n'
+    "Message: I passed my driving test today! I'm so happy.\n"
+    '{"moment": "I passed my driving test today! I\'m so happy."}'
 )
+
+
+def parse_extraction(raw: str) -> Optional[str]:
+    """The words the model chose, from its JSON answer; None when it said null.
+
+    Older or smaller models answer with plain text (or the word NONE) instead of JSON, so when there is no JSON
+    object the text itself is returned and the checks in `validate_moment` decide.
+    """
+    text = (raw or "").strip()
+    match = re.search(r"\{.*?\}", text, flags=re.DOTALL)
+    if match is None:
+        return text or None
+    try:
+        value = json.loads(match.group(0)).get("moment")
+    except (ValueError, AttributeError):
+        return None
+    return value if isinstance(value, str) and value.strip() else None
 
 # Used only when the message points back at something ("that was a great
 # idea"). The model is not asked to write anything: only to copy a few words.
 REFERENT_INSTRUCTION = (
     "Someone was talking, then replied with a short comment. Say what their "
     "comment is about by copying a few words from the earlier lines, exactly "
-    "as written. Reply with only those words. If it is unclear, reply with the "
-    "single word NONE.\n"
+    "as written. If the lines before it include something Sol suggested or "
+    "asked about, that is usually what it is about. Reply with only those "
+    "words. If it is unclear, reply with the single word NONE.\n"
     "Example. Earlier lines: Them: I might start working again. / Sol: That "
     "could help. Their comment: That was a great idea. Answer: working again\n"
     "Example. Earlier lines: Sol: Would you like to take a short walk? Their "
-    "comment: I loved that. Answer: a short walk"
+    "comment: I loved that. Answer: a short walk\n"
+    "Example. Earlier lines: Sol: How about calling a friend tonight? / Them: I might, "
+    "I haven't spoken to anyone in days. Their comment: That was a good thought. "
+    "Answer: calling a friend"
 )
 
 MAX_REFERENT_WORDS = 5
@@ -49,7 +85,14 @@ _CUT_AT = frozenset(
 
 _WARM = re.compile(
     r"\b(good|great|nice|lovely|wonderful|amazing|awesome|happy|glad|fun|enjoy\w*|"
-    r"proud|relieved|calm|better|lighter|love\w*|like[ds]?|perfect|brilliant)\b"
+    r"proud|relieved|calm|better|lighter|love\w*|like[ds]?|perfect|brilliant|helped|helps)\b"
+)
+_FRAGMENT_STARTS = frozenset("which who whose and but because although though whereas".split())
+# Praise word followed by a complaint ("Great, another meeting that could have been an email"): the good word is sarcasm.
+_SARCASM = re.compile(
+    r"\b(?:great|wonderful|perfect|fantastic|brilliant|lovely|nice|amazing)\b[,!.]*\s+(?:another|more of|just what)\b"
+    r"|\byeah,? right\b|\boh,? (?:great|wonderful|perfect|fabulous)\b|\bcould have been an e-?mail\b|\bjust what i needed\b"
+    r"|\bas if\b|\bthanks a lot\b"
 )
 _NEGATED = re.compile(r"\b(not|n't|never|no|nothing|without|don't|didn't|wasn't|isn't)\b")
 
@@ -59,14 +102,17 @@ _STOP = frozenset(
     "i me my we us our you your he she they them their it its this that these those there here "
     "is am are was were be been being do does did done have has had having will would can could "
     "should may might must just really very too quite pretty also still even only not no yes "
-    "what which who when where how why about into out up down over again more most some any all".split()
+    "what which who when where how why about into out up down over again more most some any all "
+    # Contractions say as little as the words they shorten ("I'm happy with that" holds nothing to remember).
+    "i'm i've i'd i'll it's that's there's here's he's she's we're we've we'd they're they've they'd you're you've you'd "
+    "don't didn't isn't wasn't can't won't couldn't wouldn't".split()
 )
 # Words that say it was good, or that point at nothing in particular.
 _VAGUE = frozenset(
     "good great nice lovely wonderful amazing awesome happy glad fun enjoy enjoyed enjoying "
     "proud relieved calm better lighter love loved like liked fine okay ok perfect "
     "idea ideas thing things day days time times stuff something anything everything one "
-    "sound sounds sounded seem seems".split()
+    "sound sounds sounded seem seems helped helps help".split()
 )
 
 # Mirrors lib/domain/memory/moment_extractor.dart (momentIsSensitive). Whole
@@ -283,11 +329,16 @@ def validate_moment(
     turns = clean_context(context)
     if is_sensitive(line) or is_sensitive(original):
         return None
+    if _SARCASM.search(line.lower()) or _SARCASM.search(original.lower()):
+        return None
     if any(is_sensitive(t["text"]) for t in turns):
         return None
     # "About working again: ..." is built in code; its lead word is not theirs.
     mine = _words(re.sub(r"^about\b", "", line, flags=re.IGNORECASE))
     if len(mine) < 4:
+        return None
+    # Starting mid-sentence ("which felt really good.") is a fragment that cannot be read back later.
+    if mine[0] in _FRAGMENT_STARTS:
         return None
     if is_vague(line):
         return None
