@@ -298,6 +298,19 @@ class SuggestionController extends ChangeNotifier {
     );
   }
 
+  /// Takes back a completion that was a mistake ("I did it" tapped, but it was not done).
+  ///
+  /// The record becomes a plain "not now": no verdict about the idea, no mood is read from it, and it no
+  /// longer counts as done anywhere. Without this, a mis-tap taught the app the person had done something
+  /// they had not.
+  Future<void> markNotDone(String recordId) async {
+    final record = _recordById(recordId);
+    if (record == null) return;
+    await _write(
+      record.copyWith(status: SuggestionStatus.skipped, skipReason: SuggestionSkipReason.notNow, done: false),
+    );
+  }
+
   /// Records that the user declined a specific suggestion.
   ///
   /// Separate from [submitFeedback] because the Home card declines a record it
@@ -326,6 +339,7 @@ class SuggestionController extends ChangeNotifier {
           (record) =>
               record.done == true &&
               record.useful == null &&
+              record.moodAfter == null &&
               !record.shownAt.isBefore(cutoff),
         )
         .toList()

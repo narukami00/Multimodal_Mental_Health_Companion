@@ -71,8 +71,9 @@ Future<void> _didIt(WidgetTester tester) async {
 
 Future<void> _pumpNotTodayPage(
   WidgetTester tester,
-  SuggestionController suggestionController,
-) async {
+  SuggestionController suggestionController, {
+  ProfileController? profile,
+}) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.0;
   addTearDown(() {
@@ -85,9 +86,10 @@ Future<void> _pumpNotTodayPage(
       theme: AppTheme.light(),
       home: SuggestionPage(
         suggestionController: suggestionController,
-        profileController: ProfileController(
-          repository: InMemoryProfileRepository(),
-        ),
+        profileController: profile ??
+            ProfileController(
+              repository: InMemoryProfileRepository(),
+            ),
         safetyController: SafetyController(
           screener: const KeywordSafetyScreener(),
           repository: InMemorySafetyEventRepository(),
@@ -167,31 +169,34 @@ void main() {
       // rating step still leaves the completion recorded.
       await _didIt(tester);
 
-      expect(find.text('How did it go?'), findsOneWidget);
+      expect(find.text('How do you feel now?'), findsOneWidget);
       final completed = suggestionController.history.single;
       expect(completed.status, SuggestionStatus.completed);
       expect(completed.done, isTrue);
     });
 
-    testWidgets('records a rating the user does choose', (tester) async {
+    testWidgets('"yes, again" is a positive verdict and is not a made-up star rating', (tester) async {
       await pumpPage(tester);
       await _didIt(tester);
 
-      await tester.tap(find.byKey(const ValueKey('rating-4')));
+      await tester.tap(find.byKey(const ValueKey('again-yes')));
+      await tester.pump();
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       final completed = suggestionController.history.single;
-      expect(completed.rating, 4);
-      // Four stars and above is a positive verdict, not just a number.
       expect(completed.useful, SuggestionUsefulness.up);
+      expect(completed.rating, isNull);
       expect(completed.done, isTrue);
     });
 
-    testWidgets('a low rating counts as not helpful', (tester) async {
+    testWidgets('"not really" counts as not helpful', (tester) async {
       await pumpPage(tester);
       await _didIt(tester);
 
-      await tester.tap(find.byKey(const ValueKey('rating-2')));
+      await tester.tap(find.byKey(const ValueKey('again-no')));
+      await tester.pump();
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(suggestionController.history.single.useful, SuggestionUsefulness.down);
@@ -240,6 +245,31 @@ void main() {
       expect(record.done, isNull);
       // And the closing screen says what it actually changed.
       expect(find.textContaining('leave this one out'), findsOneWidget);
+    });
+
+    testWidgets('"I\'m resting today" is no verdict on the idea, and marks the day as rest', (tester) async {
+      final profile = ProfileController(repository: InMemoryProfileRepository());
+      await profile.load();
+      await profile.ensureFirstRun();
+      await _pumpNotTodayPage(tester, suggestionController, profile: profile);
+
+      await tester.tap(find.text('Not today'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('not-today-resting')));
+      await tester.pumpAndSettle();
+
+      final record = suggestionController.history.single;
+      expect(record.status, SuggestionStatus.skipped);
+      // The same as "not now": the engine reads it as no verdict, so the idea can come back.
+      expect(record.skipReason, SuggestionSkipReason.notNow);
+      expect(record.done, isNull);
+      expect(profile.restDays, hasLength(1));
+      expect(find.text('Rest is part of it'), findsOneWidget);
+
+      // A mis-tap can be taken back.
+      await tester.tap(find.byKey(const ValueKey('undo-rest')));
+      await tester.pumpAndSettle();
+      expect(profile.restDays, isEmpty);
     });
 
     testWidgets('"too much right now" is recorded with its reason', (

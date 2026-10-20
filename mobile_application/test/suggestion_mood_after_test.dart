@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/models/activity.dart';
+import 'package:solace_mobile/core/models/emotion_result.dart';
 import 'package:solace_mobile/core/models/session_input.dart';
 import 'package:solace_mobile/core/models/suggestion_record.dart';
 import 'package:solace_mobile/core/models/user_profile.dart';
 import 'package:solace_mobile/core/theme/app_theme.dart';
 import 'package:solace_mobile/data/contracts/activity_library_repository.dart';
+import 'package:solace_mobile/data/contracts/provider_contracts.dart';
 import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_safety_event_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
@@ -13,6 +15,7 @@ import 'package:solace_mobile/data/repositories/in_memory_suggestion_repository.
 import 'package:solace_mobile/domain/recommendations/recommendation_engine.dart';
 import 'package:solace_mobile/features/profile/profile_controller.dart';
 import 'package:solace_mobile/features/safety/safety_controller.dart';
+import 'package:solace_mobile/features/safety/support_resources_page.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
 import 'package:solace_mobile/features/suggestions/suggestion_controller.dart';
 import 'package:solace_mobile/features/suggestions/suggestion_page.dart';
@@ -53,6 +56,26 @@ SuggestionController _controller() => SuggestionController(
 );
 
 const _context = RecommendationContext(profileAgeDays: 20);
+
+/// Reads every note as the given mood at the given confidence, or as nothing when [mood] is null.
+class _Reads implements EmotionAnalyzer {
+  const _Reads(this.mood, this.tier);
+
+  final String? mood;
+  final String tier;
+
+  @override
+  Future<List<EmotionResult>> analyze(SessionInput input) async => [
+    EmotionResult(
+      sessionId: input.sessionId,
+      modality: EmotionModality.text,
+      timestamp: DateTime(2026, 10, 1),
+      modelVersion: 'test',
+      mood: mood,
+      tier: tier,
+    ),
+  ];
+}
 
 void main() {
   group('SuggestionController.recordMoodAfter', () {
@@ -124,7 +147,7 @@ void main() {
     late SessionController sessionController;
     late ProfileController profileController;
 
-    Future<void> openOnDecide(WidgetTester tester) async {
+    Future<void> openOnDecide(WidgetTester tester, {EmotionAnalyzer analyzer = const MockEmotionAnalyzer()}) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.0;
       addTearDown(() {
@@ -135,7 +158,7 @@ void main() {
       suggestionController = _controller();
       sessionController = SessionController(
         repository: InMemorySessionRepository(),
-        emotionAnalyzer: const MockEmotionAnalyzer(),
+        emotionAnalyzer: analyzer,
       );
       profileController = ProfileController(
         repository: InMemoryProfileRepository(),
@@ -164,19 +187,16 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('after doing an idea, one tap records how they feel', (
-      tester,
-    ) async {
+    testWidgets('after doing an idea, picking a word records how they feel', (tester) async {
       await openOnDecide(tester);
 
       await tester.tap(find.text('I did it'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Skip this'));
-      await tester.pumpAndSettle();
-
       expect(find.text('How do you feel now?'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('feel-Steady')));
+      await tester.pump();
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       final record = suggestionController.currentRecord!;
@@ -184,24 +204,135 @@ void main() {
       // Taken from the check-in made just before the idea was offered.
       expect(record.moodBefore, 'Wobbly');
       expect(record.done, isTrue);
-      expect(find.text('Noted, thank you.'), findsOneWidget);
+      expect(find.text('Thanks for telling me'), findsOneWidget);
     });
 
-    testWidgets('ignoring the question records nothing and costs nothing', (
-      tester,
-    ) async {
+    testWidgets('skipping records no mood and costs nothing', (tester) async {
       await openOnDecide(tester);
 
       await tester.tap(find.text('I did it'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Skip this'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Not now'));
-      await tester.pumpAndSettle();
 
       final record = suggestionController.history.single;
       expect(record.moodAfter, isNull);
       expect(record.done, isTrue);
+    });
+
+    testWidgets('Save does nothing until something is chosen or written', (tester) async {
+      await openOnDecide(tester);
+
+      await tester.tap(find.text('I did it'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('How do you feel now?'), findsOneWidget);
+      expect(suggestionController.history.single.moodAfter, isNull);
+    });
+
+    testWidgets('with no word picked, a note the model reads clearly stands in for it', (tester) async {
+      await openOnDecide(tester, analyzer: const _Reads('upbeat', 'clear'));
+
+      await tester.tap(find.text('I did it'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'That was lovely, I feel so much lighter');
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      final record = suggestionController.history.single;
+      expect(record.moodAfter, 'Bright');
+      expect(record.comment, 'That was lovely, I feel so much lighter');
+    });
+
+    testWidgets('a note the model only hints at records the note, not a mood', (tester) async {
+      await openOnDecide(tester, analyzer: const _Reads('upbeat', 'hint'));
+
+      await tester.tap(find.text('I did it'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'It was fine I suppose');
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      final record = suggestionController.history.single;
+      expect(record.moodAfter, isNull);
+      expect(record.comment, 'It was fine I suppose');
+    });
+
+    testWidgets('a note the model could not read records the note, not a mood', (tester) async {
+      await openOnDecide(tester, analyzer: const _Reads(null, 'clear'));
+
+      await tester.tap(find.text('I did it'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'hmm');
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(suggestionController.history.single.moodAfter, isNull);
+    });
+
+    testWidgets('a picked word wins over what the note reads as', (tester) async {
+      await openOnDecide(tester, analyzer: const _Reads('upbeat', 'clear'));
+
+      await tester.tap(find.text('I did it'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('feel-Wobbly')));
+      await tester.enterText(find.byType(TextField), 'Everything is great');
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(suggestionController.history.single.moodAfter, 'Wobbly');
+    });
+
+    testWidgets('a note that raises a safety concern shows support first and saves nothing yet', (tester) async {
+      await openOnDecide(tester);
+
+      await tester.tap(find.text('I did it'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'I want to kill myself');
+      await tester.pump();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SupportResourcesPage), findsOneWidget);
+      expect(suggestionController.history.single.comment, isNull);
+    });
+
+    testWidgets('"I didn\'t actually do this" takes the completion back, so nothing is learned from it', (tester) async {
+      await openOnDecide(tester);
+
+      await tester.tap(find.text('I did it'));
+      await tester.pumpAndSettle();
+      expect(suggestionController.history.single.done, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('not-actually-done')));
+      await tester.pumpAndSettle();
+
+      final record = suggestionController.history.single;
+      expect(record.done, isFalse);
+      expect(record.status, SuggestionStatus.skipped);
+      expect(record.skipReason, SuggestionSkipReason.notNow);
+      expect(record.moodAfter, isNull);
+    });
+
+    testWidgets('the step still fits when the text is enlarged', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await openOnDecide(tester);
+
+      await tester.tap(find.text('I did it'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('feel-Steady')));
+      await tester.tap(find.byKey(const ValueKey('again-yes')));
+      await tester.enterText(find.byType(TextField), 'A bit of fresh air helped.');
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('declining an idea never asks how they feel', (tester) async {
@@ -216,18 +347,34 @@ void main() {
       expect(find.byKey(const ValueKey('feel-Steady')), findsNothing);
     });
 
-    testWidgets('it is asked after a rating too', (tester) async {
-      await openOnDecide(tester);
+  });
 
-      await tester.tap(find.text('I did it'));
-      await tester.pumpAndSettle();
-      // Rate with the fourth star.
-      await tester.tapAt(
-        tester.getCenter(find.byType(CustomPaint).at(3)),
-      );
-      await tester.pumpAndSettle();
+  group('what makes a completion eligible for a late review', () {
+    test('one that already has how they felt is not offered again', () async {
+      final controller = _controller();
+      await controller.load();
+      await controller.suggest(profile: const UserProfile(), context: _context);
+      await controller.recordCompletion();
+      final id = controller.currentRecord!.id;
+      expect(controller.pendingRating(), isNotNull);
 
-      expect(find.text('How do you feel now?'), findsOneWidget);
+      await controller.recordMoodAfter(recordId: id, moodAfter: 'Steady');
+
+      expect(controller.pendingRating(), isNull);
+    });
+
+    test('a completion taken back is never offered, and counts as not done', () async {
+      final controller = _controller();
+      await controller.load();
+      await controller.suggest(profile: const UserProfile(), context: _context);
+      await controller.recordCompletion();
+      final id = controller.currentRecord!.id;
+
+      await controller.markNotDone(id);
+
+      expect(controller.pendingRating(), isNull);
+      expect(controller.currentRecord!.done, isFalse);
+      expect(controller.currentRecord!.status, SuggestionStatus.skipped);
     });
   });
 }

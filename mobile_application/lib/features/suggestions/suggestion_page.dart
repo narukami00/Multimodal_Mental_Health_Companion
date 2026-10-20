@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/moods.dart';
 import '../../core/models/activity.dart';
+import '../../core/models/safety_assessment.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/recommendations/mood_change.dart';
@@ -13,6 +14,7 @@ import '../insights/mood_tab.dart' show moodColors;
 import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
+import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
 import 'suggestion_card_surface.dart';
 import 'suggestion_context.dart';
@@ -65,8 +67,13 @@ class _SuggestionPageState extends State<SuggestionPage> {
   bool _isLoading = true;
   _Step _step = _Step.decide;
 
-  /// Left unset unless the user chooses. A rating is never assumed.
-  int? _rating;
+  /// "Would you do it again?" when they answered it: true is yes, false is not really. Never assumed.
+  bool? _again;
+
+  bool _saving = false;
+
+  /// Whether the note has already been through the safety check (support is shown once, then they can save).
+  bool _noteScreened = false;
 
   /// What the user just did, so the closing screen can say what changes.
   _Outcome _outcome = _Outcome.none;
@@ -127,7 +134,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
   Future<void> _requestSuggestion() async {
     setState(() {
       _isLoading = true;
-      _rating = null;
+      _again = null;
       _outcome = _Outcome.none;
       _step = _Step.decide;
       _ratingTarget = null;
@@ -163,51 +170,96 @@ class _SuggestionPageState extends State<SuggestionPage> {
     });
   }
 
-  Future<void> _rate(int stars) async {
-    // Four and above helped, two and below did not. Three is neutral and is
-    // not recorded as either, because the model has no middle verdict.
-    final usefulness = stars >= 4
-        ? SuggestionUsefulness.up
-        : stars <= 2
-        ? SuggestionUsefulness.down
-        : null;
-    setState(() => _rating = stars);
+  /// Whether this is a late review of something done earlier (opened from the quiet "want to say how it
+  /// went?" card). How they feel now says nothing about what the idea did, so no mood is paired with it.
+  bool get _late => _ratingTarget != null;
 
-    final recordId = _ratingTarget?.id ?? _currentRecordId;
-    if (recordId != null) {
+  /// Saves the "after" step: how they feel, whether they would do it again, and a note. Every part is
+  /// optional and only what was actually given is kept.
+  Future<void> _saveFeel() async {
+    if (_saving) return;
+    final record = _ratingTarget ?? widget.suggestionController.currentRecord;
+    if (record == null) return;
+    final note = _commentController.text.trim();
+
+    // What they wrote is checked for safety first, the same as everywhere else words are typed in.
+    if (note.isNotEmpty && !_noteScreened) {
+      final assessment = await widget.safetyController.assessText(source: 'task_note', text: note);
+      if (assessment.level != SafetyLevel.clear) {
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => SupportResourcesPage(
+              safetyController: widget.safetyController,
+              profileController: widget.profileController,
+              assessment: assessment,
+            ),
+          ),
+        );
+        if (mounted) setState(() => _noteScreened = true);
+        return;
+      }
+    }
+
+    setState(() => _saving = true);
+    // How they feel now: the word they picked. With none picked, only a note the model reads clearly
+    // as one mood stands in for it; a hint, or no reading, records nothing.
+    var mood = _late ? null : _feelNow;
+    if (!_late && mood == null && note.isNotEmpty) {
+      final reading = await widget.sessionController?.readNote(note);
+      if (reading != null && reading.tier == 'clear' && reading.mood != null) {
+        mood = Moods.fromReadingMood(reading.mood);
+      }
+    }
+    if (mood != null) {
+      await widget.suggestionController.recordMoodAfter(
+        recordId: record.id,
+        moodAfter: mood,
+        moodBefore: moodBeforeFor(
+          shownAt: record.shownAt,
+          sessions: widget.sessionController?.sessions ?? const [],
+        ),
+      );
+    }
+    final again = _again;
+    if (again != null || note.isNotEmpty) {
       await widget.suggestionController.recordRating(
-        recordId: recordId,
-        usefulness: usefulness,
-        rating: stars,
-        comment: _commentController.text.trim().isEmpty
-            ? null
-            : _commentController.text.trim(),
+        recordId: record.id,
+        usefulness: again == null ? null : (again ? SuggestionUsefulness.up : SuggestionUsefulness.down),
+        comment: note.isEmpty ? null : note,
       );
     }
     if (!mounted) return;
     setState(() {
-      _outcome = usefulness == SuggestionUsefulness.down
+      _saving = false;
+      _outcome = again == true
+          ? _Outcome.ratedUp
+          : again == false
           ? _Outcome.ratedDown
-          : _Outcome.ratedUp;
+          : (mood != null || note.isNotEmpty)
+          ? _Outcome.felt
+          : _Outcome.completedUnrated;
       _step = _Step.thanks;
     });
   }
 
-  /// Saves how they feel now against the idea they just did, together with the
-  /// mood from the check-in before it when there is one close enough.
-  Future<void> _recordFeel(String mood) async {
-    final record =
-        _ratingTarget ?? widget.suggestionController.currentRecord;
+  /// "I did it" was a mis-tap. The record goes back to a plain "not now" so nothing is learned from it.
+  Future<void> _notActuallyDone() async {
+    final record = _ratingTarget ?? widget.suggestionController.currentRecord;
     if (record == null) return;
-    setState(() => _feelNow = mood);
-    await widget.suggestionController.recordMoodAfter(
-      recordId: record.id,
-      moodAfter: mood,
-      moodBefore: moodBeforeFor(
-        shownAt: record.shownAt,
-        sessions: widget.sessionController?.sessions ?? const [],
-      ),
-    );
+    await widget.suggestionController.markNotDone(record.id);
+    if (!mounted) return;
+    setState(() {
+      _outcome = _Outcome.notNow;
+      _step = _Step.thanks;
+    });
+  }
+
+  /// Takes back "I'm resting today", for a mis-tap.
+  Future<void> _undoRest() async {
+    await widget.profileController.removeRestDay(DateTime.now());
+    if (!mounted) return;
+    setState(() => _outcome = _Outcome.notNow);
   }
 
   Future<void> _skipRating() async {
@@ -226,6 +278,8 @@ class _SuggestionPageState extends State<SuggestionPage> {
       status: SuggestionStatus.skipped,
       skipReason: outcome.skipReason,
     );
+    // Resting is the person's own choice and counts as showing up; it says nothing about the idea.
+    if (outcome == _Outcome.resting) await widget.profileController.declareRestDay(DateTime.now());
     if (!mounted) return;
     setState(() => _step = _Step.thanks);
   }
@@ -234,7 +288,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
       widget.suggestionController.currentRecord?.id;
 
   Future<void> _openNotToday() async {
-    final choice = await showModalBottomSheet<SuggestionSkipReason>(
+    final choice = await showModalBottomSheet<_Outcome>(
       context: context,
       builder: (context) => SafeArea(
         child: Column(
@@ -245,22 +299,26 @@ class _SuggestionPageState extends State<SuggestionPage> {
               leading: const Icon(Icons.schedule_rounded),
               title: const Text('Not right now'),
               subtitle: const Text('It can come back around. Nothing is lost.'),
-              onTap: () =>
-                  Navigator.of(context).pop(SuggestionSkipReason.notNow),
+              onTap: () => Navigator.of(context).pop(_Outcome.notNow),
+            ),
+            ListTile(
+              key: const ValueKey('not-today-resting'),
+              leading: const Icon(Icons.bedtime_outlined),
+              title: const Text("I'm resting today"),
+              subtitle: const Text('Marks today as a rest day. Resting counts as showing up.'),
+              onTap: () => Navigator.of(context).pop(_Outcome.resting),
             ),
             ListTile(
               leading: const Icon(Icons.do_not_disturb_alt_rounded),
               title: const Text('Not for me'),
               subtitle: const Text("We'll leave this one out for a while."),
-              onTap: () =>
-                  Navigator.of(context).pop(SuggestionSkipReason.notForMe),
+              onTap: () => Navigator.of(context).pop(_Outcome.notForMe),
             ),
             ListTile(
               leading: const Icon(Icons.battery_2_bar_rounded),
               title: const Text('Too much right now'),
               subtitle: const Text("We'll keep things gentler for a bit."),
-              onTap: () =>
-                  Navigator.of(context).pop(SuggestionSkipReason.tooHard),
+              onTap: () => Navigator.of(context).pop(_Outcome.tooHard),
             ),
             const SizedBox(height: 8),
           ],
@@ -268,11 +326,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
       ),
     );
     if (choice == null || !mounted) return;
-    await _dismiss(switch (choice) {
-      SuggestionSkipReason.notNow => _Outcome.notNow,
-      SuggestionSkipReason.notForMe => _Outcome.notForMe,
-      SuggestionSkipReason.tooHard => _Outcome.tooHard,
-    });
+    await _dismiss(choice);
   }
 
   @override
@@ -328,8 +382,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
               outcome: _outcome,
               onNext: _requestSuggestion,
               onDone: () => Navigator.of(context).maybePop(),
-              feelNow: _feelNow,
-              onFeel: _outcome.wasDone ? _recordFeel : null,
+              onUndoRest: _outcome == _Outcome.resting ? _undoRest : null,
             ),
           };
         },
@@ -369,7 +422,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
                     title: pendingActivity.title,
                     onRate: () => setState(() {
                       _ratingTarget = pending;
-                      _rating = null;
+                      _again = null;
                       _step = _Step.rate;
                     }),
                     onDismiss: () => setState(() => _ratingPromptDismissed = true),
@@ -413,6 +466,9 @@ class _SuggestionPageState extends State<SuggestionPage> {
   Widget _buildRate() {
     final activity = _ratingActivity;
     final palette = activity == null ? null : ActivityArt.paletteFor(activity.type);
+    final hasNote = _commentController.text.trim().isNotEmpty;
+    final canSave = _feelNow != null || _again != null || hasNote;
+    final reads = widget.sessionController != null && !_late;
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -424,7 +480,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'How did it go?',
+                _late ? 'How did it go?' : 'How do you feel now?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.6,
@@ -438,19 +494,48 @@ class _SuggestionPageState extends State<SuggestionPage> {
                 ),
               ],
               const SizedBox(height: 4),
-              const Text(
-                'Entirely optional. Nothing here is required to keep using Solace.',
-                style: TextStyle(color: AppColors.mutedInk, height: 1.45, fontSize: 13),
+              Text(
+                _late
+                    ? 'Everything here is optional.'
+                    : 'Pick the word that fits, or write a line. Everything here is optional, and this is how Insights learns what helps you.',
+                style: const TextStyle(color: AppColors.mutedInk, height: 1.45, fontSize: 13),
               ),
-              const SizedBox(height: 18),
-              _StarRow(value: _rating, onRate: _rate),
+              if (!_late) ...[
+                const SizedBox(height: 16),
+                _MoodChips(selected: _feelNow, onSelect: (m) => setState(() => _feelNow = _feelNow == m ? null : m)),
+              ],
+              const SizedBox(height: 20),
+              const Text(
+                'Would you do it again?',
+                style: TextStyle(color: AppColors.mutedInk, fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    key: const ValueKey('again-yes'),
+                    label: const Text('Yes, again'),
+                    selected: _again == true,
+                    onSelected: (_) => setState(() => _again = _again == true ? null : true),
+                  ),
+                  ChoiceChip(
+                    key: const ValueKey('again-no'),
+                    label: const Text('Not really'),
+                    selected: _again == false,
+                    onSelected: (_) => setState(() => _again = _again == false ? null : false),
+                  ),
+                ],
+              ),
               const SizedBox(height: 18),
               TextField(
                 controller: _commentController,
                 minLines: 2,
                 maxLines: 4,
+                onChanged: (_) => setState(() => _noteScreened = false),
                 decoration: InputDecoration(
-                  hintText: 'Anything worth remembering?',
+                  hintText: 'Anything you want to remember?',
                   hintStyle: const TextStyle(color: AppColors.mutedInk),
                   filled: true,
                   fillColor: Colors.white,
@@ -469,13 +554,32 @@ class _SuggestionPageState extends State<SuggestionPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
-              Center(
-                child: TextButton(
-                  onPressed: _skipRating,
-                  child: const Text('Skip this'),
+              if (reads)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(4, 6, 4, 0),
+                  child: Text(
+                    "If you don't pick a word, Solace can read one from what you write, when you've allowed that.",
+                    style: TextStyle(color: AppColors.mutedInk, fontSize: 11.5, height: 1.4),
+                  ),
                 ),
+              const SizedBox(height: 18),
+              _ActionButton(
+                label: _saving ? 'Saving…' : 'Save',
+                filled: true,
+                onPressed: canSave && !_saving ? _saveFeel : null,
               ),
+              const SizedBox(height: 6),
+              Center(
+                child: TextButton(onPressed: _skipRating, child: const Text('Skip this')),
+              ),
+              if (!_late)
+                Center(
+                  child: TextButton(
+                    key: const ValueKey('not-actually-done'),
+                    onPressed: _notActuallyDone,
+                    child: const Text("I didn't actually do this"),
+                  ),
+                ),
             ],
           ),
         ),
@@ -734,101 +838,6 @@ class _WhyThis extends StatelessWidget {
   }
 }
 
-/// Five stars, drawn so their weight can be tuned and so they do not depend on
-/// an icon font being present.
-class _StarRow extends StatelessWidget {
-  const _StarRow({required this.value, required this.onRate});
-
-  final int? value;
-  final void Function(int) onRate;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (var star = 1; star <= 5; star++)
-          GestureDetector(
-            key: ValueKey('rating-$star'),
-            behavior: HitTestBehavior.opaque,
-            onTap: () => onRate(star),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 9),
-              child: AnimatedScale(
-                duration: const Duration(milliseconds: 160),
-                scale: (value ?? 0) >= star ? 1.0 : 0.9,
-                child: CustomPaint(
-                  size: const Size(40, 40),
-                  painter: _StarPainter(
-                    filled: (value ?? 0) >= star,
-                    active: AppColors.amber,
-                    idle: AppColors.mutedInk.withValues(alpha: 0.32),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _StarPainter extends CustomPainter {
-  _StarPainter({
-    required this.filled,
-    required this.active,
-    required this.idle,
-  });
-
-  final bool filled;
-  final Color active;
-  final Color idle;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final centre = Offset(size.width / 2, size.height / 2);
-    final outer = size.width * 0.46;
-    final inner = outer * 0.46;
-
-    final path = Path();
-    for (var i = 0; i < 10; i++) {
-      final radius = i.isEven ? outer : inner;
-      // Start at the top point rather than the right.
-      final angle = (math.pi / 5) * i - math.pi / 2;
-      final point = Offset(
-        centre.dx + radius * math.cos(angle),
-        centre.dy + radius * math.sin(angle),
-      );
-      if (i == 0) {
-        path.moveTo(point.dx, point.dy);
-      } else {
-        path.lineTo(point.dx, point.dy);
-      }
-    }
-    path.close();
-
-    if (filled) {
-      canvas.drawPath(path, Paint()..color = active);
-    } else {
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
-          ..strokeJoin = StrokeJoin.round
-          ..color = idle,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _StarPainter oldDelegate) {
-    return oldDelegate.filled != filled ||
-        oldDelegate.active != active ||
-        oldDelegate.idle != idle;
-  }
-}
-
 /// Where the user is in the flow.
 enum _Step { decide, rate, thanks }
 
@@ -837,9 +846,11 @@ enum _Outcome {
   none,
   completed,
   completedUnrated,
+  felt,
   ratedUp,
   ratedDown,
   notNow,
+  resting,
   notForMe,
   tooHard;
 
@@ -848,13 +859,15 @@ enum _Outcome {
   bool get wasDone => switch (this) {
     _Outcome.completed ||
     _Outcome.completedUnrated ||
+    _Outcome.felt ||
     _Outcome.ratedUp ||
     _Outcome.ratedDown => true,
     _ => false,
   };
 
   SuggestionSkipReason? get skipReason => switch (this) {
-    _Outcome.notNow => SuggestionSkipReason.notNow,
+    // Resting is "not now" as far as the idea goes: no verdict on it, and it can come back.
+    _Outcome.notNow || _Outcome.resting => SuggestionSkipReason.notNow,
     _Outcome.notForMe => SuggestionSkipReason.notForMe,
     _Outcome.tooHard => SuggestionSkipReason.tooHard,
     _ => null,
@@ -864,6 +877,8 @@ enum _Outcome {
   /// page.
   String get headline => switch (this) {
     _Outcome.completedUnrated => 'Good to know you did it',
+    _Outcome.felt => 'Thanks for telling me',
+    _Outcome.resting => 'Rest is part of it',
     _Outcome.ratedUp => 'Noted, thank you',
     _Outcome.ratedDown => 'Thanks for being honest',
     _Outcome.notNow => 'No rush at all',
@@ -879,7 +894,9 @@ enum _Outcome {
   /// the effort ceiling for a fortnight.
   String get impact => switch (this) {
     _Outcome.completedUnrated =>
-      'A rating is always optional. Nothing else is needed from you.',
+      'Everything here is optional. Nothing else is needed from you.',
+    _Outcome.felt => 'How you feel after things is what Insights learns from.',
+    _Outcome.resting => 'Today is marked as a rest day. Resting counts as showing up.',
     _Outcome.ratedUp => 'That shapes what comes next.',
     _Outcome.ratedDown =>
       'We will look for something that fits you better.',
@@ -892,7 +909,7 @@ enum _Outcome {
   /// Whether offering another idea is welcome here. After a refusal it would
   /// read as not having listened.
   bool get offersAnother =>
-      this == _Outcome.completedUnrated || this == _Outcome.ratedUp;
+      this == _Outcome.completedUnrated || this == _Outcome.felt || this == _Outcome.ratedUp;
 }
 
 /// A quiet offer to rate something done earlier, never pushed.
@@ -992,8 +1009,7 @@ class _FeedbackThanks extends StatelessWidget {
     required this.outcome,
     required this.onNext,
     required this.onDone,
-    this.feelNow,
-    this.onFeel,
+    this.onUndoRest,
   });
 
   final ActivityType type;
@@ -1001,9 +1017,8 @@ class _FeedbackThanks extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onDone;
 
-  /// Offered only after an idea that was done. Null [onFeel] hides it.
-  final String? feelNow;
-  final ValueChanged<String>? onFeel;
+  /// Shown only after "I'm resting today", to take it back.
+  final VoidCallback? onUndoRest;
 
   @override
   Widget build(BuildContext context) {
@@ -1031,9 +1046,9 @@ class _FeedbackThanks extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: AppColors.mutedInk, height: 1.5, fontSize: 14),
               ),
-              if (onFeel != null) ...[
-                const SizedBox(height: 24),
-                _FeelNow(selected: feelNow, onSelect: onFeel!),
+              if (onUndoRest != null) ...[
+                const SizedBox(height: 10),
+                TextButton(key: const ValueKey('undo-rest'), onPressed: onUndoRest, child: const Text('Undo')),
               ],
               const SizedBox(height: 30),
               Row(
@@ -1145,45 +1160,32 @@ class _CelebratePainter extends CustomPainter {
   bool shouldRepaint(covariant _CelebratePainter old) => old.t != t || old.burst != burst;
 }
 
-/// A quiet, optional "how do you feel now?" under the closing message.
-///
-/// One tap on a mood word and it is saved; ignoring it costs nothing. The words wear the same colours
-/// as everywhere else in the app.
-class _FeelNow extends StatelessWidget {
-  const _FeelNow({required this.selected, required this.onSelect});
+/// The five mood words as tappable chips, in the colours used everywhere else in the app.
+class _MoodChips extends StatelessWidget {
+  const _MoodChips({required this.selected, required this.onSelect});
 
   final String? selected;
   final ValueChanged<String> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: [
-        Text(
-          selected == null ? 'How do you feel now?' : 'Noted, thank you.',
-          style: const TextStyle(color: AppColors.mutedInk, fontSize: 13, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final mood in Moods.values)
-              ChoiceChip(
-                key: ValueKey('feel-$mood'),
-                avatar: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(color: moodColors[mood], shape: BoxShape.circle),
-                ),
-                label: Text(Moods.display(mood)),
-                selected: selected == mood,
-                showCheckmark: false,
-                onSelected: (_) => onSelect(mood),
-              ),
-          ],
-        ),
+        for (final mood in Moods.values)
+          ChoiceChip(
+            key: ValueKey('feel-$mood'),
+            avatar: Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(color: moodColors[mood], shape: BoxShape.circle),
+            ),
+            label: Text(Moods.display(mood)),
+            selected: selected == mood,
+            showCheckmark: false,
+            onSelected: (_) => onSelect(mood),
+          ),
       ],
     );
   }

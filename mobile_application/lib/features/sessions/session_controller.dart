@@ -115,6 +115,17 @@ class SessionController extends ChangeNotifier {
           if (s.reading == null && (s.text?.trim().isNotEmpty ?? false)) s,
       ];
 
+  /// Reads a short piece of text (such as the note after a task) with the emotion model WITHOUT keeping
+  /// it as an entry. Null when there is no reading: no text, no consent, no server, or nothing to say.
+  Future<EmotionResult?> readNote(String text) async {
+    final words = text.trim();
+    if (words.isEmpty) return null;
+    final results = await _emotionAnalyzer.analyze(
+      SessionInput(sessionId: 'note-${DateTime.now().microsecondsSinceEpoch}', mode: CaptureMode.text, text: words),
+    );
+    return results.isEmpty ? null : results.first;
+  }
+
   /// Reads one existing entry with the emotion model and keeps the reading with it. Returns the updated
   /// entry, or null when no reading could be made (nothing is changed then).
   Future<SessionRecord?> reanalyze(SessionRecord session) async {
