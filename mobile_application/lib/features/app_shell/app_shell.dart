@@ -562,6 +562,7 @@ class _AppShellState extends State<AppShell> {
                     ? null
                     : MomentsInsightsTab(
                         moments: widget.moments!,
+                        onTalk: () => _openChat(context, startNew: true),
                         onManage: widget.memory == null
                             ? null
                             : () => Navigator.of(context).push(
