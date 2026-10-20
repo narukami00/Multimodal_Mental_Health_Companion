@@ -1,3 +1,4 @@
+import '../constants/moods.dart';
 import 'emotion_result.dart';
 import 'session_input.dart';
 
@@ -17,6 +18,27 @@ class SessionRecord {
   final String? text;
   final String? mood;
   final List<EmotionResult> emotionResults;
+
+  /// The model's full reading of this entry, or null for entries made before there was one (or when the
+  /// server or the person's consent was missing).
+  EmotionResult? get reading {
+    for (final result in emotionResults) {
+      if (result.classes != null) return result;
+    }
+    return null;
+  }
+
+  /// The mood the app works with: what the model read from the entry, else (older entries) the word that
+  /// was picked at the time. Always one of [Moods.values]; null when neither exists.
+  String? get effectiveMood {
+    final r = reading;
+    if (r != null) return Moods.fromReadingMood(r.mood);
+    final picked = mood?.trim().toLowerCase();
+    for (final word in Moods.values) {
+      if (word.toLowerCase() == picked) return word; // older entries stored it in lower case
+    }
+    return mood;
+  }
 
   Map<String, Object?> toMap() {
     return {

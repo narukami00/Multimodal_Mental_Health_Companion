@@ -40,6 +40,14 @@ class EmotionResult {
     this.arousal,
     this.labels,
     this.confidence,
+    this.classes,
+    this.valenceProbs,
+    this.arousalProbs,
+    this.mood,
+    this.tier,
+    this.pattern,
+    this.inContext = false,
+    this.faceClasses,
   });
 
   final String sessionId;
@@ -55,6 +63,47 @@ class EmotionResult {
   final double? confidence;
   final String modelVersion;
 
+  /// A real model's full reading (absent on older or sample entries): the seven class
+  /// probabilities, the valence (negative/neutral/positive) and arousal (low/mid/high)
+  /// probabilities, a plain mood word such as 'low or tired' (null when the model was unsure),
+  /// how sure it was ('clear' or 'hint'), and which signals it used ('A' voice, 'T' words,
+  /// 'V' face, e.g. 'ATV').
+  final Map<String, double>? classes;
+  final Map<String, double>? valenceProbs;
+  final Map<String, double>? arousalProbs;
+  final String? mood;
+  final String? tier;
+  final String? pattern;
+
+  /// True when the earlier messages of the conversation were taken into account (a short message such as
+  /// "ok" says little alone), or the server's running read of the conversation was used.
+  final bool inContext;
+
+  /// The seven class probabilities from the face on its own, when the camera was used for this message. Kept
+  /// apart from [classes] (which blends voice, words and face) so the person can choose to see how they looked.
+  /// Never used to decide anything: the face is the weakest signal.
+  final Map<String, double>? faceClasses;
+
+  EmotionResult copyWith({EmotionOrigin? origin, bool? inContext}) => EmotionResult(
+        sessionId: sessionId,
+        modality: modality,
+        timestamp: timestamp,
+        modelVersion: modelVersion,
+        origin: origin ?? this.origin,
+        valence: valence,
+        arousal: arousal,
+        labels: labels,
+        confidence: confidence,
+        classes: classes,
+        valenceProbs: valenceProbs,
+        arousalProbs: arousalProbs,
+        mood: mood,
+        tier: tier,
+        pattern: pattern,
+        inContext: inContext ?? this.inContext,
+        faceClasses: faceClasses,
+      );
+
   Map<String, Object?> toMap() {
     return {
       'sessionId': sessionId,
@@ -66,6 +115,14 @@ class EmotionResult {
       'labels': labels?.map((label) => label.toMap()).toList(),
       'confidence': confidence,
       'modelVersion': modelVersion,
+      if (classes != null) 'classes': classes,
+      if (valenceProbs != null) 'valenceProbs': valenceProbs,
+      if (arousalProbs != null) 'arousalProbs': arousalProbs,
+      if (mood != null) 'mood': mood,
+      if (tier != null) 'tier': tier,
+      if (pattern != null) 'pattern': pattern,
+      if (inContext) 'inContext': true,
+      if (faceClasses != null) 'faceClasses': faceClasses,
     };
   }
 
@@ -95,6 +152,23 @@ class EmotionResult {
           .toList(),
       confidence: (map['confidence'] as num?)?.toDouble(),
       modelVersion: map['modelVersion'] as String? ?? 'unknown',
+      classes: _probs(map['classes']),
+      valenceProbs: _probs(map['valenceProbs']),
+      arousalProbs: _probs(map['arousalProbs']),
+      mood: map['mood'] as String?,
+      tier: map['tier'] as String?,
+      pattern: map['pattern'] as String?,
+      inContext: map['inContext'] as bool? ?? false,
+      faceClasses: _probs(map['faceClasses']),
     );
+  }
+
+  static Map<String, double>? _probs(Object? raw) {
+    if (raw is! Map) return null;
+    final out = <String, double>{};
+    raw.forEach((key, value) {
+      if (key is String && value is num) out[key] = value.toDouble();
+    });
+    return out.isEmpty ? null : out;
   }
 }

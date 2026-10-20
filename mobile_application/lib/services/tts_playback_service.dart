@@ -71,6 +71,8 @@ class TtsPlaybackService {
 
   final BytesBuilder _currentSegmentPcm = BytesBuilder(copy: false);
   final BytesBuilder _fullUtterancePcm = BytesBuilder(copy: false);
+
+  /// Raw PCM of clauses that have arrived and are waiting their turn.
   final List<Uint8List> _playbackQueue = [];
 
   String? _lastGeneratedAudioPath;
@@ -122,7 +124,7 @@ class TtsPlaybackService {
     _activeUtteranceId = data['utterance_id'] as String?;
     _activeStreamId = data['audio_stream_id'] as int?;
     _activeSampleRate = data['sample_rate'] as int? ?? 24000;
-    _activeVoiceId = data['voice_id'] as String? ?? 'af_heart';
+    _activeVoiceId = data['voice_id'] as String? ?? 'af_bella';
 
     _currentSegmentPcm.clear();
     _fullUtterancePcm.clear();
@@ -173,23 +175,28 @@ class TtsPlaybackService {
     if (state == 'ended') {
       final segPcm = _currentSegmentPcm.toBytes();
       _currentSegmentPcm.clear();
-      if (segPcm.isNotEmpty) {
-        final wavData = PcmAudioRecorderService.createWav(
-          segPcm,
-          sampleRate: _activeSampleRate,
-          channels: 1,
-          bitsPerSample: 16,
-        );
-        _enqueueSegment(wavData);
-      }
+      if (segPcm.isNotEmpty) _enqueueSegment(segPcm);
     }
   }
 
-  void _enqueueSegment(Uint8List wavBytes) {
-    _playbackQueue.add(wavBytes);
+  void _enqueueSegment(Uint8List pcm) {
+    _playbackQueue.add(pcm);
     if (!_isPlayerActive) {
       _playNextSegment();
     }
+  }
+
+  /// Everything queued right now, as one clip. The server sends clauses as fast
+  /// as it makes them, so by the time one clip ends the next few are usually
+  /// here: playing them as one removes a stop-and-start between every clause.
+  Uint8List _takeQueuedAudio() {
+    if (_playbackQueue.length == 1) return _playbackQueue.removeAt(0);
+    final all = BytesBuilder(copy: false);
+    for (final pcm in _playbackQueue) {
+      all.add(pcm);
+    }
+    _playbackQueue.clear();
+    return all.takeBytes();
   }
 
   Future<void> _playNextSegment() async {
@@ -205,16 +212,24 @@ class TtsPlaybackService {
       return;
     }
 
-    final nextWav = _playbackQueue.removeAt(0);
+    final pcm = _takeQueuedAudio();
+    final nextWav = PcmAudioRecorderService.createWav(
+      pcm,
+      sampleRate: _activeSampleRate,
+      channels: 1,
+      bitsPerSample: 16,
+    );
     _isPlayerActive = true;
     _setPlaying(true);
 
     if (_audioPlayer != null) {
       try {
-        await _audioPlayer.stop();
-        await _audioPlayer.setVolume(1.0);
-        debugPrint('[TtsPlayback] Playing segment: ${nextWav.length} bytes '
-            '(queue remaining: ${_playbackQueue.length})');
+        // No stop() / setVolume() here: a clip that finished on its own leaves the
+        // player ready, and each of those calls is a platform round trip that
+        // would land in the middle of the speech. stopVoice() restores the
+        // volume itself after a fade.
+        debugPrint('[TtsPlayback] Playing ${nextWav.length} bytes '
+            '(${pcm.length * 1000 ~/ (_activeSampleRate * 2)} ms)');
         await _audioPlayer.play(BytesSource(nextWav));
       } catch (e) {
         debugPrint('[TtsPlayback] Segment playback error: $e');
@@ -256,15 +271,7 @@ class TtsPlaybackService {
     // Flush any leftover pcm in current segment buffer
     final leftover = _currentSegmentPcm.toBytes();
     _currentSegmentPcm.clear();
-    if (leftover.isNotEmpty) {
-      final wavData = PcmAudioRecorderService.createWav(
-        leftover,
-        sampleRate: _activeSampleRate,
-        channels: 1,
-        bitsPerSample: 16,
-      );
-      _enqueueSegment(wavData);
-    }
+    if (leftover.isNotEmpty) _enqueueSegment(leftover);
 
     final fullPcm = _fullUtterancePcm.toBytes();
     if (fullPcm.isNotEmpty) {

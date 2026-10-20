@@ -18,6 +18,7 @@ class _FakeCallWs extends CompanionWebSocketService {
   final _llmStart = StreamController<Map<String, dynamic>>.broadcast();
   final _llmChunk = StreamController<Map<String, dynamic>>.broadcast();
   final _ttsEnd = StreamController<Map<String, dynamic>>.broadcast();
+  final _emotion = StreamController<Map<String, dynamic>>.broadcast();
 
   @override
   CompanionConnectionStatus get status => CompanionConnectionStatus.connected;
@@ -34,7 +35,12 @@ class _FakeCallWs extends CompanionWebSocketService {
   @override
   Stream<Map<String, dynamic>> get ttsEndStream => _ttsEnd.stream;
 
+  @override
+  Stream<Map<String, dynamic>> get emotionUpdateStream => _emotion.stream;
+
   void say(String text) => _transcript.add({'text': text});
+
+  void serverEmotion(Map<String, dynamic> update) => _emotion.add(update);
 
   void beginReply() => _llmStart.add(const {});
 
@@ -49,6 +55,7 @@ class _FakeCallWs extends CompanionWebSocketService {
     _llmStart.close();
     _llmChunk.close();
     _ttsEnd.close();
+    _emotion.close();
     super.dispose();
   }
 }
@@ -75,7 +82,7 @@ void main() {
   testWidgets('renders session chrome and toggles mic state', (tester) async {
     await pumpCall(tester);
 
-    expect(find.text('Solace Voice'), findsOneWidget);
+    expect(find.text('Sol'), findsOneWidget);
     expect(find.text('MIC ON'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.mic_none_rounded), warnIfMissed: false);
@@ -87,7 +94,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('MIC ON'), findsOneWidget);
 
-    // Raise hand button is rendered and toggles to listening state
+    // The offline demo has Sol speaking, so the raise-hand button is available and toggles to listening
     expect(find.text('RAISE HAND'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.front_hand_rounded), warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 300));
@@ -136,8 +143,62 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Solace Voice'), findsOneWidget);
+    expect(find.text('Sol'), findsOneWidget);
     expect(find.text('Take your time. Silence is welcome here.'), findsOneWidget);
+  });
+
+  testWidgets('the full reading of a call turn (voice, words, face) lands on the persons message', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final ws = _FakeCallWs();
+    final recorder = PcmAudioRecorderService(isMock: true);
+    final tts = TtsPlaybackService(webSocketService: ws, isMock: true);
+    final chat = ChatController();
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tts.dispose();
+      recorder.dispose();
+      ws.dispose();
+      chat.dispose();
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: CallPage(
+        safetyController: createSafety(),
+        webSocketService: ws,
+        audioRecorderService: recorder,
+        ttsPlaybackService: tts,
+        chatController: chat,
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    ws.say('I am so tired of all this');
+    await tester.pump();
+    ws.serverEmotion({
+      'turn_id': 't1',
+      'pattern': 'ATV',
+      'mood': 'low or tired',
+      'tier': 'clear',
+      'valence': -0.5,
+      'arousal': -0.4,
+      'model_version': 'test',
+      'estimate': {
+        'l7': {'sad': 0.6, 'neutral': 0.4},
+        'lv': {'negative': 0.7, 'neutral': 0.2, 'positive': 0.1},
+        'la': {'low': 0.6, 'mid': 0.3, 'high': 0.1},
+      },
+    });
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final mine = chat.activeConversation!.messages.where((m) => m.isUser).single;
+    expect(mine.reading?.pattern, 'ATV'); // voice + words + face
+    expect(mine.reading?.mood, 'low or tired');
+    expect(mine.reading?.valenceProbs?['negative'], 0.7);
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    await tester.pump();
   });
 
   testWidgets('call speech and Sol replies are recorded in the chat history',

@@ -15,7 +15,7 @@ List<double> dailyMoodScores({
 }) {
   final scoresByDay = <String, List<double>>{};
   for (final session in sessions) {
-    final score = Moods.score(session.mood);
+    final score = Moods.score(session.effectiveMood);
     if (score == null) continue;
     scoresByDay.putIfAbsent(dayKey(session.createdAt), () => []).add(score);
   }

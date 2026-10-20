@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import logging
 import math
+import os
 from pathlib import Path
 import threading
 import time
@@ -275,6 +276,34 @@ class EdgeTtsEngine(BaseTtsEngine):
             return self._fallback_mock.synthesize(clean_text, voice_id=voice_id, speed=speed)
 
 
+_KOKORO_V1_NAMES = (
+    "af_alloy af_aoede af_bella af_heart af_jessica af_kore af_nicole af_nova af_river af_sarah af_sky "
+    "am_adam am_echo am_eric am_fenrir am_liam am_michael am_onyx am_puck am_santa "
+    "bf_alice bf_emma bf_isabella bf_lily bm_daniel bm_fable bm_george bm_lewis"
+).split()
+_KOKORO_V019_NAMES = "af af_bella af_nicole af_sarah af_sky am_adam am_michael bf_emma bf_isabella bm_george bm_lewis".split()
+# The names the app's voice picker already shows, with the character each is known for.
+_KOKORO_FRIENDLY = {
+    "af_heart": "Heart (Warm Female)", "af_bella": "Bella (Gentle Female)", "af_sarah": "Sarah (Calm Female)",
+    "am_michael": "Michael (Calm Male)", "am_adam": "Adam (Gentle Male)",
+}
+
+
+def kokoro_voice_table(version: str) -> List[Dict[str, Any]]:
+    """Every English voice of a Kokoro model as {id, sid, name, gender}, with the speaker number that model really uses."""
+    names = _KOKORO_V019_NAMES if version == "v0_19" else _KOKORO_V1_NAMES
+    table = []
+    for sid, voice in enumerate(names):
+        label = voice.split("_", 1)[-1].capitalize() if "_" in voice else voice
+        table.append({
+            "id": voice,
+            "sid": sid,
+            "name": _KOKORO_FRIENDLY.get(voice, label),
+            "gender": "male" if voice[1:2] == "m" else "female",
+        })
+    return table
+
+
 class SherpaOnnxTtsEngine(BaseTtsEngine):
     """High-performance on-device TTS using sherpa-onnx (Kokoro-82M or Piper VITS)."""
 
@@ -286,11 +315,13 @@ class SherpaOnnxTtsEngine(BaseTtsEngine):
         data_dir: Optional[str | Path] = None,
         is_kokoro: bool = True,
         num_threads: int = 2,
+        lexicon_path: Optional[str | Path] = None,
     ) -> None:
         self.model_path = Path(model_path)
         self.tokens_path = Path(tokens_path)
         self.voices_path = Path(voices_path) if voices_path else None
         self.data_dir = Path(data_dir) if data_dir else None
+        self.lexicon_path = Path(lexicon_path) if lexicon_path else None
         self.is_kokoro = is_kokoro
         self.num_threads = num_threads
 
@@ -299,14 +330,8 @@ class SherpaOnnxTtsEngine(BaseTtsEngine):
         self._lock = threading.Lock()
         self._is_ready: bool = False
 
-        # Predefined voice names supported by Kokoro-82M
-        self._kokoro_voices = [
-            {"id": "af_heart", "sid": 0, "name": "Heart (Warm Female)", "gender": "female"},
-            {"id": "af_bella", "sid": 1, "name": "Bella (Gentle Female)", "gender": "female"},
-            {"id": "af_sarah", "sid": 2, "name": "Sarah (Calm Female)", "gender": "female"},
-            {"id": "am_michael", "sid": 3, "name": "Michael (Calm Male)", "gender": "male"},
-            {"id": "am_adam", "sid": 4, "name": "Adam (Gentle Male)", "gender": "male"},
-        ]
+        # Speaker numbers belong to the model: the same voice name has a different number in v0.19 and v1.0.
+        self._kokoro_voices = kokoro_voice_table("v0_19" if "v0_19" in self.model_path.as_posix() else "v1_0")
 
     @property
     def name(self) -> str:
@@ -339,6 +364,7 @@ class SherpaOnnxTtsEngine(BaseTtsEngine):
                         voices=str(self.voices_path) if self.voices_path else "",
                         tokens=str(self.tokens_path),
                         data_dir=str(self.data_dir) if self.data_dir else "",
+                        lexicon=str(self.lexicon_path) if self.lexicon_path else "",
                     )
                     model_config = sherpa_onnx.OfflineTtsModelConfig(
                         kokoro=kokoro_config,
@@ -416,7 +442,10 @@ class SherpaOnnxTtsEngine(BaseTtsEngine):
                     sid = v["sid"]
                     break
 
-        audio = self._tts.generate(clean_text, sid=sid, speed=speed)
+        # One decode at a time: the runtime session is not re-entrant, and the
+        # reply pipeline now prefetches the next clause while one is in flight.
+        with self._lock:
+            audio = self._tts.generate(clean_text, sid=sid, speed=speed)
         samples = np.array(audio.samples, dtype=np.float32)
         sample_rate = audio.sample_rate
 
@@ -447,24 +476,50 @@ def get_tts_engine(
 ) -> BaseTtsEngine:
     """Factory to acquire the best available TTS engine.
 
-    Priority:
-    1. Explicit 'mock' -> MockTtsEngine
-    2. EdgeTtsEngine -> studio-quality neural voices
-    3. SherpaOnnxTtsEngine -> local Kokoro / Piper ONNX
-    4. Fallback -> MockTtsEngine
+    `engine_type` comes from SOLACE_TTS: auto | kokoro | piper | edge | mock.
+
+    Priority for `auto`:
+    1. Local Kokoro / Piper ONNX weights, when the model files are present
+    2. EdgeTtsEngine -> cloud neural voices (needs internet; ~1.5 s per clause)
+    3. Fallback -> MockTtsEngine
+
+    `piper` and `kokoro` force the local engine; if its files are incomplete the
+    factory says what is missing rather than silently using the cloud voice.
     """
     if engine_type == "mock":
         return MockTtsEngine()
 
+    # `edge` skips local weights entirely: the cloud voice, chosen explicitly.
+    if engine_type == "edge":
+        return EdgeTtsEngine()
+
     base_dir = Path(models_dir) if models_dir else Path(__file__).resolve().parent / "models" / "tts"
+
+    # Kokoro v1.0 (24 kHz, 50+ voices) in its own folder, wherever SOLACE_KOKORO_DIR says (it is 350 MB, so it can live off
+    # the synced project folder). Tried first; the older v0.19 files and then Piper remain as fallbacks.
+    v1_dir = Path(os.environ.get("SOLACE_KOKORO_DIR", base_dir / "kokoro-multi-lang-v1_0"))
+    if engine_type in ("auto", "kokoro") and (v1_dir / "model.onnx").exists():
+        engine = SherpaOnnxTtsEngine(
+            model_path=v1_dir / "model.onnx",
+            tokens_path=v1_dir / "tokens.txt",
+            voices_path=v1_dir / "voices.bin",
+            data_dir=v1_dir / "espeak-ng-data",
+            lexicon_path=v1_dir / "lexicon-us-en.txt",
+            is_kokoro=True,
+            # Measured on this machine's 8 cores: 8 threads was fastest, 2 was about half as fast. Six leaves cores for the rest.
+            num_threads=int(os.environ.get("SOLACE_TTS_THREADS", "6")),
+        )
+        if engine.initialize():
+            return engine
 
     # Check for Kokoro ONNX model
     kokoro_model = base_dir / "kokoro-v0_19.onnx"
     kokoro_tokens = base_dir / "tokens.txt"
     kokoro_voices = base_dir / "voices.bin"
-    kokoro_data = base_dir / "espeak-ng-data"
+    # espeak-ng-data may live next to the models or wherever SOLACE_ESPEAK_DATA says.
+    kokoro_data = Path(os.environ.get("SOLACE_ESPEAK_DATA", base_dir / "espeak-ng-data"))
 
-    if kokoro_model.exists() and kokoro_tokens.exists():
+    if engine_type in ("auto", "kokoro") and kokoro_model.exists() and kokoro_tokens.exists():
         engine = SherpaOnnxTtsEngine(
             model_path=kokoro_model,
             tokens_path=kokoro_tokens,
@@ -478,9 +533,17 @@ def get_tts_engine(
     # Check for Piper VITS model
     piper_model = base_dir / "en_US-amy-low.onnx"
     piper_tokens = base_dir / "tokens.txt"
-    piper_data = base_dir / "espeak-ng-data"
+    piper_data = kokoro_data
 
-    if piper_model.exists() and piper_tokens.exists() and piper_data.exists():
+    if engine_type == "piper" and not piper_data.exists():
+        logger.warning(
+            f"SOLACE_TTS=piper but espeak-ng-data was not found at {piper_data}; "
+            "set SOLACE_ESPEAK_DATA or copy the folder next to the model."
+        )
+    if (
+        engine_type in ("auto", "piper")
+        and piper_model.exists() and piper_tokens.exists() and piper_data.exists()
+    ):
         engine = SherpaOnnxTtsEngine(
             model_path=piper_model,
             tokens_path=piper_tokens,
@@ -490,8 +553,8 @@ def get_tts_engine(
         if engine.initialize():
             return engine
 
-    # High-fidelity Neural Edge-TTS
-    if engine_type in ("auto", "neural"):
+    # High-fidelity Neural Edge-TTS (cloud)
+    if engine_type in ("auto", "neural", "edge"):
         try:
             import edge_tts
             import av

@@ -17,8 +17,9 @@ import requests
 import websockets
 import pytest
 
-BASE_HTTP = "http://127.0.0.1:8000"
-BASE_WS = "ws://127.0.0.1:8000/ws/v1/session"
+SERVER_ADDR = __import__("os").environ.get("SOLACE_SERVER", "127.0.0.1:8000")
+BASE_HTTP = "http://" + SERVER_ADDR
+BASE_WS = "ws://" + SERVER_ADDR + "/ws/v1/session"
 
 def verify_http_endpoints():
     print("\n--- 1. Testing HTTP Endpoints ---")

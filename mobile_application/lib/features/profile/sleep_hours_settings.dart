@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/sleep_window.dart';
+import '../../core/widgets/visual_kit.dart';
 import 'profile_controller.dart';
 
 /// Asks for a sleep window with two time pickers, bedtime then wake time.
@@ -38,10 +39,8 @@ Future<SleepWindow?> pickSleepWindow(
   );
 }
 
-String _clock(BuildContext context, int minutes) => TimeOfDay(
-  hour: (minutes ~/ 60) % 24,
-  minute: minutes % 60,
-).format(context);
+String _clock(BuildContext context, int minutes) =>
+    TimeOfDay(hour: (minutes ~/ 60) % 24, minute: minutes % 60).format(context);
 
 /// The "Sleep" block of the app settings sheet: usual hours, an optional
 /// separate weekend window, and a one-off copy into quiet hours.
@@ -70,7 +69,8 @@ class SleepHoursSettings extends StatelessWidget {
     final profile = controller.profile;
     final window = await pickSleepWindow(
       context,
-      initial: profile.weekendSleepStartMinutes == null ||
+      initial:
+          profile.weekendSleepStartMinutes == null ||
               profile.weekendSleepEndMinutes == null
           ? profile.sleepWindowFor(weekend: false)
           : SleepWindow(
@@ -105,7 +105,8 @@ class SleepHoursSettings extends StatelessWidget {
   Widget build(BuildContext context) {
     final profile = controller.profile;
     final usual = profile.sleepWindowFor(weekend: false);
-    final quietMatches = profile.quietHoursEnabled &&
+    final quietMatches =
+        profile.quietHoursEnabled &&
         usual != null &&
         profile.quietStartMinutes == usual.startMinutes &&
         profile.quietEndMinutes == usual.endMinutes;
@@ -114,50 +115,68 @@ class SleepHoursSettings extends StatelessWidget {
       key: const ValueKey('setting-sleep-hours'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
-        const Text(
-          'Usual sleep hours',
-          style: TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF3B3327),
-          ),
-        ),
-        const Text(
-          'Helps Solace pitch ideas to how much energy you probably have. '
-          'Only ever kept on this phone.',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF93887A),
-          ),
-        ),
-        if (usual == null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              key: const ValueKey('sleep-set'),
-              onPressed: () => _chooseUsual(context),
-              child: Text(
-                profile.sleepHoursSkipped
-                    ? 'Skipped earlier. Set sleep hours'
-                    : 'Set sleep hours',
+        const Row(
+          children: [
+            IconTile(
+              icon: Icons.nightlight_round,
+              color: Color(0xFF6E73C8),
+              size: 38,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Usual sleep hours',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: kitInk,
+                    ),
+                  ),
+                  SizedBox(height: 1),
+                  Text(
+                    'Helps Solace pitch ideas to how much energy you probably '
+                    'have. Only ever kept on this phone.',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.3,
+                      fontWeight: FontWeight.w600,
+                      color: kitMuted,
+                    ),
+                  ),
+                ],
               ),
             ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (usual == null)
+          _Pill(
+            key: const ValueKey('sleep-set'),
+            icon: Icons.add_rounded,
+            label: profile.sleepHoursSkipped
+                ? 'Skipped earlier. Set sleep hours'
+                : 'Set sleep hours',
+            onTap: () => _chooseUsual(context),
           )
         else ...[
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              TextButton(
+              _Pill(
                 key: const ValueKey('sleep-edit'),
-                onPressed: () => _chooseUsual(context),
-                child: Text(
-                  '${_clock(context, usual.startMinutes)}'
-                  ' to ${_clock(context, usual.endMinutes)}',
-                ),
+                icon: Icons.schedule_rounded,
+                label:
+                    '${_clock(context, usual.startMinutes)}'
+                    ' to ${_clock(context, usual.endMinutes)}',
+                onTap: () => _chooseUsual(context),
               ),
             ],
           ),
+          const SizedBox(height: 6),
           _WeekendRow(
             differs: profile.weekendSleepDiffers,
             onChanged: (on) => _turnWeekendsOn(context, on),
@@ -165,30 +184,84 @@ class SleepHoursSettings extends StatelessWidget {
           if (profile.weekendSleepDiffers &&
               profile.weekendSleepStartMinutes != null &&
               profile.weekendSleepEndMinutes != null)
-            Row(
-              children: [
-                TextButton(
-                  key: const ValueKey('sleep-weekend-edit'),
-                  onPressed: () => _chooseWeekend(context),
-                  child: Text(
-                    'Weekends: '
-                    '${_clock(context, profile.weekendSleepStartMinutes!)}'
-                    ' to ${_clock(context, profile.weekendSleepEndMinutes!)}',
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Wrap(
+                children: [
+                  _Pill(
+                    key: const ValueKey('sleep-weekend-edit'),
+                    icon: Icons.weekend_outlined,
+                    label:
+                        'Weekends: '
+                        '${_clock(context, profile.weekendSleepStartMinutes!)}'
+                        ' to ${_clock(context, profile.weekendSleepEndMinutes!)}',
+                    onTap: () => _chooseWeekend(context),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           if (!quietMatches)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                key: const ValueKey('sleep-use-as-quiet'),
-                onPressed: controller.useSleepHoursAsQuietHours,
-                child: const Text('Use these as quiet hours too'),
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Wrap(
+                children: [
+                  _Pill(
+                    key: const ValueKey('sleep-use-as-quiet'),
+                    icon: Icons.bedtime_outlined,
+                    label: 'Use these as quiet hours too',
+                    onTap: controller.useSleepHoursAsQuietHours,
+                  ),
+                ],
               ),
             ),
         ],
       ],
+    );
+  }
+}
+
+/// A tappable pill in the same style as the other settings time chips.
+class _Pill extends StatelessWidget {
+  const _Pill({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFFFF3DC),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: kitAmber),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF8A6A1C),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -207,9 +280,9 @@ class _WeekendRow extends StatelessWidget {
           child: Text(
             'Weekends differ',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 13.5,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF3B3327),
+              color: kitInk,
             ),
           ),
         ),

@@ -85,11 +85,19 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
       body = _learning(result);
     } else {
       body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final noticing in result.noticings) ...[
-            _card(noticing),
-            const SizedBox(height: 10),
-          ],
+          _shell(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Column(
+              children: [
+                for (var i = 0; i < result.noticings.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, thickness: 1, color: Color(0x143B2F26)),
+                  _row(result.noticings[i]),
+                ],
+              ],
+            ),
+          ),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
@@ -97,13 +105,17 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
               onPressed: _open,
               style: TextButton.styleFrom(
                 foregroundColor: const Color(0xFF96620C),
-                padding: EdgeInsets.zero,
+                padding: const EdgeInsets.only(top: 6),
                 minimumSize: const Size(0, 34),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: const Text(
-                'See the details',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('See the details', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                  SizedBox(width: 2),
+                  Icon(Icons.chevron_right_rounded, size: 18),
+                ],
               ),
             ),
           ),
@@ -132,8 +144,8 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
     );
   }
 
-  Widget _shell({required Widget child}) => Container(
-    padding: const EdgeInsets.all(16),
+  Widget _shell({required Widget child, EdgeInsets padding = const EdgeInsets.all(16)}) => Container(
+    padding: padding,
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(22),
@@ -217,47 +229,80 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
     );
   }
 
-  Widget _card(PhoneNoticing noticing) => _shell(
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF3DC),
-            borderRadius: BorderRadius.circular(12),
+  /// One line of "your usual": the label, the number that matters, what it is, and an optional aside.
+  Widget _row(PhoneNoticing n) => Semantics(
+    container: true,
+    label: '${n.meta}. ${n.text}',
+    excludeSemantics: true,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: const Color(0xFFFFF3DC), borderRadius: BorderRadius.circular(13)),
+            child: Icon(_icon(n.kind), size: 20, color: const Color(0xFFB57A12)),
           ),
-          child: Icon(_icon(noticing.kind), size: 19, color: const Color(0xFFB57A12)),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                noticing.meta,
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.1,
-                  color: Color(0xFFBCAC8E),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  n.meta,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                    color: Color(0xFFBCAC8E),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                noticing.text,
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  height: 1.45,
-                  color: Color(0xFF3A3125),
-                ),
-              ),
-            ],
+                const SizedBox(height: 3),
+                if (n.value != null) ...[
+                  Text(
+                    n.value!,
+                    style: const TextStyle(
+                      fontSize: 19,
+                      height: 1.2,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF3A3125),
+                    ),
+                  ),
+                  if (n.caption != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        n.caption!,
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF8A7B66)),
+                      ),
+                    ),
+                  if (n.note != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F0E2),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: Text(
+                          n.note!,
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF7A6A52)),
+                        ),
+                      ),
+                    ),
+                ] else
+                  Text(
+                    n.text,
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, height: 1.45, color: Color(0xFF3A3125)),
+                  ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }

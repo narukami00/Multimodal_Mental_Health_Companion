@@ -6,7 +6,7 @@ Duplex turn-lifecycle tests (spec §9.5 runnable checks).
   c. after `turn.interrupted` with played_ms, the next turn's history holds a
      truncated assistant message rather than the full generated text
 
-Requires the companion server on 127.0.0.1:8000.
+Requires the companion server on 127.0.0.1:8000 (override with SOLACE_SERVER=host:port).
 """
 
 import asyncio
@@ -19,7 +19,8 @@ import wave
 import pytest
 import websockets
 
-BASE_WS = "ws://127.0.0.1:8000/ws/v1/session"
+SERVER_ADDR = __import__("os").environ.get("SOLACE_SERVER", "127.0.0.1:8000")
+BASE_WS = "ws://" + SERVER_ADDR + "/ws/v1/session"
 SPEECH_WAV = Path("debug_recordings/turn_1a0dc78f9a2_1790405312.wav")
 FRAME_BYTES = 640  # 20 ms @ 16 kHz mono pcm16
 STREAM_ID = 1001

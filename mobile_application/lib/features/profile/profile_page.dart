@@ -17,6 +17,7 @@ import '../../core/models/safety_assessment.dart';
 import '../../core/models/therapist_contact.dart';
 import '../../core/models/habit_reminder.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/visual_kit.dart';
 import '../../domain/home/baseline_progress.dart';
 import '../../domain/profile/behavioral_profile.dart';
 import '../../domain/rhythm/reminder_schedule.dart';
@@ -37,6 +38,7 @@ import 'permissions_page.dart';
 import 'phone_patterns_page.dart';
 import 'profile_controller.dart';
 import 'profile_insights_page.dart';
+import 'country_picker.dart';
 import 'sleep_hours_settings.dart';
 import 'therapist_controller.dart';
 import 'habit_controller.dart';
@@ -233,554 +235,392 @@ class ProfilePage extends StatelessWidget {
         return Scaffold(
           backgroundColor: SolaceColors.from(context).background,
           body: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: ListView(
-                  // Room for the floating pill, which overlays the page.
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
-                  children: [
-                    // Only the settings control. The brandmark and the SOLACE
-                    // wordmark that used to sit opposite it are gone: they named
-                    // the app three inches above a name that was already on
-                    // screen, so they were decoration repeating what the page
-                    // said anyway. The gear stays, because it is the one thing
-                    // the header exists for — and it is the only route to app
-                    // settings now that the duplicate row is gone.
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        InkWell(
-                          onTap: () => _showAppSettingsSheet(
-                            context,
-                            profileController,
-                          ),
-                          borderRadius: BorderRadius.circular(13),
-                          child: Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(13),
-                              border: Border.all(color: const Color(0xFFF2ECDD)),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x1078501E),
-                                  blurRadius: 10,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.tune_rounded,
-                              size: 19,
-                              color: Color(0xFF8E8272),
-                            ),
+            child: ListView(
+              // Room for the floating pill, which overlays the page.
+              // Horizontal inset matches the Today page so cards line up
+              // across the app's pages.
+              padding: const EdgeInsets.fromLTRB(22, 10, 22, 120),
+              children: [
+                _identityHeader(
+                  context,
+                  displayName: displayName,
+                  avatarPath: profile.avatarPath,
+                  firstRunAt: profile.firstRunAt,
+                ),
+
+                // SECTION: SUPPORT.
+                //
+                // First, not third. It used to sit below a five-row block of
+                // care settings, which meant the one row on this page that
+                // someone might need urgently was the hardest to reach.
+                _group(
+                  label: 'Support',
+                  rows: [
+                    InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => SupportResourcesPage(
+                            safetyController: safetyController,
+                            profileController: profileController,
+                            assessment:
+                                safetyController.activeAssessment ??
+                                const SafetyAssessment.clear(),
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Profile avatar + Name header
-                    Row(
-                      children: [
-                        // Avatar ring
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: 74,
-                              height: 74,
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFFFFD88A),
-                                    Color(0xFFFFB534),
-                                    Color(0xFFFF9A6A),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(26),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Color(0x3BD69628),
-                                    blurRadius: 20,
-                                    offset: Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(23),
-                                child: GestureDetector(
-                                  onTap: () => _pickAvatar(context),
-                                  child: Container(
-                                    color: const Color(0xFFFFF6E4),
-                                    child: _AvatarContent(
-                                      avatarPath: profile.avatarPath,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              right: -2,
-                              bottom: -2,
-                              child: Container(
-                                width: 20,
-                                height: 20,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Container(
-                                    width: 11,
-                                    height: 11,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF8DCB8A),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                              ),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(15, 15, 15, 15),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xFFFFF4EE), Color(0xFFFFEEE5)],
+                          ),
+                          borderRadius: BorderRadius.circular(21),
+                          border: Border.all(color: const Color(0xFFFFDAC8)),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x2BFF7F50),
+                              blurRadius: 18,
+                              offset: Offset(0, 5),
                             ),
                           ],
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFE4D6),
+                                borderRadius: BorderRadius.circular(13),
+                              ),
+                              child: const Icon(
+                                Icons.support_agent_rounded,
+                                size: 21,
+                                color: Color(0xFFD2603A),
+                              ),
+                            ),
+                            const SizedBox(width: 13),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Flexible(
-                                    child: Text(
-                                      displayName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF332C21),
-                                        letterSpacing: -0.2,
-                                      ),
+                                  Text(
+                                    'Crisis support',
+                                    style: TextStyle(
+                                      fontSize: 15.2,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFFB4522C),
+                                      letterSpacing: -0.15,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  InkWell(
-                                    onTap: () => _showEditProfileSheet(
-                                      context,
-                                      profileController,
-                                    ),
-                                    borderRadius: BorderRadius.circular(99),
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(4),
-                                      child: Icon(
-                                        Icons.edit_outlined,
-                                        size: 16,
-                                        color: Color(0xFFA2988A),
-                                      ),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    'Free, confidential lines · 24/7',
+                                    style: TextStyle(
+                                      fontSize: 12.2,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFC08060),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _memberSinceLabel(profile.firstRunAt),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF93887A),
-                                ),
+                            ),
+                            if (iceContact != null) ...[
+                              _IceCallButton(
+                                contact: iceContact,
+                                onCall: () =>
+                                    _callIceContact(context, iceContact),
                               ),
+                              const SizedBox(width: 8),
                             ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-// SECTION: SUPPORT.
-                    //
-                    // First, not third. It used to sit below a five-row block of
-                    // care settings, which meant the one row on this page that
-                    // someone might need urgently was the hardest to reach.
-                    _group(
-                      label: 'Support',
-                      rows: [
-                        InkWell(
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => SupportResourcesPage(
-                                safetyController: safetyController,
-                                profileController: profileController,
-                                assessment:
-                                    safetyController.activeAssessment ??
-                                    const SafetyAssessment.clear(),
-                              ),
+                            const Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 13,
+                              color: Color(0xFFE8A98C),
                             ),
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.fromLTRB(15, 15, 15, 15),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Color(0xFFFFF4EE),
-                                  Color(0xFFFFEEE5),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(21),
-                              border: Border.all(color: const Color(0xFFFFDAC8)),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x2BFF7F50),
-                                  blurRadius: 18,
-                                  offset: Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFE4D6),
-                                    borderRadius: BorderRadius.circular(13),
-                                  ),
-                                  child: const Icon(
-                                    Icons.support_agent_rounded,
-                                    size: 21,
-                                    color: Color(0xFFD2603A),
-                                  ),
-                                ),
-                                const SizedBox(width: 13),
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Crisis support',
-                                        style: TextStyle(
-                                          fontSize: 15.2,
-                                          fontWeight: FontWeight.w800,
-                                          color: Color(0xFFB4522C),
-                                          letterSpacing: -0.15,
-                                        ),
-                                      ),
-                                      SizedBox(height: 3),
-                                      Text(
-                                        'Free, confidential lines · 24/7',
-                                        style: TextStyle(
-                                          fontSize: 12.2,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFFC08060),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (iceContact != null) ...[
-                                  _IceCallButton(
-                                    contact: iceContact,
-                                    onCall: () =>
-                                        _callIceContact(context, iceContact),
-                                  ),
-                                  const SizedBox(width: 8),
-                                ],
-                                const Icon(
-                                  Icons.arrow_forward_ios_rounded,
-                                  size: 13,
-                                  color: Color(0xFFE8A98C),
-                                ),
-                              ],
-                            ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // SECTION: CARE CIRCLE.
-                    //
-                    // Not "Your care". The old name sat above a list that also
-                    // contained permissions, data export and a therapist, so it
-                    // described none of them. This group holds only people.
-                    _group(
-                      label: 'Care circle',
-                      trailingLabel: emergencyContacts.isEmpty
-                          ? null
-                          : '${emergencyContacts.length} saved',
-                      rows: [
-                        _row(
-                          icon: Icons.people_outline_rounded,
-                          title: 'Emergency contacts',
-                          value: emergencyContacts.isEmpty
-                              ? 'None yet'
-                              : '${emergencyContacts.length}',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => CareContactsPage(
-                                profileController: profileController,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _row(
-                          icon: Icons.groups_outlined,
-                          title: 'Therapist collaboration',
-                          value: therapistController?.contact?.name ?? 'None yet',
-                          onTap: () => _showTherapistSheet(
-                            context,
-                            therapistController,
-                          ),
-                        ),
-                        _row(
-                          icon: Icons.checklist_rounded,
-                          title: 'Habits & hobbies',
-                          value: habitController == null || habitController!.reminders.isEmpty
-                              ? 'None set'
-                              : '${habitController!.reminders.length}',
-                          onTap: () => _showHabitsSheet(context, habitController),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // SECTION: YOUR DATA.
-                    _group(
-                      label: 'Your data',
-                      trailingLabel: 'on this device',
-                      rows: [
-                        _row(
-                          icon: Icons.verified_user_outlined,
-                          title: 'Permissions & privacy',
-                          tint: const Color(0xFFE4F2E9),
-                          onTint: const Color(0xFF3F823B),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => PermissionsPage(phonePatterns: phonePatterns),
-                            ),
-                          ),
-                        ),
-                        if (phonePatterns != null)
-                          _row(
-                            icon: Icons.phone_android_rounded,
-                            title: 'My phone patterns',
-                            tint: const Color(0xFFE4F2E9),
-                            onTint: const Color(0xFF3F823B),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => PhonePatternsPage(
-                                  phonePatterns: phonePatterns!,
-                                  profileController: profileController,
-                                ),
-                              ),
-                            ),
-                          ),
-                        _row(
-                          icon: Icons.inventory_2_outlined,
-                          title: 'Everything Solace keeps',
-                          tint: const Color(0xFFE4F2E9),
-                          onTint: const Color(0xFF3F823B),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => EverythingKeptPage(
-                                sessionController: sessionController,
-                                profileController: profileController,
-                                chatController: chatController,
-                                moments: moments,
-                                memory: memory,
-                                phonePatterns: phonePatterns,
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (moments != null && memory != null)
-                          _row(
-                            icon: Icons.bookmark_added_outlined,
-                            title: 'What Sol remembers',
-                            tint: const Color(0xFFE4F2E9),
-                            onTint: const Color(0xFF3F823B),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => WhatSolRemembersPage(
-                                  moments: moments!,
-                                  memory: memory!,
-                                  consent: memory!.consent,
-                                  profileController: profileController,
-                                  chat: chatController,
-                                ),
-                              ),
-                            ),
-                          ),
-                        _row(
-                          icon: Icons.file_download_outlined,
-                          title: 'Export reflections & data',
-                          value: 'Coming soon',
-                          tint: const Color(0xFFE4F2E9),
-                          onTint: const Color(0xFF3F823B),
-                          onTap: () => _showExportSheet(context),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // SECTION: PRACTICE.
-                    //
-                    // The baseline block keeps its progress and its button. Both
-                    // used to live inside a card of plain rows, and the
-                    // full-width button inside a list is what made that card read
-                    // as a different app bolted on. Here it leads its own group,
-                    // so being different is what the group is for.
-                    _group(
-                      label: 'Practice',
-                      trailingLabel: profile.baselineComplete
-                          ? 'Baseline complete'
-                          : '$completeCount of 4',
-                      rows: [
-                        _BaselineRow(
-                          completeCount: completeCount,
-                          isComplete: profile.baselineComplete,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => BaselineQuizPage(
-                                profileController: profileController,
-                                safetyController: safetyController,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _row(
-                          icon: Icons.local_library_outlined,
-                          title: 'Activity library',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const ActivityLibraryPage(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // SECTION: HOW IT WORKS.
-                    //
-                    // Its own group rather than another row. "How Solace decides"
-                    // is the thing that makes this app different from a mood
-                    // tracker with a checklist, and it explains why a particular
-                    // suggestion is on screen right now — which is a question
-                    // people bring to this page. Buried between the baseline and
-                    // the activity library it read as one more entry.
-                    _group(
-                      label: 'How it works',
-                      rows: [
-                        _row(
-                          icon: Icons.insights_outlined,
-                          title: 'How Solace decides',
-                          value:
-                              '${suggestionController.history.length} shown',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => ProfileInsightsPage(
-                                signals: DecisionSignals(
-                                  phonePatterns: switch (phonePatterns?.status) {
-                                    PhonePatternsStatus.on => PhoneSignal.on,
-                                    PhonePatternsStatus.needsAndroidAccess =>
-                                      PhoneSignal.needsAccess,
-                                    _ => PhoneSignal.off,
-                                  },
-                                  keptMoments: moments?.confirmed.length ?? 0,
-                                  snippetShared: memory?.snippetOn ?? false,
-                                  momentsShared: memory?.momentsOn ?? false,
-                                ),
-                                profile: BehavioralProfile.compute(
-                                  profile: profileController.profile,
-                                  sessions: sessionController.sessions,
-                                  suggestionHistory:
-                                      suggestionController.history,
-                                  library: suggestionController.library,
-                                  context: buildRecommendationContext(
-                                    profile: profileController.profile,
-                                    sessions: sessionController.sessions,
-                                    extraTags: extraEventTags?.call() ?? const [],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // SECTION: ABOUT.
-                    //
-                    // Separate from the groups above and visually quieter, on
-                    // purpose. A legal page wearing the same card as "Permissions
-                    // & privacy" would make both feel like neither. No tinted
-                    // icons, no trailing values: nothing here is state.
-                    _group(
-                      label: 'About',
-                      rows: [
-                        _row(
-                          icon: Icons.info_outline_rounded,
-                          title: 'About Solace',
-                          value: AboutSolacePage.version,
-                          tint: Colors.transparent,
-                          onTint: const Color(0xFFA2988A),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const AboutSolacePage(),
-                            ),
-                          ),
-                        ),
-                        _row(
-                          icon: Icons.description_outlined,
-                          title: 'Terms & privacy',
-                          tint: Colors.transparent,
-                          onTint: const Color(0xFFA2988A),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const TermsAndPrivacyPage(),
-                            ),
-                          ),
-                        ),
-                        _row(
-                          icon: Icons.help_outline_rounded,
-                          title: 'Frequently asked',
-                          tint: Colors.transparent,
-                          onTint: const Color(0xFFA2988A),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const FaqPage(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // App Disclaimer & Version footer
-                    const Text(
-                      'Solace is a reflection space, not a medical or clinical provider.\nSolace v0.1.0 · Local-first & Private',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFB5A98F),
-                        height: 1.6,
                       ),
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 24),
+
+                // SECTION: CARE CIRCLE.
+                //
+                // Not "Your care". The old name sat above a list that also
+                // contained permissions, data export and a therapist, so it
+                // described none of them. This group holds only people.
+                _group(
+                  label: 'Care circle',
+                  trailingLabel: emergencyContacts.isEmpty
+                      ? null
+                      : '${emergencyContacts.length} saved',
+                  rows: [
+                    _row(
+                      icon: Icons.people_outline_rounded,
+                      title: 'Emergency contacts',
+                      value: emergencyContacts.isEmpty
+                          ? 'None yet'
+                          : '${emergencyContacts.length}',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => CareContactsPage(
+                            profileController: profileController,
+                          ),
+                        ),
+                      ),
+                    ),
+                    _row(
+                      icon: Icons.groups_outlined,
+                      title: 'Therapist collaboration',
+                      value: therapistController?.contact?.name ?? 'None yet',
+                      onTap: () =>
+                          _showTherapistSheet(context, therapistController),
+                    ),
+                    _row(
+                      icon: Icons.checklist_rounded,
+                      title: 'Habits & hobbies',
+                      value:
+                          habitController == null ||
+                              habitController!.reminders.isEmpty
+                          ? 'None set'
+                          : '${habitController!.reminders.length}',
+                      onTap: () => _showHabitsSheet(context, habitController),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // SECTION: YOUR DATA.
+                _group(
+                  label: 'Your data',
+                  trailingLabel: 'on this device',
+                  rows: [
+                    _row(
+                      icon: Icons.verified_user_outlined,
+                      title: 'Permissions & privacy',
+                      tint: const Color(0xFFE4F2E9),
+                      onTint: const Color(0xFF3F823B),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              PermissionsPage(phonePatterns: phonePatterns),
+                        ),
+                      ),
+                    ),
+                    if (phonePatterns != null)
+                      _row(
+                        icon: Icons.phone_android_rounded,
+                        title: 'My phone patterns',
+                        tint: const Color(0xFFE4F2E9),
+                        onTint: const Color(0xFF3F823B),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => PhonePatternsPage(
+                              phonePatterns: phonePatterns!,
+                              profileController: profileController,
+                            ),
+                          ),
+                        ),
+                      ),
+                    _row(
+                      icon: Icons.inventory_2_outlined,
+                      title: 'Everything Solace keeps',
+                      tint: const Color(0xFFE4F2E9),
+                      onTint: const Color(0xFF3F823B),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => EverythingKeptPage(
+                            sessionController: sessionController,
+                            profileController: profileController,
+                            chatController: chatController,
+                            moments: moments,
+                            memory: memory,
+                            phonePatterns: phonePatterns,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (moments != null && memory != null)
+                      _row(
+                        icon: Icons.bookmark_added_outlined,
+                        title: 'What Sol remembers',
+                        tint: const Color(0xFFE4F2E9),
+                        onTint: const Color(0xFF3F823B),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => WhatSolRemembersPage(
+                              moments: moments!,
+                              memory: memory!,
+                              consent: memory!.consent,
+                              profileController: profileController,
+                              chat: chatController,
+                            ),
+                          ),
+                        ),
+                      ),
+                    _row(
+                      icon: Icons.file_download_outlined,
+                      title: 'Export reflections & data',
+                      value: 'Coming soon',
+                      tint: const Color(0xFFE4F2E9),
+                      onTint: const Color(0xFF3F823B),
+                      onTap: () => _showExportSheet(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // SECTION: PRACTICE.
+                //
+                // The baseline block keeps its progress and its button. Both
+                // used to live inside a card of plain rows, and the
+                // full-width button inside a list is what made that card read
+                // as a different app bolted on. Here it leads its own group,
+                // so being different is what the group is for.
+                _group(
+                  label: 'Practice',
+                  trailingLabel: profile.baselineComplete
+                      ? 'Baseline complete'
+                      : '$completeCount of 4',
+                  rows: [
+                    _BaselineRow(
+                      completeCount: completeCount,
+                      isComplete: profile.baselineComplete,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => BaselineQuizPage(
+                            profileController: profileController,
+                            safetyController: safetyController,
+                          ),
+                        ),
+                      ),
+                    ),
+                    _row(
+                      icon: Icons.local_library_outlined,
+                      title: 'Activity library',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => ActivityLibraryPage(
+                            suggestionController: suggestionController,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // SECTION: HOW IT WORKS.
+                //
+                // Its own group rather than another row. "How Solace decides"
+                // is the thing that makes this app different from a mood
+                // tracker with a checklist, and it explains why a particular
+                // suggestion is on screen right now — which is a question
+                // people bring to this page. Buried between the baseline and
+                // the activity library it read as one more entry.
+                _group(
+                  label: 'How it works',
+                  rows: [
+                    _row(
+                      icon: Icons.insights_outlined,
+                      title: 'How Solace decides',
+                      value: '${suggestionController.history.length} shown',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => ProfileInsightsPage(
+                            signals: DecisionSignals(
+                              phonePatterns: switch (phonePatterns?.status) {
+                                PhonePatternsStatus.on => PhoneSignal.on,
+                                PhonePatternsStatus.needsAndroidAccess =>
+                                  PhoneSignal.needsAccess,
+                                _ => PhoneSignal.off,
+                              },
+                              keptMoments: moments?.confirmed.length ?? 0,
+                              snippetShared: memory?.snippetOn ?? false,
+                              momentsShared: memory?.momentsOn ?? false,
+                            ),
+                            profile: BehavioralProfile.compute(
+                              profile: profileController.profile,
+                              sessions: sessionController.sessions,
+                              suggestionHistory: suggestionController.history,
+                              library: suggestionController.library,
+                              context: buildRecommendationContext(
+                                profile: profileController.profile,
+                                sessions: sessionController.sessions,
+                                extraTags: extraEventTags?.call() ?? const [],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // SECTION: ABOUT.
+                //
+                // Separate from the groups above and visually quieter, on
+                // purpose. A legal page wearing the same card as "Permissions
+                // & privacy" would make both feel like neither. No tinted
+                // icons, no trailing values: nothing here is state.
+                _group(
+                  label: 'About',
+                  rows: [
+                    _row(
+                      icon: Icons.info_outline_rounded,
+                      title: 'About Solace',
+                      value: AboutSolacePage.version,
+                      tint: Colors.transparent,
+                      onTint: const Color(0xFFA2988A),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const AboutSolacePage(),
+                        ),
+                      ),
+                    ),
+                    _row(
+                      icon: Icons.description_outlined,
+                      title: 'Terms & privacy',
+                      tint: Colors.transparent,
+                      onTint: const Color(0xFFA2988A),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const TermsAndPrivacyPage(),
+                        ),
+                      ),
+                    ),
+                    _row(
+                      icon: Icons.help_outline_rounded,
+                      title: 'Frequently asked',
+                      tint: Colors.transparent,
+                      onTint: const Color(0xFFA2988A),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const FaqPage(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // App Disclaimer & Version footer
+                const Text(
+                  'Solace is a reflection space, not a medical or clinical provider.\nSolace v0.1.0 · Local-first & Private',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFB5A98F),
+                    height: 1.6,
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -985,7 +825,8 @@ class ProfilePage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              child,
+              // Scrolls: a taller form (more settings) must never overflow a phone-sized sheet.
+              Flexible(child: SingleChildScrollView(child: child)),
             ],
           ),
         );
@@ -1059,14 +900,16 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(height: 18),
           _exportOptionCard(
             title: 'Formatted Reflection Journal',
-            desc: 'Clean, printable layout with emotion cadence & baseline history.',
+            desc:
+                'Clean, printable layout with emotion cadence & baseline history.',
             icon: Icons.picture_as_pdf_outlined,
             format: 'PDF',
           ),
           const SizedBox(height: 10),
           _exportOptionCard(
             title: 'Structured Local Archive',
-            desc: 'Complete database export for offline archival, analysis, or migration.',
+            desc:
+                'Complete database export for offline archival, analysis, or migration.',
             icon: Icons.data_object_rounded,
             format: 'JSON',
           ),
@@ -1146,18 +989,11 @@ class ProfilePage extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFF2ECDD),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFF2ECDD), width: 1),
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 24,
-            color: const Color(0xFFB57A12),
-          ),
+          Icon(icon, size: 24, color: const Color(0xFFB57A12)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1176,7 +1012,10 @@ class ProfilePage extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF6F1E5),
                         borderRadius: BorderRadius.circular(6),
@@ -1226,6 +1065,281 @@ class ProfilePage extends StatelessWidget {
 
   // 4. Permissions & data now lives on its own page, because it reports real
   // platform state rather than decoration. See PermissionsPage.
+
+  /// The identity header: a cover banner, the portrait breaking its lower
+  /// edge and the name beneath — the shape a social profile page uses,
+  /// because that is where a person's own details are expected to live.
+  ///
+  /// The settings gear rides the cover, where a profile page keeps its
+  /// actions, and it is still the only route to app settings.
+  Widget _identityHeader(
+    BuildContext context, {
+    required String displayName,
+    required String? avatarPath,
+    required DateTime? firstRunAt,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 124,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(26),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFFFEFD6),
+                        Color(0xFFFEE0B4),
+                        Color(0xFFFFCF96),
+                      ],
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x2ED69628),
+                        blurRadius: 22,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  // The discs inside are clipped to the cover's corners.
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          top: -52,
+                          right: -30,
+                          child: Container(
+                            width: 146,
+                            height: 146,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.30),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: -66,
+                          left: 78,
+                          child: Container(
+                            width: 140,
+                            height: 140,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0x26FF9A6A),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 22,
+                          right: 86,
+                          child: Container(
+                            width: 76,
+                            height: 76,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.45),
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                // Its own Material so the splash lands on the cover, not on
+                // the page underneath it.
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () =>
+                        _showAppSettingsSheet(context, profileController),
+                    borderRadius: BorderRadius.circular(13),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(color: const Color(0xFFF2ECDD)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x1A78501E),
+                            blurRadius: 10,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.tune_rounded,
+                        size: 19,
+                        color: Color(0xFF8E8272),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Portrait: white ring, warm gradient rim, photo inside. It
+              // sits on the cover's edge the way a profile picture does.
+              Positioned(
+                left: 16,
+                bottom: -36,
+                child: GestureDetector(
+                  onTap: () => _pickAvatar(context),
+                  child: Container(
+                    width: 90,
+                    height: 90,
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x3378501E),
+                          blurRadius: 16,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFFFD88A),
+                            Color(0xFFFFB534),
+                            Color(0xFFFF9A6A),
+                          ],
+                        ),
+                      ),
+                      child: ClipOval(
+                        child: Container(
+                          color: const Color(0xFFFFF6E4),
+                          child: _AvatarContent(avatarPath: avatarPath),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Room for the portrait hanging below the cover.
+        const SizedBox(height: 46),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF332C21),
+                  letterSpacing: -0.5,
+                  height: 1.15,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _showEditProfileSheet(context, profileController),
+                borderRadius: BorderRadius.circular(99),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(color: const Color(0xFFEFE7D6)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x1278501E),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 14,
+                        color: Color(0xFF8E8272),
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF6E6152),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 9),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8EA),
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(color: const Color(0x33FFB534)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                firstRunAt == null
+                    ? Icons.waving_hand_rounded
+                    : Icons.event_available_rounded,
+                size: 13,
+                color: const Color(0xFFB98A2E),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _memberSinceLabel(firstRunAt),
+                style: const TextStyle(
+                  fontSize: 12.3,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF8A7355),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
 
   // 5. App Settings Sheet
   static void _showAppSettingsSheet(
@@ -1412,7 +1526,10 @@ class _EditProfileFormState extends State<_EditProfileForm> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFFFB534), width: 1.8),
+              borderSide: const BorderSide(
+                color: Color(0xFFFFB534),
+                width: 1.8,
+              ),
             ),
           ),
         ),
@@ -1650,9 +1767,9 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
       minute: profile.reminderMinutes % 60,
     ).format(context);
     // The next time it will actually fire, computed rather than guessed.
-    final nextFireDate = MaterialLocalizations.of(
-      context,
-    ).formatMediumDate(ReminderSchedule.nextOccurrence(profile.reminderMinutes));
+    final nextFireDate = MaterialLocalizations.of(context).formatMediumDate(
+      ReminderSchedule.nextOccurrence(profile.reminderMinutes),
+    );
     final nextFireLabel = '$nextFireDate at $reminderTimeLabel';
 
     return Column(
@@ -1660,20 +1777,8 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
       children: [
         Row(
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3DC),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.tune_rounded,
-                size: 20,
-                color: Color(0xFFB57A12),
-              ),
-            ),
-            const SizedBox(width: 12),
+            const IconTile(icon: Icons.tune_rounded, color: kitAmber, size: 44),
+            const SizedBox(width: 14),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1681,17 +1786,18 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
                   Text(
                     'App settings',
                     style: TextStyle(
-                      fontSize: 16.5,
+                      fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF3B3327),
+                      letterSpacing: -0.3,
+                      color: kitInk,
                     ),
                   ),
                   Text(
-                    'Sensory & gentle interaction preferences',
+                    'Make Solace feel like yours',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF93887A),
+                      color: kitMuted,
                     ),
                   ),
                 ],
@@ -1699,109 +1805,124 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
             ),
           ],
         ),
-        const SizedBox(height: 18),
-        _SettingToggle(
-          key: const ValueKey('toggle-haptics'),
-          title: 'Gentle Haptics',
-          subtitle: 'Subtle vibrational cues on taps and sliders',
-          value: profile.hapticsEnabled,
-          onChanged: _setHaptics,
-        ),
-        _SettingToggle(
-          key: const ValueKey('toggle-ambient-audio'),
-          title: 'Soft Ambient Breath Audio',
-          subtitle: 'Plays a calm soundscape during grounding pauses',
-          value: profile.ambientAudioEnabled,
-          onChanged: _setAmbientAudio,
-        ),
-        _ReminderSetting(
-          key: const ValueKey('setting-reminder'),
-          enabled: profile.reminderEnabled,
-          timeLabel: reminderTimeLabel,
-          nextFireLabel: nextFireLabel,
-          onToggle: _setReminder,
-          onPickTime: _pickReminderTime,
-          onSendTest: _sendTestReminder,
-        ),
-        _SettingToggle(
-          key: const ValueKey('toggle-idea-push'),
-          title: 'Nudge me about ideas',
-          subtitle: 'A quiet note that a gentle idea is waiting',
-          value: profile.ideaPushEnabled,
-          onChanged: _setIdeaPush,
-        ),
-        if (profile.ideaPushEnabled) ...[
-          _SettingToggle(
-            key: const ValueKey('toggle-quiet-hours'),
-            title: 'Quiet hours',
-            subtitle: 'No idea nudges while you sleep. Your check-in reminder '
-                'still arrives when you set it.',
-            value: profile.quietHoursEnabled,
-            onChanged: (on) => _controller.setQuietHours(enabled: on),
-          ),
-          if (profile.quietHoursEnabled)
-            Row(
-              children: [
-                TextButton(
-                  key: const ValueKey('quiet-start'),
-                  onPressed: () => _pickQuietTime(start: true),
-                  child: Text(
-                    'From ${TimeOfDay(hour: profile.quietStartMinutes ~/ 60, minute: profile.quietStartMinutes % 60).format(context)}',
-                  ),
-                ),
-                TextButton(
-                  key: const ValueKey('quiet-end'),
-                  onPressed: () => _pickQuietTime(start: false),
-                  child: Text(
-                    'Until ${TimeOfDay(hour: profile.quietEndMinutes ~/ 60, minute: profile.quietEndMinutes % 60).format(context)}',
-                  ),
-                ),
-              ],
-            ),
-        ],
-        SleepHoursSettings(controller: _controller),
-        const SizedBox(height: 14),
-        const Text(
-          'COLOR PALETTE',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.2,
-            color: Color(0xFFBCAC8E),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
+        const KitLabel('FEEL'),
+        _SettingsGroup(
           children: [
-            for (final palette in SolacePaletteId.values) ...[
-              if (palette != SolacePaletteId.values.first)
-                const SizedBox(width: 8),
-              _PaletteChip(
-                key: ValueKey('palette-${palette.id}'),
-                palette: palette,
-                selected: palette == activePalette,
-                onTap: () => _setPalette(palette),
+            _SettingToggle(
+              key: const ValueKey('toggle-haptics'),
+              icon: Icons.vibration_rounded,
+              color: kitAmber,
+              title: 'Gentle Haptics',
+              subtitle: 'Subtle vibrational cues on taps and sliders',
+              value: profile.hapticsEnabled,
+              onChanged: _setHaptics,
+            ),
+            _SettingToggle(
+              key: const ValueKey('toggle-ambient-audio'),
+              icon: Icons.graphic_eq_rounded,
+              color: const Color(0xFF6E73C8),
+              title: 'Soft Ambient Breath Audio',
+              subtitle: 'A calm soundscape during grounding pauses',
+              value: profile.ambientAudioEnabled,
+              onChanged: _setAmbientAudio,
+            ),
+          ],
+        ),
+        const KitLabel('REMINDERS'),
+        _SettingsGroup(
+          children: [
+            _ReminderSetting(
+              key: const ValueKey('setting-reminder'),
+              enabled: profile.reminderEnabled,
+              timeLabel: reminderTimeLabel,
+              nextFireLabel: nextFireLabel,
+              onToggle: _setReminder,
+              onPickTime: _pickReminderTime,
+              onSendTest: _sendTestReminder,
+            ),
+            _SettingToggle(
+              key: const ValueKey('toggle-idea-push'),
+              icon: Icons.notifications_none_rounded,
+              color: const Color(0xFF4F9D76),
+              title: 'Nudge me about ideas',
+              subtitle: 'A quiet note that a gentle idea is waiting',
+              value: profile.ideaPushEnabled,
+              onChanged: _setIdeaPush,
+            ),
+            if (profile.ideaPushEnabled) ...[
+              _SettingToggle(
+                key: const ValueKey('toggle-quiet-hours'),
+                icon: Icons.bedtime_outlined,
+                color: const Color(0xFF6E73C8),
+                title: 'Quiet hours',
+                subtitle:
+                    'No idea nudges while you sleep. Your check-in reminder '
+                    'still arrives when you set it.',
+                value: profile.quietHoursEnabled,
+                onChanged: (on) => _controller.setQuietHours(enabled: on),
               ),
+              if (profile.quietHoursEnabled)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _TimePill(
+                      key: const ValueKey('quiet-start'),
+                      label:
+                          'From ${TimeOfDay(hour: profile.quietStartMinutes ~/ 60, minute: profile.quietStartMinutes % 60).format(context)}',
+                      onTap: () => _pickQuietTime(start: true),
+                    ),
+                    _TimePill(
+                      key: const ValueKey('quiet-end'),
+                      label:
+                          'Until ${TimeOfDay(hour: profile.quietEndMinutes ~/ 60, minute: profile.quietEndMinutes % 60).format(context)}',
+                      onTap: () => _pickQuietTime(start: false),
+                    ),
+                  ],
+                ),
             ],
           ],
         ),
-        const SizedBox(height: 20),
+        const KitLabel('YOUR DAY'),
+        _SettingsGroup(children: [SleepHoursSettings(controller: _controller)]),
+        const KitLabel('WHERE YOU ARE BASED'),
+        _SettingsGroup(children: [CountryPicker(controller: _controller)]),
+        const KitLabel('LOOK'),
+        _SettingsGroup(
+          children: [
+            Row(
+              children: [
+                for (final palette in SolacePaletteId.values) ...[
+                  if (palette != SolacePaletteId.values.first)
+                    const SizedBox(width: 8),
+                  _PaletteChip(
+                    key: ValueKey('palette-${palette.id}'),
+                    palette: palette,
+                    selected: palette == activePalette,
+                    onTap: () => _setPalette(palette),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
         SizedBox(
           width: double.infinity,
-          height: 44,
+          height: 50,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFFB534),
               foregroundColor: const Color(0xFF3D2E14),
               elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
               ),
             ),
             onPressed: () => Navigator.of(context).pop(),
             child: const Text(
               'Done',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
             ),
           ),
         ),
@@ -1810,9 +1931,75 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
   }
 }
 
-/// Settings row with a working switch.
+/// A white card that groups related settings, with hairlines between rows.
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return KitCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const Divider(height: 1, color: kitLine),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: children[i],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A small tappable time chip.
+class _TimePill extends StatelessWidget {
+  const _TimePill({required this.label, required this.onTap, super.key});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFFFF3DC),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.schedule_rounded, size: 15, color: kitAmber),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF8A6A1C),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings row with an icon tile and a working switch.
 class _SettingToggle extends StatelessWidget {
   const _SettingToggle({
+    required this.icon,
+    required this.color,
     required this.title,
     required this.subtitle,
     required this.value,
@@ -1820,6 +2007,8 @@ class _SettingToggle extends StatelessWidget {
     super.key,
   });
 
+  final IconData icon;
+  final Color color;
   final String title;
   final String subtitle;
   final bool value;
@@ -1827,40 +2016,40 @@ class _SettingToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF3B3327),
-                  ),
+    return Row(
+      children: [
+        IconTile(icon: icon, color: color, size: 38),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: kitInk,
                 ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF93887A),
-                  ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  height: 1.3,
+                  fontWeight: FontWeight.w600,
+                  color: kitMuted,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Switch(
-            value: value,
-            activeColor: const Color(0xFFFFB534),
-            onChanged: onChanged,
-          ),
-        ],
-      ),
+        ),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }
@@ -1890,9 +2079,7 @@ class _ReminderSetting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = enabled
-        ? const Color(0xFFB57A12)
-        : const Color(0xFF887D6E);
+    final accent = enabled ? const Color(0xFFB57A12) : const Color(0xFF887D6E);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1901,82 +2088,101 @@ class _ReminderSetting extends StatelessWidget {
         children: [
           Row(
             children: [
+              IconTile(
+                icon: Icons.alarm_rounded,
+                color: enabled ? kitAmber : kitMuted,
+                size: 38,
+              ),
+              const SizedBox(width: 12),
               const Expanded(
                 child: Text(
                   'Daily check-in reminder',
                   style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF3B3327),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: kitInk,
                   ),
                 ),
               ),
               Switch(
                 value: enabled,
-                activeColor: const Color(0xFFFFB534),
                 onChanged: onToggle,
               ),
             ],
           ),
-          GestureDetector(
-            onTap: onPickTime,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: enabled
-                    ? const Color(0xFFFFF9EE)
-                    : const Color(0xFFF4F1E7),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: enabled
-                      ? const Color(0xFFFFB534)
-                      : Colors.transparent,
+          Padding(
+            padding: const EdgeInsets.only(left: 50),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: onPickTime,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: enabled
+                          ? const Color(0xFFFFF9EE)
+                          : const Color(0xFFF4F1E7),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: enabled
+                            ? const Color(0xFFFFB534)
+                            : Colors.transparent,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.schedule_rounded, size: 15, color: accent),
+                        const SizedBox(width: 7),
+                        Text(
+                          timeLabel,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: accent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.schedule_rounded, size: 15, color: accent),
-                  const SizedBox(width: 7),
-                  Text(
-                    timeLabel,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                      color: accent,
+                const SizedBox(height: 4),
+                Text(
+                  enabled ? 'Next reminder: $nextFireLabel.' : _offCopy,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                    color: Color(0xFF93887A),
+                  ),
+                ),
+                if (enabled) ...[
+                  const SizedBox(height: 2),
+                  TextButton(
+                    key: const ValueKey('send-test-reminder'),
+                    onPressed: onSendTest,
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF96620C),
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Send a test reminder',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            enabled ? 'Next reminder: $nextFireLabel.' : _offCopy,
-            style: const TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              height: 1.4,
-              color: Color(0xFF93887A),
-            ),
-          ),
-          if (enabled) ...[
-            const SizedBox(height: 2),
-            TextButton(
-              key: const ValueKey('send-test-reminder'),
-              onPressed: onSendTest,
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF96620C),
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 32),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text(
-                'Send a test reminder',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -2002,48 +2208,61 @@ class _PaletteChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = SolaceColors.of(palette);
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFFFF9EE) : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFFFFB534)
-                  : const Color(0xFFF2ECDD),
-              width: selected ? 1.5 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [colors.amber, colors.coral],
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                ),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: palette.label,
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFFFFF9EE) : Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected ? const Color(0xFFFFB534) : kitLine,
+                width: selected ? 1.8 : 1,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
+            ),
+            child: Column(
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [colors.amber, colors.coral],
+                        ),
+                      ),
+                    ),
+                    if (selected)
+                      const Icon(
+                        Icons.check_rounded,
+                        size: 22,
+                        color: Colors.white,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
                   palette.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: selected
-                        ? const Color(0xFFB57A12)
-                        : const Color(0xFF887D6E),
+                    color: selected ? kitInk : kitMuted,
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2103,12 +2322,20 @@ class _AvatarContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final path = avatarPath;
     if (path != null && File(path).existsSync()) {
-      return Image.file(
-        File(path),
-        width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _fallback(),
+      // A 512px photo squeezed into a 68px box was resampled with the default
+      // low-quality filter, so its pixels shifted at every sub-pixel scroll
+      // offset. High-quality filtering keeps the downscale stable, and the
+      // boundary lets the page scroll without re-rasterising the photo.
+      return RepaintBoundary(
+        child: Image.file(
+          File(path),
+          width: double.infinity,
+          height: double.infinity,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => _fallback(),
+        ),
       );
     }
     return _fallback();
@@ -2116,11 +2343,7 @@ class _AvatarContent extends StatelessWidget {
 
   static Widget _fallback() {
     return const Center(
-      child: Icon(
-        Icons.face_3_rounded,
-        size: 42,
-        color: Color(0xFF7A5832),
-      ),
+      child: Icon(Icons.face_3_rounded, size: 42, color: Color(0xFF7A5832)),
     );
   }
 }
@@ -2170,11 +2393,13 @@ class _TherapistSheetContentState extends State<_TherapistSheetContent> {
     if (_saving) return;
     setState(() => _saving = true);
 
-    await widget.controller.save(TherapistContact(
-      name: name,
-      phone: _phone.text.trim(),
-      email: _email.text.trim(),
-    ));
+    await widget.controller.save(
+      TherapistContact(
+        name: name,
+        phone: _phone.text.trim(),
+        email: _email.text.trim(),
+      ),
+    );
 
     if (!mounted) return;
     setState(() {
@@ -2290,9 +2515,19 @@ class _TherapistSheetContentState extends State<_TherapistSheetContent> {
       children: [
         _field(_name, 'Name', TextInputType.name, TextCapitalization.words),
         const SizedBox(height: 12),
-        _field(_phone, 'Phone number', TextInputType.phone, TextCapitalization.none),
+        _field(
+          _phone,
+          'Phone number',
+          TextInputType.phone,
+          TextCapitalization.none,
+        ),
         const SizedBox(height: 12),
-        _field(_email, 'Email address', TextInputType.emailAddress, TextCapitalization.none),
+        _field(
+          _email,
+          'Email address',
+          TextInputType.emailAddress,
+          TextCapitalization.none,
+        ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
@@ -2457,8 +2692,7 @@ class _TherapistSheetContentState extends State<_TherapistSheetContent> {
                   ),
                 ),
               ),
-            if (contact.hasPhone && contact.hasEmail)
-              const SizedBox(width: 10),
+            if (contact.hasPhone && contact.hasEmail) const SizedBox(width: 10),
             if (contact.hasEmail)
               Expanded(
                 child: SizedBox(
@@ -2750,7 +2984,11 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.spa_outlined, size: 16, color: Color(0xFFB57A12)),
+                      Icon(
+                        Icons.spa_outlined,
+                        size: 16,
+                        color: Color(0xFFB57A12),
+                      ),
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -2815,7 +3053,10 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
                       onPressed: () => Navigator.of(context).pop(),
                       child: const Text(
                         'Done',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ),
@@ -2923,7 +3164,10 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2.5,
+                      ),
                       decoration: BoxDecoration(
                         color: reminder.enabled
                             ? const Color(0xFFFFF0D4)
@@ -2964,11 +3208,14 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
           const SizedBox(width: 8),
           Switch(
             value: reminder.enabled,
-            activeColor: const Color(0xFFFFB534),
             onChanged: (_) => widget.controller.toggleEnabled(reminder.id),
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, size: 18, color: Color(0xFF93887A)),
+            icon: const Icon(
+              Icons.more_vert,
+              size: 18,
+              color: Color(0xFF93887A),
+            ),
             onSelected: (val) {
               if (val == 'edit') {
                 _startEdit(reminder);
@@ -3028,7 +3275,10 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFFFB534), width: 1.8),
+              borderSide: const BorderSide(
+                color: Color(0xFFFFB534),
+                width: 1.8,
+              ),
             ),
           ),
         ),
@@ -3051,7 +3301,10 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFFFB534), width: 1.8),
+              borderSide: const BorderSide(
+                color: Color(0xFFFFB534),
+                width: 1.8,
+              ),
             ),
           ),
         ),
@@ -3067,7 +3320,11 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.access_time_rounded, size: 20, color: Color(0xFFB57A12)),
+              const Icon(
+                Icons.access_time_rounded,
+                size: 20,
+                color: Color(0xFFB57A12),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -3101,7 +3358,10 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
                   ),
                 ),
                 onPressed: _pickTime,
-                child: const Text('Change', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: const Text(
+                  'Change',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
@@ -3176,7 +3436,9 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w800,
-                    color: isSelected ? const Color(0xFF3D2E14) : const Color(0xFF706454),
+                    color: isSelected
+                        ? const Color(0xFF3D2E14)
+                        : const Color(0xFF706454),
                   ),
                 ),
               ),

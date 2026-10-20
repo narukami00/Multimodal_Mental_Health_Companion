@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/activity.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/visual_kit.dart';
+import '../../domain/capacity/capacity_estimator.dart';
 import '../../domain/profile/behavioral_profile.dart';
+import '../../domain/profile/decision_demo.dart';
+import '../../domain/recommendations/recommendation_engine.dart';
 
 /// Whether phone patterns are being read, for the page to describe truthfully.
 enum PhoneSignal { off, needsAccess, on }
@@ -48,122 +52,56 @@ class ProfileInsightsPage extends StatelessWidget {
     final colors = SolaceColors.from(context);
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(
-        title: const Text('How Solace decides'),
-        backgroundColor: Colors.transparent,
-      ),
       body: SafeArea(
+        top: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
+          padding: EdgeInsets.zero,
           children: [
-            _Section(
-              title: 'WHAT YOU TOLD US',
-              children: [
-                Text(
-                  'Your choices from the first-run reflections. '
-                  'Change them anytime from your baseline.',
-                  style: _bodyStyle(colors),
-                ),
-                const SizedBox(height: 12),
-                _PreferenceChips(profile: profile),
-                if (!profile.preferences.completed)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Preferences step not finished yet — the app is '
-                      'running on editorial picks until then.',
-                      style: _bodyStyle(colors),
+            const PageHero(
+              scene: HeroScene.decisions,
+              title: 'How Solace decides',
+              subtitle: 'Why this idea, and what moves it.',
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 36),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const KitLabel('TRY IT'),
+                  const _TryIt(),
+                  const KitLabel('WHAT YOU TOLD US'),
+                  KitCard(child: _PreferenceChips(profile: profile)),
+                  const KitLabel('WHAT YOU HAVE BEEN DOING'),
+                  _doing(),
+                  const KitLabel('HOW IDEAS ARE CHOSEN RIGHT NOW'),
+                  KitCard(child: _engine()),
+                  const KitLabel('QUIETLY OUT OF ROTATION'),
+                  KitCard(child: _hidden()),
+                  const KitLabel('WHAT ELSE SHAPES AN IDEA'),
+                  KitCard(child: _shapes()),
+                  const KitLabel('AFTER YOU TRY SOMETHING'),
+                  const _AfterTrying(),
+                  const KitLabel('YOUR PHONE PATTERNS'),
+                  KitCard(child: _phone()),
+                  const KitLabel('MOMENTS, AND WHAT SOL IS TOLD'),
+                  KitCard(child: _moments()),
+                  const KitLabel('NEVER USED'),
+                  KitCard(child: _never()),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Your choices and phone patterns stay on this device. '
+                    'Sol is told only what you switch on in What Sol '
+                    'remembers.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.5,
+                      fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.w600,
+                      color: kitMuted,
                     ),
                   ),
-              ],
-            ),
-            _Section(
-              title: 'WHAT YOU HAVE BEEN DOING',
-              children: [
-                if (profile.totalAnswered == 0)
-                  Text(
-                    'No ideas answered yet. Once you accept or turn down a '
-                    'few, this section shows what tends to work for you.',
-                    style: _bodyStyle(colors),
-                  )
-                else ...[
-                  Text(
-                    '${profile.totalAccepted} accepted of '
-                    '${profile.totalAnswered} answered, and how each kind '
-                    'has gone:',
-                    style: _bodyStyle(colors),
-                  ),
-                  const SizedBox(height: 12),
-                  for (final entry in profile.typeAcceptance.entries)
-                    _TypeRow(
-                      typeName: _typeLabel(entry.key),
-                      acceptance: entry.value,
-                    ),
                 ],
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    _Stat(
-                      value: '${profile.momentum.checkInsLast14Days}',
-                      label: 'check-ins\nin 14 days',
-                    ),
-                    const SizedBox(width: 12),
-                    _Stat(
-                      value: '${profile.momentum.restDaysLast14Days}',
-                      label: 'rest days\ntaken',
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            _Section(
-              title: 'HOW IDEAS ARE CHOSEN RIGHT NOW',
-              children: [
-                ..._engineLines(profile, colors),
-              ],
-            ),
-            _Section(
-              title: 'QUIETLY OUT OF ROTATION',
-              children: [
-                if (profile.engineState.hiddenCount == 0)
-                  Text(
-                    'Nothing is hidden. Everything in the library can '
-                    'currently be offered.',
-                    style: _bodyStyle(colors),
-                  )
-                else ...[
-                  if (profile.neverSuggestedTypes.isNotEmpty)
-                    Text(
-                      'You asked not to see: '
-                      '${profile.neverSuggestedTypes.join(', ')}. '
-                      'Those stay out until you change your baseline.',
-                      style: _bodyStyle(colors),
-                    ),
-                  if (profile.shelvedActivities.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Turned down three times, so no longer offered:',
-                      style: _bodyStyle(colors),
-                    ),
-                    const SizedBox(height: 6),
-                    for (final activity in profile.shelvedActivities)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text('· ${activity.title}', style: _bodyStyle(colors)),
-                      ),
-                  ],
-                ],
-              ],
-            ),
-            ..._decisionSections(colors),
-            const SizedBox(height: 8),
-            Text(
-              'Your choices and your phone patterns stay on this device. What '
-              'Sol is told is only what you switch on in What Sol remembers. '
-              'None of it describes your mental health.',
-              style: _bodyStyle(colors).copyWith(
-                fontSize: 11.5,
-                fontStyle: FontStyle.italic,
               ),
             ),
           ],
@@ -172,244 +110,766 @@ class ProfileInsightsPage extends StatelessWidget {
     );
   }
 
-  /// The parts of the picture beyond the ideas themselves: how capacity, phone
-  /// patterns, moments, and what Sol is told fit in, in the same plain words and
-  /// with the same honesty about what is and is not used.
-  List<Widget> _decisionSections(SolaceColors colors) {
-    return [
-      _Section(
-        title: 'WHAT ELSE SHAPES AN IDEA',
-        children: [
-          const _Bullet(
-            text: 'The time of day and the sleep hours you gave. Late at night, '
-                'or soon after waking, Solace leans toward smaller, gentler '
-                'ideas.',
-          ),
-          const _Bullet(
-            text: 'Your latest mood word and how your last few days have felt. '
-                'A lower stretch means shorter ideas first.',
-          ),
-          if (signals.phonePatterns == PhoneSignal.on)
-            const _Bullet(
-              text: 'A short night, estimated from when your phone was last '
-                  'used and next picked up, can count too. It only ever makes '
-                  'ideas gentler.',
+  Widget _doing() {
+    final m = profile.momentum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (profile.totalAnswered > 0)
+          KitCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${profile.totalAccepted} accepted of '
+                  '${profile.totalAnswered} answered, and how each kind '
+                  'has gone:',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    fontWeight: FontWeight.w700,
+                    color: kitSoft,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                for (final entry in profile.typeAcceptance.entries)
+                  _TypeRow(
+                    type: entry.key,
+                    typeName: _typeLabel(entry.key),
+                    acceptance: entry.value,
+                  ),
+              ],
             ),
-          const _Bullet(
-            text: 'This is a rough reading and a nudge, never a diagnosis. '
-                'When Solace is only going on the clock, it says so.',
+          )
+        else
+          const KitCard(
+            child: _InfoRow(
+              icon: Icons.hourglass_empty_rounded,
+              color: kitAmber,
+              text:
+                  'No ideas answered yet. Accept or turn down a few and '
+                  'this fills in.',
+            ),
           ),
-        ],
-      ),
-      _Section(
-        title: 'AFTER YOU TRY SOMETHING',
-        children: [
-          Text(
-            'If you say how you felt afterwards, a lift counts a little in '
-            'favour of that kind of idea and a heavier word counts a little '
-            'against it. If you do not say, nothing is assumed: skipping the '
-            'question never counts as it not working.',
-            style: _bodyStyle(colors),
-          ),
-        ],
-      ),
-      _Section(
-        title: 'YOUR PHONE PATTERNS',
-        children: [
-          Text(
-            switch (signals.phonePatterns) {
-              PhoneSignal.off =>
-                'Off. Solace reads nothing from your phone. Turning it on lets '
-                    'Solace learn your own usual rhythm: screen time, when you '
-                    'are active, an estimated night, and which kinds of app. '
-                    'All of it stays on this phone.',
-              PhoneSignal.needsAccess =>
-                'You said yes, but Android usage access is off for Solace, so '
-                    'nothing is being read.',
-              PhoneSignal.on =>
-                'On. Solace reads screen time, when you are active, when the '
-                    'phone goes down overnight (an estimate), and which kind '
-                    'of app was open. It stays on this phone.',
-            },
-            style: _bodyStyle(colors),
-          ),
-          const SizedBox(height: 10),
-          const _Bullet(
-            text: 'It compares you only with your own last few weeks, never '
-                'with anyone else, and it never tells you what amount is right.',
-          ),
-          const _Bullet(
-            text: 'When more than one kind of pattern shifts at once, Solace '
-                'may ask once whether anything is going on. Never about a '
-                'single odd day, and never more than once a week. You can '
-                'turn the question off.',
-          ),
-          const _Bullet(
-            text: 'Names of apps are not kept unless you choose that. '
-                'Otherwise only totals for kinds of app, like social or video.',
-          ),
-        ],
-      ),
-      _Section(
-        title: 'MOMENTS, AND WHAT SOL IS TOLD',
-        children: [
-          const _Bullet(
-            text: 'When you write about something good, Solace may ask whether '
-                'to remember it. Only your yes keeps it, and hard topics are '
-                'never offered.',
-          ),
-          _Bullet(
-            text: signals.keptMoments == 0
-                ? 'No moments are kept right now.'
-                : '${signals.keptMoments} '
-                      '${signals.keptMoments == 1 ? 'moment is' : 'moments are'} '
-                      'kept, in your own words.',
-          ),
-          _Bullet(
-            text: signals.snippetShared
-                ? 'Sol is told a short note about how you like things.'
-                : 'Sol is not told anything about you beyond the conversation '
-                      'itself.',
-          ),
-          _Bullet(
-            text: signals.momentsShared
-                ? 'Sol is told your few most recent kept moments.'
-                : 'Sol is not told your moments.',
-          ),
-          const _Bullet(
-            text: 'What Sol remembers shows exactly what would be sent, and is '
-                'where you change or delete any of it.',
-          ),
-        ],
-      ),
-      _Section(
-        title: 'NEVER USED',
-        children: [
-          const _Bullet(
-            text: 'What is inside your other apps or messages, and where you '
-                'are.',
-          ),
-          const _Bullet(
-            text: 'Your microphone or camera, except when you start a voice or '
-                'video check-in, send a voice message, or make a call.',
-          ),
-          const _Bullet(
-            text: 'Questionnaire answers or scores. They are never sent to '
-                'Sol.',
-          ),
-          const _Bullet(
-            text: 'Anything that compares you with other people.',
-          ),
-          const _Bullet(
-            text: 'Emotion read from your words or voice. Today your mood '
-                'words are the ones you choose. Any labels shown on an entry '
-                'are placeholders and shape nothing. If that changes, it will '
-                'be explained here and be yours to switch off first.',
-          ),
-        ],
-      ),
-    ];
-  }
-
-  TextStyle _bodyStyle(SolaceColors colors) {
-    return TextStyle(
-      fontSize: 13,
-      height: 1.5,
-      color: colors.mutedInk,
-      fontWeight: FontWeight.w600,
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            StatTile(
+              value: '${m.checkInsLast14Days}',
+              label: 'check-ins in 14 days',
+              color: kitAmber,
+              icon: Icons.edit_note_rounded,
+            ),
+            const SizedBox(width: 10),
+            StatTile(
+              value: '${m.restDaysLast14Days}',
+              label: 'rest days taken',
+              color: _blue,
+              icon: Icons.bedtime_outlined,
+            ),
+          ],
+        ),
+      ],
     );
   }
 
-  List<Widget> _engineLines(BehavioralProfile profile, SolaceColors colors) {
+  Widget _engine() {
     final engine = profile.engineState;
-    final lines = <Widget>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (engine.daysLeftOfStarterTour > 0) ...[
+          _Meter(
+            value:
+                1 -
+                engine.daysLeftOfStarterTour /
+                    RecommendationEngine.starterTourDays,
+            color: _green,
+          ),
+          const SizedBox(height: 8),
+          _InfoRow(
+            icon: Icons.route_rounded,
+            color: _green,
+            text:
+                'You are in the gentle starter tour: short, easy ideas '
+                'while Solace learns what fits. '
+                '${engine.daysLeftOfStarterTour} '
+                '${engine.daysLeftOfStarterTour == 1 ? 'day remains' : 'days remain'}.',
+          ),
+        ] else ...[
+          _Meter(
+            value: engine.exploreShare,
+            marker: engine.exploreTargetShare,
+            color: _blue,
+          ),
+          const SizedBox(height: 8),
+          _InfoRow(
+            icon: Icons.explore_outlined,
+            color: _blue,
+            text:
+                'Roughly ${(engine.exploreShare * 100).round()}% of recent '
+                'ideas were new to you, against a target of about '
+                '${(engine.exploreTargetShare * 100).round()}%.',
+          ),
+        ],
+        const SizedBox(height: 12),
+        if (engine.typesClearingGate.isNotEmpty) ...[
+          const _InfoRow(
+            icon: Icons.verified_outlined,
+            color: kitAmber,
+            text: 'Enough good days to offer from experience:',
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final name in engine.typesClearingGate)
+                _Chip(_typeLabelFromName(name), kitAmber),
+            ],
+          ),
+        ] else
+          const _InfoRow(
+            icon: Icons.verified_outlined,
+            color: kitMuted,
+            text:
+                'No type has enough history yet to be offered from '
+                'experience. Ideas are still being explored.',
+          ),
+        if (engine.effortCapped) ...[
+          const SizedBox(height: 12),
+          const _InfoRow(
+            icon: Icons.speed_rounded,
+            color: kitCoral,
+            text:
+                'A recent "too hard" keeps ideas gentle for a couple of '
+                'weeks.',
+          ),
+        ],
+      ],
+    );
+  }
 
-    if (engine.daysLeftOfStarterTour > 0) {
-      lines.add(
-        _Bullet(
-          text: engine.profileAgeDays == 0
-              ? 'You are in the gentle starter tour — short, easy ideas '
-                  'while Solace learns what fits you. '
-                  '${engine.daysLeftOfStarterTour} days remain.'
-              : '${engine.daysLeftOfStarterTour} days left of the starter '
-                  'tour, then ideas start drawing on what has worked before.',
-        ),
-      );
-    } else {
-      final sharePercent = (engine.exploreShare * 100).round();
-      final targetPercent = (engine.exploreTargetShare * 100).round();
-      lines.add(
-        _Bullet(
-          text: 'Roughly $sharePercent% of recent ideas were new-to-you, '
-              'against a target of about $targetPercent%. The rest are '
-              'drawn from what has gone well before.',
-        ),
+  Widget _hidden() {
+    if (profile.engineState.hiddenCount == 0) {
+      return const _InfoRow(
+        icon: Icons.visibility_outlined,
+        color: _green,
+        text:
+            'Nothing is hidden. Everything in the library can currently be '
+            'offered.',
       );
     }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (profile.neverSuggestedTypes.isNotEmpty)
+          _InfoRow(
+            icon: Icons.visibility_off_outlined,
+            color: kitCoral,
+            text:
+                'You asked not to see: '
+                '${profile.neverSuggestedTypes.join(', ')}. '
+                'Those stay out until you change your baseline.',
+          ),
+        if (profile.shelvedActivities.isNotEmpty) ...[
+          if (profile.neverSuggestedTypes.isNotEmpty)
+            const SizedBox(height: 12),
+          const _InfoRow(
+            icon: Icons.inventory_2_outlined,
+            color: kitMuted,
+            text: 'Turned down three times, so no longer offered:',
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final activity in profile.shelvedActivities)
+                _Chip(activity.title, kitMuted),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
 
-    if (engine.typesClearingGate.isNotEmpty) {
-      lines.add(
-        _Bullet(
-          text: 'Enough good days so far to offer, from experience: '
-              '${engine.typesClearingGate.map(_typeLabelFromName).join(', ')}.',
+  Widget _shapes() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _InfoRow(
+          icon: Icons.schedule_rounded,
+          color: _blue,
+          text:
+              'Time of day and the sleep hours you gave. Late, or soon '
+              'after waking, ideas get smaller and gentler.',
         ),
-      );
-    } else {
-      lines.add(
-        const _Bullet(
-          text: 'No type has enough history yet to be offered from '
-              'experience — ideas are still being explored.',
+        const SizedBox(height: 12),
+        const _InfoRow(
+          icon: Icons.mood_outlined,
+          color: kitAmber,
+          text:
+              'Your latest mood word and how the last few days felt. A '
+              'lower stretch means shorter ideas first.',
         ),
-      );
-    }
+        if (signals.phonePatterns == PhoneSignal.on) ...[
+          const SizedBox(height: 12),
+          const _InfoRow(
+            icon: Icons.phone_android_rounded,
+            color: _green,
+            text:
+                'A short night, estimated from phone use, can count too. '
+                'It only ever makes ideas gentler.',
+          ),
+        ],
+        const SizedBox(height: 12),
+        const _InfoRow(
+          icon: Icons.info_outline_rounded,
+          color: kitMuted,
+          text:
+              'A rough reading and a nudge, never a diagnosis. With only '
+              'the clock to go on, Solace says so.',
+        ),
+      ],
+    );
+  }
 
-    if (engine.effortCapped) {
-      lines.add(
-        const _Bullet(
-          text: 'A recent "too hard" has ideas capped at gentle options '
-              'for a couple of weeks.',
+  Widget _phone() {
+    final (label, color, text) = switch (signals.phonePatterns) {
+      PhoneSignal.off => (
+        'Off',
+        kitMuted,
+        'Off. Solace reads nothing from your phone.',
+      ),
+      PhoneSignal.needsAccess => (
+        'Needs access',
+        kitCoral,
+        'You said yes, but Android usage access is off for Solace, so '
+            'nothing is being read.',
+      ),
+      PhoneSignal.on => (
+        'On',
+        _green,
+        'On. Solace reads screen time, when you are active, an estimated '
+            'night and kinds of app. It stays on this phone.',
+      ),
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        StatusPill(label, color: color),
+        const SizedBox(height: 10),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.45,
+            fontWeight: FontWeight.w700,
+            color: kitSoft,
+          ),
         ),
-      );
-    }
+        const SizedBox(height: 14),
+        const _InfoRow(
+          icon: Icons.person_outline_rounded,
+          color: _blue,
+          text:
+              'Compared only with your own last few weeks, never with '
+              'anyone else.',
+        ),
+        const SizedBox(height: 10),
+        const _InfoRow(
+          icon: Icons.chat_bubble_outline_rounded,
+          color: kitAmber,
+          text:
+              'If several patterns shift together, Solace may ask once '
+              'whether anything is going on. At most weekly, and you can '
+              'turn it off.',
+        ),
+        const SizedBox(height: 10),
+        const _InfoRow(
+          icon: Icons.apps_rounded,
+          color: _green,
+          text:
+              'Only totals for kinds of app are kept, not app names, unless '
+              'you choose that.',
+        ),
+      ],
+    );
+  }
 
-    return lines;
+  Widget _moments() {
+    final kept = signals.keptMoments;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _InfoRow(
+          icon: Icons.favorite_border_rounded,
+          color: kitCoral,
+          text:
+              'Solace may ask whether to remember something good. Only '
+              'your yes keeps it, and hard topics are never offered.',
+        ),
+        const SizedBox(height: 12),
+        _InfoRow(
+          icon: Icons.bookmark_border_rounded,
+          color: kept == 0 ? kitMuted : kitAmber,
+          text: kept == 0
+              ? 'No moments are kept right now.'
+              : '$kept ${kept == 1 ? 'moment is' : 'moments are'} kept, in '
+                    'your own words.',
+        ),
+        const SizedBox(height: 12),
+        _InfoRow(
+          icon: signals.snippetShared
+              ? Icons.send_rounded
+              : Icons.do_not_disturb_on_outlined,
+          color: signals.snippetShared ? _blue : kitMuted,
+          text: signals.snippetShared
+              ? 'Sol is told a short note about how you like things.'
+              : 'Sol is not told anything about you beyond the conversation '
+                    'itself.',
+        ),
+        const SizedBox(height: 12),
+        _InfoRow(
+          icon: signals.momentsShared
+              ? Icons.send_rounded
+              : Icons.do_not_disturb_on_outlined,
+          color: signals.momentsShared ? _blue : kitMuted,
+          text: signals.momentsShared
+              ? 'Sol is told your few most recent kept moments.'
+              : 'Sol is not told your moments.',
+        ),
+        const SizedBox(height: 12),
+        const _InfoRow(
+          icon: Icons.manage_search_rounded,
+          color: kitMuted,
+          text:
+              'What Sol remembers shows exactly what would be sent, and is '
+              'where you change or delete any of it.',
+        ),
+      ],
+    );
+  }
+
+  Widget _never() {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _InfoRow(
+          icon: Icons.apps_outage_rounded,
+          color: kitCoral,
+          text:
+              'What is inside your other apps or messages, and where you '
+              'are.',
+        ),
+        SizedBox(height: 12),
+        _InfoRow(
+          icon: Icons.mic_off_outlined,
+          color: kitCoral,
+          text:
+              'Your microphone or camera, except when you start a voice or '
+              'video check-in, send a voice message, or make a call.',
+        ),
+        SizedBox(height: 12),
+        _InfoRow(
+          icon: Icons.quiz_outlined,
+          color: kitCoral,
+          text: 'Questionnaire answers or scores. They are never sent to Sol.',
+        ),
+        SizedBox(height: 12),
+        _InfoRow(
+          icon: Icons.groups_outlined,
+          color: kitCoral,
+          text: 'Anything that compares you with other people.',
+        ),
+        SizedBox(height: 12),
+        _InfoRow(
+          icon: Icons.sentiment_neutral_rounded,
+          color: kitCoral,
+          text:
+              'Emotion read from your words or voice. Labels on an entry '
+              'are placeholders and shape nothing. If that changes, it will '
+              'be explained here and be yours to switch off first.',
+        ),
+      ],
+    );
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
+const _green = Color(0xFF4F9D76);
+const _blue = Color(0xFF6E73C8);
 
-  final String title;
-  final List<Widget> children;
+/// An icon tile with one short line beside it.
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.icon, required this.color, required this.text});
+
+  final IconData icon;
+  final Color color;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        IconTile(icon: icon, color: color, size: 34),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+                color: kitSoft,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip(this.text, this.color);
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.14),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color),
+    ),
+  );
+}
+
+/// A slim filled bar, with an optional tick for a target.
+class _Meter extends StatelessWidget {
+  const _Meter({required this.value, required this.color, this.marker});
+
+  final double value;
+  final double? marker;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final w = box.maxWidth;
+        return SizedBox(
+          height: 14,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeOutCubic,
+                height: 8,
+                width: w * value.clamp(0.0, 1.0),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              if (marker != null)
+                Positioned(
+                  left: (w * marker!.clamp(0.0, 1.0) - 1.5).clamp(0.0, w - 3),
+                  child: Container(
+                    width: 3,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: kitInk,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Felt lighter, felt heavier, did not say: what each does to the next pick.
+class _AfterTrying extends StatelessWidget {
+  const _AfterTrying();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget cell(IconData icon, Color color, String title, String body) {
+      return Expanded(
+        child: KitCard(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              IconTile(icon: icon, color: color, size: 38),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: kitInk,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  height: 1.3,
+                  fontWeight: FontWeight.w600,
+                  color: kitSoft,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              cell(
+                Icons.trending_up_rounded,
+                _green,
+                'Lighter',
+                'Counts a little for that kind',
+              ),
+              const SizedBox(width: 8),
+              cell(
+                Icons.trending_down_rounded,
+                kitCoral,
+                'Heavier',
+                'Counts a little against it',
+              ),
+              const SizedBox(width: 8),
+              cell(
+                Icons.remove_rounded,
+                kitMuted,
+                'Not said',
+                'Nothing is assumed',
+              ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(4, 8, 4, 0),
+          child: Text(
+            'Skipping the question never counts as it not working.',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: kitMuted,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The interactive demo: change a pretend situation, watch the rules respond.
+/// Built from the engine's own constants; it shows the rules, not a forecast.
+class _TryIt extends StatefulWidget {
+  const _TryIt();
+
+  @override
+  State<_TryIt> createState() => _TryItState();
+}
+
+class _TryItState extends State<_TryIt> {
+  CapacityLevel _capacity = CapacityLevel.high;
+  bool _tooHard = false;
+  bool _noMovement = false;
+
+  static const _levels = [
+    (CapacityLevel.low, 'Low energy', Icons.battery_2_bar_rounded),
+    (CapacityLevel.medium, 'Middling', Icons.battery_4_bar_rounded),
+    (CapacityLevel.high, 'Plenty', Icons.battery_full_rounded),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final demo = DecisionDemo(
+      capacity: _capacity,
+      recentTooHard: _tooHard,
+      avoidedMovement: _noMovement,
+    );
+    final max = demo.maxMinutes;
+    return KitCard(
+      color: const Color(0xFFFFFBF2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 11.5,
+          const Text(
+            'Pretend today looks like this:',
+            style: TextStyle(
+              fontSize: 13,
               fontWeight: FontWeight.w800,
-              letterSpacing: 1.3,
-              color: Color(0xFFBCAC8E),
+              color: kitInk,
             ),
           ),
           const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0xFFF7F2E6)),
+          Row(
+            children: [
+              for (final (level, label, icon) in _levels)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      right: level == CapacityLevel.high ? 0 : 6,
+                    ),
+                    child: _Choice(
+                      key: ValueKey('demo-${level.name}'),
+                      icon: icon,
+                      label: label,
+                      selected: _capacity == level,
+                      onTap: () => setState(() => _capacity = level),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _Toggle(
+                key: const ValueKey('demo-hard'),
+                label: 'Marked one as Too hard',
+                on: _tooHard,
+                onTap: () => setState(() => _tooHard = !_tooHard),
+              ),
+              _Toggle(
+                key: const ValueKey('demo-nomove'),
+                label: 'Hide movement ideas',
+                on: _noMovement,
+                onTap: () => setState(() => _noMovement = !_noMovement),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: kitLine),
+          const SizedBox(height: 14),
+          const Text(
+            'IDEAS SOLACE WOULD FAVOUR',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+              color: kitMuted,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: children,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(Icons.timer_outlined, size: 18, color: kitAmber),
+              const SizedBox(width: 8),
+              Text(
+                max == null ? 'Any length' : 'Up to $max min',
+                key: const ValueKey('demo-length'),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: kitInk,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _Meter(value: max == null ? 1 : max / 20, color: kitAmber),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              const Icon(Icons.speed_rounded, size: 18, color: _blue),
+              const SizedBox(width: 8),
+              Text(
+                demo.gentleEffortOnly ? 'Gentle effort only' : 'Any effort',
+                key: const ValueKey('demo-effort'),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: kitInk,
+                ),
+              ),
+              const Spacer(),
+              for (var i = 0; i < 3; i++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.only(left: 4),
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: (demo.gentleEffortOnly ? i < 1 : true)
+                        ? _blue
+                        : _blue.withValues(alpha: 0.15),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (final type in ActivityType.values)
+                _KindDot(
+                  type: type,
+                  out: !demo.kindsInPlay.contains(type),
+                  leaned: demo.leaned.contains(type),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            demo.leansGentleKinds
+                ? 'Ringed kinds ask least, so they get a small lean.'
+                : 'No kind is leaned towards.',
+            key: const ValueKey('demo-kinds-note'),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kitSoft,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'A picture of the rules, not your live data. Low energy comes '
+            'from the hour, the sleep hours you gave, and your latest mood '
+            'word.',
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.4,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w600,
+              color: kitMuted,
             ),
           ),
         ],
@@ -417,6 +877,165 @@ class _Section extends StatelessWidget {
     );
   }
 }
+
+class _Choice extends StatelessWidget {
+  const _Choice({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          decoration: BoxDecoration(
+            color: selected ? kitAmber.withValues(alpha: 0.18) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? kitAmber : kitLine,
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 22, color: selected ? kitAmber : kitMuted),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: selected ? kitInk : kitSoft,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Toggle extends StatelessWidget {
+  const _Toggle({
+    required this.label,
+    required this.on,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      toggled: on,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: on ? _blue.withValues(alpha: 0.16) : Colors.white,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: on ? _blue : kitLine),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                on ? Icons.check_circle_rounded : Icons.circle_outlined,
+                size: 16,
+                color: on ? _blue : kitMuted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: on ? kitInk : kitSoft,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KindDot extends StatelessWidget {
+  const _KindDot({required this.type, required this.out, required this.leaned});
+
+  final ActivityType type;
+  final bool out;
+  final bool leaned;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = out ? kitMuted : kitAmber;
+    return Semantics(
+      label:
+          '${_typeLabel(type)}'
+          '${out
+              ? ', out'
+              : leaned
+              ? ', leaned towards'
+              : ''}',
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withValues(alpha: out ? 0.08 : 0.16),
+          border: Border.all(
+            color: leaned ? kitAmber : Colors.transparent,
+            width: 2.2,
+          ),
+        ),
+        child: Icon(
+          _typeIcon(type),
+          size: 18,
+          color: out ? kitMuted.withValues(alpha: 0.4) : kitAmber,
+        ),
+      ),
+    );
+  }
+}
+
+IconData _typeIcon(ActivityType type) => switch (type) {
+  ActivityType.movement => Icons.directions_walk_rounded,
+  ActivityType.social => Icons.people_outline_rounded,
+  ActivityType.creative => Icons.brush_outlined,
+  ActivityType.nature => Icons.park_outlined,
+  ActivityType.mindfulness => Icons.self_improvement_rounded,
+  ActivityType.learning => Icons.menu_book_outlined,
+  ActivityType.productivity => Icons.checklist_rounded,
+};
 
 class _PreferenceChips extends StatelessWidget {
   const _PreferenceChips({required this.profile});
@@ -425,189 +1044,132 @@ class _PreferenceChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = SolaceColors.from(context);
     final preferences = profile.preferences;
-    final rows = <(String, List<String>)>[
-      ('You like', preferences.preferredActivities),
-      ('Within', preferences.constraints),
-      ('Tone', preferences.interactionPreferences),
-      ('Never suggest', preferences.neverSuggest),
+    final rows = <(String, IconData, Color, List<String>)>[
+      (
+        'You like',
+        Icons.favorite_border_rounded,
+        kitCoral,
+        preferences.preferredActivities,
+      ),
+      ('Within', Icons.timelapse_rounded, _blue, preferences.constraints),
+      (
+        'Tone',
+        Icons.chat_bubble_outline_rounded,
+        _green,
+        preferences.interactionPreferences,
+      ),
+      (
+        'Never suggest',
+        Icons.block_rounded,
+        kitMuted,
+        preferences.neverSuggest,
+      ),
     ];
-    final any = rows.any((row) => row.$2.isNotEmpty);
-    if (!any) {
-      return Text(
-        'No preferences recorded yet.',
-        style: TextStyle(fontSize: 13, color: colors.mutedInk),
+    if (!rows.any((row) => row.$4.isNotEmpty)) {
+      return const _InfoRow(
+        icon: Icons.tune_rounded,
+        color: kitMuted,
+        text: 'No preferences recorded yet.',
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final (label, values) in rows)
+        for (final (label, icon, color, values) in rows)
           if (values.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 6,
-                runSpacing: 6,
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '$label:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: colors.ink,
+                  IconTile(icon: icon, color: color, size: 34),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$label:',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: kitInk,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final value in values) _Chip(value, color),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  for (final value in values)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF3DC),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        value,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF8A6A1C),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
+        if (!profile.preferences.completed)
+          const _InfoRow(
+            icon: Icons.pending_outlined,
+            color: kitAmber,
+            text:
+                'Preferences are not finished yet, so the app is using '
+                'editorial picks until then.',
+          ),
       ],
     );
   }
 }
 
 class _TypeRow extends StatelessWidget {
-  const _TypeRow({required this.typeName, required this.acceptance});
+  const _TypeRow({
+    required this.type,
+    required this.typeName,
+    required this.acceptance,
+  });
 
+  final ActivityType type;
   final String typeName;
   final TypeAcceptance acceptance;
 
   @override
   Widget build(BuildContext context) {
-    final colors = SolaceColors.from(context);
+    final decided = acceptance.completed + acceptance.declined > 0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
+          IconTile(icon: _typeIcon(type), color: kitAmber, size: 34),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   typeName,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
-                    color: colors.ink,
+                    color: kitInk,
                   ),
                 ),
-              ),
-              Text(
-                acceptance.subtitle,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: colors.mutedInk,
+                const SizedBox(height: 2),
+                Text(
+                  acceptance.subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: kitSoft,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          if (acceptance.completed + acceptance.declined > 0) ...[
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: acceptance.completionShare,
-                minHeight: 5,
-                backgroundColor: colors.mutedInk.withValues(alpha: 0.15),
-                valueColor: AlwaysStoppedAnimation<Color>(colors.amber),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = SolaceColors.from(context);
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF9EE),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF7EBCE)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFFB57A12),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: colors.mutedInk,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Bullet extends StatelessWidget {
-  const _Bullet({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = SolaceColors.from(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('·  ', style: TextStyle(color: colors.amber, height: 1.5)),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.5,
-                fontWeight: FontWeight.w600,
-                color: colors.mutedInk,
-              ),
+                if (decided) ...[
+                  const SizedBox(height: 6),
+                  _Meter(value: acceptance.completionShare, color: kitAmber),
+                ],
+              ],
             ),
           ),
         ],
@@ -617,14 +1179,14 @@ class _Bullet extends StatelessWidget {
 }
 
 String _typeLabel(ActivityType type) => switch (type) {
-      ActivityType.movement => 'Movement',
-      ActivityType.social => 'Social',
-      ActivityType.creative => 'Creative',
-      ActivityType.nature => 'Nature',
-      ActivityType.mindfulness => 'Mindfulness',
-      ActivityType.learning => 'Learning',
-      ActivityType.productivity => 'Productivity',
-    };
+  ActivityType.movement => 'Movement',
+  ActivityType.social => 'Social',
+  ActivityType.creative => 'Creative',
+  ActivityType.nature => 'Nature',
+  ActivityType.mindfulness => 'Mindfulness',
+  ActivityType.learning => 'Learning',
+  ActivityType.productivity => 'Productivity',
+};
 
 String _typeLabelFromName(String name) {
   for (final type in ActivityType.values) {

@@ -9,11 +9,13 @@ class _FakePermissions extends AppPermissionService {
   _FakePermissions({
     this.notifications = false,
     this.microphone = false,
+    this.camera = false,
     this.canOpenSettings = true,
   });
 
   final bool notifications;
   final bool microphone;
+  final bool camera;
   final bool canOpenSettings;
   int settingsOpened = 0;
 
@@ -22,6 +24,9 @@ class _FakePermissions extends AppPermissionService {
 
   @override
   Future<bool> microphoneGranted() async => microphone;
+
+  @override
+  Future<bool> cameraGranted() async => camera;
 
   @override
   Future<bool> openSystemSettings() async {
@@ -35,11 +40,13 @@ void main() {
     WidgetTester tester, {
     bool notifications = false,
     bool microphone = false,
+    bool camera = false,
     bool canOpenSettings = true,
   }) async {
     final permissions = _FakePermissions(
       notifications: notifications,
       microphone: microphone,
+      camera: camera,
       canOpenSettings: canOpenSettings,
     );
 
@@ -65,7 +72,8 @@ void main() {
 
     expect(find.text('Notifications'), findsOneWidget);
     expect(find.text('Microphone'), findsOneWidget);
-    expect(find.text('Not allowed'), findsNWidgets(2));
+    expect(find.text('Camera'), findsOneWidget);
+    expect(find.text('Not allowed'), findsNWidgets(3));
     // Denied rows explain the consequence rather than nagging.
     expect(
       find.text('No reminders. Everything else still works.'),
@@ -85,6 +93,14 @@ void main() {
     );
   });
 
+  testWidgets('the camera is reported like the other permissions, and location is never asked', (tester) async {
+    await pumpPage(tester, camera: true);
+    expect(find.text('Allowed'), findsOneWidget);
+    expect(find.textContaining('Frames are read live and never saved'), findsOneWidget);
+    expect(find.byKey(const ValueKey('permission-location')), findsOneWidget);
+    expect(find.text('Never asked'), findsOneWidget);
+  });
+
   testWidgets('says plainly that the app cannot change these itself', (
     tester,
   ) async {
@@ -96,7 +112,7 @@ void main() {
     );
     expect(
       find.text('Change in system settings'),
-      findsNWidgets(2),
+      findsNWidgets(3),
     );
   });
 
@@ -133,6 +149,8 @@ void main() {
       find.textContaining('sends your chat text to the Solace companion'),
       findsOneWidget,
     );
+    // Live camera frames genuinely leave the device when face reading is on, so it says so too.
+    expect(find.textContaining('live camera frames'), findsOneWidget);
   });
 
   testWidgets('names what it deliberately does not collect', (

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/models/chat_conversation_record.dart';
 import '../../core/models/chat_message_record.dart';
+import '../../core/models/emotion_result.dart';
 
 /// Manages persistent chat conversation sessions, message history, and active session state.
 class ChatController extends ChangeNotifier {
@@ -234,6 +235,7 @@ class ChatController extends ChangeNotifier {
     await _saveToPrefs();
     notifyListeners();
     if (message.isUser && !message.isVoice) onUserMessage?.call(message);
+    if (message.isUser) await _givePendingReading(message);
   }
 
   /// Update an existing message (e.g. adding transcription or finishing LLM stream).
@@ -250,7 +252,10 @@ class ChatController extends ChangeNotifier {
     if (msgIdx < 0) return;
 
     final updatedMessages = List<ChatMessageRecord>.from(current.messages);
-    updatedMessages[msgIdx] = updatedMessage;
+    // A later update (audio path, transcript) must not wipe a reading that arrived in between.
+    updatedMessages[msgIdx] = updatedMessage.reading == null && current.messages[msgIdx].reading != null
+        ? updatedMessage.copyWith(reading: current.messages[msgIdx].reading)
+        : updatedMessage;
 
     // Update title if user transcription just arrived
     var title = current.title;
@@ -273,6 +278,110 @@ class ChatController extends ChangeNotifier {
     _conversations[activeIdx] = updatedConv;
     await _saveToPrefs();
     notifyListeners();
+  }
+
+  // --- how each of the person's messages read ---------------------------------
+
+  /// Reads one message of the person's when the live socket did not (older messages, or a server that
+  /// was away). Given the message and the messages before it in the same conversation; null = no reading.
+  /// Set by the app only when the person agreed to Sol noticing how they sound.
+  Future<EmotionResult?> Function(ChatMessageRecord message, List<ChatMessageRecord> before)? messageReader;
+
+  bool get canReadMessages => messageReader != null;
+
+  ChatConversationRecord? conversationById(String id) {
+    for (final c in _conversations) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  /// Keeps [reading] on message [messageId], wherever its conversation is.
+  Future<void> setReading(String messageId, EmotionResult reading) async {
+    for (var c = 0; c < _conversations.length; c++) {
+      final conv = _conversations[c];
+      final i = conv.messages.indexWhere((m) => m.id == messageId && m.isUser);
+      if (i < 0) continue;
+      final messages = List<ChatMessageRecord>.from(conv.messages);
+      messages[i] = messages[i].copyWith(reading: reading);
+      _conversations[c] = conv.copyWith(messages: messages);
+      await _saveToPrefs();
+      notifyListeners();
+      return;
+    }
+  }
+
+  EmotionResult? _pendingReading;
+  DateTime? _pendingAt;
+
+  /// A live reading from the server (typed text, a voice message, or a call turn read with voice and
+  /// face) arrives just after the person's turn: it belongs to the newest message of theirs that has none
+  /// yet, if that message is recent. If the message is not saved yet (a call turn's words can land a
+  /// moment after the reading) the reading waits briefly and is given to the next message of theirs.
+  Future<bool> attachToLatestUserMessage(EmotionResult reading, {Duration within = const Duration(seconds: 20)}) async {
+    final conv = activeConversation;
+    if (conv != null) {
+      for (var i = conv.messages.length - 1; i >= 0; i--) {
+        final m = conv.messages[i];
+        if (!m.isUser) continue;
+        if (m.reading != null) return false; // already read (another listener got there first)
+        if (DateTime.now().difference(m.timestamp) <= within) {
+          await setReading(m.id, reading);
+          return true;
+        }
+        break;
+      }
+    }
+    _pendingReading = reading;
+    _pendingAt = DateTime.now();
+    return false;
+  }
+
+  Future<void> _givePendingReading(ChatMessageRecord message) async {
+    final reading = _pendingReading;
+    final at = _pendingAt;
+    if (reading == null || at == null || !message.isUser || message.reading != null) return;
+    _pendingReading = null;
+    _pendingAt = null;
+    if (DateTime.now().difference(at) > const Duration(seconds: 20)) return;
+    await setReading(message.id, reading);
+  }
+
+  /// Reads one message now, with the messages before it as context. Returns the reading, or null.
+  Future<EmotionResult?> readMessage(String conversationId, String messageId) async {
+    final reader = messageReader;
+    final conv = conversationById(conversationId);
+    if (reader == null || conv == null) return null;
+    final i = conv.messages.indexWhere((m) => m.id == messageId && m.isUser);
+    if (i < 0) return null;
+    if (conv.messages[i].reading != null) return conv.messages[i].reading;
+    final reading = await reader(conv.messages[i], conv.messages.sublist(0, i));
+    if (reading != null) await setReading(messageId, reading);
+    return reading;
+  }
+
+  /// The person's messages in [conversationId] that have words but no reading yet.
+  List<ChatMessageRecord> unreadMessages(String conversationId) {
+    final conv = conversationById(conversationId);
+    if (conv == null) return const [];
+    return [
+      for (final m in conv.messages)
+        if (m.isUser && m.reading == null && m.spokenText.isNotEmpty && m.spokenText != 'Audio reflection') m,
+    ];
+  }
+
+  /// Reads every unread message of one conversation, oldest first, and stops at the first miss (the
+  /// server is away). Returns how many were read.
+  Future<int> readUnreadMessages(String conversationId, {void Function(int done, int total)? onProgress}) async {
+    final todo = unreadMessages(conversationId);
+    var done = 0;
+    for (final m in todo) {
+      final r = await readMessage(conversationId, m.id);
+      if (r == null) break;
+      done++;
+      onProgress?.call(done, todo.length);
+    }
+    return done;
   }
 
   /// Stores the summary of a conversation's older messages, covering up to and

@@ -80,6 +80,88 @@ class SessionController extends ChangeNotifier {
     return session;
   }
 
+  /// Saves a journal entry whose words and emotion reading are already known (a recording that the
+  /// server transcribed and read). [emotionResults] may be empty: the entry is then kept without an
+  /// analysis, never with an invented one.
+  Future<SessionRecord> saveAnalyzed({
+    required CaptureMode mode,
+    required String text,
+    required List<EmotionResult> Function(String sessionId) emotionResults,
+    String? mood,
+  }) async {
+    final sessionId = DateTime.now().microsecondsSinceEpoch.toString();
+    final session = SessionRecord(
+      id: sessionId,
+      createdAt: DateTime.now(),
+      mode: mode,
+      text: text,
+      mood: mood,
+      emotionResults: emotionResults(sessionId),
+    );
+    await _repository.save(session);
+    _sessions = [
+      session,
+      ..._sessions.where((item) => item.id != session.id),
+    ];
+    notifyListeners();
+    onSaved?.call(session);
+    return session;
+  }
+
+  /// Entries that have words but no model reading yet (made before there was one, or without the server or
+  /// the person's consent). Voice and video entries keep only their transcript, so they are read from that.
+  List<SessionRecord> get unread => [
+        for (final s in _sessions)
+          if (s.reading == null && (s.text?.trim().isNotEmpty ?? false)) s,
+      ];
+
+  /// Reads a short piece of text (such as the note after a task) with the emotion model WITHOUT keeping
+  /// it as an entry. Null when there is no reading: no text, no consent, no server, or nothing to say.
+  Future<EmotionResult?> readNote(String text) async {
+    final words = text.trim();
+    if (words.isEmpty) return null;
+    final results = await _emotionAnalyzer.analyze(
+      SessionInput(sessionId: 'note-${DateTime.now().microsecondsSinceEpoch}', mode: CaptureMode.text, text: words),
+    );
+    return results.isEmpty ? null : results.first;
+  }
+
+  /// Reads one existing entry with the emotion model and keeps the reading with it. Returns the updated
+  /// entry, or null when no reading could be made (nothing is changed then).
+  Future<SessionRecord?> reanalyze(SessionRecord session) async {
+    final text = session.text?.trim() ?? '';
+    if (text.isEmpty) return null;
+    final results = await _emotionAnalyzer.analyze(
+      SessionInput(sessionId: session.id, mode: session.mode, text: text),
+    );
+    if (results.isEmpty) return null;
+    final updated = SessionRecord(
+      id: session.id,
+      createdAt: session.createdAt,
+      mode: session.mode,
+      text: session.text,
+      mood: session.mood,
+      emotionResults: results,
+    );
+    await _repository.save(updated);
+    _sessions = [for (final s in _sessions) s.id == updated.id ? updated : s];
+    notifyListeners();
+    return updated;
+  }
+
+  /// Reads every unread entry, one after another. Returns how many were read.
+  Future<int> reanalyzeUnread() async {
+    var read = 0;
+    for (final session in unread) {
+      if (await reanalyze(session) != null) {
+        read++;
+      } else {
+        break; // the server is unreachable or reading is off: do not hammer it entry by entry
+      }
+    }
+    return read;
+  }
+
   /// Deletes an entry for good. Nothing is kept of it, and [onDeleted] lets
   /// things made from it (such as a moment) go with it.
   Future<void> deleteSession(String id) async {

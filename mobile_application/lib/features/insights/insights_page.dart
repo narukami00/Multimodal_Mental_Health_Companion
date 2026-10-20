@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/solace_palette.dart';
+import '../../domain/capacity/mood_trend.dart';
 import '../footprint/break_prompt_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../profile/profile_controller.dart';
@@ -22,6 +23,7 @@ class InsightsPage extends StatefulWidget {
     this.profileController,
     this.breakPrompts,
     this.momentsTab,
+    this.ideaActions,
     this.clock,
     super.key,
   });
@@ -38,6 +40,9 @@ class InsightsPage extends StatefulWidget {
 
   /// The "Moments" tab's content, when that feature is available.
   final Widget? momentsTab;
+
+  /// What the Helps tab's "Want to try something?" card does. Without it the card is not shown.
+  final IdeaActions? ideaActions;
   final DateTime Function()? clock;
 
   @override
@@ -65,7 +70,16 @@ class _InsightsPageState extends State<InsightsPage> {
   ];
 
   Widget _content(String id) => switch (id) {
-    'helps' => HelpsTab(suggestionController: widget.suggestionController!),
+    'helps' => HelpsTab(
+      suggestionController: widget.suggestionController!,
+      ideaActions: widget.ideaActions,
+      moodScores: dailyMoodScores(
+        sessions: widget.sessionController.sessions,
+        now: (widget.clock ?? DateTime.now)(),
+        days: 7,
+      ),
+      clock: widget.clock,
+    ),
     'phone' => PhoneTab(
       phonePatterns: widget.phonePatterns!,
       profileController: widget.profileController!,
@@ -105,59 +119,73 @@ class _InsightsPageState extends State<InsightsPage> {
             ),
             Positioned.fill(
               child: SafeArea(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 380),
-                    child: SingleChildScrollView(
-                      // Room for the floating pill, which overlays the page.
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _header(context),
-                          const SizedBox(height: 16),
-                          _TabBar(
-                            tabs: tabs,
-                            selected: selected,
-                            onSelected: (id) => setState(() => _selected = id),
-                          ),
-                          const SizedBox(height: 16),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 220),
-                            switchInCurve: Curves.easeOut,
-                            transitionBuilder: (child, animation) =>
-                                FadeTransition(
-                                  opacity: animation,
-                                  child: SlideTransition(
-                                    position: Tween(
-                                      begin: const Offset(0, 0.02),
-                                      end: Offset.zero,
-                                    ).animate(animation),
-                                    child: child,
-                                  ),
-                                ),
-                            child: KeyedSubtree(
-                              key: ValueKey(selected),
-                              child: _content(selected),
-                            ),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(8, 24, 8, 4),
-                            child: Text(
-                              'Patterns are reflections of what you shared, never clinical conclusions.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 11,
-                                height: 1.65,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFFB9AB96),
-                              ),
-                            ),
-                          ),
-                        ],
+                child: SingleChildScrollView(
+                  // Room for the floating pill, which overlays the page.
+                  // Horizontal inset matches the Today page so cards line up
+                  // across the app's pages.
+                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _header(context),
+                      const SizedBox(height: 16),
+                      _TabBar(
+                        tabs: tabs,
+                        selected: selected,
+                        onSelected: (id) => setState(() => _selected = id),
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      // The outgoing tab is laid over the top of the new one and takes no space, so nothing
+                      // is ever centred inside a taller neighbour (that made the content sit low and then
+                      // jump up). The height eases to the new tab's, and the rise is a few pixels, not a
+                      // fraction of the tab's height.
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          layoutBuilder: (current, previous) => Stack(
+                            alignment: Alignment.topCenter,
+                            children: [
+                              for (final old in previous)
+                                Positioned(top: 0, left: 0, right: 0, child: IgnorePointer(child: old)),
+                              if (current != null) current,
+                            ],
+                          ),
+                          transitionBuilder: (child, animation) => FadeTransition(
+                            opacity: animation,
+                            child: AnimatedBuilder(
+                              animation: animation,
+                              builder: (context, child) => Transform.translate(
+                                offset: Offset(0, (1 - animation.value) * 8),
+                                child: child,
+                              ),
+                              child: child,
+                            ),
+                          ),
+                          child: KeyedSubtree(
+                            key: ValueKey(selected),
+                            child: _content(selected),
+                          ),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(8, 24, 8, 4),
+                        child: Text(
+                          'Patterns are reflections of what you shared, never clinical conclusions.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.65,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFB9AB96),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

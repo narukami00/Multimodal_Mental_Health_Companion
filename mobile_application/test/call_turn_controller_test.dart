@@ -3,14 +3,6 @@ import 'package:solace_mobile/features/call/call_turn_controller.dart';
 
 CallTurnController controller() => CallTurnController(clock: Stopwatch());
 
-const probe = SpeechProbe(
-  snrDb: 18,
-  onsetRunMs: 60,
-  speechMs: 400,
-  assistantSpeaking: false,
-  sinceAssistantStartMs: 5000,
-);
-
 void main() {
   group('turn table (spec §7.4)', () {
     test('idle -> turnStarted -> userSpeaking', () {
@@ -93,7 +85,8 @@ void main() {
       c.onTurnStarted('t');
       c.onCallEnded();
       expect(c.currentPhase, CallPhase.ended);
-      c.onLocalOnset(probe);
+      c.onTurnStarted('late');
+      c.onServerIdle();
       expect(c.currentPhase, CallPhase.ended);
       c.dispose();
     });
@@ -140,56 +133,47 @@ void main() {
     });
   });
 
-  group('barge-in classification (spec §5.8)', () {
-    test('an onset while Solace is silent opens a turn', () {
+  group('the server reports where the call stands', () {
+    test('server idle ends whatever the phone still showed as in flight', () {
+      for (final setUp in <void Function(CallTurnController)>[
+        (c) => c.onTurnStarted('t'),
+        (c) {
+          c.onTurnStarted('t');
+          c.onEndpointed('t');
+        },
+        (c) {
+          c.onTurnStarted('t');
+          c.onEndpointed('t');
+          c.onProcessing('t', TurnStage.ttsFirstFrame);
+        },
+      ]) {
+        final c = controller();
+        setUp(c);
+        expect(c.currentPhase, isNot(CallPhase.idle));
+        c.onServerIdle();
+        expect(c.currentPhase, CallPhase.idle);
+        c.dispose();
+      }
+    });
+
+    test('server idle while already idle is a no-op, not an illegal pair', () async {
       final c = controller();
-      expect(c.onLocalOnset(probe), BargeInClass.interrupt);
-      expect(c.currentPhase, CallPhase.userSpeaking);
+      final seen = <CallPhaseTransition>[];
+      c.transitions.listen(seen.add);
+      c.onServerIdle();
+      await Future<void>.delayed(Duration.zero);
+      expect(c.currentPhase, CallPhase.idle);
       c.dispose();
     });
 
-    test('a short early utterance is a backchannel, not an interruption', () {
+    test('speaking over Sol takes the floor; a false alarm hands it back', () {
       final c = controller();
       c.onTurnStarted('t');
       c.onEndpointed('t');
       c.onProcessing('t', TurnStage.ttsFirstFrame);
-      final cls = c.onLocalOnset(const SpeechProbe(
-        snrDb: 20,
-        onsetRunMs: 60,
-        speechMs: 120,
-        assistantSpeaking: true,
-        sinceAssistantStartMs: 400,
-      ));
-      expect(cls, BargeInClass.backchannel);
-      expect(c.currentPhase, CallPhase.assistantSpeaking);
-      c.dispose();
-    });
-
-    test('sustained speech during playback does interrupt', () {
-      final c = controller();
-      c.onTurnStarted('t');
-      c.onEndpointed('t');
-      c.onProcessing('t', TurnStage.ttsFirstFrame);
-      final cls = c.onLocalOnset(const SpeechProbe(
-        snrDb: 20,
-        onsetRunMs: 60,
-        speechMs: 900,
-        assistantSpeaking: true,
-        sinceAssistantStartMs: 2500,
-      ));
-      expect(cls, BargeInClass.interrupt);
+      c.onInterrupted(turnId: null, playedMs: 900);
       expect(c.currentPhase, CallPhase.userSpeaking);
-      c.dispose();
-    });
-
-    test('a false interruption reverts when the server resumes playback', () {
-      final c = controller();
-      c.onTurnStarted('t');
-      c.onEndpointed('t');
-      c.onProcessing('t', TurnStage.ttsFirstFrame);
-      c.onLocalOnset(probe);
-      expect(c.currentPhase, CallPhase.userSpeaking);
-      c.onTtsResume('utt_1', 1840);
+      c.onTtsResume('utt_1', 900);
       expect(c.currentPhase, CallPhase.assistantSpeaking);
       c.dispose();
     });

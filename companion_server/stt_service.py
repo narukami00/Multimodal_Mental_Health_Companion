@@ -8,51 +8,72 @@ import wave
 
 import numpy as np
 import torch
-from faster_whisper import WhisperModel
-from silero_vad import load_silero_vad, get_speech_timestamps, get_speech_timestamps_from_probs
+
+from cuda_libs import cuda_usable, register_cuda_dll_dirs
+
+# Before faster_whisper/ctranslate2 are imported: they resolve cuBLAS/cuDNN lazily
+# and fall back to the CPU if the DLLs are not on the search path.
+register_cuda_dll_dirs()
+
+from faster_whisper import WhisperModel  # noqa: E402
+from silero_vad import load_silero_vad, get_speech_timestamps, get_speech_timestamps_from_probs  # noqa: E402
 
 logger = logging.getLogger("solace_companion.stt")
 
-# Silero is called 50x/second on a 512-sample window. Extra torch threads only
-# add contention with Whisper's cpu_threads=4 on the same box.
-torch.set_num_threads(1)
+# Phrases Whisper invents for a stretch of near-silence. They are only discarded
+# when the audio behind them was too short to hold the words.
+_PHANTOM_PHRASES = {
+    "you", "thank you", "thanks", "thanks for watching", "bye", "bye bye",
+    "thank you for watching", "please subscribe", "the end",
+}
+_PHANTOM_MAX_SPEECH_MS = 700
+
+
+def clean_transcript(text: str, speech_ms: int) -> str:
+    """Drop a transcript that is almost certainly Whisper hallucinating on a blip."""
+    normalized = "".join(ch for ch in text.lower() if ch.isalpha() or ch == " ").strip()
+    if not normalized:
+        return ""
+    if speech_ms and speech_ms < _PHANTOM_MAX_SPEECH_MS and normalized in _PHANTOM_PHRASES:
+        return ""
+    return text
 
 # Silero v5/v6 internal geometry.
 VAD_WINDOW = 512          # samples per inference step (32 ms @ 16 kHz)
 VAD_CONTEXT = 64          # samples of leading context the model keeps itself
 
-# The model is stateful (LSTM + context) and shared by every session, by the
-# streaming path and by the batch path. `get_speech_timestamps` calls
-# reset_states() internally, so an unguarded batch pass silently wipes a
-# concurrent streaming turn's state and that turn looks like near-silence.
+# The batch model is stateful and `get_speech_timestamps` calls reset_states()
+# internally, so concurrent batch passes must not interleave. Streaming sessions
+# each own a separate model instance and never take this lock.
 _VAD_LOCK = threading.Lock()
 
 
 class StreamingVad:
-    """Frame-at-a-time Silero wrapper.
+    """Frame-at-a-time Silero wrapper over a model instance it owns.
 
     The batch API (`get_speech_timestamps` over a whole buffer) structurally
-    cannot emit a speech-onset event before the buffer is closed, which is why
-    barge-in used to wait for a full transcription. This keeps the model's
-    internal state (512-sample window + 64-sample context + LSTM) between calls
-    so a crossing can be reported in ~32 ms of server time.
+    cannot emit a speech-onset event before the buffer is closed. This keeps the
+    model's internal state (512-sample window + 64-sample context + LSTM) between
+    calls so every 32 ms window yields a probability as soon as it is complete.
     """
 
     def __init__(self, model, sample_rate: int = 16000, threshold: float = 0.5,
-                 neg_threshold: float = 0.35):
+                 neg_threshold: float = 0.35, keep_history: bool = True):
         self._model = model
         self._sample_rate = sample_rate
         self.threshold = threshold
         self.neg_threshold = neg_threshold
+        # A live call streams for minutes; only the per-turn explicit path needs
+        # the whole probability vector back at the end.
+        self.keep_history = keep_history
         self.reset()
 
     def reset(self) -> None:
         """Call on turn start so no probability leaks across turns."""
-        with _VAD_LOCK:
-            try:
-                self._model.reset_states()
-            except Exception:  # pragma: no cover - older silero builds
-                pass
+        try:
+            self._model.reset_states()
+        except Exception:  # pragma: no cover - older silero builds
+            pass
         # The model keeps its own 64-sample context between calls; it wants
         # exactly one 512-sample window per inference.
         self._buffer = np.zeros(VAD_WINDOW, dtype=np.float32)
@@ -65,6 +86,7 @@ class StreamingVad:
         self.total_samples = 0
         self.peak_prob = 0.0
         self._probs: List[float] = []
+        self.window_probs: List[float] = []
 
     @property
     def speech_ms(self) -> int:
@@ -80,6 +102,7 @@ class StreamingVad:
             return 0.0
         samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
         self.total_samples += len(samples)
+        self.window_probs = []
         offset = 0
         prob = 0.0
         while offset < len(samples):
@@ -89,14 +112,15 @@ class StreamingVad:
             offset += take
             if self._filled < VAD_WINDOW:
                 break
-            with _VAD_LOCK:
-                prob = float(self._model(torch.from_numpy(self._buffer), self._sample_rate).item())
+            prob = float(self._model(torch.from_numpy(self._buffer), self._sample_rate).item())
             self._filled = 0
             self._record(prob)
         return prob
 
     def _record(self, prob: float) -> None:
-        self._probs.append(prob)
+        self.window_probs.append(prob)
+        if self.keep_history:
+            self._probs.append(prob)
         self.peak_prob = max(self.peak_prob, prob)
         if prob >= self.threshold:
             if not self.ever_spoke:
@@ -137,10 +161,10 @@ class SttService:
 
         logger.info(f"Initializing Faster-Whisper ({self.model_size})...")
         t1 = time.time()
-        # Attempt CUDA int8 first; verify runtime libraries (cublas, cudnn), fall back to CPU int8
+        # CUDA int8 first, but only when cuBLAS and cuDNN can actually be loaded: a
+        # failed attempt can leave the next one hanging (see cuda_libs.cuda_usable).
         try:
-            import ctranslate2
-            if ctranslate2.get_cuda_device_count() > 0:
+            if cuda_usable(need_cudnn=True):
                 try:
                     candidate = WhisperModel(
                         self.model_size,
@@ -176,6 +200,15 @@ class SttService:
             logger.info("Faster-Whisper verified running on CPU (int8)")
 
         logger.info(f"Faster-Whisper model ready in {time.time() - t1:.2f}s")
+        # First decode pays for kernel selection and memory allocation: do it now,
+        # not on the first thing a person says.
+        try:
+            t2 = time.time()
+            tone = (0.02 * np.sin(2 * np.pi * 220 * np.arange(16000) / 16000)).astype(np.float32)
+            list(self._whisper_model.transcribe(tone, beam_size=1, language="en")[0])
+            logger.info(f"Whisper warm-up decode took {time.time() - t2:.2f}s on {self._device}")
+        except Exception as warm_err:  # pragma: no cover - warm-up is best effort
+            logger.debug(f"Whisper warm-up skipped: {warm_err}")
         self._is_ready = True
 
     @property
@@ -186,14 +219,21 @@ class SttService:
     def device(self) -> str:
         return self._device
 
-    def new_streaming_vad(self, sample_rate: int = 16000) -> StreamingVad:
+    def new_streaming_vad(self, sample_rate: int = 16000, keep_history: bool = True) -> StreamingVad:
+        """A VAD with its own model instance.
+
+        Silero is stateful (LSTM + context), so sharing one instance between two
+        connections - or between a live call and a batch pass - corrupts both.
+        Loading the ONNX graph is a few milliseconds.
+        """
         if not self._is_ready:
             self.initialize()
         return StreamingVad(
-            self._vad_model,
+            load_silero_vad(onnx=True),
             sample_rate=sample_rate,
             threshold=self.vad_threshold,
             neg_threshold=self.vad_neg_threshold,
+            keep_history=keep_history,
         )
 
     def detect_speech(self, pcm_bytes: bytes, sample_rate: int = 16000) -> List[Dict[str, int]]:
@@ -223,6 +263,46 @@ class SttService:
         """Check if audio contains voice activity."""
         timestamps = self.detect_speech(pcm_bytes, sample_rate=sample_rate)
         return len(timestamps) > 0
+
+    def transcribe_pcm(self, pcm_bytes: bytes, sample_rate: int = 16000,
+                       speech_ms: int = 0) -> Tuple[str, float, str]:
+        """Transcribe audio the turn detector already trimmed to one utterance.
+
+        No second VAD pass: the server's streaming VAD decided this is speech, and
+        Whisper's own `vad_filter` would only add latency and a second opinion.
+        """
+        if not self._is_ready:
+            self.initialize()
+        if len(pcm_bytes) < 3200:
+            return "", 0.0, "en"
+
+        t0 = time.time()
+        audio = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+        segments, info = self._whisper_model.transcribe(
+            audio,
+            beam_size=1,
+            language="en",
+            temperature=0.0,
+            vad_filter=False,
+            condition_on_previous_text=False,
+        )
+        texts, confidences = [], []
+        for s in segments:
+            # Whisper's own "this was not speech" signal, per segment.
+            if (s.no_speech_prob or 0.0) > 0.6 and (s.avg_logprob or 0.0) < -1.0:
+                continue
+            texts.append(s.text.strip())
+            speech_prob = (1.0 - s.no_speech_prob) if s.no_speech_prob is not None else 0.9
+            exp_prob = float(np.exp(s.avg_logprob)) if s.avg_logprob is not None else 0.8
+            confidences.append(min(max(speech_prob * 0.5 + exp_prob * 0.5, 0.0), 1.0))
+
+        text = clean_transcript(" ".join(t for t in texts if t).strip(), speech_ms)
+        confidence = float(np.mean(confidences)) if confidences else float(info.language_probability)
+        logger.info(
+            f"Transcribed {len(pcm_bytes)} B in {(time.time() - t0) * 1000:.0f}ms on "
+            f"{self._device}: {len(text.split())} words (conf: {confidence:.2f})"  # words are not logged (privacy); see SOLACE_LOG_TEXT in session.py
+        )
+        return text, confidence, info.language or "en"
 
     def transcribe(self, pcm_bytes: bytes, sample_rate: int = 16000) -> Tuple[str, float, str]:
         """Transcribe raw PCM bytes and return (text, confidence, language)."""
@@ -296,7 +376,7 @@ class SttService:
             conf = min(max((speech_prob * 0.5 + exp_prob * 0.5), 0.0), 1.0)
             confidences.append(conf)
 
-        final_text = " ".join(texts).strip()
+        final_text = clean_transcript(" ".join(texts).strip(), speech_ms)
         avg_confidence = float(np.mean(confidences)) if confidences else float(info.language_probability)
         duration_ms = (time.time() - t0) * 1000
         logger.info(

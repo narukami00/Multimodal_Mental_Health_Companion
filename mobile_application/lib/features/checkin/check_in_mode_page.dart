@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/session_input.dart';
-import '../call/call_page.dart';
+import '../../core/widgets/page_back_button.dart';
+import '../../data/repositories/in_memory_consent_repository.dart';
+import '../art/checkin_art.dart';
+import '../consent/consent_controller.dart';
+import '../journal/journal_capture_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../sessions/session_controller.dart';
 import 'text_check_in_page.dart';
 
 class CheckInModePage extends StatelessWidget {
+  /// What the person has agreed to; set once at start-up. Without it every recording asks again.
+  static ConsentController? consent;
+
   const CheckInModePage({
     required this.sessionController,
     required this.safetyController,
@@ -84,77 +91,57 @@ class CheckInModePage extends StatelessWidget {
                   child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                 children: [
-                  Row(
-                    children: [
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => Navigator.of(context).maybePop(),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              size: 20,
-                              color: Color(0xFF3A3125),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'How would you like to check in?',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF3A3125),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  const Align(alignment: Alignment.centerLeft, child: PageBackButton()),
                   const SizedBox(height: 14),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 290),
-                    child: const Text(
-                      'Whatever feels easiest right now is the right one.',
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF6E6252),
-                        height: 1.5,
-                      ),
+                  const Text(
+                    'How would you like\nto check in?',
+                    style: TextStyle(
+                      fontSize: 30,
+                      height: 1.12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.8,
+                      color: Color(0xFF3A3125),
                     ),
                   ),
-                  const SizedBox(height: 26),
-                  _ModeTile(
-                    mode: CaptureMode.text,
-                    title: 'Text',
-                    description: "Type how you're feeling",
-                    icon: Icons.chat_bubble_outline_rounded,
-                    onTap: () => _openText(context),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Whatever feels easiest right now is the right one.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF8A7A61),
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  _Enter(
+                    index: 0,
+                    child: _ModeTile(
+                      kind: CheckInKind.text,
+                      title: 'Text',
+                      description: "Type how you're feeling",
+                      onTap: () => _openText(context),
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  _ModeTile(
-                    mode: CaptureMode.voice,
-                    title: 'Voice',
-                    description: 'Say it out loud',
-                    icon: Icons.mic_none_rounded,
-                    onTap: () => _openVoiceCall(context),
+                  _Enter(
+                    index: 1,
+                    child: _ModeTile(
+                      kind: CheckInKind.voice,
+                      title: 'Voice',
+                      description: 'Say it out loud',
+                      onTap: () => _openJournal(context, CaptureMode.voice),
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  _ModeTile(
-                    mode: CaptureMode.video,
-                    title: 'Video',
-                    description: 'See yourself as you speak',
-                    icon: Icons.videocam_outlined,
-                    onTap: () => _openVoiceCall(context),
+                  _Enter(
+                    index: 2,
+                    child: _ModeTile(
+                      kind: CheckInKind.video,
+                      title: 'Video',
+                      description: 'See yourself as you speak',
+                      onTap: () => _openJournal(context, CaptureMode.video),
+                    ),
                   ),
                   const SizedBox(height: 26),
                   Center(
@@ -217,133 +204,115 @@ class CheckInModePage extends StatelessWidget {
     );
   }
 
-  void _openVoiceCall(BuildContext context) {
+  /// Voice and video check-ins are JOURNAL entries: you talk to yourself, nobody replies, and the
+  /// recording becomes a transcript with its emotion reading. (The live conversation with Sol is
+  /// the separate Call, opened from chat.)
+  void _openJournal(BuildContext context, CaptureMode mode) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => CallPage(
+        builder: (_) => JournalCapturePage(
+          mode: mode,
+          sessionController: sessionController,
           safetyController: safetyController,
           profileController: profileController,
+          consentController: consent ?? ConsentController(repository: InMemoryConsentRepository()),
         ),
       ),
     );
   }
 }
 
+/// Fades and slides a tile up a beat after the one before it.
+class _Enter extends StatelessWidget {
+  const _Enter({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      // Quick, so the cards are there as the page settles instead of arriving after it.
+      duration: Duration(milliseconds: 240 + index * 50),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => Opacity(
+        opacity: 0.35 + 0.65 * t,
+        child: Transform.translate(offset: Offset(0, (1 - t) * 10), child: child),
+      ),
+      child: child,
+    );
+  }
+}
+
 class _ModeTile extends StatelessWidget {
   const _ModeTile({
-    required this.mode,
+    required this.kind,
     required this.title,
     required this.description,
-    required this.icon,
     required this.onTap,
   });
 
-  final CaptureMode mode;
+  final CheckInKind kind;
   final String title;
   final String description;
-  final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 148,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0x42FFB534), width: 1.5),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFFFFF), Color(0xFFFFFDFA)],
-        ),
+        borderRadius: BorderRadius.circular(28),
+        color: Colors.white,
+        border: Border.all(color: const Color(0x33FFB534), width: 1.2),
         boxShadow: const [
-          BoxShadow(
-            color: Color(0x38B28028),
-            blurRadius: 28,
-            offset: Offset(0, 12),
-          ),
-          BoxShadow(
-            color: Color(0x1CB28028),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
+          BoxShadow(color: Color(0x33B28028), blurRadius: 26, offset: Offset(0, 12)),
+          BoxShadow(color: Color(0x14B28028), blurRadius: 6, offset: Offset(0, 2)),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(26),
+          borderRadius: BorderRadius.circular(28),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+            padding: const EdgeInsets.all(10),
             child: Row(
               children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0x4DFFB534),
-                      width: 1.0,
-                    ),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0x29FFB534),
-                        Color(0x21FF7F50),
-                      ],
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: ShaderMask(
-                    shaderCallback: (bounds) => const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFFFFB534),
-                        Color(0xFFFF7F50),
-                      ],
-                    ).createShader(bounds),
-                    child: Icon(
-                      icon,
-                      size: 26,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+                SizedBox(width: 128, height: double.infinity, child: CheckInArt(kind: kind, radius: 20)),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
                         style: const TextStyle(
-                          fontSize: 17,
+                          fontSize: 22,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFF3A3125),
-                          letterSpacing: -0.2,
+                          letterSpacing: -0.4,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         description,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFA2947F),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF8A7A61), height: 1.3),
                       ),
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFFD8C9B2),
-                  size: 24,
+                Container(
+                  width: 38,
+                  height: 38,
+                  margin: const EdgeInsets.only(right: 6),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: [Color(0xFFFFB534), Color(0xFFFF8F5A)]),
+                  ),
+                  child: const Icon(Icons.arrow_forward_rounded, size: 20, color: Colors.white),
                 ),
               ],
             ),
@@ -353,4 +322,3 @@ class _ModeTile extends StatelessWidget {
     );
   }
 }
-

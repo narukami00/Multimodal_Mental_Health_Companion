@@ -1,3 +1,4 @@
+import '../domain/memory/moment_extractor.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -30,6 +31,8 @@ class CompanionWebSocketService {
   String token;
 
   String? _sessionId;
+  String? _connectedHost;
+  int? _connectedPort;
   String? _threadId;
   String? _lastEventId;
 
@@ -177,14 +180,59 @@ class CompanionWebSocketService {
   Stream<Map<String, dynamic>> get turnDiagnosticStream =>
       _turnDiagnosticController.stream;
 
+  /// Where a turn's time went: speech-to-text, first token, first audio.
+  final _turnLatencyController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get turnLatencyStream =>
+      _turnLatencyController.stream;
+
+  /// The server acknowledges `call.listen` / `call.config`.
+  final _callListeningController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get callListeningStream =>
+      _callListeningController.stream;
+
+  /// The server's own crisis-language gate fired for the person's last words
+  /// (`safety.alert`: a level, never their words).
+  final _safetyAlertController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get safetyAlertStream =>
+      _safetyAlertController.stream;
+
+  /// What the server inferred from a turn's voice and words (`emotion.update`),
+  /// sent only when the person opted in.
+  final _emotionUpdateController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get emotionUpdateStream =>
+      _emotionUpdateController.stream;
+
+  /// Where the camera-frame socket lives: the same host and port this call actually connected to, same session.
+  /// Null until connected.
+  Uri? get videoUri {
+    final host = _connectedHost;
+    final port = _connectedPort;
+    final session = _sessionId;
+    if (host == null || port == null || session == null) return null;
+    return Uri(
+      scheme: 'ws',
+      host: host,
+      port: port,
+      path: '/ws/v1/video',
+      queryParameters: {'session_id': session},
+    );
+  }
+
   static CompanionWebSocketService? _live;
 
   /// Quotes one good moment from a chat message over the live connection, or
   /// null when no connection is live. Lets code that does not own a connection
   /// (such as the moments controller) use whichever one is open.
-  static Future<String?> Function(String text)? get liveMomentRequester {
+  static Future<String?> Function(String text, List<MomentContextLine> context)?
+  get liveMomentRequester {
     final live = _live;
-    return live == null ? null : (text) => live.requestMoment(text);
+    return live == null
+        ? null
+        : (text, context) => live.requestMoment(text, context: context);
   }
 
   void _updateStatus(CompanionConnectionStatus newStatus) {
@@ -304,6 +352,8 @@ class CompanionWebSocketService {
       }
 
       _reconnectAttempts = 0;
+      _connectedHost = candidateHost;
+      _connectedPort = candidatePort;
 
       _subscription = channel.stream.listen(
         _handleIncomingMessage,
@@ -469,10 +519,13 @@ class CompanionWebSocketService {
         _channel!.sink.add(chunk);
         return;
       }
-      final header = ByteData(8)
+      // 50 frames a second for the length of a call: one allocation, no spreads.
+      final out = Uint8List(8 + chunk.length);
+      ByteData.sublistView(out, 0, 8)
         ..setUint32(0, _inputStreamId, Endian.little)
         ..setUint32(4, _inputSeq++, Endian.little);
-      _channel!.sink.add(Uint8List.fromList([...header.buffer.asUint8List(), ...chunk]));
+      out.setRange(8, out.length, chunk);
+      _channel!.sink.add(out);
     } catch (e) {
       debugPrint('[CompanionWS] Failed to send binary audio chunk: $e');
     }
@@ -495,6 +548,53 @@ class CompanionWebSocketService {
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
     _sendJson(payload);
+  }
+
+  /// Starts a live call: from here the microphone streams continuously through
+  /// [sendAudioChunk] and the *server* decides where each turn starts and ends.
+  ///
+  /// [bargeIn] says whether the person may talk over the assistant. Only true
+  /// when the audio goes to headphones: a loudspeaker's own voice would come
+  /// straight back in through the microphone.
+  Future<void> sendCallListen({bool bargeIn = false}) async {
+    _heartbeatInterval = callHeartbeatInterval;
+    _inputSeq = 0;
+    // Restart the timer so the call cadence applies to a connection that was
+    // opened for chat.
+    if (_status == CompanionConnectionStatus.connected) _startHeartbeat();
+    _sendJson({
+      'v': 1,
+      'type': 'call.listen',
+      'session_id': _sessionId,
+      'sample_rate': 16000,
+      'frame_ms': 20,
+      'barge_in': bargeIn,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  /// Changes a live call: the audio route moved between loudspeaker and
+  /// headphones, so talking over the assistant became unsafe or safe.
+  Future<void> sendCallConfig({required bool bargeIn}) async {
+    _sendJson({
+      'v': 1,
+      'type': 'call.config',
+      'session_id': _sessionId,
+      'barge_in': bargeIn,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  /// Mutes or unmutes the microphone for the server's turn detector. A muted
+  /// call drops the turn in progress and ignores audio until unmuted.
+  Future<void> sendCallMute({required bool muted}) async {
+    _sendJson({
+      'v': 1,
+      'type': 'call.mute',
+      'session_id': _sessionId,
+      'muted': muted,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
   }
 
   /// The client abandoned the turn (page disposed, mute, call end). Sent
@@ -579,7 +679,7 @@ class CompanionWebSocketService {
   Future<void> sendSessionConfigure({
     required String mode,
     bool ttsEnabled = true,
-    String voiceId = 'af_heart',
+    String voiceId = 'af_bella',
     double speed = 0.96,
     int micSampleRate = 16000,
     int playbackSampleRate = 24000,
@@ -602,6 +702,9 @@ class CompanionWebSocketService {
       vad: vad,
       memory: memoryProvider?.call(),
       resume: resume,
+      country: countryProvider?.call(),
+      emotion: emotionProvider?.call(),
+      face: faceProvider?.call() ?? false,
     );
     _sendJson(payload);
   }
@@ -612,6 +715,17 @@ class CompanionWebSocketService {
   /// the server: it treats an absent block as "none" on each configure.
   static Map<String, Object?>? Function()? memoryProvider;
 
+  /// Where the person is based (ISO alpha-2), sent with every `session.configure` so the server
+  /// can name the right local emergency resources if it ever has to. Set once at start-up.
+  static String? Function()? countryProvider;
+
+  /// Whether the person agreed to Sol noticing how they sound. Read on every configure, so
+  /// withdrawing the consent reaches the server on the next one. Set once at start-up.
+  static bool Function()? emotionProvider;
+
+  /// Whether the person also agreed to the camera being read during calls (a separate consent).
+  static bool Function()? faceProvider;
+
   /// The `session.configure` message. Pure, so what goes on the wire can be
   /// tested without a socket.
   @visibleForTesting
@@ -619,7 +733,7 @@ class CompanionWebSocketService {
     required String? sessionId,
     required String mode,
     bool ttsEnabled = true,
-    String voiceId = 'af_heart',
+    String voiceId = 'af_bella',
     double speed = 0.96,
     int micSampleRate = 16000,
     int playbackSampleRate = 24000,
@@ -627,6 +741,9 @@ class CompanionWebSocketService {
     Map<String, dynamic>? vad,
     Map<String, Object?>? memory,
     Map<String, Object?>? resume,
+    String? country,
+    bool? emotion,
+    bool face = false,
   }) {
     return {
       'v': 1,
@@ -646,6 +763,10 @@ class CompanionWebSocketService {
       if (vad != null) 'vad': vad,
       if (memory != null) 'memory': memory,
       if (resume != null) 'resume': resume,
+      if (country != null && country.isNotEmpty) 'country': country,
+      // Sent whenever the app knows the answer, so withdrawing consent reaches the server on the very next configure.
+      if (emotion != null)
+        'emotion': {'enabled': emotion, if (emotion && face) 'face_features': true},
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
   }
@@ -710,6 +831,7 @@ class CompanionWebSocketService {
   /// throws. The server validates its answer; the caller validates it again.
   Future<String?> requestMoment(
     String text, {
+    List<MomentContextLine> context = const [],
     Duration timeout = const Duration(seconds: 12),
   }) async {
     if (_channel == null || text.trim().isEmpty) return null;
@@ -721,6 +843,10 @@ class CompanionWebSocketService {
       'type': 'moment.extract',
       'request_id': requestId,
       'text': text,
+      'context': [
+        for (final line in context)
+          {'role': line.fromPerson ? 'user' : 'assistant', 'text': line.text},
+      ],
       'ts': DateTime.now().millisecondsSinceEpoch,
     });
     try {
@@ -899,6 +1025,18 @@ class CompanionWebSocketService {
           }
           break;
 
+        case 'safety.alert':
+          if (!_safetyAlertController.isClosed) {
+            _safetyAlertController.add(data);
+          }
+          break;
+
+        case 'emotion.update':
+          if (!_emotionUpdateController.isClosed) {
+            _emotionUpdateController.add(data);
+          }
+          break;
+
         case 'transcript_failed':
           if (!_transcriptFailedController.isClosed) {
             _transcriptFailedController.add(data);
@@ -951,6 +1089,18 @@ class CompanionWebSocketService {
         case 'turn.diagnostic':
           if (!_turnDiagnosticController.isClosed) {
             _turnDiagnosticController.add(data);
+          }
+          break;
+
+        case 'turn.latency':
+          if (!_turnLatencyController.isClosed) {
+            _turnLatencyController.add(data);
+          }
+          break;
+
+        case 'call.listening':
+          if (!_callListeningController.isClosed) {
+            _callListeningController.add(data);
           }
           break;
 
@@ -1055,6 +1205,8 @@ class CompanionWebSocketService {
     _audioReceivedController.close();
     _turnCancelledController.close();
     _transcriptFinalController.close();
+    _safetyAlertController.close();
+    _emotionUpdateController.close();
     _transcriptFailedController.close();
     _binaryAudioController.close();
     _ttsStartController.close();
@@ -1069,5 +1221,7 @@ class CompanionWebSocketService {
     _turnDiscardedController.close();
     _ttsResumeController.close();
     _turnDiagnosticController.close();
+    _turnLatencyController.close();
+    _callListeningController.close();
   }
 }

@@ -1,4 +1,30 @@
+# Web server
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 websockets>=13.0
 pydantic>=2.8.0
+
+# Speech to text and voice activity detection
+faster-whisper>=1.1.0
+silero-vad>=5.1
+numpy>=1.26
+
+# Language model: converted once to CTranslate2 int8 on first start
+ctranslate2>=4.5.0
+transformers>=4.50
+torch>=2.4            # CPU build is enough; used for conversion and as the fallback backend
+
+# Text to speech
+edge-tts>=7.0         # cloud voice, used when no local weights are present
+av>=12.0              # decodes the cloud voice
+sherpa-onnx>=1.10     # local Kokoro / Piper voices (see README)
+
+# GPU (optional, strongly recommended on an NVIDIA card): without these CTranslate2
+# lists the GPU but fails on first use, and the server silently runs on the CPU.
+#   pip install nvidia-cublas-cu12 "nvidia-cudnn-cu12<10"
+
+# Tests
+pytest>=8.0
+pytest-asyncio>=0.23
+requests>=2.31
+httpx>=0.27

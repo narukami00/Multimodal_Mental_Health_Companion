@@ -58,7 +58,7 @@ def test_summary_prompt_carries_the_old_summary_and_new_turns():
     body = messages[1]["content"]
     assert "Earlier summary: The user felt overwhelmed at work." in body
     assert "User: I slept badly." in body
-    assert "Solace: That sounds hard." in body
+    assert "Sol: That sounds hard." in body
 
 
 def test_clean_summary_is_one_capped_line():

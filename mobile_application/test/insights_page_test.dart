@@ -76,6 +76,23 @@ void main() {
     expect(find.textContaining('three tries'), findsOneWidget);
   });
 
+  testWidgets('switching tabs does not push the new tab down and then snap it back up', (tester) async {
+    final sessions = _controller();
+    await sessions.load();
+    await sessions.saveSession(mode: CaptureMode.text, text: 'a quiet morning', mood: 'Steady');
+    await _pump(tester, sessions, clock: DateTime.now); // Mood is now much taller than Helps
+    final text = find.text('Nothing to say yet, and that is fine');
+
+    await tester.tap(find.byKey(const ValueKey('insights-tab-helps')));
+    await tester.pump(const Duration(milliseconds: 110)); // mid-transition: both tabs are in the tree
+    final during = tester.getTopLeft(text).dy;
+    await tester.pump(const Duration(milliseconds: 600));
+    final after = tester.getTopLeft(text).dy;
+
+    // It may still be rising by a few pixels; it must never sit far low (centred in the taller Mood tab).
+    expect((during - after).abs(), lessThan(12));
+  });
+
   testWidgets('a check-in with a mood word draws the strip and a plain summary', (
     tester,
   ) async {
@@ -90,7 +107,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('mood-strip')), findsOneWidget);
     expect(
-      find.text('You checked in on 1 of the last 30 days. Steady came up most, on 1.'),
+      find.text('You checked in on 1 of the last 30 days. Calm came up most, on 1.'),
       findsOneWidget,
     );
   });

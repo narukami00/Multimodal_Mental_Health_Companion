@@ -12,8 +12,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/companion_server_config.dart';
 import '../../core/models/chat_message_record.dart';
+import '../../core/models/emotion_result.dart';
+import '../../core/models/memory_moment.dart';
+import '../../domain/memory/moment_entry.dart';
+import '../memory/keep_moment.dart';
 import '../../core/models/safety_assessment.dart';
+import '../../core/widgets/page_back_button.dart';
 import '../../services/companion_websocket_service.dart';
+import '../../services/journal_analysis_client.dart';
 import '../../services/pcm_audio_recorder_service.dart';
 import '../../services/tts_playback_service.dart';
 import '../call/call_page.dart';
@@ -21,7 +27,10 @@ import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'chat_controller.dart';
+import 'conversation_breakdown_page.dart';
+import 'connection_sheet.dart';
 import 'conversation_history.dart';
+import 'message_reading_popover.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -44,6 +53,9 @@ class ChatPage extends StatefulWidget {
   final PcmAudioRecorderService? audioRecorderService;
   final TtsPlaybackService? ttsPlaybackService;
   final bool autoConnect;
+
+  /// The moments the person chose to keep, shown on the conversation breakdown. Set once in main.dart.
+  static List<MemoryMoment> Function()? keptMoments;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -124,7 +136,6 @@ class _Msg {
 }
 
 
-const _ink = Color(0xFF3A3125);
 const _bubbleInk = Color(0xFF46382A);
 const _softInk = Color(0xFF6E6252);
 const _faint = Color(0xFFB7A98F);
@@ -174,6 +185,7 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription<Map<String, dynamic>>? _wsStartSub;
   StreamSubscription<Map<String, dynamic>>? _wsChunkSub;
   StreamSubscription<Map<String, dynamic>>? _wsDoneSub;
+  StreamSubscription<Map<String, dynamic>>? _wsEmotionSub;
 
   late final PcmAudioRecorderService _audioRecorder;
   StreamSubscription<Uint8List>? _audioFrameSub;
@@ -193,7 +205,7 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription<Map<String, String>>? _ttsAudioReadySub;
 
   bool _ttsEnabled = true;
-  String _selectedVoiceId = 'af_heart';
+  String _selectedVoiceId = 'af_bella';
   double _ttsSpeed = 0.96;
 
   CompanionConnectionStatus _wsStatus = CompanionConnectionStatus.disconnected;
@@ -509,6 +521,16 @@ class _ChatPageState extends State<ChatPage> {
       _scrollDown();
     });
 
+    // The server reads each turn as it happens (with its running memory of the conversation) when the
+    // person has agreed; that reading belongs to the message they just sent.
+    _wsEmotionSub = _wsService.emotionUpdateStream.listen((data) {
+      final reading = JournalAnalysis(transcript: '', emotion: data)
+          .toResults(sessionId: data['turn_id'] as String? ?? '')
+          .firstOrNull
+          ?.copyWith(origin: EmotionOrigin.chat, inContext: true);
+      if (reading != null) _chatController.attachToLatestUserMessage(reading);
+    });
+
     _input.addListener(() => setState(() {}));
 
     _loadSavedServerConfig();
@@ -654,7 +676,7 @@ class _ChatPageState extends State<ChatPage> {
       final savedPort = prefs.getInt(CompanionServerConfig.prefKeyPort);
       _ttsEnabled = prefs.getBool('companion_tts_enabled') ?? true;
       _selectedVoiceId =
-          prefs.getString('companion_tts_voice_id') ?? 'af_heart';
+          prefs.getString('companion_tts_voice_id') ?? 'af_bella';
       _ttsSpeed = prefs.getDouble('companion_tts_speed') ?? 0.96;
 
       // Auto-migrate from old local Wi-Fi / localhost IPs to Tailscale
@@ -708,6 +730,8 @@ class _ChatPageState extends State<ChatPage> {
     _wsStartSub?.cancel();
     _wsChunkSub?.cancel();
     _wsDoneSub?.cancel();
+    _wsEmotionSub?.cancel();
+    _closeReading();
     if (widget.webSocketService == null) {
       _wsService.dispose();
     }
@@ -968,13 +992,56 @@ class _ChatPageState extends State<ChatPage> {
     _scrollDown();
   }
 
-  Future<void> _openSupport() async {
-    await Navigator.of(context).push(
+  OverlayEntry? _readingPopover;
+
+  void _closeReading() {
+    final entry = _readingPopover;
+    _readingPopover = null;
+    if (entry != null && entry.mounted) entry.remove();
+  }
+
+  /// Long-press on one of the person's messages: a small card saying how that message read, in the
+  /// context of the conversation. A message with no reading yet is read now (needs the server and the OK).
+  void _showReading(String messageId, Rect anchor) {
+    final conv = _chatController.activeConversation;
+    if (conv == null) return;
+    final index = conv.messages.indexWhere((m) => m.id == messageId);
+    if (index < 0) return;
+    final message = conv.messages[index];
+    _closeReading();
+    HapticFeedback.mediumImpact();
+    _readingPopover = showMessageReading(
+      context: context,
+      anchor: anchor,
+      message: message,
+      read: _chatController.canReadMessages ? () => _chatController.readMessage(conv.id, messageId) : null,
+      onKeep: KeepMoment.available
+          ? (reading) => KeepMoment.open(
+              context,
+              MomentEntry(
+                text: message.spokenText,
+                source: MomentSource.chat,
+                sourceRef: 'chat:${message.id}',
+                at: message.timestamp,
+                reading: reading ?? message.reading,
+              ),
+            )
+          : null,
+    );
+  }
+
+  void _openBreakdown() {
+    final conv = _chatController.activeConversation;
+    if (conv == null) return;
+    _closeReading();
+    Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => SupportResourcesPage(
+        builder: (_) => ConversationBreakdownPage(
+          chatController: _chatController,
+          conversationId: conv.id,
           safetyController: widget.safetyController,
           profileController: widget.profileController,
-          assessment: const SafetyAssessment.clear(),
+          keptMoments: ChatPage.keptMoments,
         ),
       ),
     );
@@ -1043,6 +1110,9 @@ class _ChatPageState extends State<ChatPage> {
                               return _Bubble(
                                 msg: msg,
                                 isSpeaking: isSpeaking,
+                                onLongPress: msg.isUser && msg.id != null && !msg.isStreaming
+                                    ? (anchor) => _showReading(msg.id!, anchor)
+                                    : null,
                                 onCancelVoice: () => _ttsPlayback.cancelVoice(
                                   utteranceId: msg.utteranceId,
                                 ),
@@ -1082,18 +1152,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
       child: Row(
         children: [
-          IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19),
-            style: IconButton.styleFrom(
-              foregroundColor: _ink,
-              minimumSize: const Size(44, 44),
-              backgroundColor: const Color(0xFFFFFDF6),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
+          const PageBackButton(),
           const Spacer(),
           IconButton(
             onPressed: () {
@@ -1109,7 +1168,7 @@ class _ChatPageState extends State<ChatPage> {
             tooltip: 'Past conversations',
             icon: const Icon(Icons.history_rounded, size: 22),
             style: IconButton.styleFrom(
-              foregroundColor: _ink,
+              foregroundColor: const Color(0xFF6C5E50),
               minimumSize: const Size(40, 44),
             ),
           ),
@@ -1142,7 +1201,7 @@ class _ChatPageState extends State<ChatPage> {
             tooltip: 'Call Sol',
             icon: const Icon(Icons.phone_in_talk_rounded, size: 21),
             style: IconButton.styleFrom(
-              foregroundColor: const Color(0xFFC08A1E),
+              foregroundColor: const Color(0xFF6C5E50),
               minimumSize: const Size(40, 44),
             ),
           ),
@@ -1185,11 +1244,12 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ),
           IconButton(
-            onPressed: _openSupport,
-            tooltip: 'Support resources',
-            icon: const Icon(Icons.health_and_safety_outlined, size: 22),
+            key: const ValueKey('chat-breakdown'),
+            onPressed: _openBreakdown,
+            tooltip: 'How this conversation felt',
+            icon: const Icon(Icons.mood_rounded, size: 23),
             style: IconButton.styleFrom(
-              foregroundColor: _coral,
+              foregroundColor: const Color(0xFF6C5E50),
               minimumSize: const Size(40, 44),
             ),
           ),
@@ -1199,466 +1259,75 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _showConnectionSettingsDialog() {
-    final hostCtrl = TextEditingController(text: _wsService.host);
-    final portCtrl = TextEditingController(text: _wsService.port.toString());
+    // A keyboard that is still open would fight the sheet for room.
+    FocusManager.instance.primaryFocus?.unfocus();
 
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: const Color(0xFFFFFDF8),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             _modalSetState = setModalState;
-            final isConnected =
-                _wsStatus == CompanionConnectionStatus.connected;
-            final isConnecting =
-                _wsStatus == CompanionConnectionStatus.connecting;
-            final isError =
-                _wsStatus == CompanionConnectionStatus.error;
+            final isConnected = _wsStatus == CompanionConnectionStatus.connected;
 
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDDD2BE),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Row(
-                    children: [
-                      Icon(Icons.hub_outlined, color: _coral, size: 22),
-                      SizedBox(width: 8),
-                      Text(
-                        'Companion Backend Settings',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: _ink,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Connect to the Python Solace companion engine for live WebSocket communication & STT/LLM streaming.',
-                    style:
-                        TextStyle(fontSize: 12, color: _softInk, height: 1.4),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: TextField(
-                          controller: hostCtrl,
-                          decoration: InputDecoration(
-                            labelText: 'Host / IP',
-                            hintText: CompanionServerConfig.defaultTailscaleIp,
-                            filled: true,
-                            fillColor: const Color(0xFFF9F5EC),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        flex: 2,
-                        child: TextField(
-                          controller: portCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Port',
-                            hintText: '8000',
-                            filled: true,
-                            fillColor: const Color(0xFFF9F5EC),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Quick Presets:',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: _softInk,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      ActionChip(
-                        avatar: const Icon(Icons.vpn_lock_rounded, size: 14, color: _coral),
-                        label: const Text('Tailscale: 100.88.46.59 (Direct Mesh)'),
-                        backgroundColor: const Color(0xFFFFF2E6),
-                        side: const BorderSide(color: Color(0xFFFFCC99)),
-                        labelStyle: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                        ),
-                        onPressed: () {
-                          hostCtrl.text = CompanionServerConfig.defaultTailscaleIp;
-                          portCtrl.text = '8000';
-                          setModalState(() {});
-                        },
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.dns_rounded, size: 14, color: _softInk),
-                        label: const Text('MagicDNS: desktop-cdej4vj'),
-                        backgroundColor: const Color(0xFFF7F2E7),
-                        side: const BorderSide(color: Color(0xFFDDD2BE)),
-                        labelStyle: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: _ink,
-                        ),
-                        onPressed: () {
-                          hostCtrl.text = CompanionServerConfig.defaultMagicDns;
-                          portCtrl.text = '8000';
-                          setModalState(() {});
-                        },
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.wifi_rounded, size: 14, color: _softInk),
-                        label: const Text('Wi-Fi PC: 192.168.0.38'),
-                        backgroundColor: const Color(0xFFF7F2E7),
-                        side: const BorderSide(color: Color(0xFFDDD2BE)),
-                        labelStyle: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: _ink,
-                        ),
-                        onPressed: () {
-                          hostCtrl.text = CompanionServerConfig.defaultLanIp;
-                          portCtrl.text = '8000';
-                          setModalState(() {});
-                        },
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.computer_rounded, size: 14, color: _softInk),
-                        label: const Text('Localhost (USB): 127.0.0.1'),
-                        backgroundColor: const Color(0xFFF7F2E7),
-                        side: const BorderSide(color: Color(0xFFDDD2BE)),
-                        labelStyle: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: _ink,
-                        ),
-                        onPressed: () {
-                          hostCtrl.text = CompanionServerConfig.defaultLocalhost;
-                          portCtrl.text = '8000';
-                          setModalState(() {});
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isError
-                          ? const Color(0xFFFEF2F2)
-                          : const Color(0xFFF7F2E7),
-                      borderRadius: BorderRadius.circular(12),
-                      border: isError
-                          ? Border.all(color: const Color(0xFFFCA5A5))
-                          : null,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isConnected
-                              ? Icons.check_circle_rounded
-                              : isConnecting
-                                  ? Icons.hourglass_top_rounded
-                                  : (isError
-                                      ? Icons.error_outline_rounded
-                                      : Icons.radio_button_unchecked_rounded),
-                          size: 18,
-                          color: isConnected
-                              ? const Color(0xFF38A169)
-                              : isConnecting
-                                  ? const Color(0xFFD69E2E)
-                                  : (isError
-                                      ? const Color(0xFFDC2626)
-                                      : _faint),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            isConnected
-                                ? 'Connected · Latency: ${_lastLatencyMs ?? 0}ms'
-                                : isConnecting
-                                    ? 'Connecting to ${hostCtrl.text}...'
-                                    : (isError
-                                        ? (_wsService.lastErrorMessage ??
-                                            'Connection unreachable')
-                                        : 'Disconnected'),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: isError ? const Color(0xFFDC2626) : _ink,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(color: Color(0xFFE8DECF), height: 28),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.record_voice_over_rounded, color: _coral, size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'Voice Playback',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: _ink,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Switch(
-                        value: _ttsEnabled,
-                        activeColor: _coral,
-                        onChanged: (val) async {
-                          _ttsEnabled = val;
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setBool('companion_tts_enabled', val);
-                          if (isConnected) {
-                            _wsService.sendSessionConfigure(
-                              mode: 'chat_voice_playback',
-                              ttsEnabled: _ttsEnabled,
-                              voiceId: _selectedVoiceId,
-                              speed: _ttsSpeed,
-                            );
-                          }
-                          setModalState(() {});
-                          setState(() {});
-                        },
-                      ),
-                    ],
-                  ),
-                  if (_ttsEnabled) ...[
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Voice Persona:',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: _softInk,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Builder(
-                      builder: (ctx) {
-                        Widget voiceChip(String voiceId, String label) {
-                          final isSelected = _selectedVoiceId == voiceId;
-                          return ChoiceChip(
-                            label: Text(label),
-                            selected: isSelected,
-                            selectedColor: const Color(0xFFFFE0D0),
-                            backgroundColor: const Color(0xFFF7F2E7),
-                            labelStyle: TextStyle(
-                              fontSize: 11,
-                              fontWeight:
-                                  isSelected ? FontWeight.w700 : FontWeight.w500,
-                              color: isSelected
-                                  ? const Color(0xFF9E4010)
-                                  : _ink,
-                            ),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? const Color(0xFFFF9E70)
-                                  : const Color(0xFFDDD2BE),
-                            ),
-                            onSelected: (selected) async {
-                              if (selected) {
-                                _selectedVoiceId = voiceId;
-                                final prefs =
-                                    await SharedPreferences.getInstance();
-                                await prefs.setString(
-                                  'companion_tts_voice_id',
-                                  voiceId,
-                                );
-                                if (isConnected) {
-                                  _wsService.sendSessionConfigure(
-                                    mode: 'chat_voice_playback',
-                                    ttsEnabled: _ttsEnabled,
-                                    voiceId: _selectedVoiceId,
-                                    speed: _ttsSpeed,
-                                  );
-                                }
-                                setModalState(() {});
-                                setState(() {});
-                              }
-                            },
-                          );
-                        }
+            void sendVoiceConfig() {
+              if (!isConnected) return;
+              _wsService.sendSessionConfigure(
+                mode: 'chat_voice_playback',
+                ttsEnabled: _ttsEnabled,
+                voiceId: _selectedVoiceId,
+                speed: _ttsSpeed,
+              );
+            }
 
-                        return Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: [
-                            voiceChip('af_heart', 'Heart · Warm'),
-                            voiceChip('af_bella', 'Bella · Gentle'),
-                            voiceChip('af_sarah', 'Sarah · Soft'),
-                            voiceChip('am_michael', 'Michael · Grounded'),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      if (isConnected) ...[
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              _wsService.sendPing();
-                              setModalState(() {});
-                            },
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: _ink,
-                              side: const BorderSide(color: Color(0xFFDDD2BE)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text('Test Ping'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              await _wsService.disconnect();
-                              setModalState(() {});
-                              setState(() {});
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFE2E8F0),
-                              foregroundColor: _ink,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text('Disconnect'),
-                          ),
-                        ),
-                      ] else ...[
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: isConnecting
-                                ? null
-                                : () async {
-                                    final host = hostCtrl.text.trim();
-                                    final port =
-                                        int.tryParse(portCtrl.text.trim()) ??
-                                            CompanionServerConfig.defaultPort;
-                                    final effectiveHost = host.isNotEmpty
-                                        ? host
-                                        : CompanionServerConfig.defaultTailscaleIp;
-                                    final prefs =
-                                        await SharedPreferences.getInstance();
-                                    await prefs.setString(
-                                      CompanionServerConfig.prefKeyHost,
-                                      effectiveHost,
-                                    );
-                                    await prefs.setInt(
-                                      CompanionServerConfig.prefKeyPort,
-                                      port,
-                                    );
-                                    await prefs.setBool(
-                                      CompanionServerConfig.prefKeyTailscaleMigrated,
-                                      true,
-                                    );
-                                    _wsService.connect(
-                                      customHost: effectiveHost,
-                                      customPort: port,
-                                    );
-                                    setModalState(() {});
-                                    setState(() {});
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _coral,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: isConnecting
-                                ? const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation(Colors.white),
-                                        ),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Text('Connecting...'),
-                                    ],
-                                  )
-                                : Text(isError ? 'Retry Connection' : 'Connect Now'),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
+            return ConnectionSheetView(
+              initialHost: _wsService.host,
+              initialPort: _wsService.port,
+              status: _wsStatus,
+              latencyMs: _lastLatencyMs,
+              errorMessage: _wsService.lastErrorMessage,
+              ttsEnabled: _ttsEnabled,
+              voiceId: _selectedVoiceId,
+              onPing: () {
+                _wsService.sendPing();
+                setModalState(() {});
+              },
+              onDisconnect: () async {
+                await _wsService.disconnect();
+                setModalState(() {});
+                setState(() {});
+              },
+              onConnect: (host, port) async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString(CompanionServerConfig.prefKeyHost, host);
+                await prefs.setInt(CompanionServerConfig.prefKeyPort, port);
+                await prefs.setBool(CompanionServerConfig.prefKeyTailscaleMigrated, true);
+                _wsService.connect(customHost: host, customPort: port);
+                setModalState(() {});
+                setState(() {});
+              },
+              onTtsChanged: (value) async {
+                _ttsEnabled = value;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('companion_tts_enabled', value);
+                sendVoiceConfig();
+                setModalState(() {});
+                setState(() {});
+              },
+              onVoiceChanged: (voiceId) async {
+                _selectedVoiceId = voiceId;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('companion_tts_voice_id', voiceId);
+                sendVoiceConfig();
+                setModalState(() {});
+                setState(() {});
+              },
             );
           },
         );
@@ -1795,7 +1464,7 @@ class _ChatPageState extends State<ChatPage> {
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: EdgeInsets.symmetric(vertical: 16),
-                  hintText: 'Speak or type what\u2019s here…',
+                  hintText: 'Say or type anything…',
                   hintStyle: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -2378,12 +2047,16 @@ class _Bubble extends StatelessWidget {
     this.isSpeaking = false,
     this.onCancelVoice,
     this.onReplayVoice,
+    this.onLongPress,
   });
 
   final _Msg msg;
   final bool isSpeaking;
   final VoidCallback? onCancelVoice;
   final VoidCallback? onReplayVoice;
+
+  /// Long-press on the bubble, with the bubble's place on screen (only given for the person's own messages).
+  final void Function(Rect anchor)? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -2402,7 +2075,19 @@ class _Bubble extends StatelessWidget {
         crossAxisAlignment:
             isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Container(
+          Builder(
+            builder: (bubbleContext) => GestureDetector(
+              key: onLongPress == null ? null : ValueKey('bubble-${msg.id}'),
+              behavior: HitTestBehavior.translucent,
+              onLongPress: onLongPress == null
+                  ? null
+                  : () {
+                      final box = bubbleContext.findRenderObject() as RenderBox?;
+                      if (box == null || !box.attached) return;
+                      onLongPress!(box.localToGlobal(Offset.zero) & box.size);
+                    },
+              child:
+Container(
             constraints: const BoxConstraints(maxWidth: 256),
             padding: EdgeInsets.symmetric(
               horizontal: isVoice ? 12 : 15,
@@ -2478,6 +2163,8 @@ class _Bubble extends StatelessWidget {
                       letterSpacing: -0.1,
                     ),
                   ),
+          ),
+            ),
           ),
           if (!isUser && isSpeaking) ...[
             const SizedBox(height: 6),

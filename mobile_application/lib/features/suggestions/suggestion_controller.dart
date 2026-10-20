@@ -5,6 +5,7 @@ import '../../core/models/suggestion_record.dart';
 import '../../core/models/user_profile.dart';
 import '../../data/contracts/activity_library_repository.dart';
 import '../../data/contracts/suggestion_repository.dart';
+import '../../domain/recommendations/mood_change.dart';
 import '../../domain/recommendations/recommendation_engine.dart';
 
 class SuggestionController extends ChangeNotifier {
@@ -64,10 +65,15 @@ class SuggestionController extends ChangeNotifier {
     required UserProfile profile,
     required RecommendationContext context,
     DateTime? now,
+    Set<String> excludeIds = const {},
   }) {
-    if (_library.isEmpty) return null;
+    // [excludeIds]: ideas already shown in this sitting, so "another idea" never repeats one.
+    final pool = excludeIds.isEmpty
+        ? _library
+        : [for (final activity in _library) if (!excludeIds.contains(activity.id)) activity];
+    if (pool.isEmpty) return null;
     return _engine.choose(
-      activities: _library,
+      activities: pool,
       profile: profile,
       context: context,
       history: _history,
@@ -88,9 +94,11 @@ class SuggestionController extends ChangeNotifier {
     required RecommendationContext context,
     DateTime? now,
     bool proactive = false,
+    bool fresh = false,
   }) async {
     final shownAt = now ?? DateTime.now();
-    for (final existing in _history) {
+    // [fresh]: an idea the person asked for is its own try, even when the same idea was answered earlier today.
+    for (final existing in fresh ? const <SuggestionRecord>[] : _history) {
       if (existing.activityId == recommendation.activity.id &&
           existing.proactive == proactive &&
           _sameDay(existing.shownAt, shownAt)) {
@@ -231,6 +239,7 @@ class SuggestionController extends ChangeNotifier {
     String? comment,
     bool? done,
     SuggestionUsefulness? useful,
+    DateTime? completedAt,
   }) async {
     final record = _currentRecord;
     if (record == null) return;
@@ -244,6 +253,7 @@ class SuggestionController extends ChangeNotifier {
         comment: comment,
         done: done,
         useful: useful,
+        completedAt: completedAt,
       ),
     );
   }
@@ -254,7 +264,42 @@ class SuggestionController extends ChangeNotifier {
   /// activity and then ignored the rating step has still done it, and leaving
   /// `done` unset until a rating arrives would be inferring it later.
   Future<void> recordCompletion() {
-    return submitFeedback(status: SuggestionStatus.completed, done: true);
+    return submitFeedback(status: SuggestionStatus.completed, done: true, completedAt: DateTime.now());
+  }
+
+  /// How long an idea that was started stays "being done" with nothing said. After it, it quietly stops
+  /// being offered as in progress and carries no verdict: not done, not refused, nothing learned.
+  static const doingExpiry = Duration(hours: 8);
+
+  /// The idea the person said they would do and has not finished, or null. It survives leaving the app, so
+  /// the next visit can pick it up; [doingExpiry] ends it without a word if it was simply left.
+  SuggestionRecord? doingNow({DateTime? now}) {
+    final current = now ?? DateTime.now();
+    SuggestionRecord? best;
+    for (final record in _history) {
+      final started = record.acceptedAt;
+      if (started == null || record.done != null || record.status != SuggestionStatus.shown) continue;
+      if (current.difference(started) >= doingExpiry) continue;
+      if (best == null || started.isAfter(best.acceptedAt!)) best = record;
+    }
+    return best;
+  }
+
+  /// They said "I'll do it". [moodBefore] is how they said they felt as they began (asked directly), or null
+  /// when they skipped that. Nothing about the idea is concluded yet.
+  Future<void> startDoing(String recordId, {String? moodBefore, DateTime? now}) async {
+    final record = _recordById(recordId);
+    if (record == null) return;
+    await _write(record.copyWith(acceptedAt: now ?? DateTime.now(), moodBefore: moodBefore));
+  }
+
+  /// They said they are done with an idea they started (or one found again after leaving the app).
+  Future<void> completeRecord(String recordId, {DateTime? now}) async {
+    final record = _recordById(recordId);
+    if (record == null) return;
+    await _write(
+      record.copyWith(status: SuggestionStatus.completed, done: true, completedAt: now ?? DateTime.now()),
+    );
   }
 
   /// Records how a suggestion went, for one specific record.
@@ -293,8 +338,26 @@ class SuggestionController extends ChangeNotifier {
   }) async {
     final record = _recordById(recordId);
     if (record == null || record.done != true) return;
+    // Started long before it was finished: the moods around it say nothing about the idea, so they are not
+    // kept as a pair (the after is still kept as how they felt).
+    final pairs = moodsPair(record, record.completedAt ?? DateTime.now());
     await _write(
-      record.copyWith(moodAfter: moodAfter, moodBefore: moodBefore),
+      pairs
+          ? record.copyWith(moodAfter: moodAfter, moodBefore: moodBefore)
+          : record.copyWith(moodAfter: moodAfter, clearMoodBefore: true),
+    );
+  }
+
+  /// Takes back a completion that was a mistake ("I did it" tapped, but it was not done).
+  ///
+  /// The record becomes a plain "not now": no verdict about the idea, no mood is read from it, and it no
+  /// longer counts as done anywhere. Without this, a mis-tap taught the app the person had done something
+  /// they had not.
+  Future<void> markNotDone(String recordId) async {
+    final record = _recordById(recordId);
+    if (record == null) return;
+    await _write(
+      record.copyWith(status: SuggestionStatus.skipped, skipReason: SuggestionSkipReason.notNow, done: false),
     );
   }
 
@@ -326,6 +389,7 @@ class SuggestionController extends ChangeNotifier {
           (record) =>
               record.done == true &&
               record.useful == null &&
+              record.moodAfter == null &&
               !record.shownAt.isBefore(cutoff),
         )
         .toList()

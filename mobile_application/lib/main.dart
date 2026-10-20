@@ -21,7 +21,13 @@ import 'data/repositories/shared_preferences_session_repository.dart';
 import 'data/repositories/shared_preferences_suggestion_repository.dart';
 import 'domain/rhythm/reminder_lapse_policy.dart';
 import 'features/chat/chat_controller.dart';
+import 'features/chat/chat_message_reader.dart';
+import 'features/chat/chat_page.dart';
 import 'features/checkin/check_in_mode_page.dart';
+import 'core/models/consent.dart';
+import 'features/call/call_page.dart';
+import 'providers/server/server_emotion_analyzer.dart';
+import 'services/journal_analysis_client.dart';
 import 'features/consent/consent_controller.dart';
 import 'features/footprint/in_app_feature_recorder.dart';
 import 'features/footprint/break_prompt_controller.dart';
@@ -35,7 +41,6 @@ import 'features/profile/habit_controller.dart';
 import 'features/safety/safety_controller.dart';
 import 'features/sessions/session_controller.dart';
 import 'features/suggestions/suggestion_controller.dart';
-import 'providers/mock/mock_providers.dart';
 import 'providers/safety/keyword_safety_screener.dart';
 import 'services/check_in_reminder_service.dart';
 import 'services/check_in_widget_service.dart';
@@ -44,6 +49,7 @@ import 'data/repositories/shared_preferences_moment_repository.dart';
 import 'domain/memory/moment_extractor.dart';
 import 'domain/memory/server_moment_extractor.dart';
 import 'features/memory/companion_memory_context.dart';
+import 'features/memory/keep_moment.dart';
 import 'features/memory/moments_controller.dart';
 import 'services/companion_websocket_service.dart';
 import 'services/usage_collector_service.dart';
@@ -51,9 +57,16 @@ import 'services/usage_collector_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences = await SharedPreferences.getInstance();
+  final journalClient = JournalAnalysisClient();
+  // Typed entries are read by the companion server's real emotion model (only with the person's consent;
+  // never an invented answer). The consent controller is created further down.
+  ConsentController? emotionConsent;
   final sessionController = SessionController(
     repository: SharedPreferencesSessionRepository(preferences),
-    emotionAnalyzer: const MockEmotionAnalyzer(),
+    emotionAnalyzer: ServerEmotionAnalyzer(
+      client: journalClient,
+      consentGranted: () => emotionConsent?.isGranted(ConsentKey.emotionEstimate) ?? false,
+    ),
   );
   await sessionController.load();
   final safetyController = SafetyController(
@@ -130,6 +143,7 @@ Future<void> main() async {
     repository: SharedPreferencesConsentRepository(preferences),
   );
   await consentController.load();
+  emotionConsent = consentController;
   final phonePatterns = PhonePatternsController(
     consent: consentController,
     collector: MethodChannelUsageCollector.instance,
@@ -181,6 +195,8 @@ Future<void> main() async {
     ),
   );
   await moments.load();
+  // Lets a journal entry or a chat message offer "keep as a moment".
+  KeepMoment.controller = moments;
   void offerMoment(MomentCandidate candidate) {
     if (profileController.profile.momentPromptsMuted) return;
     if (safetyController.hasActiveFlag) return;
@@ -196,7 +212,7 @@ Future<void> main() async {
         source: text.length > 80 ? MomentSource.journal : MomentSource.checkIn,
         createdAt: session.createdAt,
         sourceRef: session.id,
-        moodWord: session.mood,
+        moodWord: session.effectiveMood,
       ),
     );
   };
@@ -207,14 +223,27 @@ Future<void> main() async {
   // Deleting an entry deletes the moments that came from it.
   sessionController.onDeleted = (session) =>
       unawaited(moments.deleteForSource(session.id));
-  chatController.onUserMessage = (message) => offerMoment(
-    MomentCandidate(
-      text: message.text,
-      source: MomentSource.chat,
-      createdAt: message.timestamp,
-      sourceRef: 'chat:${message.id}',
-    ),
-  );
+  chatController.onUserMessage = (message) {
+    // The last few lines before this message, so "that was a great idea" is
+    // kept as what it was about instead of as a fragment.
+    final all = chatController.activeConversation?.messages ?? const [];
+    final cut = all.indexWhere((m) => m.id == message.id);
+    final before = cut < 0 ? all : all.sublist(0, cut);
+    final earlier = <MomentContextLine>[
+      for (final m in before.skip(before.length > 4 ? before.length - 4 : 0))
+        if (m.text.trim().isNotEmpty)
+          MomentContextLine(fromPerson: m.isUser, text: m.text.trim()),
+    ];
+    offerMoment(
+      MomentCandidate(
+        text: message.text,
+        source: MomentSource.chat,
+        createdAt: message.timestamp,
+        sourceRef: 'chat:${message.id}',
+        context: earlier,
+      ),
+    );
+  };
 
   final memory = CompanionMemoryContext(
     consent: consentController,
@@ -227,6 +256,20 @@ Future<void> main() async {
   // Every connection to the companion carries exactly what the person agreed to
   // share, and the same object feeds the "What Sol remembers" preview.
   CompanionWebSocketService.memoryProvider = memory.payload;
+  CompanionWebSocketService.countryProvider = () =>
+      profileController.profile.countryCode;
+  CompanionWebSocketService.emotionProvider = () =>
+      consentController.isGranted(ConsentKey.emotionEstimate);
+  CompanionWebSocketService.faceProvider = () =>
+      consentController.isGranted(ConsentKey.faceFeatures);
+  CallPage.consent = consentController;
+  CheckInModePage.consent = consentController;
+  // Messages the live socket did not read (older chats, a server that was away) are read on request.
+  chatController.messageReader = ChatMessageReader(
+    client: journalClient,
+    consentGranted: () => consentController.isGranted(ConsentKey.emotionEstimate),
+  ).call;
+  ChatPage.keptMoments = () => moments.confirmed;
 
   final navigatorKey = GlobalKey<NavigatorState>();
 

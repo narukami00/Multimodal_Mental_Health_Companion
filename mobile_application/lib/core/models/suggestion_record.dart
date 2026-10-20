@@ -28,6 +28,8 @@ class SuggestionRecord {
     this.proactive = false,
     this.moodBefore,
     this.moodAfter,
+    this.acceptedAt,
+    this.completedAt,
   });
 
   final String id;
@@ -67,6 +69,14 @@ class SuggestionRecord {
   /// Optional: null means they did not say, never that nothing changed.
   final String? moodAfter;
 
+  /// When they said "I'll do it" and started. The mood "before" is read as of this moment (it is when
+  /// the person decided to begin, not when the card appeared). Null on ideas answered the older one-step way.
+  final DateTime? acceptedAt;
+
+  /// When they said they were done. Null while it is still being done, and on records written before this
+  /// existed.
+  final DateTime? completedAt;
+
   SuggestionRecord copyWith({
     SuggestionStatus? status,
     int? rating,
@@ -78,6 +88,9 @@ class SuggestionRecord {
     bool? proactive,
     String? moodBefore,
     String? moodAfter,
+    DateTime? acceptedAt,
+    DateTime? completedAt,
+    bool clearMoodBefore = false,
   }) {
     return SuggestionRecord(
       id: id,
@@ -92,8 +105,10 @@ class SuggestionRecord {
       done: done ?? this.done,
       useful: useful ?? this.useful,
       proactive: proactive ?? this.proactive,
-      moodBefore: moodBefore ?? this.moodBefore,
+      moodBefore: clearMoodBefore ? null : (moodBefore ?? this.moodBefore),
       moodAfter: moodAfter ?? this.moodAfter,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 
@@ -113,6 +128,8 @@ class SuggestionRecord {
       'proactive': proactive,
       'moodBefore': moodBefore,
       'moodAfter': moodAfter,
+      'acceptedAt': acceptedAt?.toIso8601String(),
+      'completedAt': completedAt?.toIso8601String(),
     };
   }
 
@@ -150,6 +167,9 @@ class SuggestionRecord {
       // Absent on records written before these existed: nothing was asked.
       moodBefore: map['moodBefore'] as String?,
       moodAfter: map['moodAfter'] as String?,
+      // Absent on records written before the two-step flow: they were answered in one tap.
+      acceptedAt: DateTime.tryParse(map['acceptedAt'] as String? ?? ''),
+      completedAt: DateTime.tryParse(map['completedAt'] as String? ?? ''),
     );
   }
 

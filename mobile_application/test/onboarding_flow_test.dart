@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/data/repositories/in_memory_onboarding_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
@@ -34,6 +35,14 @@ void main() {
 
     await tester.tap(find.text('Skip for now'));
     await tester.pumpAndSettle();
+    expect(find.textContaining('Where are you'), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('What should I'), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
     expect(find.text('Support is always nearby.'), findsOneWidget);
 
     await tester.tap(find.text('Start checking in'));
@@ -60,6 +69,8 @@ void main() {
   });
 
   _sleepPageTests();
+  _countryPageTests();
+  _namePageTests();
 }
 
 Future<ProfileController> _reachSleepPage(
@@ -98,7 +109,7 @@ void _sleepPageTests() {
 
     expect(profile.profile.sleepHoursSkipped, isTrue);
     expect(profile.profile.sleepHoursSet, isFalse);
-    expect(find.text('Support is always nearby.'), findsOneWidget);
+    expect(find.textContaining('Where are you'), findsOneWidget);
   });
 
   testWidgets('the top Skip on the sleep page is the same honest skip', (
@@ -111,7 +122,7 @@ void _sleepPageTests() {
     await tester.pumpAndSettle();
 
     expect(profile.profile.sleepHoursSkipped, isTrue);
-    expect(find.text('Support is always nearby.'), findsOneWidget);
+    expect(find.textContaining('Where are you'), findsOneWidget);
   });
 
   testWidgets('choosing hours saves them and moves on', (tester) async {
@@ -129,7 +140,7 @@ void _sleepPageTests() {
     expect(profile.profile.sleepStartMinutes, 23 * 60);
     expect(profile.profile.sleepEndMinutes, 7 * 60);
     expect(profile.profile.sleepHoursSkipped, isFalse);
-    expect(find.text('Support is always nearby.'), findsOneWidget);
+    expect(find.textContaining('Where are you'), findsOneWidget);
   });
 
   testWidgets('dismissing a picker saves nothing and stays on the page', (
@@ -153,4 +164,74 @@ SessionController _testSessionController() {
     repository: InMemorySessionRepository(),
     emotionAnalyzer: const MockEmotionAnalyzer(),
   );
+}
+
+
+void _countryPageTests() {
+  testWidgets('the country page defaults to Bangladesh and saves a change', (
+    tester,
+  ) async {
+    final repository = InMemoryOnboardingRepository();
+    final profile = ProfileController(repository: InMemoryProfileRepository());
+    await profile.load();
+    await repository.setCurrentPage(4);
+    await tester.pumpWidget(
+      SolaceApp(
+        onboardingRepository: repository,
+        sessionController: _testSessionController(),
+        profileController: profile,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Where are you'), findsOneWidget);
+    expect(profile.profile.countryCode, 'BD');
+    expect(find.text('Emergency number 999'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('country-ZZ')));
+    await tester.tap(find.byKey(const ValueKey('country-ZZ')));
+    await tester.pumpAndSettle();
+    expect(profile.profile.countryCode, 'ZZ');
+
+    await tester.ensureVisible(find.byKey(const ValueKey('country-BD')));
+    await tester.tap(find.byKey(const ValueKey('country-BD')));
+    await tester.pumpAndSettle();
+    expect(profile.profile.countryCode, 'BD');
+  });
+}
+
+void _namePageTests() {
+  Future<ProfileController> reach(WidgetTester tester) async {
+    final repository = InMemoryOnboardingRepository();
+    final profile = ProfileController(repository: InMemoryProfileRepository());
+    await profile.load();
+    await repository.setCurrentPage(5);
+    await tester.pumpWidget(
+      SolaceApp(
+        onboardingRepository: repository,
+        sessionController: _testSessionController(),
+        profileController: profile,
+      ),
+    );
+    await tester.pumpAndSettle();
+    return profile;
+  }
+
+  testWidgets('a name typed here is kept, and moves on to the safety page', (tester) async {
+    final profile = await reach(tester);
+    expect(find.textContaining('What should I'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('onboarding-name')), '  Rafsan ');
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(profile.profile.displayName, 'Rafsan');
+    expect(find.text('Support is always nearby.'), findsOneWidget);
+  });
+
+  testWidgets('leaving the name blank, or skipping, keeps nothing and is fine', (tester) async {
+    final profile = await reach(tester);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(profile.profile.displayName, anyOf(isNull, isEmpty));
+    expect(find.text('Support is always nearby.'), findsOneWidget);
+  });
 }

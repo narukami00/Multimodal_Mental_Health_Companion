@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -30,7 +31,10 @@ class MainActivity : FlutterActivity() {
     private val STREAM_CHANNEL = "com.sysmentalhealth.solace_mobile/audio_stream"
     private val PERMISSIONS_CHANNEL = "com.sysmentalhealth.solace_mobile/app_permissions"
     private val USAGE_CHANNEL = "com.sysmentalhealth.solace_mobile/usage_collector"
+    private val CAMERA_CONTROL_CHANNEL = "com.sysmentalhealth.solace_mobile/camera_control"
+    private val CAMERA_STREAM_CHANNEL = "com.sysmentalhealth.solace_mobile/camera_stream"
     private val PERMISSION_REQUEST_CODE = 1002
+    private val CAMERA_PERMISSION_REQUEST_CODE = 1003
 
     private companion object {
         const val TAG = "SolaceAudio"
@@ -41,6 +45,11 @@ class MainActivity : FlutterActivity() {
 
     private var eventSink: EventChannel.EventSink? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
+    private var cameraSink: EventChannel.EventSink? = null
+    private var pendingCameraResult: MethodChannel.Result? = null
+    private val camera: CameraFrameCapture by lazy {
+        CameraFrameCapture(this, this, flutterEngine?.renderer) { jpeg -> mainHandler.post { cameraSink?.success(jpeg) } }
+    }
     private val mainHandler = Handler(Looper.getMainLooper())
     private val audioManager by lazy {
         getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -97,6 +106,7 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
                 "captureInfo" -> result.success(captureInfo())
+                "outputRoute" -> result.success(outputRoute())
                 else -> result.notImplemented()
             }
         }
@@ -117,6 +127,46 @@ class MainActivity : FlutterActivity() {
             }
         )
 
+        // Optional camera frames for the emotion module. The camera opens only when Dart asks (after the person
+        // turned it on), only after the CAMERA permission is granted, and closes when the app is paused.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CAMERA_CONTROL_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "hasPermission" -> result.success(
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
+                )
+                "start" -> {
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                        camera.start { ok -> mainHandler.post { result.success(ok) } }
+                    } else {
+                        pendingCameraResult = result
+                        ActivityCompat.requestPermissions(
+                            this,
+                            arrayOf(Manifest.permission.CAMERA),
+                            CAMERA_PERMISSION_REQUEST_CODE,
+                        )
+                    }
+                }
+                "stop" -> {
+                    camera.stop()
+                    result.success(true)
+                }
+                // Where the smooth self view is (a Flutter texture), or null when there is none.
+                "previewInfo" -> result.success(camera.previewInfo())
+                else -> result.notImplemented()
+            }
+        }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, CAMERA_STREAM_CHANNEL).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    cameraSink = events
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    cameraSink = null
+                }
+            }
+        )
+
         // Backs the permissions page. Android owns these permissions, so the app
         // can only report their real state and send the user to the system
         // screen; it cannot flip them itself.
@@ -126,6 +176,13 @@ class MainActivity : FlutterActivity() {
                     val granted = ContextCompat.checkSelfPermission(
                         this,
                         Manifest.permission.RECORD_AUDIO
+                    ) == PackageManager.PERMISSION_GRANTED
+                    result.success(granted)
+                }
+                "cameraGranted" -> {
+                    val granted = ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.CAMERA
                     ) == PackageManager.PERMISSION_GRANTED
                     result.success(granted)
                 }
@@ -193,6 +250,14 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            val pending = pendingCameraResult
+            pendingCameraResult = null
+            if (pending != null) {
+                if (granted) camera.start { ok -> mainHandler.post { pending.success(ok) } } else pending.success(false)
+            }
+        }
         if (requestCode == PERMISSION_REQUEST_CODE) {
             val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
             pendingPermissionResult?.success(granted)
@@ -204,6 +269,7 @@ class MainActivity : FlutterActivity() {
         super.onPause()
         resumeAfterPause = isRecording
         if (isRecording) stopPcmRecording()
+        camera.stop() // the camera never keeps running in the background
     }
 
     override fun onResume() {
@@ -235,7 +301,10 @@ class MainActivity : FlutterActivity() {
             // Keep normal media audio mode so all audio playback routes to the
             // main loudspeaker with full-frequency fidelity, not through the in-call earpiece.
             audioManager.mode = AudioManager.MODE_NORMAL
-            audioManager.isSpeakerphoneOn = true
+            // Loudspeaker unless something is worn on the head: forcing the speaker
+            // would override headphones, and the app treats "headset connected" as
+            // "no echo", so the two must agree.
+            audioManager.isSpeakerphoneOn = outputRoute()["headset"] != true
 
             var record = try {
                 AudioRecord(
@@ -415,6 +484,35 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /**
+     * Is the audio going to something worn on the head rather than the phone's
+     * loudspeaker? Only then can the microphone stay open while the assistant
+     * talks: through a loudspeaker the phone hears its own voice a few
+     * centimetres away and cannot tell it from the person.
+     */
+    private fun outputRoute(): Map<String, Any?> {
+        val headsetTypes = mutableSetOf(
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+            AudioDeviceInfo.TYPE_USB_HEADSET,
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            headsetTypes.add(AudioDeviceInfo.TYPE_HEARING_AID)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            headsetTypes.add(AudioDeviceInfo.TYPE_BLE_HEADSET)
+        }
+        val headset = try {
+            audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in headsetTypes }
+        } catch (e: Exception) {
+            Log.w(TAG, "output route probe failed: $e")
+            false
+        }
+        return mapOf("headset" to headset)
+    }
+
     private fun captureInfo(): Map<String, Any?> = mapOf(
         "aec_active" to aecActive,
         "aec_source" to if (aecActive) "platform" else "software-fallback",
@@ -437,6 +535,7 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         stopPcmRecording()
         releaseEffects()
+        camera.release()
         super.onDestroy()
     }
 }

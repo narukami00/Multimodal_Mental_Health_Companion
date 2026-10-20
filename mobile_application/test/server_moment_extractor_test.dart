@@ -15,6 +15,7 @@ MomentCandidate _candidate(String text, {MomentSource source = MomentSource.chat
     );
 
 void main() {
+  _newGuardTests();
   group('acceptQuotedMoment', () {
     test('accepts a faithful quote and tidies quotes and spaces', () {
       expect(acceptQuotedMoment(_original, _quote), _quote);
@@ -48,7 +49,7 @@ void main() {
   group('ServerMomentExtractor', () {
     test('uses the server for chat and carries the usual fields', () async {
       final extractor = ServerMomentExtractor(
-        requesterProvider: () => (text) async => _quote,
+        requesterProvider: () => (text, context) async => _quote,
       );
       final proposal = (await extractor.extract(_candidate(_original)))!;
 
@@ -61,7 +62,7 @@ void main() {
     test('never sends a journal entry or a check-in to the server', () async {
       var asked = false;
       final extractor = ServerMomentExtractor(
-        requesterProvider: () => (text) async {
+        requesterProvider: () => (text, context) async {
           asked = true;
           return _quote;
         },
@@ -88,10 +89,10 @@ void main() {
       );
 
       for (final r in <MomentRequester>[
-        (text) async => null,
-        (text) async => throw StateError('socket closed'),
-        (text) => Future.delayed(const Duration(seconds: 2), () => _quote),
-        (text) async => 'A completely different sentence that was never said anywhere.',
+        (text, context) async => null,
+        (text, context) async => throw StateError('socket closed'),
+        (text, context) => Future.delayed(const Duration(seconds: 2), () => _quote),
+        (text, context) async => 'A completely different sentence that was never said anywhere.',
       ]) {
         reply = r;
         final proposal = await extractor.extract(_candidate(_original));
@@ -102,12 +103,34 @@ void main() {
 
     test('a sensitive message yields nothing from either reader', () async {
       final extractor = ServerMomentExtractor(
-        requesterProvider: () => (text) async => _quote,
+        requesterProvider: () => (text, context) async => _quote,
       );
       final proposal = await extractor.extract(
         _candidate('My grandmother died last week. $_original'),
       );
       expect(proposal, isNull);
+    });
+  });
+}
+
+void _newGuardTests() {
+  group('the phone agrees with the server about fragments and sarcasm', () {
+    test('a fragment that starts mid-sentence is not kept', () {
+      const original = 'I managed to get out of bed early and made pancakes, which felt really good.';
+      expect(acceptQuotedMoment(original, 'which felt really good.'), isNull);
+      expect(acceptQuotedMoment(original, original), original);
+    });
+
+    test('praise that is a complaint is not kept', () {
+      const sarcastic = 'Great, another meeting that could have been an email. Really wonderful.';
+      expect(acceptQuotedMoment(sarcastic, sarcastic), isNull);
+      const genuine = 'The meeting ended early and we all had a lovely walk.';
+      expect(acceptQuotedMoment(genuine, genuine), genuine);
+    });
+
+    test('contractions around praise still read as saying nothing', () {
+      expect(momentIsVague("Nice, I'm happy with that."), isTrue);
+      expect(momentIsVague("I'm proud of the painting."), isFalse);
     });
   });
 }

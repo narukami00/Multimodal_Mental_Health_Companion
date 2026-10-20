@@ -69,7 +69,36 @@ class ConsentKey {
     currentVersion: '1.0',
   );
 
-  static const all = [usageFootprint, topAppNames, profileSnippet, memoryMoments];
+  /// Letting the companion server estimate, from the voice and words of each
+  /// spoken or typed turn, whether the person sounds low, tense or upbeat. The
+  /// estimate only softens Sol's tone and shows a hedged line; audio is analysed
+  /// in memory and never kept.
+  static const emotionEstimate = ConsentKey._(
+    category: 'emotionEstimate',
+    modality: 'fused',
+    purpose: 'chatCompanion',
+    currentVersion: '1.0',
+  );
+
+  /// Letting the camera, during a video call, help that estimate: frames are sent live to the
+  /// companion server, read for the face in memory and never saved. Separate from voice and text, and
+  /// only counts while [emotionEstimate] is also granted.
+  static const faceFeatures = ConsentKey._(
+    category: 'faceFeatures',
+    modality: 'video',
+    purpose: 'emotionExtraction',
+    currentVersion: '1.0',
+    parent: emotionEstimate,
+  );
+
+  static const all = [
+    usageFootprint,
+    topAppNames,
+    profileSnippet,
+    memoryMoments,
+    emotionEstimate,
+    faceFeatures,
+  ];
 
   static ConsentKey? fromKey(String key) {
     for (final candidate in all) {

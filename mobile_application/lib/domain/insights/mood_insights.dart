@@ -6,9 +6,15 @@ import '../footprint/personal_baseline.dart';
 
 /// One calendar day in the mood strip.
 class MoodDay {
-  const MoodDay({required this.day, this.mood, this.checkIns = 0});
+  const MoodDay({required this.day, this.mood, this.checkIns = 0, this.entries = const []});
 
   final DateTime day;
+
+  /// Every entry that day that has a mood, oldest first (the dot shows all of them, not only the top word).
+  final List<SessionRecord> entries;
+
+  /// The mood word of each entry in [entries], in the same order.
+  List<String> get moods => [for (final e in entries) e.effectiveMood!];
 
   /// The mood word chosen most often that day (the latest, on a tie). Null when
   /// no mood word was chosen: a gap is a gap, never filled in.
@@ -20,7 +26,7 @@ class MoodDay {
 List<MoodDay> moodStrip(List<SessionRecord> sessions, DateTime now, {int days = 30}) {
   final byDay = <String, List<SessionRecord>>{};
   for (final session in sessions) {
-    if (Moods.score(session.mood) == null) continue;
+    if (Moods.score(session.effectiveMood) == null) continue;
     byDay.putIfAbsent(dayKey(session.createdAt), () => []).add(session);
   }
   final today = dateOnly(now);
@@ -34,17 +40,17 @@ List<MoodDay> moodStrip(List<SessionRecord> sessions, DateTime now, {int days = 
         final counts = <String, int>{};
         for (final e in entries) {
           final word = Moods.values.firstWhere(
-            (m) => m.toLowerCase() == e.mood!.trim().toLowerCase(),
+            (m) => m.toLowerCase() == e.effectiveMood!.trim().toLowerCase(),
           );
           counts[word] = (counts[word] ?? 0) + 1;
         }
         final top = counts.values.reduce((a, b) => a > b ? a : b);
         // Latest check-in among the most frequent words wins a tie.
         final word = Moods.values.firstWhere(
-          (m) => counts[m] == top && m.toLowerCase() == entries.last.mood!.trim().toLowerCase(),
+          (m) => counts[m] == top && m.toLowerCase() == entries.last.effectiveMood!.trim().toLowerCase(),
           orElse: () => counts.entries.firstWhere((e) => e.value == top).key,
         );
-        return MoodDay(day: day, mood: word, checkIns: entries.length);
+        return MoodDay(day: day, mood: word, checkIns: entries.length, entries: List.unmodifiable(entries));
       }(),
   ];
 }
@@ -66,7 +72,7 @@ String? moodStripSummary(List<MoodDay> strip) {
   final top = ranked.first;
   final days = withMood.length;
   return 'You checked in on $days of the last ${strip.length} days. '
-      '${top.key} came up most, on ${top.value}.';
+      '${Moods.display(top.key)} came up most, on ${top.value}.';
 }
 
 /// What can honestly be said about late nights and the mood words on the days
@@ -118,7 +124,7 @@ NightsAndMoods? nightsAndMoods(
 
   final scoresByDay = <String, List<double>>{};
   for (final s in sessions) {
-    final score = Moods.score(s.mood);
+    final score = Moods.score(s.effectiveMood);
     if (score != null) scoresByDay.putIfAbsent(dayKey(s.createdAt), () => []).add(score);
   }
 
@@ -218,9 +224,9 @@ MoodThroughTheDay? moodThroughTheDay(
     for (final part in DayPart.values) part: {for (final m in Moods.values) m: 0},
   };
   for (final s in sessions) {
-    if (Moods.score(s.mood) == null) continue;
+    if (Moods.score(s.effectiveMood) == null) continue;
     final word = Moods.values.firstWhere(
-      (m) => m.toLowerCase() == s.mood!.trim().toLowerCase(),
+      (m) => m.toLowerCase() == s.effectiveMood!.trim().toLowerCase(),
     );
     final part = DayPartLabels.ofHour(s.createdAt.hour);
     counts[part]![word] = counts[part]![word]! + 1;

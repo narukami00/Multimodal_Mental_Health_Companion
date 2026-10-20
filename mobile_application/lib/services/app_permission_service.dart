@@ -33,6 +33,16 @@ class AppPermissionService {
     }
   }
 
+  /// Whether camera access is currently granted.
+  Future<bool> cameraGranted() async {
+    try {
+      return await _channel.invokeMethod<bool>('cameraGranted') ?? false;
+    } catch (error) {
+      debugPrint('AppPermissionService camera warning: $error');
+      return false;
+    }
+  }
+
   /// Opens this app's page in system settings, where permissions are changed.
   ///
   /// Returns false when the screen could not be opened.

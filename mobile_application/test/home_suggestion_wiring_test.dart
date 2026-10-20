@@ -10,6 +10,7 @@ import 'package:solace_mobile/data/repositories/in_memory_onboarding_repository.
 import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_suggestion_repository.dart';
+import 'package:solace_mobile/domain/recommendations/recommendation_engine.dart';
 import 'package:solace_mobile/features/profile/profile_controller.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
 import 'package:solace_mobile/features/suggestions/suggestion_controller.dart';
@@ -158,7 +159,7 @@ void main() {
     expect(controller.history.single.skipReason, SuggestionSkipReason.notNow);
   });
 
-  testWidgets('trying it records one nudge and leaves Home', (tester) async {
+  testWidgets('trying it records one nudge, starts it, and leaves Home for the doing screen', (tester) async {
     final controller = SuggestionController(
       libraryRepository: _library,
       suggestionRepository: InMemorySuggestionRepository(),
@@ -171,13 +172,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
-    expect(controller.history.single.proactive, isTrue);
-    // Done is written at once, so the idea cannot come back after a restart.
-    expect(controller.history.single.status, SuggestionStatus.completed);
-    expect(controller.history.single.done, isTrue);
-    expect(controller.pendingProactive(), isNull);
-    // The card faded out first, and the page that opened has taken its place.
+    final record = controller.history.single;
+    expect(record.proactive, isTrue);
+    // Started, not finished: nothing is concluded until they say they are done.
+    expect(record.acceptedAt, isNotNull);
+    expect(record.done, isNull);
+    expect(record.status, SuggestionStatus.shown);
+    expect(controller.doingNow()?.id, record.id);
+    // The card faded out first, and the doing screen has taken its place.
     expect(find.byKey(const ValueKey('task-accept')), findsNothing);
+    expect(find.text("YOU'RE ON THIS"), findsOneWidget);
   });
 
   testWidgets('rebuilding Home records the impression once', (tester) async {
@@ -248,6 +252,63 @@ void main() {
       );
 
       expect(find.textContaining('Setup'), findsNothing);
+    });
+  });
+
+  group('an idea in progress', () {
+    const context = RecommendationContext(profileAgeDays: 20);
+
+    Future<(SuggestionController, SuggestionRecord, String)> started() async {
+      final controller = SuggestionController(
+        libraryRepository: _library,
+        suggestionRepository: InMemorySuggestionRepository(),
+      );
+      await controller.load();
+      await controller.warmUp();
+      final recommendation = controller.peek(profile: const UserProfile(), context: context)!;
+      final record = await controller.commit(recommendation, context: context, proactive: true);
+      await controller.startDoing(record.id);
+      return (controller, record, recommendation.activity.title);
+    }
+
+    testWidgets('takes the slot on Today: it is shown as being done, with nothing new offered', (tester) async {
+      final (controller, _, title) = await started();
+
+      await _pumpShell(tester, controller);
+
+      expect(find.text(title), findsOneWidget);
+      expect(find.text("I'm done"), findsOneWidget);
+      expect(find.text('Something came up'), findsOneWidget);
+      expect(find.text("I'll try it"), findsNothing);
+    });
+
+    testWidgets('"something came up" ends it with no verdict', (tester) async {
+      final (controller, record, _) = await started();
+      await _pumpShell(tester, controller);
+
+      await tester.tap(find.byKey(const ValueKey('task-decline')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      final ended = controller.history.firstWhere((r) => r.id == record.id);
+      expect(ended.status, SuggestionStatus.skipped);
+      expect(ended.skipReason, SuggestionSkipReason.notNow);
+      expect(ended.done, isNull);
+      expect(controller.doingNow(), isNull);
+    });
+
+    testWidgets('done writes the finishing time and asks how they feel now', (tester) async {
+      final (controller, record, _) = await started();
+      await _pumpShell(tester, controller);
+
+      await tester.tap(find.byKey(const ValueKey('task-accept')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      final finished = controller.history.firstWhere((r) => r.id == record.id);
+      expect(finished.done, isTrue);
+      expect(finished.completedAt, isNotNull);
+      expect(find.text('How do you feel now?'), findsOneWidget);
     });
   });
 }

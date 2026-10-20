@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/models/country_resources.dart';
 import '../../core/models/emergency_contact.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/theme/solace_palette.dart';
+import '../../core/widgets/visual_kit.dart';
 import '../../services/dialer_service.dart';
 import '../profile/profile_controller.dart';
 import 'breathing_pattern.dart';
@@ -63,12 +65,13 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
   @override
   void initState() {
     super.initState();
-    _breath = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: _pattern.cycleMs),
-    )
-      ..addListener(_onBreathTick)
-      ..addStatusListener(_onBreathStatus);
+    _breath =
+        AnimationController(
+            vsync: this,
+            duration: Duration(milliseconds: _pattern.cycleMs),
+          )
+          ..addListener(_onBreathTick)
+          ..addStatusListener(_onBreathStatus);
 
     // Never auto-run under test: an endless animation would hang pumpAndSettle.
     if (!_isTestEnvironment) {
@@ -120,8 +123,11 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
     return contacts.first;
   }
 
-  bool get _isUrgent =>
-      widget.assessment?.level == SafetyLevel.urgentSupport;
+  /// The person's own country decides the emergency number and listening lines.
+  CountryResources get _country =>
+      CountryResources.byCode(widget.profileController?.profile.countryCode);
+
+  bool get _isUrgent => widget.assessment?.level == SafetyLevel.urgentSupport;
 
   Future<void> _close() async {
     await widget.safetyController.markSupportShown();
@@ -142,6 +148,11 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
       );
   }
 
+  void _dialEmergency() {
+    final number = _country.emergencyNumber;
+    if (number != null) _dial(number);
+  }
+
   Future<void> _openContacts() async {
     final controller = widget.profileController;
     if (controller == null) return;
@@ -158,109 +169,68 @@ class _SupportResourcesPageState extends State<SupportResourcesPage>
 
     return Scaffold(
       backgroundColor: colors.background,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      body: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          // Calm on arrival, and short when it is urgent so the emergency number is on screen at once.
+          PageHero(
+            scene: HeroScene.support,
+            title: 'Right now',
+            subtitle: 'One of these is enough.',
+            height: _isUrgent ? 150 : 200,
+            onBack: _close,
+            backTooltip: 'Close',
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildHeader(colors),
-                const SizedBox(height: 6),
-                const Text(
-                  'Right now',
-                  style: TextStyle(
-                    fontSize: 27,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    height: 1.15,
-                    color: Color(0xFF3A3125),
-                  ),
-                ),
-                const SizedBox(height: 5),
-                const Text(
-                  'One of these is enough.',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF7B6A55),
-                  ),
-                ),
-                const SizedBox(height: 18),
 
-                // For an acute flag, the emergency number comes before anything.
-                if (_isUrgent) ...[
-                  _DangerRow(
-                    number: SupportResourcesPage.emergencyNumber,
-                    emphasised: true,
-                    onTap: () => _dial(
-                      SupportResourcesPage.emergencyNumber,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
+            // For an acute flag, the emergency number comes before anything.
+            if (_isUrgent) ...[
+              _DangerRow(
+                number: _country.emergencyNumber,
+                emphasised: true,
+                onTap: _dialEmergency,
+              ),
+              const SizedBox(height: 14),
+            ],
 
-                _buildPersonBlock(),
-                const SizedBox(height: 14),
+            _buildPersonBlock(),
+            const SizedBox(height: 14),
 
-                _buildBreathCard(colors),
+            for (final line in _country.helplines) ...[
+              _HelplineCard(helpline: line, onCall: () => _dial(line.phone)),
+              const SizedBox(height: 14),
+            ],
 
-                if (!_isUrgent) ...[
-                  const SizedBox(height: 16),
-                  _DangerRow(
-                    number: SupportResourcesPage.emergencyNumber,
-                    emphasised: false,
-                    onTap: () => _dial(
-                      SupportResourcesPage.emergencyNumber,
-                    ),
-                  ),
-                ],
+            _buildBreathCard(colors),
 
-                const SizedBox(height: 22),
-                const Text(
-                  'Solace is not an emergency service.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFA2988A),
-                  ),
-                ),
+            if (!_isUrgent) ...[
+              const SizedBox(height: 16),
+              _DangerRow(
+                number: _country.emergencyNumber,
+                emphasised: false,
+                onTap: _dialEmergency,
+              ),
+            ],
+
+            const SizedBox(height: 22),
+            const Text(
+              'Solace is not an emergency service.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFA2988A),
+              ),
+            ),
               ],
             ),
           ),
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildHeader(SolaceColors colors) {
-    return Row(
-      children: [
-        IconButton(
-          onPressed: _close,
-          tooltip: 'Close',
-          icon: const Icon(Icons.close_rounded, size: 20),
-          style: IconButton.styleFrom(
-            foregroundColor: const Color(0xFF8E8272),
-            minimumSize: const Size(44, 44),
-            backgroundColor: colors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        const Text(
-          'SOLACE CARE',
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.4,
-            color: Color(0xFFB9A98C),
-          ),
-        ),
-      ],
     );
   }
 
@@ -438,35 +408,46 @@ class _PersonCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            contact.isIce ? 'YOUR CALL-FIRST PERSON' : 'YOUR PERSON',
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.3,
-              color: Color(0xFFB58A4C),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            contact.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.3,
-              color: Color(0xFF3A3125),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            contact.phone,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF8A7A62),
-            ),
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(colors: [Color(0xFFFFC85A), Color(0xFFFF9A6A)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  boxShadow: [BoxShadow(color: const Color(0xFFFF9A6A).withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 5))],
+                ),
+                child: Text(
+                  contact.name.trim().isEmpty ? '?' : contact.name.trim()[0].toUpperCase(),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      contact.isIce ? 'YOUR CALL-FIRST PERSON' : 'YOUR PERSON',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.3, color: Color(0xFFB58A4C)),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      contact.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3, color: Color(0xFF3A3125)),
+                    ),
+                    Text(
+                      contact.phone,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF8A7A62)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -594,7 +575,8 @@ class _AddPersonCard extends StatelessWidget {
   }
 }
 
-/// Tap-to-dial line for the national emergency number.
+/// Tap-to-dial line for the national emergency number. Always present, calm
+/// and unmissable without shouting.
 class _DangerRow extends StatelessWidget {
   const _DangerRow({
     required this.number,
@@ -602,53 +584,245 @@ class _DangerRow extends StatelessWidget {
     required this.emphasised,
   });
 
-  final String number;
+  /// Null when no emergency number is verified for the country: the row then only
+  /// reminds the person to call their local one.
+  final String? number;
   final VoidCallback onTap;
   final bool emphasised;
 
   @override
   Widget build(BuildContext context) {
+    final emphasisedInk = const Color(0xFFB4522C);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: emphasised ? const Color(0xFFFFE9DE) : const Color(0xFFFFF7F0),
-            borderRadius: BorderRadius.circular(18),
+            color: emphasised
+                ? const Color(0xFFFFE9DE)
+                : const Color(0xFFFFF7F0),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: emphasised
                   ? const Color(0xFFFFC7AC)
                   : const Color(0xFFF6E2D6),
             ),
+            boxShadow: emphasised
+                ? const [
+                    BoxShadow(
+                      color: Color(0x2ED2603A),
+                      blurRadius: 18,
+                      offset: Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           child: Row(
             children: [
-              const Icon(
-                Icons.emergency_outlined,
-                size: 20,
-                color: Color(0xFFD2603A),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'In immediate danger? Call $number',
-                  style: TextStyle(
-                    fontSize: emphasised ? 14.5 : 13.5,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFFB4522C),
-                  ),
+              // The emergency glyph sits in its own sunken disc, like a call
+              // button that happens to say "911".
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: emphasised
+                      ? const Color(0xFFFFD9C8)
+                      : const Color(0xFFFFF1EA),
+                  border: Border.all(color: const Color(0x33D2603A)),
+                ),
+                child: const Icon(
+                  Icons.emergency_outlined,
+                  size: 21,
+                  color: Color(0xFFD2603A),
                 ),
               ),
-              const Icon(
-                Icons.call_rounded,
-                size: 18,
-                color: Color(0xFFD2603A),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      number == null
+                          ? 'In immediate danger?'
+                          : 'In immediate danger? Call $number',
+                      style: TextStyle(
+                        fontSize: emphasised ? 14.5 : 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: emphasisedInk,
+                      ),
+                    ),
+                    if (number == null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Call your local emergency number',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: emphasisedInk.withValues(alpha: 0.75),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
+              if (number != null)
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFD2603A),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33D2603A),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.call_rounded,
+                    size: 17,
+                    color: Colors.white,
+                  ),
+                ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A listening line for the person's country, with one-tap dialling.
+class _HelplineCard extends StatelessWidget {
+  const _HelplineCard({required this.helpline, required this.onCall});
+
+  final Helpline helpline;
+  final VoidCallback onCall;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFDF6),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFF6EFD9)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14785C28),
+            blurRadius: 18,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: onCall,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // A quiet dial disc at the left: the whole card is tappable,
+                // and the disc says so at a glance.
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFFF3DC),
+                    border: Border.all(color: const Color(0x33FFB534)),
+                  ),
+                  child: const Icon(
+                    Icons.headset_mic_rounded,
+                    size: 21,
+                    color: Color(0xFFB57A12),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        helpline.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF3A3125),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        helpline.about,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
+                          color: Color(0xFF7B6A55),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 13,
+                            color: Color(0xFF96620C),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              helpline.hours,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF96620C),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  key: const ValueKey('call-helpline'),
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFFB534),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33B57A12),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.call_rounded,
+                    size: 19,
+                    color: Color(0xFF3D2E14),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

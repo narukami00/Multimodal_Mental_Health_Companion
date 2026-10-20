@@ -37,6 +37,8 @@ class MemoryMoment {
     this.editedByUser = false,
     this.sourceRef,
     this.updatedAt,
+    this.signals,
+    this.lookedClass,
     this.schemaVersion = currentSchemaVersion,
   });
 
@@ -68,6 +70,14 @@ class MemoryMoment {
   /// proposed moments with it.
   final String? sourceRef;
   final DateTime? updatedAt;
+
+  /// Which signals the model's reading of this entry used when the person kept it: 'A' voice, 'T' words,
+  /// 'V' face (for example 'ATV'). Model-inferred; null when there was no reading.
+  final String? signals;
+
+  /// The face on its own, as the model's top guess when the person kept it, when the camera was on. Hedged:
+  /// the weakest signal, kept apart from [emotionClass].
+  final String? lookedClass;
   final int schemaVersion;
 
   bool get isConfirmed => state == MomentState.confirmed;
@@ -93,6 +103,8 @@ class MemoryMoment {
       editedByUser: editedByUser ?? this.editedByUser,
       sourceRef: sourceRef,
       updatedAt: updatedAt ?? this.updatedAt,
+      signals: signals,
+      lookedClass: lookedClass,
       schemaVersion: schemaVersion,
     );
   }
@@ -111,6 +123,8 @@ class MemoryMoment {
     'editedByUser': editedByUser,
     'sourceRef': sourceRef,
     'updatedAt': updatedAt?.toIso8601String(),
+    if (signals != null) 'signals': signals,
+    if (lookedClass != null) 'lookedClass': lookedClass,
     'schemaVersion': schemaVersion,
   };
 
@@ -141,6 +155,8 @@ class MemoryMoment {
       editedByUser: raw['editedByUser'] == true,
       sourceRef: raw['sourceRef'] as String?,
       updatedAt: DateTime.tryParse(raw['updatedAt'] as String? ?? ''),
+      signals: raw['signals'] as String?,
+      lookedClass: raw['lookedClass'] as String?,
       schemaVersion: (raw['schemaVersion'] as num?)?.toInt() ?? currentSchemaVersion,
     );
   }

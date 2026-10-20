@@ -1,6 +1,15 @@
 import '../../core/day_key.dart';
 import '../../core/models/memory_moment.dart';
 
+/// One earlier line of a conversation, given alongside a message so a reply
+/// like "that was a great idea" can be understood as being about something.
+class MomentContextLine {
+  const MomentContextLine({required this.fromPerson, required this.text});
+
+  final bool fromPerson;
+  final String text;
+}
+
 /// What an extractor is given: one entry the person wrote or said.
 class MomentCandidate {
   const MomentCandidate({
@@ -11,9 +20,14 @@ class MomentCandidate {
     this.moodWord,
     this.emotionClass,
     this.emotionConfidence,
+    this.context = const [],
   });
 
   final String text;
+
+  /// The few lines before this message in the same conversation, oldest first.
+  /// Empty for a journal entry or check-in, which stand on their own.
+  final List<MomentContextLine> context;
   final MomentSource source;
   final DateTime createdAt;
   final String? sourceRef;
@@ -58,6 +72,41 @@ class MomentProposal {
 abstract interface class MomentExtractor {
   Future<MomentProposal?> extract(MomentCandidate candidate);
 }
+
+/// True when a line says nothing that could be understood on its own.
+///
+/// "That was a great idea." points at something it does not name, so read back in
+/// a later conversation it would mean nothing. A line is vague when, once filler
+/// words, praise words and empty nouns like "idea" or "thing" are taken away,
+/// nothing is left. Mirrors the companion server's `is_vague`.
+bool momentIsVague(String text) {
+  for (final m in RegExp(r"[a-z0-9']+").allMatches(text.toLowerCase())) {
+    final word = m.group(0)!;
+    if (!_stopWords.contains(word) && !_vagueWords.contains(word)) return false;
+  }
+  return true;
+}
+
+final _stopWords = <String>{
+  ...'yeah yes yep yup sure indeed well oh wow haha ok okay '
+          'a an the and or but so to of in on at for with from by as if than then '
+          'i me my we us our you your he she they them their it its this that these those there here '
+          'is am are was were be been being do does did done have has had having will would can could '
+          'should may might must just really very too quite pretty also still even only not no yes '
+          'what which who when where how why about into out up down over again more most some any all '
+          // Contractions say as little as the words they shorten.
+          "i'm i've i'd i'll it's that's there's here's he's she's we're we've we'd they're they've they'd you're you've you'd "
+          "don't didn't isn't wasn't can't won't couldn't wouldn't"
+      .split(' '),
+};
+
+final _vagueWords = <String>{
+  ...'good great nice lovely wonderful amazing awesome happy glad fun enjoy enjoyed enjoying '
+          'proud relieved calm better lighter love loved like liked fine okay ok perfect '
+          'idea ideas thing things day days time times stuff something anything everything one '
+          'sound sounds sounded seem seems'
+      .split(' '),
+};
 
 /// Topics Sol never offers to remember on its own: crisis and self-harm, loss,
 /// health, money trouble, and harm done to them. Matched on whole words so
@@ -114,16 +163,8 @@ class RuleBasedMomentExtractor implements MomentExtractor {
   Future<MomentProposal?> extract(MomentCandidate candidate) async {
     if (momentIsSensitive(candidate.text)) return null;
 
-    String? best;
-    var bestScore = 0;
-    for (final sentence in _sentences(candidate.text)) {
-      final score = _score(sentence);
-      if (score > bestScore) {
-        best = sentence;
-        bestScore = score;
-      }
-    }
-    if (best == null || bestScore < 2) return null;
+    final best = bestSentence(candidate.text);
+    if (best == null) return null;
 
     return MomentProposal(
       text: _tidy(best),
@@ -135,6 +176,23 @@ class RuleBasedMomentExtractor implements MomentExtractor {
       emotionClass: candidate.emotionClass,
       emotionConfidence: candidate.emotionConfidence,
     );
+  }
+
+  /// The one sentence that most reads like a good thing that happened to them, or null when none does. Also used
+  /// to suggest what to keep when the person chooses to keep a long entry.
+  static String? bestSentence(String text) {
+    String? best;
+    var bestScore = 0;
+    for (final sentence in _sentences(text)) {
+      final score = _score(sentence);
+      if (score > bestScore) {
+        best = sentence;
+        bestScore = score;
+      }
+    }
+    if (best == null || bestScore < 2) return null;
+    if (momentIsVague(best)) return null;
+    return best;
   }
 
   static List<String> _sentences(String text) => [

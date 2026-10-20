@@ -4,7 +4,30 @@
 /// clinical. Shared so the text check-in and the one-word path cannot drift
 /// apart.
 abstract final class Moods {
+  /// The internal five-step scale (kept so every earlier entry, baseline and insight still works).
+  /// What a PERSON sees is [display]: plain words that describe how an entry read.
   static const values = ['Steady', 'Bright', 'Tender', 'Wobbly', 'Quiet'];
+
+  /// The plain word shown for an internal mood: Bright -> Upbeat, Steady -> Calm, Quiet -> Even,
+  /// Tender -> Low, Wobbly -> Tense. Unknown words are shown as they are.
+  static String display(String? mood) => switch (mood?.trim().toLowerCase()) {
+        'bright' => 'Upbeat',
+        'steady' => 'Calm',
+        'quiet' => 'Even',
+        'tender' => 'Low',
+        'wobbly' => 'Tense',
+        _ => mood ?? '',
+      };
+
+  /// The internal mood for a model reading's own mood word ('upbeat', 'calm or content', 'low or tired',
+  /// 'tense or upset'); an unsure reading (null) is 'Quiet' (Even).
+  static String fromReadingMood(String? readingMood) => switch (readingMood) {
+        'upbeat' => 'Bright',
+        'calm or content' => 'Steady',
+        'low or tired' => 'Tender',
+        'tense or upset' => 'Wobbly',
+        _ => 'Quiet',
+      };
 
   /// A coarse ordering of the mood words, from -1 (lowest) to 1 (brightest).
   ///

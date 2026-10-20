@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -9,15 +10,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/companion_server_config.dart';
 import '../../core/models/chat_message_record.dart';
+import '../../core/models/consent.dart';
+import '../../core/models/emotion_result.dart';
+import '../../core/models/safety_assessment.dart';
 import '../../services/audio_processor.dart';
 import '../../services/companion_websocket_service.dart';
+import '../../services/journal_analysis_client.dart';
 import '../../services/pcm_audio_recorder_service.dart';
+import '../../services/platform_frame_source.dart';
 import '../../services/tts_playback_service.dart';
+import '../../services/video_frame_service.dart';
+import '../camera/self_view.dart';
 import '../chat/chat_controller.dart';
+import '../consent/consent_controller.dart';
+import '../consent/emotion_consent_sheets.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'call_turn_controller.dart';
+import 'mood_note.dart';
 
 class CallPage extends StatefulWidget {
   const CallPage({
@@ -27,8 +38,16 @@ class CallPage extends StatefulWidget {
     this.audioRecorderService,
     this.ttsPlaybackService,
     this.chatController,
+    this.videoFrameService,
     super.key,
   });
+
+  /// What the person has agreed to; set once at start-up. Without it the camera button stays a plain
+  /// on-screen toggle that opens no camera and sends nothing.
+  static ConsentController? consent;
+
+  /// Streams camera frames to the server. Built on demand from the phone camera; tests pass a fake.
+  final VideoFrameService? videoFrameService;
 
   final SafetyController safetyController;
   final ProfileController? profileController;
@@ -45,14 +64,14 @@ class CallPage extends StatefulWidget {
 }
 
 class _CaptionLine {
-  _CaptionLine({required this.aria, required this.words});
+  _CaptionLine({required this.sol, required this.words});
 
-  final bool aria;
+  final bool sol;
   final List<String> words;
   int shown = 0;
 }
 
-class _CallPageState extends State<CallPage> {
+class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
   static const _ink = Color(0xFF4A3B2A);
   static const _softInk = Color(0xFF6E5D49);
   static const _timerInk = Color(0xFF8E7E6A);
@@ -60,9 +79,14 @@ class _CallPageState extends State<CallPage> {
   static const _coral = Color(0xFFFF7F50);
   static const _line = Color(0x1F7A5D3A);
 
+  /// After a loudspeaker falls silent the room still rings for a moment. The
+  /// server hears silence for this long so the tail is not taken for a person.
+  /// Counted in captured audio, not wall time: the frames are the timeline.
+  static const _echoTailMs = 300;
+
   // ponytail: fixed script loop instead of real audio pipeline; swap for live STT/TTS when available
   static const _script = <(bool, String)>[
-    (true, "Hi, it's Aria. I'm really glad you came back today."),
+    (true, "Hi, it's Sol. I'm really glad you came back today."),
     (false, "Hey… honestly, it's been a heavy week."),
     (true, 'That sounds like a lot to carry. Where would feel easiest to begin?'),
     (false, "I keep feeling like I'm behind on everything."),
@@ -74,6 +98,7 @@ class _CallPageState extends State<CallPage> {
   ];
 
   Timer? _ticker;
+  Timer? _handTimer;
   Completer<void>? _delay;
   var _seconds = 0;
   var _lineIndex = 0;
@@ -83,7 +108,7 @@ class _CallPageState extends State<CallPage> {
   var _handRaised = false;
   var _paused = false;
   var _ended = false;
-  var _ariaSpeaking = false;
+  var _solSpeaking = false;
   final _lines = <_CaptionLine>[];
 
   CompanionWebSocketService? _wsService;
@@ -104,26 +129,23 @@ class _CallPageState extends State<CallPage> {
   /// this file is allowed to decide what phase the call is in.
   final _turn = CallTurnController();
 
-  // SNR-gate edge tracking. The gate itself (hysteresis, echo filter, hangover,
-  // adaptive endpoint deadline) lives in [AudioProcessor]; this is only the
-  // edge detection that used to be two naive frame counters.
-  bool _gateOpen = false;
-
-  /// `input.start` has been sent and framed audio is streaming.
-  bool _turnOpen = false;
-
-  /// A barge-in decision is deferred until speech outlives a backchannel.
-  bool _pendingOnset = false;
-
-  String? _turnId;
-  int _turnOpenedAtMs = 0;
-  int _silenceSinceMs = -1;
-  int _onsetAtMs = -1;
-  int _assistantSinceMs = -1;
-  int _ttsStartedAtMs = -1;
-  double _ttsLevelRms = 0.0;
-
   bool _isLiveCall = false;
+
+  /// `call.listen` is in effect on the current connection, so microphone frames
+  /// may flow. Cleared while disconnected: a frame sent then is lost, and the
+  /// server starts a fresh listener after a reconnect.
+  bool _listening = false;
+  CompanionConnectionStatus _wsStatus = CompanionConnectionStatus.disconnected;
+
+  /// True on headphones: the microphone can stay open while Sol talks. Through a
+  /// loudspeaker her own voice comes straight back in, so then the server is
+  /// sent silence for as long as she is audible.
+  bool _bargeInAllowed = false;
+  int _echoTailMsLeft = 0;
+  Uint8List? _silence;
+
+  /// The person's most recent turn, as numbered by the server.
+  String? _turnId;
 
   /// Sol's reply as it streams this response; committed to the chat history
   /// once the utterance lands (or when the call ends mid-turn).
@@ -136,6 +158,7 @@ class _CallPageState extends State<CallPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_ended || _paused || !mounted) return;
       setState(() => _seconds++);
@@ -146,17 +169,16 @@ class _CallPageState extends State<CallPage> {
     _audioRecorder = widget.audioRecorderService;
     _ttsPlayback = widget.ttsPlaybackService;
 
-    if (_wsService!.status == CompanionConnectionStatus.connected) {
+    _wsStatus = _wsService!.status;
+    _wsStatusSub = _wsService!.statusStream.listen(_onWsStatus);
+    if (_wsStatus == CompanionConnectionStatus.connected) {
       _startLiveDuplexCall();
+    } else if (_isTestEnv) {
+      // ponytail: widget tests never open a socket, the scripted loop is
+      // their live-call stand-in.
+      _runConversation(++_generation);
     } else {
-      _wsStatusSub = _wsService!.statusStream.listen(_onWsStatus);
-      if (_isTestEnv) {
-        // ponytail: widget tests never open a socket, the scripted loop is
-        // their live-call stand-in.
-        _runConversation(++_generation);
-      } else {
-        unawaited(_connectSavedServer());
-      }
+      unawaited(_connectSavedServer());
     }
   }
 
@@ -197,22 +219,35 @@ class _CallPageState extends State<CallPage> {
     await ws.connect();
   }
 
-  /// One owner for every connection outcome: connected starts the duplex call,
-  /// a dead connection falls back to the scripted loop.
+  /// One owner for every connection outcome: connected starts the call (or
+  /// resumes it after a drop), a refused first connection falls back to the
+  /// scripted loop.
   void _onWsStatus(CompanionConnectionStatus status) {
-    if (!mounted || _ended || _isLiveCall) return;
+    if (!mounted || _ended) return;
+    setState(() => _wsStatus = status);
     if (status == CompanionConnectionStatus.connected) {
-      _startLiveDuplexCall();
-    } else if (status == CompanionConnectionStatus.error) {
+      if (_isLiveCall) {
+        _resumeListening();
+      } else {
+        _startLiveDuplexCall();
+      }
+      return;
+    }
+    _listening = false;
+    if (status == CompanionConnectionStatus.error && !_isLiveCall) {
       debugPrint('[CallPage] WebSocket connect failed, running scripted demo');
       _runConversation(++_generation);
     }
   }
 
+  bool get _connectionLost =>
+      _isLiveCall && _wsStatus != CompanionConnectionStatus.connected;
+
   Future<void> _startLiveDuplexCall() async {
     _generation++; // supersede a scripted fallback still running
     _releaseDelay();
     _isLiveCall = true;
+    _listening = false;
 
     // Restartable: a previous attempt's listeners must not double-send.
     for (final sub in _subs) {
@@ -221,11 +256,7 @@ class _CallPageState extends State<CallPage> {
     _subs.clear();
     _turn.reset();
     _turnId = null;
-    _turnOpen = false;
-    _gateOpen = false;
-    _pendingOnset = false;
     _handRaised = false;
-    _silenceSinceMs = -1;
 
     _wsService?.sendSessionConfigure(
       mode: 'duplex_call',
@@ -236,11 +267,11 @@ class _CallPageState extends State<CallPage> {
       _ttsPlayback = TtsPlaybackService(webSocketService: _wsService!);
       _ownsTtsPlayback = true;
     }
-
     if (_audioRecorder == null) {
       _audioRecorder = PcmAudioRecorderService();
       _ownsAudioRecorder = true;
     }
+    _listenToCall();
 
     final started =
         await _audioRecorder!.startRecording(sampleRate: 16000, frameMs: 20);
@@ -252,167 +283,127 @@ class _CallPageState extends State<CallPage> {
         ),
       );
     }
+    _bargeInAllowed = await _audioRecorder!.isHeadsetConnected();
+    if (!mounted || _ended) return;
+    _announceListening();
+  }
 
-    // Mic frames. They only leave the device while a turn is open: the
-    // pre-roll ring already carries the onset, so nothing captured before
-    // `input.start` is lost (spec 9.2).
-    _on(_audioRecorder!.audioStream, (Uint8List chunk) {
-      if (_turnOpen && !_muted && !_ended && !_paused) {
-        _wsService?.sendAudioChunk(chunk, framed: true);
+  /// After a reconnect the server's session is new: it has no call and no
+  /// configuration, so both are sent again before any audio.
+  void _resumeListening() {
+    _wsService?.sendSessionConfigure(mode: 'duplex_call', ttsEnabled: true);
+    _announceListening();
+  }
+
+  void _announceListening() {
+    _wsService?.sendCallListen(bargeIn: _bargeInAllowed);
+    if (_muted || _paused) _wsService?.sendCallMute(muted: true);
+    _listening = true;
+  }
+
+  /// Wires the call: the microphone out, and everything the server and the
+  /// speaker report back. The server owns turn-taking; the phone only streams
+  /// the microphone and reflects what it is told.
+  void _listenToCall() {
+    // Every frame leaves the device. The server's neural VAD finds the speech,
+    // which a volume threshold cannot do against a phone's room noise.
+    _on(_audioRecorder!.audioStream, _onMicFrame);
+
+    // The level only drives the orb; no decision reads it.
+    _on(_audioRecorder!.frameMetricsStream, (FrameMetrics m) {
+      _turn.noiseFloorRms = _audioRecorder!.floorRms;
+      if (_turn.currentPhase != CallPhase.assistantSpeaking) {
+        _turn.rawAmplitude = m.rms;
       }
     });
 
-    // The signal chain's verdict on every frame: noise floor, SNR gate edge,
-    // echo filter, adaptive endpoint deadline. This replaces the frame-counter
-    // pair and the two magic amplitude thresholds (spec 9.4).
-    _on(_audioRecorder!.frameMetricsStream, _onFrameMetrics);
-
-    // Playback level feeds the orb envelope while Aria speaks, and the echo
-    // filter's idea of what our own voice sounds like in the mic.
+    // Playback level feeds the orb envelope while Sol speaks.
     _on(_ttsPlayback?.amplitudeStream, (double amp) {
-      _ttsLevelRms = amp;
       if (_turn.currentPhase == CallPhase.assistantSpeaking) {
         _turn.rawAmplitude = amp;
       }
-      _syncEchoFilter();
     });
 
-    // Real speaker output is what the echo filter must know about, and what
-    // "the assistant is speaking" has to mean (spec 5.4: never network arrival).
-    _on(_ttsPlayback?.playingStream, (bool playing) {
-      final wasSpeaking = _ariaSpeaking;
-      setState(() {
-        _ariaSpeaking = playing;
-      });
-      _syncEchoFilter();
-      if (playing) {
-        _assistantSinceMs = _nowMs;
-      } else if (wasSpeaking && !_ariaSpeaking) {
-        // Playback drained: ASSISTANT_SPEAKING -> IDLE.
-        // Instantly purge loudspeaker leakage from echo filter, gate, and floor
-        // so the user's voice is recognized immediately without delay!
-        final p = _audioRecorder?.processor;
-        if (p != null) {
-          p.echo.reset();
-          p.gate.reset();
-          p.noiseFloor.reset();
-          p.preRoll.clear();
-        }
-        _gateOpen = false;
-        _pendingOnset = false;
-        _silenceSinceMs = -1;
-        if (_turn.currentPhase != CallPhase.userSpeaking) {
-          _turn.onTtsComplete();
-          if (_turn.currentPhase != CallPhase.idle) {
-            _turn.phase.value = CallPhase.idle;
-          }
-        }
-      }
-    });
-
-    _on(_wsService?.ttsStartStream, (Map<String, dynamic> data) {
-      _ttsStartedAtMs = _nowMs;
-      if (_assistantSinceMs < 0) _assistantSinceMs = _nowMs;
-      setState(() => _ariaSpeaking = true);
-      _syncEchoFilter();
-      // First response audio: ASSISTANT_SPEAKING begins (spec 5.9).
-      if (!_ended && !_muted &&
-          _turn.currentPhase != CallPhase.assistantSpeaking) {
-        _turn.onProcessing(_turnId, TurnStage.ttsFirstFrame);
-      }
-    });
-
-    _on(_wsService?.ttsEndStream, (Map<String, dynamic> data) {
-      final cancelled = data['cancelled'] as bool? ?? false;
-      if (cancelled) {
-        // Our own interruption tore down a response; only the visuals reset,
-        // the phase is already USER_SPEAKING. Its half-spoken text stays out
-        // of the history.
-        _assistantTurnCancelled = true;
-        _ttsStartedAtMs = -1;
-        setState(() {
-          _ariaSpeaking = false;
-          _ttsLevelRms = 0.0;
-        });
-        _syncEchoFilter();
-        return;
-      }
-      // Generation finished: this turn will send nothing else, so stop
-      // matching events against it.
-      _commitAssistantTurn();
-      _ttsStartedAtMs = -1;
-      _turnId = null;
-      if (!_ariaSpeaking && _turn.currentPhase != CallPhase.userSpeaking) {
-        _turn.onTtsComplete();
-        if (_turn.currentPhase != CallPhase.idle) {
-          _turn.phase.value = CallPhase.idle;
-        }
-      }
-    });
-
-    _on(_wsService?.callStateStream, (Map<String, dynamic> data) {
-      final state = data['state'] as String? ?? data['phase'] as String?;
-      if (state == 'idle' || state == 'listening') {
-        if (!_turnOpen && !_muted && _turn.currentPhase != CallPhase.userSpeaking) {
-          if (_turn.currentPhase != CallPhase.idle) {
-            _turn.phase.value = CallPhase.idle;
-          }
-        }
-      }
-    });
+    // What "Sol is speaking" means is what the speaker is doing, never when the
+    // network delivered the audio.
+    _on(_ttsPlayback?.playingStream, _onPlaybackChanged);
 
     _on(_wsService?.turnStartedStream, (Map<String, dynamic> data) {
-      if (!_forCurrentTurn(data)) return;
+      _turnId = data['turn_id'] as String? ?? _turnId;
       _turn.onTurnStarted(_turnId);
     });
 
-    // Server confirmation of the provisional barge-in (spec 7.5).
     _on(_wsService?.speechDetectedStream, (Map<String, dynamic> data) {
-      if (!_forCurrentTurn(data)) return;
       _turn.onSpeechDetected(
-        _turnId,
+        data['turn_id'] as String?,
         offsetMs: data['offset_ms'] as int? ?? 0,
         confidence: (data['confidence'] as num? ?? 0).toDouble(),
       );
     });
 
     _on(_wsService?.turnEndpointedStream, (Map<String, dynamic> data) {
-      if (!_forCurrentTurn(data)) return;
-      _turnOpen = false;
-      _silenceSinceMs = -1;
-      _turn.onEndpointed(_turnId, speechMs: data['speech_ms'] as int? ?? 0);
+      _endHandRaise();
+      _turn.onEndpointed(data['turn_id'] as String?,
+          speechMs: data['speech_ms'] as int? ?? 0);
     });
 
     _on(_wsService?.turnProcessingStream, (Map<String, dynamic> data) {
-      if (!_forCurrentTurn(data)) return;
       final stage = _stageOf(data['stage'] as String?);
       if (stage != null && !_ended && !_muted) {
-        _turn.onProcessing(_turnId, stage);
+        _turn.onProcessing(null, stage);
       }
     });
 
     _on(_wsService?.turnDiscardedStream, (Map<String, dynamic> data) {
-      if (!_forCurrentTurn(data)) return;
-      _turnOpen = false;
-      _turn.onDiscarded(_turnId, _reasonOf(data['reason'] as String?));
-      _turnId = null;
-    });
-
-    _on(_wsService?.transcriptFailedStream, (Map<String, dynamic> data) {
-      if (!_forCurrentTurn(data)) return;
-      _turnOpen = false;
-      _turn.onDiscarded(_turnId, _reasonOf(data['reason'] as String?));
-      _turnId = null;
-    });
-
-    // A false interruption timed out and the assistant resumes from where it
-    // stopped: the provisional barge-in reverts (spec 5.8).
-    _on(_wsService?.ttsResumeStream, (Map<String, dynamic> data) {
-      _assistantTurnCancelled = false;
-      _turn.onTtsResume(
-        data['utterance_id'] as String?,
-        data['from_ms'] as int? ?? 0,
+      _endHandRaise();
+      _turn.onDiscarded(
+        data['turn_id'] as String?,
+        _reasonOf(data['reason'] as String?),
       );
+    });
+
+    // The server heard the person speak over Sol (headphones only): she stops at
+    // once, mid-word, rather than finishing her sentence.
+    _on(_wsService?.turnInterruptedStream, (Map<String, dynamic> data) {
+      unawaited(_ttsPlayback?.stopVoice(fadeMs: 25));
+      _turn.onInterrupted(
+        turnId: null,
+        playedMs: (data['played_ms'] as num? ?? 0).toInt(),
+      );
+    });
+
+    // The server settled back to listening: nothing is left in flight, unless
+    // the speaker is still working through audio it was sent a moment ago.
+    _on(_wsService?.callStateStream, (Map<String, dynamic> data) {
+      final state = data['state'] as String? ?? data['phase'] as String?;
+      if ((state == 'idle' || state == 'listening') &&
+          !_solSpeaking &&
+          !_muted &&
+          !_ended) {
+        _turn.onServerIdle();
+      }
+    });
+
+    _on(_wsService?.turnLatencyStream, (Map<String, dynamic> data) {
+      debugPrint(
+        '[CallPage] latency: first audio ${data['to_first_audio_ms']} ms after '
+        'you stopped (stt ${data['stt_ms']}, first token '
+        '${data['llm_first_token_ms']}, tts ${data['tts_first_audio_ms']})',
+      );
+    });
+
+    _on(_wsService?.turnDiagnosticStream, (Map<String, dynamic> data) {
+      debugPrint('[CallPage] diagnostic: ${data['reason']} $data');
+    });
+
+    _on(_wsService?.ttsEndStream, (Map<String, dynamic> data) {
+      if (data['cancelled'] as bool? ?? false) {
+        // Sol was cut off; her half-spoken text stays out of the history.
+        _assistantTurnCancelled = true;
+        return;
+      }
+      // Generation finished: the reply text is complete.
+      _commitAssistantTurn();
     });
 
     _on(_wsService?.llmStartStream, (_) {
@@ -420,11 +411,16 @@ class _CallPageState extends State<CallPage> {
       _assistantTurnCancelled = false;
       setState(() {
         if (_lines.length >= 2) _lines.removeAt(0);
-        _lines.add(_CaptionLine(aria: true, words: []));
+        _lines.add(_CaptionLine(sol: true, words: []));
       });
-      if (!_ended && !_muted &&
-          _turn.currentPhase != CallPhase.assistantSpeaking) {
-        _turn.onProcessing(_turnId, TurnStage.llmFirstToken);
+      // The route may have changed since the call began; the server needs to know
+      // before the audio does.
+      unawaited(_refreshAudioRoute());
+      if (!_ended &&
+          !_muted &&
+          (_turn.currentPhase == CallPhase.idle ||
+              _turn.currentPhase == CallPhase.thinking)) {
+        _turn.onProcessing(null, TurnStage.llmFirstToken);
       }
     });
 
@@ -433,7 +429,7 @@ class _CallPageState extends State<CallPage> {
       if (delta.isNotEmpty) {
         _assistantTurnBuffer.write(delta);
       }
-      if (delta.trim().isNotEmpty && _lines.isNotEmpty && _lines.last.aria) {
+      if (delta.trim().isNotEmpty && _lines.isNotEmpty && _lines.last.sol) {
         final newWords = delta.trim().split(' ');
         setState(() {
           _lines.last.words.addAll(newWords);
@@ -442,26 +438,104 @@ class _CallPageState extends State<CallPage> {
       }
     });
 
+    // Two independent safety nets for spoken words: the app's own screener on
+    // every final transcript, and the server's gate (which also answers with a
+    // fixed supportive reply). Either one opens Support; it opens only once.
+    _on(_wsService?.emotionUpdateStream, (Map<String, dynamic> data) {
+      _showMoodNote(
+        moodNoteFor(data['mood'] as String?, data['tier'] as String?),
+      );
+      // The full reading of this turn (voice, words and, with consent, face) goes onto the person's
+      // message, so its long-press card and the conversation breakdown can show it.
+      final reading = JournalAnalysis(transcript: '', emotion: data)
+          .toResults(sessionId: data['turn_id'] as String? ?? '')
+          .firstOrNull
+          ?.copyWith(origin: EmotionOrigin.chat, inContext: true);
+      final chat = widget.chatController;
+      if (reading != null && chat != null) unawaited(chat.attachToLatestUserMessage(reading));
+    });
+
+    _on(_wsService?.safetyAlertStream, (Map<String, dynamic> data) {
+      final level = data['level'] == 'urgent_support'
+          ? SafetyLevel.urgentSupport
+          : SafetyLevel.supportSuggested;
+      unawaited(
+        widget.safetyController
+            .assessSignal(
+              source: 'call_server',
+              assessment: SafetyAssessment(
+                level: level,
+                matchedSignals: const ['server_safety_gate'],
+              ),
+            )
+            .then(_openSupportFor),
+      );
+    });
+
     _on(_wsService?.transcriptFinalStream, (Map<String, dynamic> data) {
       final text = data['text'] as String? ?? '';
       if (text.trim().isEmpty) return;
-
-      // The transcript is the committed confirmation of a barge-in. If the
-      // local gate somehow got here first, flush now (spec 7.5).
-      if (_turn.currentPhase == CallPhase.assistantSpeaking && !_pendingOnset) {
-        _flushInterruption();
-      }
-
+      unawaited(
+        widget.safetyController
+            .assessText(source: 'call', text: text)
+            .then(_openSupportFor),
+      );
       _commitUserTurn(text.trim());
-
       setState(() {
         if (_lines.length >= 2) _lines.removeAt(0);
         final words = text.split(' ');
-        final line = _CaptionLine(aria: false, words: words);
+        final line = _CaptionLine(sol: false, words: words);
         line.shown = words.length;
         _lines.add(line);
       });
     });
+  }
+
+  // --- microphone ------------------------------------------------------------
+
+  /// On a loudspeaker the server is sent silence, not the microphone, for as
+  /// long as Sol is audible and a moment after: her own voice would otherwise
+  /// come straight back and be heard as a person.
+  bool get _micGated =>
+      !_bargeInAllowed && (_solSpeaking || _echoTailMsLeft > 0);
+
+  void _onMicFrame(Uint8List chunk) {
+    if (!_listening || _muted || _paused || _ended) return;
+    final gated = _micGated;
+    if (!_solSpeaking && _echoTailMsLeft > 0) {
+      _echoTailMsLeft -= chunk.length * 1000 ~/ (16000 * 2); // 16 kHz pcm16
+    }
+    _wsService?.sendAudioChunk(gated ? _silenceLike(chunk) : chunk, framed: true);
+  }
+
+  /// Silence keeps the audio timeline unbroken: the server counts samples.
+  Uint8List _silenceLike(Uint8List chunk) {
+    final cached = _silence;
+    if (cached != null && cached.length == chunk.length) return cached;
+    return _silence = Uint8List(chunk.length);
+  }
+
+  Future<void> _refreshAudioRoute() async {
+    final headset = await _audioRecorder?.isHeadsetConnected() ?? false;
+    if (!mounted || _ended || headset == _bargeInAllowed) return;
+    _bargeInAllowed = headset;
+    _wsService?.sendCallConfig(bargeIn: headset);
+  }
+
+  void _onPlaybackChanged(bool playing) {
+    final wasSpeaking = _solSpeaking;
+    setState(() => _solSpeaking = playing);
+    if (playing) {
+      _endHandRaise();
+      if (!_ended && !_muted && _turn.currentPhase != CallPhase.assistantSpeaking) {
+        _turn.onProcessing(null, TurnStage.ttsFirstFrame);
+      }
+    } else if (wasSpeaking) {
+      _echoTailMsLeft = _echoTailMs;
+      if (_turn.currentPhase == CallPhase.assistantSpeaking) {
+        _turn.onTtsComplete();
+      }
+    }
   }
 
   // --- chat history ---------------------------------------------------------
@@ -502,10 +576,6 @@ class _CallPageState extends State<CallPage> {
     );
   }
 
-  // --- turn lifecycle --------------------------------------------------------
-
-  int get _nowMs => _audioRecorder?.processor.nowMs ?? 0;
-
   void _on<T>(Stream<T>? stream, void Function(T) handler) {
     if (stream == null) return;
     _subs.add(stream.listen((event) {
@@ -513,194 +583,9 @@ class _CallPageState extends State<CallPage> {
     }));
   }
 
-  /// Every server envelope carries a turn id; events for a turn this page did
-  /// not open (or that the user already cancelled) are dropped here, which is
-  /// what keeps the state machine free of cross-turn races.
-  bool _forCurrentTurn(Map<String, dynamic> data) {
-    if (_ended || _muted || _turnId == null) return false;
-    final id = data['turn_id'];
-    return id is String && id == _turnId;
-  }
-
-  /// Tell the echo filter whether the loudspeaker is actually making noise.
-  void _syncEchoFilter() {
-    _audioRecorder?.onPlaybackChanged(
-      active: _ariaSpeaking,
-      levelRms: (_ttsLevelRms.clamp(0.0, 1.0) * 32767).round(),
-    );
-  }
-
-  /// One frame from the signal chain. The gate already applied the noise
-  /// floor, the echo filter and hysteresis; all that is left here is edge
-  /// detection, the deferred barge-in decision and the endpoint deadline.
-  void _onFrameMetrics(FrameMetrics m) {
-    if (!_isLiveCall || _ended || _paused) return;
-    final p = _audioRecorder?.processor;
-    if (p == null) return;
-
-    _turn.noiseFloorRms = p.floorRms;
-    if (_turn.currentPhase != CallPhase.assistantSpeaking) {
-      _turn.rawAmplitude = m.rms;
-    }
-    if (_muted) return;
-
-    final now = p.nowMs;
-    if (!_gateOpen && m.isSpeech) {
-      _gateOpen = true;
-      _onsetDetected(m, now);
-    } else if (_gateOpen && !m.isSpeech) {
-      _gateOpen = false;
-      _silenceSinceMs = now;
-      _resolvePendingOnset(m, now, stillSpeaking: false);
-    } else if (!_gateOpen && !m.isSpeech && _silenceSinceMs < 0 && _turnOpen) {
-      _silenceSinceMs = now;
-    }
-
-    _resolvePendingOnset(m, now, stillSpeaking: true);
-    _maybeEndpoint(p, now);
-  }
-
-  /// The gate confirmed speech. If the assistant is talking, the decision is
-  /// deferred: a backchannel must not interrupt (spec 5.8), and the pre-roll
-  /// ring keeps the onset meanwhile, so nothing is lost by waiting.
-  void _onsetDetected(FrameMetrics m, int now) {
-    _onsetAtMs = now;
-    _silenceSinceMs = -1;
-    if (_turnOpen) {
-      // Our turn is already open: no new decision to make. The exception is
-      // playback that resumed underneath the turn — take the floor back.
-      if (_ariaSpeaking) _flushInterruption();
-      return;
-    }
-    if (_ariaSpeaking) {
-      _pendingOnset = true;
-      return;
-    }
-    _startUserTurn(m, speechMs: 0, assistantWasSpeaking: false);
-  }
-
-  void _resolvePendingOnset(
-    FrameMetrics m,
-    int now, {
-    required bool stillSpeaking,
-  }) {
-    if (!_pendingOnset) return;
-    final speechMs = now - _onsetAtMs;
-    if (stillSpeaking && speechMs < SpeechProbe.backchannelMaxMs) return;
-    _pendingOnset = false;
-    _startUserTurn(m, speechMs: speechMs, assistantWasSpeaking: true);
-  }
-
-  void _startUserTurn(
-    FrameMetrics m, {
-    required int speechMs,
-    required bool assistantWasSpeaking,
-  }) {
-    final verdict = _turn.onLocalOnset(
-      SpeechProbe(
-        snrDb: m.snrDb,
-        onsetRunMs: speechMs,
-        speechMs: speechMs,
-        assistantSpeaking: assistantWasSpeaking,
-        sinceAssistantStartMs: assistantWasSpeaking && _assistantSinceMs >= 0
-            ? (_nowMs - _assistantSinceMs).clamp(0, 60000)
-            : 0,
-      ),
-    );
-    final turnId = 'call_$_nowMs';
-
-    if (verdict == BargeInClass.interrupt && assistantWasSpeaking) {
-      _flushInterruption(turnId: turnId);
-    }
-    if (verdict != BargeInClass.interrupt) {
-      // Backchannel or noise: the assistant keeps talking and no turn opens.
-      return;
-    }
-    _openUserTurn(turnId);
-  }
-
-  /// `input.start`, then the pre-roll ring drained into the same stream so the
-  /// first phonemes of the onset survive (spec 9.4).
-  void _openUserTurn(String turnId) {
-    if (_turnOpen) return;
-    _turnOpen = true;
-    _turnId = turnId;
-    _turnOpenedAtMs = _nowMs;
-    _silenceSinceMs = -1;
-
-    unawaited(_wsService?.sendInputStart(
-      turnId: turnId,
-      preRollMs: 600,
-      sampleRate: 16000,
-      frameMs: 20,
-    ));
-    // Synchronous: no frame listener can interleave between input.start and
-    // the ring contents, because both leave on this microtask in order.
-    for (final chunk in _audioRecorder?.drainPreRoll(600) ?? const <Uint8List>[]) {
-      _wsService?.sendAudioChunk(chunk, framed: true);
-    }
-    debugPrint('[CallPage] turn open: $turnId');
-    if (mounted) setState(() {});
-  }
-
-  void _endUserTurn({String reason = 'client_endpoint'}) {
-    if (!_turnOpen || _turnId == null) return;
-    final p = _audioRecorder?.processor;
-    final turnId = _turnId!;
-    final durationMs = p == null ? 0 : (p.nowMs - _turnOpenedAtMs);
-    _turnOpen = false;
-    _silenceSinceMs = -1;
-    _handRaised = false;
-    if (p != null && p.gate.speechConfirmed && p.gate.lastSpeechMs >= 0) {
-      // Adaptive endpoint deadline learns from the gaps this client emitted.
-      p.gate.noteAcceptedGap(p.nowMs - p.gate.lastSpeechMs);
-    }
-    p?.gate.reset();
-    debugPrint('[CallPage] turn end: $turnId ($reason)');
-    unawaited(_wsService?.sendInputEnd(
-      turnId: turnId,
-      durationMs: durationMs,
-      reason: reason,
-    ));
-    if (mounted) setState(() {});
-  }
-
-  /// The silence deadline, and the hard cap no detector may exceed
-  /// (spec 5.1.5).
-  void _maybeEndpoint(AudioProcessor p, int now) {
-    if (!_turnOpen) return;
-    final overCap = now - _turnOpenedAtMs >= p.gate.maxTurnMs;
-    if (overCap) {
-      _endUserTurn(reason: 'max_duration');
-      return;
-    }
-    if (_gateOpen) {
-      _silenceSinceMs = -1;
-      return;
-    }
-    if (_silenceSinceMs < 0) return;
-    if (now - _silenceSinceMs >= p.gate.effectiveEndpointMs) {
-      _endUserTurn(reason: 'client_endpoint');
-    }
-  }
-
-  /// Stop local playback and tell the server the exact point the ear reached,
-  /// so its history matches what was actually heard (spec 6.2).
-  void _flushInterruption({String? turnId}) {
-    final playedMs = _ttsStartedAtMs >= 0
-        ? (_nowMs - _ttsStartedAtMs).clamp(0, 60000)
-        : 0;
-    if (_turn.currentPhase == CallPhase.assistantSpeaking) {
-      // null: keep whatever turn id the machine already holds, this flush is
-      // about the assistant's audio, not about naming a new turn.
-      _turn.onInterrupted(turnId: null, playedMs: playedMs);
-    }
-    _ttsPlayback?.stopVoice(fadeMs: 25);
-    _wsService?.sendTurnInterrupted(
-      turnId: turnId ?? 'call_$_nowMs',
-      playedMs: playedMs,
-    );
-    if (mounted) setState(() => _ariaSpeaking = false);
+  void _endHandRaise() {
+    _handTimer?.cancel();
+    if (_handRaised && mounted) setState(() => _handRaised = false);
   }
 
   static TurnStage? _stageOf(String? stage) => switch (stage) {
@@ -728,6 +613,11 @@ class _CallPageState extends State<CallPage> {
     _generation++;
     _releaseDelay();
     _ticker?.cancel();
+    _handTimer?.cancel();
+    _moodTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _video?.removeListener(_onVideoChanged);
+    _video?.dispose();
     _commitAssistantTurn();
 
     for (final sub in _subs) {
@@ -739,10 +629,7 @@ class _CallPageState extends State<CallPage> {
     _turn.dispose();
 
     if (_isLiveCall) {
-      if (_turnOpen && _turnId != null) {
-        _wsService?.sendTurnCancel(turnId: _turnId!, reason: 'page_disposed');
-      }
-      _turnOpen = false;
+      _listening = false;
       _audioRecorder?.stopRecording();
       _ttsPlayback?.stopVoice();
       _wsService?.sendCallEnd(reason: 'page_disposed');
@@ -772,7 +659,7 @@ class _CallPageState extends State<CallPage> {
   (Color, String) _statusFor(CallPhase phase) => switch (phase) {
         CallPhase.userSpeaking => (const Color(0xFF10B981), 'Listening to you...'),
         CallPhase.thinking => (_amber, 'Thinking...'),
-        CallPhase.assistantSpeaking => (_coral, 'Solace speaking'),
+        CallPhase.assistantSpeaking => (_coral, 'Sol speaking'),
         CallPhase.muted => (_softInk, 'Microphone muted'),
         CallPhase.ended => (_softInk, 'Call ended'),
         _ => (_amber, 'Listening · take your time'),
@@ -802,8 +689,8 @@ class _CallPageState extends State<CallPage> {
           continue;
         }
 
-        final (aria, text) = _script[_lineIndex % _script.length];
-        if (!aria && _muted) {
+        final (sol, text) = _script[_lineIndex % _script.length];
+        if (!sol && _muted) {
           _lineIndex++;
           await _wait(1100, token);
           continue;
@@ -811,11 +698,11 @@ class _CallPageState extends State<CallPage> {
 
         final words = text.split(' ');
         setState(() {
-          _ariaSpeaking = aria;
+          _solSpeaking = sol;
           if (_lines.length >= 2) _lines.removeAt(0);
-          _lines.add(_CaptionLine(aria: aria, words: words));
+          _lines.add(_CaptionLine(sol: sol, words: words));
         });
-        _syncScriptPhase(aria);
+        _syncScriptPhase(sol);
 
         for (var i = 0; i < words.length; i++) {
           while (_paused && token == _generation && !_ended) {
@@ -823,7 +710,7 @@ class _CallPageState extends State<CallPage> {
           }
           if (token != _generation || _ended) return;
 
-          var beat = aria ? 96 : 82;
+          var beat = sol ? 96 : 82;
           if (words[i].length > 7) beat += 34;
           if (RegExp(r'[,.;:—?!]$').hasMatch(words[i])) beat += 210;
           await _wait(beat, token);
@@ -832,9 +719,9 @@ class _CallPageState extends State<CallPage> {
         }
 
         _lineIndex++;
-        await _wait(aria ? 1500 : 1150, token);
+        await _wait(sol ? 1500 : 1150, token);
         if (mounted && token == _generation) {
-          setState(() => _ariaSpeaking = false);
+          setState(() => _solSpeaking = false);
           _syncScriptPhase(false, allowOnset: false);
         }
         await _wait(500, token);
@@ -846,9 +733,9 @@ class _CallPageState extends State<CallPage> {
 
   /// The scripted demo has no server, so its two beats are pushed through the
   /// same machine: the orb shows the same states a live call would.
-  void _syncScriptPhase(bool ariaSpeaking, {bool allowOnset = true}) {
+  void _syncScriptPhase(bool solSpeaking, {bool allowOnset = true}) {
     if (_muted || _ended) return;
-    if (ariaSpeaking) {
+    if (solSpeaking) {
       if (_turn.currentPhase != CallPhase.assistantSpeaking) {
         _turn.onProcessing(null, TurnStage.ttsFirstFrame);
       }
@@ -858,119 +745,144 @@ class _CallPageState extends State<CallPage> {
       _turn.onTtsComplete();
     }
     if (allowOnset && _turn.currentPhase == CallPhase.idle) {
-      _turn.onLocalOnset(
-        const SpeechProbe(
-          snrDb: 30,
-          onsetRunMs: 0,
-          speechMs: 0,
-          assistantSpeaking: false,
-          sinceAssistantStartMs: 0,
-        ),
-      );
+      _turn.onSpeechDetected(null);
     }
+  }
+
+  /// The server hears the microphone only while the call is live and neither
+  /// muted nor paused behind the leave sheet.
+  void _syncMicOpen() {
+    if (!_isLiveCall) return;
+    _wsService?.sendCallMute(muted: _muted || _paused);
   }
 
   void _toggleMic() {
     if (_ended) return;
     setState(() => _muted = !_muted);
     _turn.onMicMutedChanged(_muted);
-    if (_muted) {
-      // Muting abandons whatever was in flight; the server keeps no orphan.
-      if (_turnOpen && _turnId != null) {
-        _wsService?.sendTurnCancel(turnId: _turnId!, reason: 'muted');
-      }
-      _turnOpen = false;
-      _turnId = null;
-      _pendingOnset = false;
-      _gateOpen = false;
-      _handRaised = false;
-      _silenceSinceMs = -1;
-      _syncEchoFilter();
-    } else {
-      // Unmuting: purge any stale audio, reset filters cleanly so user is heard immediately!
-      final p = _audioRecorder?.processor;
-      if (p != null) {
-        p.reset();
-      }
-      _turnOpen = false;
-      _turnId = null;
-      _pendingOnset = false;
-      _gateOpen = false;
-      _handRaised = false;
-      _silenceSinceMs = -1;
-      _syncEchoFilter();
-      if (!_ariaSpeaking && _turn.currentPhase != CallPhase.idle) {
-        _turn.reset();
-      }
-    }
+    if (_muted) _endHandRaise();
+    _syncMicOpen();
   }
+
+  /// Raising a hand interrupts Sol, so it only makes sense while Sol is speaking.
+  bool get _canRaiseHand =>
+      !_ended && (_solSpeaking || _turn.currentPhase == CallPhase.assistantSpeaking);
 
   void _onRaiseHand() {
-    if (_ended) return;
+    if (_ended || !_canRaiseHand) return;
     HapticFeedback.heavyImpact();
-    debugPrint('[CallPage] Raise hand pressed: interrupting AI and forcing mic capture');
+    debugPrint('[CallPage] Raise hand: silencing Sol and giving the floor to you');
 
-    // 1. Unmute if muted
     if (_muted) {
-      _muted = false;
+      setState(() => _muted = false);
       _turn.onMicMutedChanged(false);
+      _syncMicOpen();
     }
 
-    // 2. Stop assistant speech immediately
-    _ttsPlayback?.stopVoice(fadeMs: 10);
-    _ariaSpeaking = false;
-    _ttsLevelRms = 0.0;
-    final playedMs = _ttsStartedAtMs >= 0
-        ? (_nowMs - _ttsStartedAtMs).clamp(0, 60000)
-        : 0;
-    _ttsStartedAtMs = -1;
-
-    // 3. Signal server to cancel TTS and LLM, and interrupt the turn
+    // Sol stops now, and the microphone opens now: no tail guard for a person
+    // who asked for the floor.
+    final wasSpeaking =
+        _solSpeaking || _turn.currentPhase == CallPhase.assistantSpeaking;
+    unawaited(_ttsPlayback?.stopVoice(fadeMs: 10));
+    _echoTailMsLeft = 0;
     _wsService?.sendCallBargeIn(reason: 'user_raised_hand');
-    _wsService?.sendSpeechCancel(
-      cancelTts: true,
-      cancelLlm: true,
-      reason: 'user_raised_hand',
-    );
-    _wsService?.sendTurnInterrupted(
-      turnId: _turnId ?? 'call_$_nowMs',
-      playedMs: playedMs,
-    );
+    if (wasSpeaking) _turn.onInterrupted(turnId: null, playedMs: 0);
 
-    // 4. Reset audio filters completely
-    final p = _audioRecorder?.processor;
-    if (p != null) {
-      p.echo.reset();
-      p.gate.reset();
-      p.noiseFloor.reset();
-      p.preRoll.clear();
-    }
-
-    // 5. Cancel any prior in-flight user turn
-    if (_turnOpen && _turnId != null) {
-      _wsService?.sendTurnCancel(turnId: _turnId!, reason: 'user_raised_hand');
-    }
-
-    // 6. Force-open a fresh user turn and transition to userSpeaking
-    _turnOpen = false;
-    _gateOpen = true;
-    _pendingOnset = false;
-    _silenceSinceMs = -1;
-    final newTurnId = 'call_hand_$_nowMs';
-    _turn.onInterrupted(turnId: newTurnId, playedMs: playedMs);
-    _turn.phase.value = CallPhase.userSpeaking;
-    _openUserTurn(newTurnId);
-
+    _handTimer?.cancel();
+    _handTimer = Timer(const Duration(seconds: 10), _endHandRaise);
     setState(() {
       _handRaised = true;
-      _ariaSpeaking = false;
+      _solSpeaking = false;
     });
-    _syncEchoFilter();
   }
 
-  void _toggleCamera() {
+  VideoFrameService? _video;
+
+  /// The camera pipeline, or null when nothing is wired (then the button is only an on-screen toggle).
+  VideoFrameService? _videoService() {
+    if (_video != null) return _video;
+    final injected = widget.videoFrameService;
+    final consent = CallPage.consent;
+    final ws = _wsService;
+    if (injected != null) {
+      _video = injected;
+    } else if (consent != null && ws != null) {
+      _video = VideoFrameService(
+        source: PlatformFrameSource(),
+        uriProvider: () => ws.videoUri,
+        consentGranted: () => consent.isGranted(ConsentKey.faceFeatures),
+      );
+    }
+    _video?.addListener(_onVideoChanged);
+    return _video;
+  }
+
+  void _onVideoChanged() {
+    if (!mounted) return;
+    final video = _video;
+    setState(() {
+      // The camera closing for any reason (consent withdrawn, server refusal, error) turns the button off.
+      if (_camera && video != null && !video.streaming) _camera = false;
+    });
+  }
+
+  Future<void> _toggleCamera() async {
     if (_ended) return;
-    setState(() => _camera = !_camera);
+    if (_camera) {
+      await _stopCamera();
+      return;
+    }
+    final video = _videoService();
+    if (video == null) {
+      setState(() => _camera = true);
+      return;
+    }
+    if (!await _ensureFaceConsent()) return;
+    // The server learns about the new consent before the first frame arrives.
+    _wsService?.sendSessionConfigure(mode: 'duplex_call', ttsEnabled: true);
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    var ok = await video.start();
+    if (!ok && video.refusedReason == 'no_consent') {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      ok = await video.start();
+    }
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _camera = true);
+    } else {
+      final why = video.refusedReason == null
+          ? "Couldn't open the camera."
+          : "The server isn't set up to read the camera yet.";
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(why), behavior: SnackBarBehavior.floating));
+    }
+  }
+
+  Future<void> _stopCamera() async {
+    await _video?.stop();
+    if (mounted) setState(() => _camera = false);
+  }
+
+  /// The camera is a separate, explicit yes. Asked once here; the same switch lives in "What Sol remembers".
+  Future<bool> _ensureFaceConsent() async {
+    final consent = CallPage.consent;
+    if (consent == null) return true;
+    return askFaceConsent(context, consent);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Leaving the app closes the camera; coming back never reopens it by itself.
+    if (state == AppLifecycleState.paused && _camera) unawaited(_stopCamera());
+  }
+
+  String get _cameraLabel {
+    if (!_camera) return 'VOICE ONLY · CAMERA OFF';
+    final video = _video;
+    if (video == null) return 'CAMERA ON';
+    if (video.lastUsable == false) return "CAMERA ON · CAN'T SEE YOUR FACE";
+    return 'CAMERA ON · ANALYSED LIVE, NEVER SAVED';
   }
 
   void _endSession() {
@@ -979,16 +891,14 @@ class _CallPageState extends State<CallPage> {
       _ended = true;
       _paused = false;
       _generation++;
-      _ariaSpeaking = false;
+      _solSpeaking = false;
       _handRaised = false;
     });
     _releaseDelay();
+    _handTimer?.cancel();
 
     if (_isLiveCall) {
-      if (_turnOpen && _turnId != null) {
-        _wsService?.sendTurnCancel(turnId: _turnId!, reason: 'user_ended_call');
-      }
-      _turnOpen = false;
+      _listening = false;
       _audioRecorder?.stopRecording();
       _ttsPlayback?.stopVoice();
       _wsService?.sendCallEnd(reason: 'user_ended_call');
@@ -1010,11 +920,6 @@ class _CallPageState extends State<CallPage> {
     _releaseDelay();
     _turn.reset();
     _turnId = null;
-    _turnOpen = false;
-    _gateOpen = false;
-    _pendingOnset = false;
-    _handRaised = false;
-    _silenceSinceMs = -1;
     if (_isLiveCall) {
       _startLiveDuplexCall();
     } else {
@@ -1025,6 +930,7 @@ class _CallPageState extends State<CallPage> {
   Future<void> _confirmLeave() async {
     if (_ended) return;
     setState(() => _paused = true);
+    _syncMicOpen();
     final leave = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1035,7 +941,45 @@ class _CallPageState extends State<CallPage> {
     );
     if (!mounted) return;
     setState(() => _paused = false);
+    _syncMicOpen();
     if (leave == true) _endSession();
+  }
+
+  /// The hedged "you sound ..." line, shown briefly after a turn when the person opted in.
+  String? _moodNote;
+  Timer? _moodTimer;
+
+  void _showMoodNote(String? note) {
+    _moodTimer?.cancel();
+    if (note == null) return;
+    setState(() => _moodNote = note);
+    _moodTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted) setState(() => _moodNote = null);
+    });
+  }
+
+  bool _supportOpen = false;
+
+  /// Opens Support for a flagged assessment, once at a time. The call keeps
+  /// running underneath, so the fixed supportive reply is still heard.
+  Future<void> _openSupportFor(SafetyAssessment assessment) async {
+    if (assessment.level == SafetyLevel.clear || _supportOpen || !mounted) {
+      return;
+    }
+    _supportOpen = true;
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SupportResourcesPage(
+            safetyController: widget.safetyController,
+            profileController: widget.profileController,
+            assessment: assessment,
+          ),
+        ),
+      );
+    } finally {
+      _supportOpen = false;
+    }
   }
 
   Future<void> _openSupport() async {
@@ -1145,7 +1089,7 @@ class _CallPageState extends State<CallPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Solace Voice',
+                  'Sol',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
@@ -1158,7 +1102,9 @@ class _CallPageState extends State<CallPage> {
                 ValueListenableBuilder<CallPhase>(
                   valueListenable: _turn.phase,
                   builder: (context, phase, _) {
-                    final (color, label) = _statusFor(phase);
+                    final (color, label) = _connectionLost
+                        ? (_coral, 'Reconnecting...')
+                        : _statusFor(phase);
                     return Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1276,7 +1222,7 @@ class _CallPageState extends State<CallPage> {
             opacity: _camera ? 1 : 0,
             child: IgnorePointer(
               ignoring: !_camera,
-              child: const _SelfView(),
+              child: _SelfView(preview: _video?.preview, source: _video?.source, active: _camera),
             ),
           ),
         ),
@@ -1319,6 +1265,20 @@ class _CallPageState extends State<CallPage> {
             const SizedBox(height: 10),
             for (var i = 0; i < _lines.length; i++)
               _CaptionText(line: _lines[i], past: i < _lines.length - 1),
+            if (_moodNote != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _moodNote!,
+                key: const ValueKey('mood-note'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  fontStyle: FontStyle.italic,
+                  color: _ink.withValues(alpha: 0.55),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -1348,7 +1308,7 @@ class _CallPageState extends State<CallPage> {
             const SizedBox(width: 7),
             Flexible(
               child: Text(
-                _camera ? 'CAMERA ON · YOU ARE VISIBLE' : 'VOICE ONLY · CAMERA OFF',
+                _cameraLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -1394,7 +1354,9 @@ class _CallPageState extends State<CallPage> {
             ),
             _Ctrl(
               label: _handRaised ? 'Listening' : 'Raise hand',
-              active: _handRaised || _turn.currentPhase == CallPhase.userSpeaking,
+              // Ready (white) only while Sol is talking; otherwise there is nothing to interrupt.
+              active: _canRaiseHand || _handRaised,
+              enabled: _canRaiseHand,
               onTap: _onRaiseHand,
               icon: Icons.front_hand_rounded,
               slashed: false,
@@ -2152,12 +2114,12 @@ class _CaptionText extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              line.aria ? 'ARIA' : 'YOU',
+              line.sol ? 'SOL' : 'YOU',
               style: TextStyle(
                 fontSize: 9.5,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.9,
-                color: line.aria
+                color: line.sol
                     ? const Color(0x9ED66E34)
                     : _CallPageState._ink.withValues(alpha: 0.34),
               ),
@@ -2181,13 +2143,21 @@ class _CaptionText extends StatelessWidget {
 }
 
 class _SelfView extends StatelessWidget {
-  const _SelfView();
+  const _SelfView({this.preview, this.source, this.active = false});
+
+  /// Where the live preview comes from, and whether the camera is on.
+  final FrameSource? source;
+  final bool active;
+
+  /// The live camera frame; without it (camera still opening, or nothing wired) the soft placeholder shows.
+  final ValueListenable<Uint8List?>? preview;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 86,
       height: 116,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
@@ -2205,7 +2175,17 @@ class _SelfView extends StatelessWidget {
         ],
       ),
       child: Stack(
+        fit: StackFit.expand,
         children: [
+          // A selfie view is mirrored, like a mirror, and runs at the camera's own
+          // frame rate: only what is sent to the server is thinned to a few a second.
+          if (preview != null)
+            SelfView(
+              source: source,
+              active: active,
+              fallbackListenable: preview,
+              fallbackKey: const ValueKey('self-view'),
+            ),
           Positioned(
             top: 8,
             right: 8,
@@ -2254,6 +2234,7 @@ class _Ctrl extends StatelessWidget {
     required this.onTap,
     required this.icon,
     required this.slashed,
+    this.enabled = true,
   });
 
   final String label;
@@ -2262,15 +2243,25 @@ class _Ctrl extends StatelessWidget {
   final IconData icon;
   final bool slashed;
 
+  /// False greys the button out and ignores taps.
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
     final fg = active ? _CallPageState._ink : const Color(0xFF8A5A1E);
+    return Opacity(
+      opacity: enabled ? 1 : 0.38,
+      child: _body(fg),
+    );
+  }
+
+  Widget _body(Color fg) {
     return Column(
       children: [
         Material(
           type: MaterialType.transparency,
           child: InkWell(
-            onTap: onTap,
+            onTap: enabled ? onTap : null,
             borderRadius: BorderRadius.circular(999),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),

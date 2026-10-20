@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'today_footer.dart';
 
 import '../../core/theme/solace_palette.dart';
 import '../../domain/home/home_card_priority.dart';
@@ -31,6 +32,7 @@ class TodayPage extends StatelessWidget {
     this.patternPrompt,
     this.dayRhythm,
     this.momentPrompt,
+    this.footer,
     this.onTaskOpen,
     this.onTaskAccept,
     this.onTaskDecline,
@@ -39,6 +41,7 @@ class TodayPage extends StatelessWidget {
     this.onContinueSetup,
     this.setupProgressBadge,
     this.currentTime,
+    this.name,
     this.chatController,
     this.ambientAudioEnabled = true,
     this.rhythmCard,
@@ -86,6 +89,9 @@ class TodayPage extends StatelessWidget {
 
   /// "Want me to remember this?", when a good moment is waiting for an answer.
   final Widget? momentPrompt;
+
+  /// One quiet card and the sky, filling the space under everything else.
+  final Widget? footer;
   final VoidCallback? onTaskOpen;
 
   /// The day's task, offered inside the check-in card rather than as a second
@@ -99,6 +105,9 @@ class TodayPage extends StatelessWidget {
   final VoidCallback? onBlobTap;
 
   final DateTime? currentTime;
+
+  /// What to call the person, if they said. Shown after the greeting.
+  final String? name;
   final ChatController? chatController;
 
   /// Whether the user has allowed ambient audio in Settings.
@@ -127,7 +136,10 @@ class TodayPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = currentTime ?? DateTime.now();
-    final greeting = greetingForHour(now.hour);
+    final given = name?.trim().split(RegExp(r'\s+')).first;
+    final greeting = given == null || given.isEmpty
+        ? greetingForHour(now.hour)
+        : '${greetingForHour(now.hour)}, $given';
     final date = MaterialLocalizations.of(context).formatMediumDate(now);
     final card = _PrimaryCardContent.fromType(primaryCard);
 
@@ -146,7 +158,18 @@ class TodayPage extends StatelessWidget {
           stops: const [0.0, 0.45, 1.0],
         ),
       ),
-      child: SafeArea(
+      child: Stack(
+        children: [
+          // The sky is part of the page: anchored to the bottom of the screen,
+          // fading upward into the background, with the content scrolling over it.
+          if (footer != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SkyBackdrop(hour: now.hour + now.minute / 60),
+            ),
+          SafeArea(
         // No horizontal padding here: several sections below are deliberately
         // full-bleed, and a single padded column is what made the page read as
         // one stack of identical slabs.
@@ -212,15 +235,15 @@ class TodayPage extends StatelessWidget {
               ),
             if (patternPrompt != null)
               Padding(
-                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
                 child: patternPrompt!,
               ),
             if (momentPrompt != null)
               Padding(
-                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
                 child: momentPrompt!,
               ),
-            const SizedBox(height: 26),
+            SizedBox(height: footer == null ? 26 : 0),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Column(
@@ -233,9 +256,16 @@ class TodayPage extends StatelessWidget {
                 ],
               ),
             ),
+            if (footer != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                child: footer!,
+              ),
             const SizedBox(height: 30),
           ],
         ),
+      ),
+        ],
       ),
     );
   }
@@ -253,6 +283,8 @@ class TodayPage extends StatelessWidget {
         Expanded(
           child: Text(
             greeting,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 21,
               fontWeight: FontWeight.w700,
@@ -293,8 +325,9 @@ class TodayPage extends StatelessWidget {
       HomeCardType.support => onOpenSupport,
       HomeCardType.checkIn => onStartCheckIn,
       HomeCardType.onboarding => onContinueSetup,
-      // "Open a journal or conversation whenever you are ready."
-      HomeCardType.defaultAction => onOpenChat,
+      // After today's first entry the card invites another one: the same text / voice / video choice,
+      // and the new entry is added to today's journal.
+      HomeCardType.defaultAction => onStartCheckIn,
     };
   }
 
@@ -1220,10 +1253,10 @@ class _PrimaryCardContent {
           ctaTextColor: Color(0xFF8A5A16),
         ),
       HomeCardType.defaultAction => const _PrimaryCardContent(
-          eyebrow: 'SPACE TO REFLECT',
-          title: 'What feels present\nright now?',
-          subtitle: 'Open a journal or conversation whenever you are ready.',
-          action: 'Open journal',
+          eyebrow: "TODAY'S JOURNAL",
+          title: 'Got anything\nelse to say?',
+          subtitle: 'Add another entry to today whenever you like: text, voice or video.',
+          action: 'Add to today',
           icon: Icons.arrow_forward_rounded,
         ),
     };

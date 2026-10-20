@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/moods.dart';
 import '../../core/models/session_input.dart';
 import '../../core/models/safety_assessment.dart';
+import '../../core/widgets/page_back_button.dart';
+import '../consent/emotion_consent_sheets.dart';
+import '../journal/journal_ui.dart';
 import '../journal/session_detail_page.dart';
+import 'check_in_mode_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -33,7 +36,6 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
   static const _coral = Color(0xFFFF7F50);
 
   final _textController = TextEditingController();
-  String? _selectedMood;
   bool _isSaving = false;
   bool _safetyAcknowledged = false;
 
@@ -66,7 +68,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
   }
 
   bool get _canSave =>
-      _selectedMood != null || _textController.text.trim().isNotEmpty;
+      _textController.text.trim().isNotEmpty;
 
   Future<void> _save() async {
     if (!_canSave || _isSaving) return;
@@ -102,10 +104,15 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
       }
     }
 
+    // The words are read for emotion by the companion server only with the person's yes (asked once).
+    final consent = CheckInModePage.consent;
+    if (text != null && consent != null && mounted) {
+      await askEmotionConsent(context, consent);
+    }
+
     final session = await widget.sessionController.saveSession(
       mode: CaptureMode.text,
       text: text,
-      mood: _selectedMood?.toLowerCase(),
     );
 
     if (!mounted) return;
@@ -114,218 +121,164 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
         builder: (_) => SessionDetailPage(
           session: session,
           onDelete: (s) => widget.sessionController.deleteSession(s.id),
+          onReanalyze: widget.sessionController.reanalyze,
         ),
       ),
     );
   }
 
+  int get _wordCount {
+    final t = _textController.text.trim();
+    return t.isEmpty ? 0 : t.split(RegExp(r'\s+')).length;
+  }
+
+  /// A quiet line under the box that changes as they write. It never says how much is enough.
+  String _nudge(int words) {
+    if (words == 0) return 'No rush. A single word is enough.';
+    if (words < 6) return 'Good start. Keep going if you like.';
+    if (words < 25) return "That's it. Let it come.";
+    return 'Whenever you feel done, keep this moment.';
+  }
+
+  /// Begins (or continues) the entry with a sentence starter, which is often the hardest part.
+  void _begin(String starter) {
+    final current = _textController.text;
+    final spaced = current.isEmpty || current.endsWith(' ') || current.endsWith('\n') ? current : '$current ';
+    final text = '$spaced$starter ';
+    setState(() {
+      _textController.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+      _safetyAcknowledged = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final enabled = _canSave && !_isSaving;
+    final nudge = _nudge(_wordCount);
     return Scaffold(
       backgroundColor: const Color(0xFFFDF8EC),
-      body: ClipRect(
-        child: Stack(
-          clipBehavior: Clip.hardEdge,
-          children: [
-            const Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFFFDF8EC),
-                      Color(0xFFFBF3E4),
-                      Color(0xFFFBEFE3),
+      body: JournalBackdrop(
+        tint: JournalTint.text,
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                children: [
+                  const Row(
+                    children: [
+                      PageBackButton(),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Text check-in',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _ink),
+                        ),
+                      ),
                     ],
                   ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: -70,
-              right: -60,
-              child: _GlowBlob(
-                color: _amber.withValues(alpha: 0.32),
-                size: 260,
-              ),
-            ),
-            Positioned(
-              bottom: -80,
-              left: -70,
-              child: _GlowBlob(
-                color: _coral.withValues(alpha: 0.26),
-                size: 300,
-              ),
-            ),
-            Positioned.fill(
-              child: SafeArea(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  const SizedBox(height: 22),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(colors: [_amber, _coral]),
+                          boxShadow: [BoxShadow(color: _coral.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6))],
+                        ),
+                        child: const Icon(Icons.edit_rounded, size: 22, color: Colors.white),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Text(
+                          'What feels present right now?',
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _ink, height: 1.25),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'A word or a few sentences are all enough.',
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: _softInk, height: 1.5),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'What is on your mind?',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _ink),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _textController,
+                    onChanged: (_) {
+                      setState(() {
+                        _safetyAcknowledged = false;
+                      });
+                    },
+                    minLines: 5,
+                    maxLines: 8,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _ink),
+                    decoration: InputDecoration(
+                      hintText: 'Let the thought land here…',
+                      hintStyle: TextStyle(color: _softInk.withValues(alpha: 0.7), fontWeight: FontWeight.w600),
+                      filled: true,
+                      fillColor: _cream,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: const BorderSide(color: Color(0x42FFB534))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: const BorderSide(color: Color(0x42FFB534))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: const BorderSide(color: _amber, width: 2)),
+                      contentPadding: const EdgeInsets.all(18),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      child: Text(
+                        nudge,
+                        key: ValueKey(nudge),
+                        style: const TextStyle(fontSize: 12.5, height: 1.4, fontWeight: FontWeight.w700, color: _softInk),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'NEED A PLACE TO START?',
+                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.3, color: _softInk),
+                  ),
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                       children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            onPressed: () => Navigator.of(context).maybePop(),
-                            icon: const Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              size: 20,
-                              color: _ink,
-                            ),
-                            style: IconButton.styleFrom(
-                              minimumSize: const Size(44, 44),
-                              maximumSize: const Size(44, 44),
-                              backgroundColor: _cream.withValues(alpha: 0.8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(
-                                  color: _amber.withValues(alpha: 0.25),
-                                ),
-                              ),
-                            ),
+                        for (final starter in sentenceStarters(DateTime.now().hour))
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: _StarterChip(key: ValueKey('starter-$starter'), label: starter, onTap: () => _begin(starter)),
                           ),
-                          const SizedBox(width: 12),
-                          const Text(
-                            'Text check-in',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: _ink,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      const Text(
-                        'What feels present right now?',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: _ink,
-                          height: 1.25,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'A word, a mood, or a few sentences are all enough.',
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                          color: _softInk,
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 26),
-                      const Text(
-                        'A quick word for it',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 9,
-                        runSpacing: 9,
-                        children: [
-                          for (final mood in Moods.values)
-                            _MoodPill(
-                              label: mood,
-                              selected: _selectedMood == mood,
-                              onTap: () {
-                                setState(
-                                  () => _selectedMood = _selectedMood == mood
-                                      ? null
-                                      : mood,
-                                );
-                              },
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 26),
-                      const Text(
-                        'Anything else?',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _textController,
-                        onChanged: (_) {
-                          setState(() {
-                            _safetyAcknowledged = false;
-                          });
-                        },
-                        minLines: 5,
-                        maxLines: 8,
-                        textCapitalization: TextCapitalization.sentences,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: _ink,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Let the thought land here…',
-                          hintStyle: TextStyle(
-                            color: _softInk.withValues(alpha: 0.7),
-                            fontWeight: FontWeight.w600,
-                          ),
-                          filled: true,
-                          fillColor: _cream,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(22),
-                            borderSide: const BorderSide(
-                              color: Color(0x42FFB534),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(22),
-                            borderSide: const BorderSide(
-                              color: Color(0x42FFB534),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(22),
-                            borderSide: const BorderSide(
-                              color: _amber,
-                              width: 2,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.all(18),
-                        ),
-                      ),
-                      if (widget.profileController != null) ...[
-                        const SizedBox(height: 14),
-                        TextButton(
-                          key: const ValueKey('rest-today-checkin'),
-                          onPressed: _declareRest,
-                          style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF96620C),
-                          ),
-                          child: const Text(
-                            'Rest today instead',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
                       ],
-                    ],
+                    ),
                   ),
-                  ),
-                ),
+                  if (widget.profileController != null) ...[
+                    const SizedBox(height: 10),
+                    TextButton(
+                      key: const ValueKey('rest-today-checkin'),
+                      onPressed: _declareRest,
+                      style: TextButton.styleFrom(foregroundColor: const Color(0xFF96620C)),
+                      child: const Text('Rest today instead', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
       bottomNavigationBar: SafeArea(
@@ -379,8 +332,11 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
                                 : const Color(0x804A3728),
                           ),
                         const SizedBox(width: 9),
-                        Text(
+                        Flexible(
+                          child: Text(
                           'Keep this moment',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 15.5,
                             fontWeight: FontWeight.w800,
@@ -388,6 +344,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
                                 ? Colors.white
                                 : const Color(0x804A3728),
                           ),
+                        ),
                         ),
                       ],
                     ),
@@ -402,71 +359,25 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
   }
 }
 
-class _MoodPill extends StatelessWidget {
-  const _MoodPill({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+/// A sentence starter, tapped to begin the entry.
+class _StarterChip extends StatelessWidget {
+  const _StarterChip({required this.label, required this.onTap, super.key});
 
   final String label;
-  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      type: MaterialType.transparency,
+      color: Colors.white.withValues(alpha: 0.75),
+      shape: const StadiumBorder(side: BorderSide(color: Color(0x55FFB534))),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        customBorder: const StadiumBorder(),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            gradient: selected
-                ? const LinearGradient(
-                    colors: [Color(0xFFFFB534), Color(0xFFFF9F45)],
-                  )
-                : null,
-            color: selected ? null : const Color(0xFFFFFDF6),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? const Color(0x59FFB534)
-                  : const Color(0x38B28028),
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13.5,
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-              color: selected
-                  ? const Color(0xFF3A3125)
-                  : const Color(0xFF6E6252),
-            ),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF6E5A2E))),
         ),
-      ),
-    );
-  }
-}
-
-class _GlowBlob extends StatelessWidget {
-  const _GlowBlob({required this.color, required this.size});
-
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
       ),
     );
   }

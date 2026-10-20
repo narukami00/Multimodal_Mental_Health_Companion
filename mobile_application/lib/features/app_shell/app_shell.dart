@@ -19,6 +19,7 @@ import '../call/call_page.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_page.dart';
 import '../checkin/check_in_mode_page.dart';
+import '../insights/helps_tab.dart' show IdeaActions;
 import '../insights/insights_page.dart';
 import '../journal/journal_page.dart';
 import '../footprint/break_prompt_card.dart';
@@ -45,6 +46,8 @@ import '../suggestions/suggestion_page.dart';
 import 'setup_progress_badge.dart';
 import 'check_in_task_card.dart';
 import 'home_rail.dart';
+import 'today_footer.dart';
+import '../../domain/insights/what_helped.dart';
 import 'home_suggestion_card.dart';
 import 'nav_pill.dart';
 import 'today_page.dart';
@@ -210,31 +213,63 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  /// The user did it. The record is written now, at the moment they responded,
-  /// and they land straight on the rating step.
+  /// "I'll try it". The idea is now being done: it is written down as started (so it is still there after
+  /// leaving the app, in this same slot), and they land on the calm "doing it" screen.
   Future<void> _acceptSuggestion(SuggestionCardChoice choice) async {
     final record = await widget.suggestionController.commit(
       choice.recommendation,
       context: choice.context,
       proactive: true,
     );
-    // Accepting lands on the rating step, which treats the idea as done, so the
-    // completion is written now. Without it the record stayed `shown`: the idea
-    // came back after a restart and the card was left faded out until then.
-    await widget.suggestionController.recordCompletion();
+    await widget.suggestionController.startDoing(record.id);
     if (!mounted) return;
-    await Navigator.of(context).push(
+    await _openIdea(resumeRecordId: record.id);
+  }
+
+  /// "Want to try something?" in the Helps tab. Nothing is written until they say "I'll do it".
+  Future<void> _askForIdea() {
+    return Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SuggestionPage(
           suggestionController: widget.suggestionController,
           profileController: widget.profileController,
           safetyController: widget.safetyController,
           sessionController: widget.sessionController,
-          seededRecordId: record.id,
+          onDemand: true,
           extraEventTags: widget.breakPrompts?.activeThemes() ?? const [],
         ),
       ),
     );
+  }
+
+  /// Opens the page on an idea that is under way (or has just been finished).
+  Future<void> _openIdea({required String resumeRecordId, bool finished = false}) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SuggestionPage(
+          suggestionController: widget.suggestionController,
+          profileController: widget.profileController,
+          safetyController: widget.safetyController,
+          sessionController: widget.sessionController,
+          resumeRecordId: resumeRecordId,
+          resumeFinished: finished,
+          extraEventTags: widget.breakPrompts?.activeThemes() ?? const [],
+        ),
+      ),
+    );
+  }
+
+  /// "I'm done" on the card that shows an idea in progress: the finishing time is written, then how they
+  /// feel now is asked.
+  Future<void> _finishDoing(SuggestionRecord record) async {
+    await widget.suggestionController.completeRecord(record.id);
+    if (!mounted) return;
+    await _openIdea(resumeRecordId: record.id, finished: true);
+  }
+
+  /// "Something came up": the idea ends with no verdict, so nothing is learned about it.
+  Future<void> _interruptDoing(SuggestionRecord record) {
+    return widget.suggestionController.dismissRecord(record.id, reason: SuggestionSkipReason.notNow);
   }
 
   /// Opens the rhythm page, where a rest day can be declared.
@@ -319,7 +354,12 @@ class _AppShellState extends State<AppShell> {
           suggestionDue: suggestionDue,
         );
         final showSuggestion = HomeCardPriority.showSuggestion(homeState);
-        final suggestionChoice = _peekSuggestion(allowed: showSuggestion);
+        // An idea they are in the middle of takes the slot: one thing at a time, and no new offer until it is
+        // finished, dropped, or has quietly expired.
+        final doing = safetyActive ? null : widget.suggestionController.doingNow();
+        final doingActivity = doing == null ? null : widget.suggestionController.activityFor(doing.activityId);
+        final inProgress = doing != null && doingActivity != null;
+        final suggestionChoice = inProgress ? null : _peekSuggestion(allowed: showSuggestion);
         _rememberShown(suggestionChoice);
         // After the frame, like the write above: building Home must not do I/O.
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -341,6 +381,7 @@ class _AppShellState extends State<AppShell> {
                 index: _selectedTab.index,
                 children: [
               TodayPage(
+                name: widget.profileController.profile.displayName,
                 chatController: _chatController,
                 ambientAudioEnabled:
                     widget.profileController.profile.ambientAudioEnabled,
@@ -360,7 +401,15 @@ class _AppShellState extends State<AppShell> {
                 showSuggestion:
                     suggestionChoice != null &&
                     HomeCardPriority.select(homeState) == HomeCardType.support,
-                taskOffer: suggestionChoice == null
+                taskOffer: inProgress
+                    ? TaskOffer(
+                        eyebrow: "You're on this",
+                        title: doingActivity.title,
+                        description: doingActivity.description,
+                        acceptLabel: "I'm done",
+                        declineLabel: 'Something came up',
+                      )
+                    : suggestionChoice == null
                     ? null
                     : TaskOffer(
                         eyebrow: 'An idea for today',
@@ -441,9 +490,25 @@ class _AppShellState extends State<AppShell> {
                         onStopAsking: () =>
                             widget.profileController.setMomentPromptsMuted(true),
                       ),
-                onTaskOpen: () => _openSuggestionDetails(suggestionChoice),
-                onTaskAccept: () => _acceptSuggestion(suggestionChoice!),
-                onTaskDecline: _declineSuggestion,
+                footer: ListenableBuilder(
+                  listenable: Listenable.merge([
+                    widget.suggestionController,
+                    ?widget.moments,
+                  ]),
+                  builder: (context, _) => TodayFooter(
+                    helped: whatHelped(
+                      widget.suggestionController.history,
+                      widget.suggestionController.library,
+                    ),
+                    keptMoments: widget.moments?.forInsights ?? const [],
+                    now: DateTime.now(),
+                  ),
+                ),
+                onTaskOpen: inProgress
+                    ? () => _openIdea(resumeRecordId: doing.id)
+                    : () => _openSuggestionDetails(suggestionChoice),
+                onTaskAccept: inProgress ? () => _finishDoing(doing) : () => _acceptSuggestion(suggestionChoice!),
+                onTaskDecline: inProgress ? () => _interruptDoing(doing) : _declineSuggestion,
                 // Only a tap now. Holding the shape used to open the most recent
                 // conversation, but the rail's conversations tile already does
                 // exactly that, and holding now fills the bubble with air and
@@ -484,6 +549,12 @@ class _AppShellState extends State<AppShell> {
               InsightsPage(
                 sessionController: widget.sessionController,
                 suggestionController: widget.suggestionController,
+                ideaActions: IdeaActions(
+                  ask: _askForIdea,
+                  resume: (record) => _openIdea(resumeRecordId: record.id),
+                  finish: _finishDoing,
+                  interrupt: _interruptDoing,
+                ),
                 phonePatterns: widget.phonePatterns,
                 profileController: widget.profileController,
                 breakPrompts: widget.breakPrompts,
@@ -491,6 +562,7 @@ class _AppShellState extends State<AppShell> {
                     ? null
                     : MomentsInsightsTab(
                         moments: widget.moments!,
+                        onTalk: () => _openChat(context, startNew: true),
                         onManage: widget.memory == null
                             ? null
                             : () => Navigator.of(context).push(

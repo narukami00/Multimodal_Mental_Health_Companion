@@ -8,10 +8,9 @@ import 'audio_processor.dart';
 /// Records raw 16 kHz PCM 16-bit mono audio over an EventChannel and measures
 /// every frame exactly once.
 ///
-/// This service owns the single [AudioProcessor] for a capture session: one
-/// adaptive noise floor, one echo filter, one SNR gate, one pre-roll ring
-/// buffer. `call_page.dart` reads [frameMetricsStream] and drains the pre-roll;
-/// it never re-measures a frame itself.
+/// Capture only: it never decides whether anyone is speaking. A call streams
+/// every frame to the server, whose VAD finds the speech; the level measured
+/// here drives the orb's animation and nothing else.
 class PcmAudioRecorderService {
   static const MethodChannel _controlChannel =
       MethodChannel('com.sysmentalhealth.solace_mobile/audio_control');
@@ -20,9 +19,7 @@ class PcmAudioRecorderService {
 
   final bool isMock;
 
-  /// Mock capture cadence. Defaults match a conversational 700 ms utterance
-  /// with a 500 ms pause; tests shorten the pause so the endpoint deadline is
-  /// reachable without pumping half a minute of fake time.
+  /// Mock capture cadence: a burst of tone, then silence, repeating.
   final int mockSpeechMs;
   final int mockSilenceMs;
 
@@ -33,7 +30,7 @@ class PcmAudioRecorderService {
     AudioProcessor? processor,
   }) : processor = processor ?? AudioProcessor();
 
-  /// The capture-side signal chain (spec §5.2). Exposed for diagnostics.
+  /// Frame measurement for the orb. Exposed for diagnostics.
   final AudioProcessor processor;
 
   bool _isRecording = false;
@@ -46,13 +43,9 @@ class PcmAudioRecorderService {
 
   int _frameSeq = 0;
   int _samplesPerFrame = 320;
-  bool _assistantSpeaking = false;
 
-  /// Current noise floor (normalised RMS) — spec §10 telemetry.
+  /// Current room-noise level (normalised RMS), for the orb's display gate.
   double get floorRms => processor.floorRms;
-  double get floorDriftDb => processor.floorDriftDb;
-  int get echoSuppressionCount => processor.echoSuppressions;
-  int get preRollBytes => processor.preRoll.totalBytes;
 
   StreamSubscription<dynamic>? _nativeStreamSub;
 
@@ -169,8 +162,7 @@ class PcmAudioRecorderService {
     return null;
   }
 
-  /// The single place a frame is measured, floored, echo-filtered, gated and
-  /// written to the pre-roll ring.
+  /// The single place a frame is measured.
   void _onAudioChunk(Uint8List chunk) {
     if (!_audioController.isClosed) {
       _audioController.add(chunk);
@@ -180,7 +172,6 @@ class PcmAudioRecorderService {
       seq: _frameSeq,
       sampleOffset: _frameSeq * _samplesPerFrame,
       frameMs: _frameMs,
-      assistantSpeaking: _assistantSpeaking,
     );
     _frameSeq++;
     if (!_frameMetricsController.isClosed) {
@@ -192,21 +183,23 @@ class PcmAudioRecorderService {
     }
   }
 
-  /// Tell the signal chain whether the assistant's audio is actually coming out
-  /// of the speaker. [active] must come from real playback state, never from
-  /// network arrival.
-  void onPlaybackChanged({required bool active, required int levelRms}) {
-    _assistantSpeaking = active;
-    processor.onPlaybackChanged(active: active, levelRms: levelRms);
+  /// Whether the audio is going to headphones, earbuds or a headset rather than
+  /// the phone's loudspeaker. Only then can the microphone stay open while the
+  /// assistant talks: a loudspeaker's own voice would come straight back in.
+  Future<bool> isHeadsetConnected() async {
+    if (isMock) return false;
+    try {
+      final route =
+          await _controlChannel.invokeMapMethod<String, dynamic>('outputRoute');
+      return route?['headset'] as bool? ?? false;
+    } catch (e) {
+      debugPrint('[PcmAudioRecorder] outputRoute failed: $e');
+      return false;
+    }
   }
 
-  /// Oldest-first frames covering the last [backMs] of capture, capped at the
-  /// ring's capacity. Drained once when a turn opens so the onset is preserved.
-  List<Uint8List> drainPreRoll(int backMs) => processor.drainPreRoll(backMs);
-
   /// Whether platform echo cancellation is engaged on the capture session.
-  /// `null` until the capture path has been started. Reported in
-  /// `turn.diagnostic` so the app knows which echo regime it is in.
+  /// `null` until the capture path has been started.
   Future<Map<String, dynamic>?> captureInfo() async {
     if (isMock) {
       return const {'aec_active': false, 'aec_source': 'mock'};
