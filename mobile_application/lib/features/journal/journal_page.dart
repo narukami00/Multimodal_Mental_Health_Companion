@@ -76,10 +76,8 @@ class _JournalPageState extends State<JournalPage> {
     // surface colour is what made this page read whiter than its neighbours.
     return ColoredBox(
       color: colors.background,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: AnimatedBuilder(
+      // No width cap and the same 22 px side inset as Today and Insights, so cards line up across the app's pages.
+      child: AnimatedBuilder(
             animation: sessionController,
             builder: (context, _) {
               final all = sessionController.sessions;
@@ -88,7 +86,7 @@ class _JournalPageState extends State<JournalPage> {
                 child: CustomScrollView(
                   slivers: [
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 6),
+                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 6),
                       sliver: SliverToBoxAdapter(
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,7 +168,7 @@ class _JournalPageState extends State<JournalPage> {
                     else
                       SliverPadding(
                         // Room for the floating pill, which overlays the page.
-                        padding: const EdgeInsets.fromLTRB(12, 14, 20, 120),
+                        padding: const EdgeInsets.fromLTRB(22, 14, 22, 120),
                         sliver: SliverList.builder(
                           itemCount: _groupSessions(sessions).length,
                           itemBuilder: (context, index) {
@@ -188,8 +186,6 @@ class _JournalPageState extends State<JournalPage> {
                 ),
               );
             },
-          ),
-        ),
       ),
     );
   }
@@ -497,7 +493,7 @@ class _JournalDayGroup extends StatelessWidget {
         children: [
           Row(
             children: [
-              const SizedBox(width: 14),
+              const SizedBox(width: 11),
               Container(
                 width: 10,
                 height: 10,
@@ -597,7 +593,7 @@ class _StitchedEntry extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            width: 40,
+            width: 32,
             child: Stack(
               alignment: Alignment.topCenter,
               children: [
@@ -613,8 +609,8 @@ class _StitchedEntry extends StatelessWidget {
                   ),
                 Container(
                   margin: const EdgeInsets.only(top: 8),
-                  width: 34,
-                  height: 34,
+                  width: 28,
+                  height: 28,
                   decoration: BoxDecoration(
                     color: beadColor,
                     shape: BoxShape.circle,
@@ -628,14 +624,14 @@ class _StitchedEntry extends StatelessWidget {
                   ),
                   child: Icon(
                     _modeIcon(session.mode),
-                    size: 16,
+                    size: 14,
                     color: Colors.white,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 14),
@@ -884,7 +880,7 @@ class _UnreadEntriesBannerState extends State<_UnreadEntriesBanner> {
     if (count == 0) return const SizedBox.shrink();
     return Container(
       key: const ValueKey('unread-banner'),
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      margin: const EdgeInsets.fromLTRB(22, 12, 22, 0),
       padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF6E2),
