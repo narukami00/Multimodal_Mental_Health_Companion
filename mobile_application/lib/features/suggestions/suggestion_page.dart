@@ -215,8 +215,8 @@ class _SuggestionPageState extends State<SuggestionPage> {
       await widget.suggestionController.recordMoodAfter(
         recordId: record.id,
         moodAfter: mood,
-        moodBefore: moodBeforeFor(
-          shownAt: record.shownAt,
+        moodBefore: moodBeforeForRecord(
+          record: record,
           sessions: widget.sessionController?.sessions ?? const [],
         ),
       );

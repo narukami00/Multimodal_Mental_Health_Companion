@@ -49,7 +49,7 @@ RecommendationContext buildRecommendationContext({
             now: current,
             sleepWindow: resolveSleepWindow(profile: profile, now: current),
             // Only a check-in close enough to mean something about right now.
-            latestMood: moodBeforeFor(shownAt: current, sessions: sessions),
+            latestMood: moodBeforeFor(shownAt: current, sessions: sessions, window: moodContextWindow),
             recentMoodScores: dailyMoodScores(sessions: sessions, now: current),
           ),
   );
