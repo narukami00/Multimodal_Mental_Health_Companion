@@ -190,7 +190,9 @@ void main() {
     testWidgets('after doing an idea, picking a word records how they feel', (tester) async {
       await openOnDecide(tester);
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       expect(find.text('How do you feel now?'), findsOneWidget);
 
@@ -210,7 +212,9 @@ void main() {
     testWidgets('skipping records no mood and costs nothing', (tester) async {
       await openOnDecide(tester);
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Skip this'));
       await tester.pumpAndSettle();
@@ -223,7 +227,9 @@ void main() {
     testWidgets('Save does nothing until something is chosen or written', (tester) async {
       await openOnDecide(tester);
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
@@ -235,7 +241,9 @@ void main() {
     testWidgets('with no word picked, a note the model reads clearly stands in for it', (tester) async {
       await openOnDecide(tester, analyzer: const _Reads('upbeat', 'clear'));
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'That was lovely, I feel so much lighter');
       await tester.pump();
@@ -250,7 +258,9 @@ void main() {
     testWidgets('a note the model only hints at records the note, not a mood', (tester) async {
       await openOnDecide(tester, analyzer: const _Reads('upbeat', 'hint'));
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'It was fine I suppose');
       await tester.pump();
@@ -265,7 +275,9 @@ void main() {
     testWidgets('a note the model could not read records the note, not a mood', (tester) async {
       await openOnDecide(tester, analyzer: const _Reads(null, 'clear'));
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'hmm');
       await tester.pump();
@@ -278,7 +290,9 @@ void main() {
     testWidgets('a picked word wins over what the note reads as', (tester) async {
       await openOnDecide(tester, analyzer: const _Reads('upbeat', 'clear'));
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('feel-Wobbly')));
       await tester.enterText(find.byType(TextField), 'Everything is great');
@@ -292,7 +306,9 @@ void main() {
     testWidgets('a note that raises a safety concern shows support first and saves nothing yet', (tester) async {
       await openOnDecide(tester);
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'I want to kill myself');
       await tester.pump();
@@ -306,7 +322,9 @@ void main() {
     testWidgets('"I didn\'t actually do this" takes the completion back, so nothing is learned from it', (tester) async {
       await openOnDecide(tester);
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       expect(suggestionController.history.single.done, isTrue);
 
@@ -325,7 +343,9 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await openOnDecide(tester);
 
-      await tester.tap(find.text('I did it'));
+      await tester.tap(find.text("I'll do it"));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("I'm done"));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('feel-Steady')));
       await tester.tap(find.byKey(const ValueKey('again-yes')));

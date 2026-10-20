@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/activity.dart';
+import '../../core/models/suggestion_record.dart';
 import '../../domain/insights/what_helped.dart';
 import '../suggestions/suggestion_controller.dart';
 import '../art/activity_art.dart';
+import 'ideas_invitation_card.dart';
 import 'insight_widgets.dart';
 
 IconData _icon(ActivityType type) => switch (type) {
@@ -16,11 +18,42 @@ IconData _icon(ActivityType type) => switch (type) {
   ActivityType.productivity => Icons.check_circle_outline_rounded,
 };
 
+/// What the Helps tab's "Want to try something?" card can do, supplied by the app shell (which owns the
+/// controllers the idea page needs).
+class IdeaActions {
+  const IdeaActions({required this.ask, required this.resume, required this.finish, required this.interrupt});
+
+  /// Open the page that asks how they are and offers an idea.
+  final VoidCallback ask;
+
+  /// Open the idea they are in the middle of.
+  final void Function(SuggestionRecord record) resume;
+
+  /// They are done with it: write the time, then ask how they feel.
+  final void Function(SuggestionRecord record) finish;
+
+  /// Something came up: it ends with no verdict.
+  final void Function(SuggestionRecord record) interrupt;
+}
+
 /// What seemed to help, from how the person said they felt after trying things.
 class HelpsTab extends StatelessWidget {
-  const HelpsTab({required this.suggestionController, super.key});
+  const HelpsTab({
+    required this.suggestionController,
+    this.ideaActions,
+    this.moodScores = const [],
+    this.clock,
+    super.key,
+  });
 
   final SuggestionController suggestionController;
+
+  /// Without it there is no "Want to try something?" card.
+  final IdeaActions? ideaActions;
+
+  /// Recent daily mood scores, oldest first, which tint the card's scene.
+  final List<double> moodScores;
+  final DateTime Function()? clock;
 
   @override
   Widget build(BuildContext context) {
@@ -32,10 +65,13 @@ class HelpsTab extends StatelessWidget {
           suggestionController.library,
         );
         final progress = helpsProgress(suggestionController.history, suggestionController.library);
+        final invitation = _invitation();
         if (kinds.isEmpty) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              ?invitation,
+              if (invitation != null) const SizedBox(height: 14),
               const InsightCard(
                 key: ValueKey('helps-how'),
                 child: Column(
@@ -51,7 +87,7 @@ class HelpsTab extends StatelessWidget {
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: insightSoft),
                     ),
                     SizedBox(height: 16),
-                    _Step(n: 1, icon: Icons.lightbulb_outline_rounded, title: 'Try an idea', sub: 'From Today, tap "I did it".'),
+                    _Step(n: 1, icon: Icons.lightbulb_outline_rounded, title: 'Try an idea', sub: 'From Today, or ask for one above.'),
                     _Step(n: 2, icon: Icons.sentiment_satisfied_alt_rounded, title: 'Say how you feel after', sub: 'One tap on a mood word.'),
                     _Step(n: 3, icon: Icons.auto_graph_rounded, title: 'After three tries of a kind', sub: 'Then what lifted you shows up here.', last: true),
                   ],
@@ -65,6 +101,8 @@ class HelpsTab extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            ?invitation,
+            if (invitation != null) const SizedBox(height: 14),
             for (final kind in kinds) ...[
               _KindCard(kind: kind),
               const SizedBox(height: 10),
@@ -89,6 +127,28 @@ class HelpsTab extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// The card at the top. With an idea under way it shows that instead, and offers no way to ask for another.
+  Widget? _invitation() {
+    final actions = ideaActions;
+    if (actions == null) return null;
+    final now = (clock ?? DateTime.now)();
+    final doing = suggestionController.doingNow(now: now);
+    final doingActivity = doing == null ? null : suggestionController.activityFor(doing.activityId);
+    final tries = suggestionController.history.where((record) => record.done == true).length;
+    final scene = IdeaScene.from(now: now, moodScores: moodScores, tries: tries);
+    if (doing != null && doingActivity != null) {
+      return IdeasInvitationCard(
+        scene: scene,
+        onStart: () => actions.resume(doing),
+        doingTitle: doingActivity.title,
+        onResume: () => actions.resume(doing),
+        onDone: () => actions.finish(doing),
+        onInterrupt: () => actions.interrupt(doing),
+      );
+    }
+    return IdeasInvitationCard(scene: scene, onStart: actions.ask);
   }
 }
 

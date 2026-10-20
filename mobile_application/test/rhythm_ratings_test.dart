@@ -60,12 +60,14 @@ SuggestionRecord _rated({
   );
 }
 
-/// Says "I did it" and lands on the rating step.
+/// Starts the idea and says it is done, which lands on the "how do you feel now" step.
 Future<void> _didIt(WidgetTester tester) async {
-  final didIt = find.text('I did it');
-  await tester.ensureVisible(didIt);
+  final start = find.text("I'll do it");
+  await tester.ensureVisible(start);
   await tester.pumpAndSettle();
-  await tester.tap(didIt);
+  await tester.tap(start);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text("I'm done"));
   await tester.pumpAndSettle();
 }
 
@@ -165,7 +167,7 @@ void main() {
     ) async {
       await pumpPage(tester);
 
-      // Saying "I did it" counts straight away, so walking away from the
+      // Saying it is done counts straight away, so walking away from the
       // rating step still leaves the completion recorded.
       await _didIt(tester);
 

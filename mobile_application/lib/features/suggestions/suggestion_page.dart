@@ -29,6 +29,9 @@ class SuggestionPage extends StatefulWidget {
     this.seededRecordId,
     this.seededChoice,
     this.extraEventTags = const [],
+    this.onDemand = false,
+    this.resumeRecordId,
+    this.resumeFinished = false,
     super.key,
   });
 
@@ -57,6 +60,18 @@ class SuggestionPage extends StatefulWidget {
   /// Themes the person chose when asked what was going on, to count as context
   /// alongside what they wrote about.
   final List<String> extraEventTags;
+
+  /// The person asked for an idea themselves ("Want to try something?"). They are asked how they are first
+  /// (optional), can look at another idea as often as they like without anything being written down, and
+  /// nothing is recorded until they say "I'll do it".
+  final bool onDemand;
+
+  /// An idea already started (found again after leaving the app): open straight on it. While one is in
+  /// progress this is the only thing the page shows, so there is no shuffling to other ideas.
+  final String? resumeRecordId;
+
+  /// With [resumeRecordId]: it was just finished, so go straight to how they feel now.
+  final bool resumeFinished;
 
   @override
   State<SuggestionPage> createState() => _SuggestionPageState();
@@ -90,9 +105,46 @@ class _SuggestionPageState extends State<SuggestionPage> {
   /// The suggestion this page is showing when Home peeked at it.
   SuggestionCardChoice? _seeded;
 
+  /// Ideas already shown in this sitting, so "another idea" never repeats one.
+  final _seenIds = <String>{};
+
+  /// How they said they feel as they begin, when asked directly. Null when they skipped it.
+  String? _before;
+
+  /// The idea being done, or just finished.
+  SuggestionRecord? _active;
+
+  /// "I already did it": done earlier, at a time we do not know, so no mood is paired with it.
+  bool _retro = false;
+
+  bool _outOfIdeas = false;
+
+  /// The record the after-step and the doing screen are about.
+  SuggestionRecord? get _target => _active ?? _ratingTarget ?? widget.suggestionController.currentRecord;
+
   @override
   void initState() {
     super.initState();
+    final resumeId = widget.resumeRecordId;
+    if (resumeId != null) {
+      _isLoading = false;
+      _active = _recordById(resumeId);
+      _outcome = widget.resumeFinished ? _Outcome.completed : _Outcome.none;
+      _step = widget.resumeFinished ? _Step.rate : _Step.doing;
+      return;
+    }
+    if (widget.onDemand) {
+      // One thing at a time: an idea already in progress is the only thing offered.
+      final doing = widget.suggestionController.doingNow();
+      _isLoading = false;
+      if (doing != null) {
+        _active = doing;
+        _step = _Step.doing;
+      } else {
+        _step = _Step.ask;
+      }
+      return;
+    }
     if (widget.seededRecordId != null) {
       // Opened from Home for something already offered: the record exists, so
       // go straight to rating it.
@@ -165,20 +217,118 @@ class _SuggestionPageState extends State<SuggestionPage> {
     await widget.suggestionController.recordCompletion();
     if (!mounted) return;
     setState(() {
+      _retro = true;
       _outcome = _Outcome.completed;
       _step = _Step.rate;
     });
   }
 
+  SuggestionRecord? _recordById(String id) {
+    for (final record in widget.suggestionController.history) {
+      if (record.id == id) return record;
+    }
+    return null;
+  }
+
+  RecommendationContext _ideaContext() => buildRecommendationContext(
+    profile: widget.profileController.profile,
+    sessions: widget.sessionController?.sessions ?? const [],
+    extraTags: widget.extraEventTags,
+    moodNow: _before,
+  );
+
+  /// Looks for an idea they have not seen this sitting. Looking is never written down.
+  void _requestIdea() {
+    final context = _ideaContext();
+    final recommendation = widget.suggestionController.peek(
+      profile: widget.profileController.profile,
+      context: context,
+      excludeIds: _seenIds,
+    );
+    setState(() {
+      if (recommendation == null) {
+        _outOfIdeas = true;
+        _seeded = null;
+      } else {
+        _outOfIdeas = false;
+        _seenIds.add(recommendation.activity.id);
+        _seeded = SuggestionCardChoice(recommendation: recommendation, context: context);
+      }
+      _step = _Step.decide;
+    });
+  }
+
+  /// "I'll do it": the first thing written down about an asked-for idea. It stays "being done" across leaving
+  /// the app until they say they are done (or it quietly expires).
+  Future<void> _startDoing() async {
+    final controller = widget.suggestionController;
+    SuggestionRecord? record;
+    if (widget.onDemand) {
+      final seeded = _seeded;
+      if (seeded == null) return;
+      record = await controller.commit(seeded.recommendation, context: seeded.context, fresh: true);
+    } else if (await _ensureRecord()) {
+      record = controller.currentRecord;
+    }
+    if (record == null) return;
+    await controller.startDoing(record.id, moodBefore: _before);
+    if (!mounted) return;
+    setState(() {
+      _active = _recordById(record!.id);
+      _step = _Step.doing;
+    });
+  }
+
+  /// Done: the real finishing time is written, then how they feel now is asked.
+  Future<void> _finishDoing() async {
+    final id = _active?.id;
+    if (id == null) return;
+    await widget.suggestionController.completeRecord(id);
+    if (!mounted) return;
+    setState(() {
+      _active = _recordById(id);
+      _outcome = _Outcome.completed;
+      _step = _Step.rate;
+    });
+  }
+
+  /// "Something came up": it ends with no verdict, so nothing is learned about the idea.
+  Future<void> _interruptDoing() async {
+    final id = _active?.id;
+    if (id == null) return;
+    await widget.suggestionController.dismissRecord(id, reason: SuggestionSkipReason.notNow);
+    if (!mounted) return;
+    setState(() {
+      _outcome = _Outcome.notNow;
+      _step = _Step.thanks;
+    });
+  }
+
+  /// After finishing one, another can be asked for: they are asked how they are again, every time.
+  void _startOver() {
+    setState(() {
+      _step = _Step.ask;
+      _active = null;
+      _seeded = null;
+      _before = null;
+      _feelNow = null;
+      _again = null;
+      _retro = false;
+      _outOfIdeas = false;
+      _commentController.clear();
+      _outcome = _Outcome.none;
+    });
+  }
+
   /// Whether this is a late review of something done earlier (opened from the quiet "want to say how it
   /// went?" card). How they feel now says nothing about what the idea did, so no mood is paired with it.
-  bool get _late => _ratingTarget != null;
+  bool get _late => _ratingTarget != null || _retro;
 
   /// Saves the "after" step: how they feel, whether they would do it again, and a note. Every part is
   /// optional and only what was actually given is kept.
   Future<void> _saveFeel() async {
     if (_saving) return;
-    final record = _ratingTarget ?? widget.suggestionController.currentRecord;
+    final record = _target;
     if (record == null) return;
     final note = _commentController.text.trim();
 
@@ -245,7 +395,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
 
   /// "I did it" was a mis-tap. The record goes back to a plain "not now" so nothing is learned from it.
   Future<void> _notActuallyDone() async {
-    final record = _ratingTarget ?? widget.suggestionController.currentRecord;
+    final record = _target;
     if (record == null) return;
     await widget.suggestionController.markNotDone(record.id);
     if (!mounted) return;
@@ -359,7 +509,19 @@ class _SuggestionPageState extends State<SuggestionPage> {
           }
           // A peeked suggestion takes precedence: it is what the user tapped.
           final recommendation = _seeded?.recommendation ??
-              widget.suggestionController.current;
+              (widget.onDemand ? null : widget.suggestionController.current);
+          // What is already under way never waits on anything else.
+          if (_step == _Step.doing) return _buildDoing();
+          if (_step == _Step.rate) return _buildRate();
+          if (_step == _Step.thanks) {
+            return _FeedbackThanks(
+              type: _ratingActivity?.type ?? recommendation?.activity.type ?? ActivityType.mindfulness,
+              outcome: _outcome,
+              onNext: widget.onDemand ? _startOver : _requestSuggestion,
+              onDone: () => Navigator.of(context).maybePop(),
+              onUndoRest: _outcome == _Outcome.resting ? _undoRest : null,
+            );
+          }
           if (widget.suggestionController.shouldHelpMeKnowYouBetter) {
             return _FallbackState(
               onRevisit: () => Navigator.of(context).push(
@@ -372,19 +534,10 @@ class _SuggestionPageState extends State<SuggestionPage> {
               ),
             );
           }
+          if (_step == _Step.ask) return _buildAsk();
+          if (_outOfIdeas) return _buildOutOfIdeas();
           if (recommendation == null) return const _EmptyState();
-
-          return switch (_step) {
-            _Step.decide => _buildDecide(context, recommendation),
-            _Step.rate => _buildRate(),
-            _Step.thanks => _FeedbackThanks(
-              type: (_ratingActivity ?? recommendation.activity).type,
-              outcome: _outcome,
-              onNext: _requestSuggestion,
-              onDone: () => Navigator.of(context).maybePop(),
-              onUndoRest: _outcome == _Outcome.resting ? _undoRest : null,
-            ),
-          };
+          return _buildDecide(context, recommendation);
         },
       ),
     );
@@ -416,7 +569,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
             child: Column(
               children: [
                 _DetailsCard(activity: activity, palette: palette),
-                if (pending != null && pendingActivity != null) ...[
+                if (!widget.onDemand && pending != null && pendingActivity != null) ...[
                   const SizedBox(height: 12),
                   _PendingRatingCard(
                     title: pendingActivity.title,
@@ -435,15 +588,23 @@ class _SuggestionPageState extends State<SuggestionPage> {
                   children: [
                     Expanded(
                       flex: 3,
-                      child: _ActionButton(label: 'I did it', filled: true, onPressed: _didIt),
+                      child: _ActionButton(label: "I'll do it", filled: true, onPressed: _startDoing),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       flex: 2,
-                      child: _ActionButton(label: 'Not today', filled: false, onPressed: _openNotToday),
+                      child: widget.onDemand
+                          ? _ActionButton(label: 'Another idea', filled: false, onPressed: _requestIdea)
+                          : _ActionButton(label: 'Not today', filled: false, onPressed: _openNotToday),
                     ),
                   ],
                 ),
+                if (!widget.onDemand)
+                  TextButton(
+                    key: const ValueKey('already-did-it'),
+                    onPressed: _didIt,
+                    child: const Text('I already did it'),
+                  ),
                 const SizedBox(height: 14),
                 const Text(
                   'Suggestions are optional lifestyle ideas, not treatment or medical advice.',
@@ -453,6 +614,125 @@ class _SuggestionPageState extends State<SuggestionPage> {
                 const SizedBox(height: 8),
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// "How are you right now?" before an asked-for idea. Optional, and skipping costs nothing.
+  Widget _buildAsk() {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        const _Hero(type: ActivityType.mindfulness, height: 190),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'How are you right now?',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.6,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Only if you would like to say. It helps pick something that fits.',
+                style: TextStyle(color: AppColors.mutedInk, height: 1.45, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              _MoodChips(selected: _before, onSelect: (m) => setState(() => _before = _before == m ? null : m)),
+              const SizedBox(height: 26),
+              _ActionButton(
+                label: _before == null ? 'Skip, just show me' : 'Show me an idea',
+                filled: _before != null,
+                onPressed: _requestIdea,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOutOfIdeas() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "That's all I have for now.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Come back anytime. Nothing was recorded.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.mutedInk, height: 1.45),
+            ),
+            const SizedBox(height: 20),
+            _ActionButton(label: 'Close', filled: true, onPressed: () => Navigator.of(context).maybePop()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Under way. Calm on purpose: no timer, no pressure. They can leave the app and it stays like this until
+  /// they come back to say they are done.
+  Widget _buildDoing() {
+    final record = _active;
+    final activity = record == null ? null : widget.suggestionController.activityFor(record.activityId);
+    final palette = ActivityArt.paletteFor(activity?.type ?? ActivityType.mindfulness);
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _Hero(type: activity?.type ?? ActivityType.mindfulness, height: 230),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "YOU'RE ON THIS",
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.3, color: palette.ink),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                activity?.title ?? 'Your idea',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.6,
+                    ),
+              ),
+              if (activity != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  activity.description,
+                  style: const TextStyle(color: AppColors.mutedInk, height: 1.5, fontSize: 14),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'About ${activity.durationMinutes} min',
+                  style: const TextStyle(color: AppColors.mutedInk, fontSize: 12.5, fontWeight: FontWeight.w700),
+                ),
+              ],
+              const SizedBox(height: 18),
+              const Text(
+                'Take your time. You can leave the app; this will be waiting when you come back.',
+                style: TextStyle(color: AppColors.mutedInk, height: 1.5, fontSize: 13),
+              ),
+              const SizedBox(height: 26),
+              _ActionButton(label: "I'm done", filled: true, onPressed: _finishDoing),
+              const SizedBox(height: 10),
+              _ActionButton(label: 'Something came up', filled: false, onPressed: _interruptDoing),
+            ],
           ),
         ),
       ],
@@ -589,7 +869,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
 
   /// The activity being rated, whether it came from Home or this page.
   Activity? get _ratingActivity {
-    final target = _ratingTarget ?? widget.suggestionController.currentRecord;
+    final target = _target;
     if (target == null) return null;
     return widget.suggestionController.activityFor(target.activityId);
   }
@@ -839,7 +1119,7 @@ class _WhyThis extends StatelessWidget {
 }
 
 /// Where the user is in the flow.
-enum _Step { decide, rate, thanks }
+enum _Step { ask, decide, doing, rate, thanks }
 
 /// What they chose, so the closing screen can state what it changed.
 enum _Outcome {

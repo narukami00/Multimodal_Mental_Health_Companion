@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/solace_palette.dart';
+import '../../domain/capacity/mood_trend.dart';
 import '../footprint/break_prompt_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../profile/profile_controller.dart';
@@ -22,6 +23,7 @@ class InsightsPage extends StatefulWidget {
     this.profileController,
     this.breakPrompts,
     this.momentsTab,
+    this.ideaActions,
     this.clock,
     super.key,
   });
@@ -38,6 +40,9 @@ class InsightsPage extends StatefulWidget {
 
   /// The "Moments" tab's content, when that feature is available.
   final Widget? momentsTab;
+
+  /// What the Helps tab's "Want to try something?" card does. Without it the card is not shown.
+  final IdeaActions? ideaActions;
   final DateTime Function()? clock;
 
   @override
@@ -65,7 +70,16 @@ class _InsightsPageState extends State<InsightsPage> {
   ];
 
   Widget _content(String id) => switch (id) {
-    'helps' => HelpsTab(suggestionController: widget.suggestionController!),
+    'helps' => HelpsTab(
+      suggestionController: widget.suggestionController!,
+      ideaActions: widget.ideaActions,
+      moodScores: dailyMoodScores(
+        sessions: widget.sessionController.sessions,
+        now: (widget.clock ?? DateTime.now)(),
+        days: 7,
+      ),
+      clock: widget.clock,
+    ),
     'phone' => PhoneTab(
       phonePatterns: widget.phonePatterns!,
       profileController: widget.profileController!,

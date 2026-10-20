@@ -19,6 +19,7 @@ RecommendationContext buildRecommendationContext({
   required List<SessionRecord> sessions,
   DateTime? now,
   List<String> extraTags = const [],
+  String? moodNow,
 }) {
   final current = now ?? DateTime.now();
   // Sessions arrive newest first.
@@ -33,7 +34,8 @@ RecommendationContext buildRecommendationContext({
             .toList();
 
   return RecommendationContext(
-    currentState: latest?.effectiveMood,
+    // [moodNow]: how they said they feel right now when asked directly, which is better than any check-in.
+    currentState: moodNow ?? latest?.effectiveMood,
     // What they wrote about, then anything they chose themselves when asked what
     // was going on. Each once.
     eventTags: [
@@ -49,7 +51,7 @@ RecommendationContext buildRecommendationContext({
             now: current,
             sleepWindow: resolveSleepWindow(profile: profile, now: current),
             // Only a check-in close enough to mean something about right now.
-            latestMood: moodBeforeFor(shownAt: current, sessions: sessions, window: moodContextWindow),
+            latestMood: moodNow ?? moodBeforeFor(shownAt: current, sessions: sessions, window: moodContextWindow),
             recentMoodScores: dailyMoodScores(sessions: sessions, now: current),
           ),
   );
