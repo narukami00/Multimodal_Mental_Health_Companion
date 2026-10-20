@@ -9,6 +9,7 @@ import '../../domain/chat/conversation_breakdown.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../consent/emotion_consent_sheets.dart';
 import '../insights/mood_tab.dart' show moodColors;
+import '../journal/emotion_reading_card.dart' show EmotionReadingCard;
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -134,6 +135,8 @@ class ConversationBreakdownPage extends StatelessWidget {
                     _ShiftsCard(shifts: breakdown.shifts),
                   _TalkedAboutCard(conversation: conv, breakdown: breakdown),
                   _NoticingCard(notes: breakdown.notes),
+                  if (breakdown.points.any((p) => p.reading.faceClasses != null))
+                    _LooksCard(points: [for (final p in breakdown.points) if (p.reading.faceClasses != null) p]),
                 ],
                 _KeptCard(
                   conversation: conv,
@@ -688,6 +691,105 @@ class _ShiftsCard extends StatelessWidget {
               color: Color(0xFF8A7A61),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// How the person's face read, message by message, when the camera was on. Hidden until they ask for it: the
+/// face is the weakest signal here, so it is offered, never pushed, and every line is hedged.
+class _LooksCard extends StatefulWidget {
+  const _LooksCard({required this.points});
+
+  final List<ReadMessage> points;
+
+  @override
+  State<_LooksCard> createState() => _LooksCardState();
+}
+
+class _LooksCardState extends State<_LooksCard> {
+  bool _open = false;
+
+  static (String, double) _top(Map<String, double> classes) {
+    final best = classes.entries.reduce((a, b) => a.value >= b.value ? a : b);
+    return (EmotionReadingCard.plainFeeling(best.key), best.value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const soft = Color(0xFF8A7A61);
+    const ink = Color(0xFF3A3125);
+    return _Card(
+      key: const ValueKey('breakdown-looks'),
+      title: 'How you looked',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            key: const ValueKey('looks-toggle'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _open ? 'Hide how you looked' : 'Show how your face looked (optional, a rough guess)',
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: ink),
+                    ),
+                  ),
+                  Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 20, color: soft),
+                ],
+              ),
+            ),
+          ),
+          if (!_open)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'Your camera was on for part of this. What your face seemed to show is tucked away until you ask.',
+                key: ValueKey('looks-withheld'),
+                style: TextStyle(fontSize: 12, height: 1.4, fontWeight: FontWeight.w600, color: soft),
+              ),
+            )
+          else ...[
+            const SizedBox(height: 6),
+            const Text(
+              'The face is the hardest thing to read, and it often looks different from how you feel. Take this lightly: '
+              'it can easily be wrong.',
+              key: ValueKey('looks-warning'),
+              style: TextStyle(fontSize: 12, height: 1.4, fontWeight: FontWeight.w700, color: Color(0xFFB4651F)),
+            ),
+            const SizedBox(height: 10),
+            for (final p in widget.points)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  key: ValueKey('looks-${p.message.id}'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'While you said “${_snippet(p.message.spokenText, 80)}”',
+                      style: const TextStyle(fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w600, color: Color(0xFF6E6252)),
+                    ),
+                    const SizedBox(height: 3),
+                    Builder(builder: (context) {
+                      final (word, share) = _top(p.reading.faceClasses!);
+                      return Text(
+                        'Your face looked roughly ${word.toLowerCase()} (${(share * 100).round()}%)',
+                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: ink),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            const Text(
+              'Only you know how you felt.',
+              style: TextStyle(fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w600, color: soft),
+            ),
+          ],
         ],
       ),
     );

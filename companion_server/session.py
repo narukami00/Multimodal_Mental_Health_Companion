@@ -399,12 +399,17 @@ class Session:
             return ""
         d, cue = res["decision"], res.get("cue") or ""
         est = res.get("estimate") or {}
-        await self._send({
+        update = {
             "type": "emotion.update", "turn_id": turn_id, "source": "voice" if use_audio else "text",
             "model_version": res.get("model_version"), "pattern": d.get("pattern"), "mood": d.get("mood"), "tier": d.get("tier"),
             "valence": d.get("valence"), "arousal": d.get("arousal"), "cue_used": bool(cue), "suppressed": d.get("suppressed"),
             "estimate": {"lv": est.get("lv"), "la": est.get("la"), "l7": est.get("l7")},
-        })
+        }
+        face = res.get("face")
+        if face and self.face_allowed():
+            # The face on its own, only for the person's optional "how you looked" view. It never shapes the reply.
+            update["face"] = {"lv": face.get("lv"), "la": face.get("la"), "l7": face.get("l7")}
+        await self._send(update)
         return cue  # crisis language is handled by safety_gate in _start_reply, not here
 
     def _spawn(self, coro: Awaitable[None]) -> "asyncio.Task[None]":

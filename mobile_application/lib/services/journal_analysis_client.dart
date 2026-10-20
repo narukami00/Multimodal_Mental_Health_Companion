@@ -48,6 +48,7 @@ class JournalAnalysis {
     if (classes == null) return const [];
     final valenceProbs = _probs(estimate['lv']);
     final pattern = em['pattern'] as String? ?? '';
+    final face = em['face'];
     final top = classes.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     return [
       EmotionResult(
@@ -71,6 +72,7 @@ class JournalAnalysis {
         mood: em['mood'] as String?,
         tier: em['tier'] as String?,
         pattern: pattern.isEmpty ? null : pattern,
+        faceClasses: face is Map ? _probs(face['l7']) : null,
       ),
     ];
   }

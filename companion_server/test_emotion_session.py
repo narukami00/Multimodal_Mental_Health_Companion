@@ -126,6 +126,40 @@ async def test_cue_reaches_the_prompt_and_the_app_is_told():
         assert "safety.alert" not in order
 
 
+def result_with_face() -> Dict[str, Any]:
+    res = result()
+    res["face"] = {"pattern": "V", "l7": {"sad": 0.5, "neutral": 0.5}, "lv": {"negative": 0.5, "neutral": 0.4, "positive": 0.1},
+                   "la": {"low": 0.6, "mid": 0.3, "high": 0.1}}
+    return res
+
+
+@pytest.mark.asyncio
+async def test_the_face_on_its_own_reaches_the_app_only_with_face_consent(monkeypatch):
+    import session as session_module
+    monkeypatch.setattr(session_module, "FACE_SERVER_ENABLED", True)
+    async with Call(["I have been feeling really low lately."]) as call:
+        with_emotion(call, FakeEmotion(result_with_face()), CueLlm())
+        call.ws.put_json({"type": "session.configure", "emotion": {"enabled": True, "face_features": True}})
+        await call.until("session.ready")
+        await call.speak()
+        await call.until("tts.end")
+        update = call.ws.of("emotion.update")[0]
+        assert update["face"]["l7"] == {"sad": 0.5, "neutral": 0.5}
+        assert update["estimate"]["l7"] == {"sad": 0.6}  # the blended reading is the same as without a face
+
+
+@pytest.mark.asyncio
+async def test_the_face_on_its_own_is_never_sent_without_face_consent(monkeypatch):
+    import session as session_module
+    monkeypatch.setattr(session_module, "FACE_SERVER_ENABLED", True)
+    async with Call(["I have been feeling really low lately."]) as call:
+        with_emotion(call, FakeEmotion(result_with_face()), CueLlm())
+        await opt_in(call)  # emotion on, but no face consent
+        await call.speak()
+        await call.until("tts.end")
+        assert "face" not in call.ws.of("emotion.update")[0]
+
+
 @pytest.mark.asyncio
 async def test_the_result_is_only_requested_after_the_audio_upload_finished():
     async with Call(["I have been feeling really low lately."]) as call:

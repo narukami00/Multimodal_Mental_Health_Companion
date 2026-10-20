@@ -26,8 +26,10 @@ EmotionResult reading({
   double high = 0.1,
   String pattern = 'T',
   bool inContext = false,
+  Map<String, double>? face,
 }) =>
     EmotionResult(
+      faceClasses: face,
       sessionId: 's',
       modality: EmotionModality.text,
       timestamp: DateTime(2026, 1, 1),
@@ -73,6 +75,33 @@ Future<ChatController> controllerWith(List<ChatMessageRecord> messages, {String?
 }
 
 void main() {
+  group('the face on its own', () {
+    test('is read from the server update, kept when saved, and absent when there was no camera', () {
+      final withFace = JournalAnalysis(transcript: '', emotion: {
+        'pattern': 'ATV',
+        'estimate': {
+          'l7': {'happy': 0.5, 'neutral': 0.5},
+          'lv': {'negative': 0.1, 'neutral': 0.4, 'positive': 0.5},
+        },
+        'face': {
+          'l7': {'sad': 0.7, 'neutral': 0.3},
+        },
+      }).toResults(sessionId: 't').single;
+      expect(withFace.faceClasses, {'sad': 0.7, 'neutral': 0.3});
+      expect(withFace.classes!['happy'], 0.5); // the blended reading is untouched
+      expect(EmotionResult.fromMap(withFace.toMap()).faceClasses, {'sad': 0.7, 'neutral': 0.3});
+
+      final without = JournalAnalysis(transcript: '', emotion: {
+        'pattern': 'AT',
+        'estimate': {
+          'l7': {'happy': 1.0},
+        },
+      }).toResults(sessionId: 't').single;
+      expect(without.faceClasses, isNull);
+      expect(without.toMap().containsKey('faceClasses'), isFalse);
+    });
+  });
+
   group('a message and its reading', () {
     test('survive saving and loading, and older messages without one still load', () {
       final m = userMsg('a', 'Too tired to talk', r: reading(inContext: true));
@@ -352,6 +381,36 @@ void main() {
       await tester.scrollUntilVisible(find.byKey(const ValueKey('breakdown-kept-empty')), 300,
           scrollable: find.byType(Scrollable).last);
       expect(find.byKey(const ValueKey('breakdown-kept-empty')), findsOneWidget);
+    });
+
+    testWidgets('how you looked is not offered when the camera was never on', (tester) async {
+      final without = await controllerWith([userMsg('1', 'No camera in this one', r: reading())]);
+      await pump(tester, without);
+      await tester.tap(find.byKey(const ValueKey('chat-breakdown')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('breakdown-looks')), findsNothing);
+    });
+
+    testWidgets('how you looked is tucked away until you ask, and hedged', (tester) async {
+      final c = await controllerWith([
+        userMsg('1', 'Work was fine and I felt good', r: reading(pattern: 'ATV', face: const {'happy': 0.6, 'neutral': 0.3, 'sad': 0.1})),
+        userMsg('2', 'My manager shouted at me', r: reading(pattern: 'ATV', face: const {'sad': 0.55, 'neutral': 0.35, 'angry': 0.1})),
+        userMsg('3', 'Typed with no camera', r: reading()),
+      ]);
+      await pump(tester, c);
+      await tester.tap(find.byKey(const ValueKey('chat-breakdown')));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('breakdown-looks')), 300, scrollable: find.byType(Scrollable).last);
+
+      expect(find.byKey(const ValueKey('looks-withheld')), findsOneWidget);
+      expect(find.textContaining('roughly'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('looks-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('looks-warning')), findsOneWidget);
+      expect(find.textContaining('roughly happy (60%)'), findsOneWidget);
+      expect(find.textContaining('roughly sad (55%)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('looks-3')), findsNothing); // a message with no camera is not listed
     });
 
     testWidgets('a conversation with unread messages offers to read them', (tester) async {

@@ -47,6 +47,7 @@ class EmotionResult {
     this.tier,
     this.pattern,
     this.inContext = false,
+    this.faceClasses,
   });
 
   final String sessionId;
@@ -78,6 +79,11 @@ class EmotionResult {
   /// "ok" says little alone), or the server's running read of the conversation was used.
   final bool inContext;
 
+  /// The seven class probabilities from the face on its own, when the camera was used for this message. Kept
+  /// apart from [classes] (which blends voice, words and face) so the person can choose to see how they looked.
+  /// Never used to decide anything: the face is the weakest signal.
+  final Map<String, double>? faceClasses;
+
   EmotionResult copyWith({EmotionOrigin? origin, bool? inContext}) => EmotionResult(
         sessionId: sessionId,
         modality: modality,
@@ -95,6 +101,7 @@ class EmotionResult {
         tier: tier,
         pattern: pattern,
         inContext: inContext ?? this.inContext,
+        faceClasses: faceClasses,
       );
 
   Map<String, Object?> toMap() {
@@ -115,6 +122,7 @@ class EmotionResult {
       if (tier != null) 'tier': tier,
       if (pattern != null) 'pattern': pattern,
       if (inContext) 'inContext': true,
+      if (faceClasses != null) 'faceClasses': faceClasses,
     };
   }
 
@@ -151,6 +159,7 @@ class EmotionResult {
       tier: map['tier'] as String?,
       pattern: map['pattern'] as String?,
       inContext: map['inContext'] as bool? ?? false,
+      faceClasses: _probs(map['faceClasses']),
     );
   }
 

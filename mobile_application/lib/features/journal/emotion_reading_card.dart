@@ -47,6 +47,9 @@ class EmotionReadingCard extends StatelessWidget {
     return '${parts.sublist(0, parts.length - 1).join(', ')} and ${parts.last}';
   }
 
+  /// A class name in plain words ('fear' becomes 'Afraid').
+  static String plainFeeling(String cls) => _plain(cls);
+
   static String _plain(String cls) => switch (cls) {
         'neutral' => 'Neutral',
         'happy' => 'Happy',
