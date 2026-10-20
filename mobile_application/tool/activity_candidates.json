@@ -1,0 +1,2911 @@
+{
+  "schemaVersion": 1,
+  "catalogStatus": "candidates_pending_review",
+  "reviewPolicy": "Lifestyle entries only. These are drafts: none is part of the catalog until approved.",
+  "activities": [
+    {
+      "id": "movement-007",
+      "title": "Roll your shoulders slowly",
+      "description": "Lift, roll back, and drop your shoulders a few times, letting your jaw soften too.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "home",
+        "work",
+        "short_break",
+        "low_energy"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-008",
+      "title": "Stand up and reach tall",
+      "description": "Stand, reach your arms overhead, and take one slow breath before lowering them.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "work",
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-009",
+      "title": "Walk to the end of the street",
+      "description": "Walk a short way and turn back whenever you like. Notice how your feet feel.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "outdoors",
+        "alone",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-010",
+      "title": "Dance to one song",
+      "description": "Pick a song you like and move however feels right, even if it is just your hands.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "home",
+        "alone",
+        "low_energy"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-011",
+      "title": "Release your neck gently",
+      "description": "Tilt your head toward each shoulder and hold for a few slow breaths, without forcing anything.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "work",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-012",
+      "title": "Walk while you talk",
+      "description": "Call or voice-message someone you like and stroll while you chat.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 15,
+      "contexts": [
+        "outdoors",
+        "with_someone",
+        "relationships"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-013",
+      "title": "Shake out your hands and arms",
+      "description": "Let your hands and arms go loose and shake them out for half a minute.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 1,
+      "contexts": [
+        "home",
+        "work",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-014",
+      "title": "Climb one flight of stairs slowly",
+      "description": "Take a flight of stairs at an easy pace and notice your breath.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "work",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-015",
+      "title": "Stretch your back on the floor",
+      "description": "Lie down, bring one knee at a time toward your chest, and breathe.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "home",
+        "alone",
+        "sleep",
+        "low_energy"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-016",
+      "title": "Take a slow lap of the room",
+      "description": "Walk a quiet circuit of the room and look at things you usually skip past.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "low_energy",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-017",
+      "title": "Stretch before bed",
+      "description": "A few slow stretches for your legs and back, to help the day let go.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "home",
+        "sleep",
+        "low_energy"
+      ],
+      "targetStates": [
+        "tender",
+        "quiet",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-018",
+      "title": "Walk to a place you like",
+      "description": "Go to a nearby spot you enjoy, a bench, a shop, a corner, and sit for a minute.",
+      "type": "movement",
+      "effort": "medium",
+      "durationMinutes": 25,
+      "contexts": [
+        "outdoors",
+        "alone",
+        "health"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-019",
+      "title": "Try a few easy wall push-ups",
+      "description": "Do a few at your own pace and stop whenever you feel like it.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "home",
+        "short_break",
+        "health"
+      ],
+      "targetStates": [
+        "bright",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-020",
+      "title": "Step outside for three breaths",
+      "description": "Open the door, step out, and take three slow breaths in the open air.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "outdoors",
+        "short_break",
+        "low_energy"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-021",
+      "title": "Tidy up to music",
+      "description": "Put on something playful and put things away while you move around.",
+      "type": "movement",
+      "effort": "medium",
+      "durationMinutes": 10,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "bright",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "movement-022",
+      "title": "Stretch your wrists and fingers",
+      "description": "Gently open and close your hands and circle your wrists, especially after typing.",
+      "type": "movement",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "work",
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-007",
+      "title": "Send a voice note",
+      "description": "Record a short, warm message to someone instead of typing.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "relationships",
+        "with_someone",
+        "home"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-008",
+      "title": "Thank someone specifically",
+      "description": "Tell someone one thing they did that helped, in a sentence or two.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "relationships",
+        "with_someone"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-009",
+      "title": "Answer a message you have been putting off",
+      "description": "Send a short, honest reply. It does not need to be perfect.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "relationships",
+        "short_break",
+        "home"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-010",
+      "title": "Say hello to a neighbour",
+      "description": "A smile and a hello is plenty.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "outdoors",
+        "with_someone"
+      ],
+      "targetStates": [
+        "bright",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-011",
+      "title": "Share a song with someone",
+      "description": "Send a song that reminded you of them, with no pressure to reply.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "relationships",
+        "home"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "tender",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-012",
+      "title": "Sit near someone without talking",
+      "description": "Spend a few minutes in the same room as someone you like, each doing your own thing.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "home",
+        "with_someone",
+        "low_energy"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-013",
+      "title": "Ask how someone is, and listen",
+      "description": "Ask one question about their day and give them your full attention.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "relationships",
+        "with_someone"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-014",
+      "title": "Look at old photos together",
+      "description": "Pick a few photos with someone and share the stories behind them.",
+      "type": "social",
+      "effort": "medium",
+      "durationMinutes": 15,
+      "contexts": [
+        "with_someone",
+        "home",
+        "relationships"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-015",
+      "title": "Suggest something small to do together",
+      "description": "Offer a short walk or a coffee with someone, with no date needed yet.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "relationships",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-016",
+      "title": "Pay someone a genuine compliment",
+      "description": "Notice something kind to say about someone and say it.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "work",
+        "outdoors",
+        "with_someone"
+      ],
+      "targetStates": [
+        "bright",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-017",
+      "title": "Write a short note of appreciation",
+      "description": "Write two or three lines to someone and keep it or send it.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "relationships",
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "tender",
+        "steady",
+        "bright",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-018",
+      "title": "Share a simple meal",
+      "description": "Eat with someone, even something small, and keep phones away.",
+      "type": "social",
+      "effort": "medium",
+      "durationMinutes": 25,
+      "contexts": [
+        "with_someone",
+        "home"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-019",
+      "title": "Add one real comment to a chat",
+      "description": "Say something in a group chat you usually only read.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "relationships",
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-020",
+      "title": "Ask for a small favour",
+      "description": "Ask someone for a little help. Most people are glad to be asked.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "relationships",
+        "with_someone"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-021",
+      "title": "Reach out to someone you miss",
+      "description": "Send a short message with no agenda, such as thinking of you.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "relationships",
+        "home"
+      ],
+      "targetStates": [
+        "tender",
+        "steady",
+        "quiet",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "social-022",
+      "title": "Spend a few minutes with an animal",
+      "description": "Pet a cat or a dog, or watch birds, and stay with it for a while.",
+      "type": "social",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "outdoors",
+        "alone",
+        "low_energy"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "quiet",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-007",
+      "title": "Doodle with your other hand",
+      "description": "Draw anything with the hand you do not usually use and enjoy how wobbly it is.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "alone",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "quiet",
+        "steady",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-008",
+      "title": "Write three lines of a poem",
+      "description": "Pick any three lines: a feeling, something you can see, an ending.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "quiet",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-009",
+      "title": "Colour in a simple pattern",
+      "description": "Fill a page with colour and no plan.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 15,
+      "contexts": [
+        "home",
+        "low_energy",
+        "alone"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-010",
+      "title": "Take a photo of something you like",
+      "description": "Walk around and photograph one thing that pleases you.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "outdoors",
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-011",
+      "title": "Plate a meal as if for a friend",
+      "description": "Take a minute to arrange your food nicely before you eat it.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "home",
+        "health"
+      ],
+      "targetStates": [
+        "steady",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-012",
+      "title": "Hum or sing something quietly",
+      "description": "Sing a line or two, even if it is only for yourself.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "alone",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-013",
+      "title": "Make a collage from scraps",
+      "description": "Cut or tear pictures and paper and arrange them on a page.",
+      "type": "creative",
+      "effort": "medium",
+      "durationMinutes": 20,
+      "contexts": [
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "quiet",
+        "steady",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-014",
+      "title": "Write a letter you will not send",
+      "description": "Write whatever you want to say to someone, then keep it or tear it up.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 12,
+      "contexts": [
+        "home",
+        "alone",
+        "relationships"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-015",
+      "title": "Rearrange a shelf or a corner",
+      "description": "Move a few things until the space looks nicer to you.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-016",
+      "title": "Draw your day as three shapes",
+      "description": "Choose a shape and a colour for the morning, the afternoon, and the evening.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "quiet",
+        "steady",
+        "wobbly",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-017",
+      "title": "Invent three book titles",
+      "description": "Make up three titles and a one-line story for your favourite.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-018",
+      "title": "Fold a paper boat or crane",
+      "description": "Follow a simple tutorial and fold something small.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "home",
+        "alone",
+        "low_energy"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-019",
+      "title": "Tap out a rhythm",
+      "description": "Drum a beat on a table or play a few notes you know.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-020",
+      "title": "List five favourites",
+      "description": "Choose a category such as foods, songs, places, or smells, and list five you love.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "home",
+        "alone",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "tender",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-021",
+      "title": "Sketch what is in front of you",
+      "description": "Draw an object nearby in simple lines, without erasing.",
+      "type": "creative",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "alone",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "creative-022",
+      "title": "Make something for someone",
+      "description": "A card, a drawing, a small note, whatever you can make in a short while.",
+      "type": "creative",
+      "effort": "medium",
+      "durationMinutes": 15,
+      "contexts": [
+        "relationships",
+        "home"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-007",
+      "title": "Do a slow body scan",
+      "description": "Move your attention from your head to your toes, noticing without changing anything.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "alone",
+        "sleep",
+        "low_energy"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "quiet",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-008",
+      "title": "Name five things you can see",
+      "description": "Look around and quietly name five things, then four you can feel.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "short_break",
+        "work"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-009",
+      "title": "Hold a warm cup in both hands",
+      "description": "Feel the warmth for a minute before the first sip.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "home",
+        "low_energy",
+        "short_break"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-010",
+      "title": "Breathe out a little longer than you breathe in",
+      "description": "Breathe in for four and out for six, a few times, as gently as you can.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "work",
+        "short_break",
+        "sleep"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-011",
+      "title": "Feel your feet on the floor",
+      "description": "Press them gently down and notice the ground holding you.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "work",
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "steady",
+        "tender",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-012",
+      "title": "Listen to one song with your eyes closed",
+      "description": "Give a song your full attention from start to finish.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "quiet",
+        "steady",
+        "tender",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-013",
+      "title": "Let thoughts drift by",
+      "description": "Sit for two minutes and let thoughts pass without following them.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-014",
+      "title": "Wash your hands slowly",
+      "description": "Feel the water, the soap, and the temperature, one sense at a time.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "home",
+        "work",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "steady",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-015",
+      "title": "Watch out of a window for a few minutes",
+      "description": "No phone, just watching what moves.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "home",
+        "low_energy"
+      ],
+      "targetStates": [
+        "tender",
+        "quiet",
+        "wobbly",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-016",
+      "title": "Note three small things that went okay",
+      "description": "Anything counts: a warm shower, a quiet minute, a kind word.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "sleep",
+        "alone"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "quiet",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-017",
+      "title": "Take a mindful shower",
+      "description": "Notice the water, the sound, and the warmth instead of planning.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "home",
+        "health",
+        "sleep"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-018",
+      "title": "Wind down without a screen",
+      "description": "Spend ten minutes before bed with soft light and no screen.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "sleep",
+        "home",
+        "low_energy"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "quiet",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-019",
+      "title": "Eat one bite slowly",
+      "description": "Take one bite or sip and notice the taste and texture fully.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "work",
+        "short_break",
+        "health"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "tender",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-020",
+      "title": "Rest a hand on your chest",
+      "description": "Notice your breathing and your heartbeat for a minute.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "home",
+        "alone",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-021",
+      "title": "Say something kind to yourself",
+      "description": "Say what you would say to a friend having the same kind of day.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "alone",
+        "short_break"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "quiet",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "mindfulness-022",
+      "title": "Sit quietly for five minutes",
+      "description": "Set a timer and just sit, with no goal.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-007",
+      "title": "Write down what is on your mind",
+      "description": "Empty your head onto paper, with no order or neatness.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "work",
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-008",
+      "title": "Pick the one thing that matters today",
+      "description": "Choose a single task that would make the day feel okay.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "work",
+        "home"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "wobbly",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-009",
+      "title": "Tidy the surface in front of you",
+      "description": "Clear just that one surface and nothing more.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "work",
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-010",
+      "title": "Reply to one email",
+      "description": "Choose the easiest one and send it.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "work",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-011",
+      "title": "Make your bed",
+      "description": "A small, quick reset that makes the room feel calmer.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "low_energy",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-012",
+      "title": "Do a five-minute rescue",
+      "description": "Set a timer, tidy one space until it rings, then stop.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "wobbly",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-013",
+      "title": "Put one thing away",
+      "description": "Return one item to where it lives. That is the whole task.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 1,
+      "contexts": [
+        "home",
+        "low_energy"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-014",
+      "title": "Plan something to look forward to",
+      "description": "Choose one small thing for later today or tomorrow and put it on your calendar.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-015",
+      "title": "Look at one bill or account",
+      "description": "Open one item you have been avoiding and take the smallest next step.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "money",
+        "home"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-016",
+      "title": "Write down tomorrow's top three",
+      "description": "Three lines, no more.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "work",
+        "home",
+        "sleep"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-017",
+      "title": "Take a proper break",
+      "description": "Step away from the screen, drink some water, and come back.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "work",
+        "short_break",
+        "health"
+      ],
+      "targetStates": [
+        "steady",
+        "wobbly",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-018",
+      "title": "Batch a few tiny tasks",
+      "description": "Group several two-minute tasks and do them together.",
+      "type": "productivity",
+      "effort": "medium",
+      "durationMinutes": 15,
+      "contexts": [
+        "home",
+        "work"
+      ],
+      "targetStates": [
+        "bright",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-019",
+      "title": "Clear out ten digital things",
+      "description": "Delete or archive a few old photos, files, or emails.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "work",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-020",
+      "title": "Set out clothes for tomorrow",
+      "description": "One small favour to your future self.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "home",
+        "sleep"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-021",
+      "title": "Ask for help with one task",
+      "description": "Tell someone what is hard and ask for a hand or a suggestion.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "work",
+        "relationships"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "productivity-022",
+      "title": "Do just the first two minutes",
+      "description": "Start the thing you have been avoiding for two minutes, then decide whether to go on.",
+      "type": "productivity",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "work",
+        "home"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-006",
+      "title": "Look at a tree for a minute",
+      "description": "Pick one tree and notice its shape, its bark, and how its leaves move.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "outdoors",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "wobbly",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-007",
+      "title": "Sit in the sun for a few minutes",
+      "description": "Find some daylight and let your face feel it.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "outdoors",
+        "home",
+        "short_break",
+        "health"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-008",
+      "title": "Listen to birds",
+      "description": "Stand still and count how many different sounds you can hear.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "outdoors",
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "wobbly",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-009",
+      "title": "Stand barefoot on grass or floor",
+      "description": "Feel the ground under your feet.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "outdoors",
+        "home"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-010",
+      "title": "Collect a small natural object",
+      "description": "A leaf, a stone, a feather. Keep it somewhere you will see it.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "outdoors",
+        "alone"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-011",
+      "title": "Watch water move",
+      "description": "A tap, a stream, a puddle, a fountain. Watch it for a minute.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "outdoors",
+        "home"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "quiet",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-012",
+      "title": "Look closely at one small living thing",
+      "description": "A flower, some moss, an insect. Notice details you usually walk past.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "outdoors",
+        "home"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-013",
+      "title": "Take your lunch outside",
+      "description": "Eat somewhere with a view of sky or trees.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 15,
+      "contexts": [
+        "outdoors",
+        "work",
+        "short_break",
+        "health"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-014",
+      "title": "Notice what the season is doing",
+      "description": "Spot a leaf, a flower, a light, or a smell that tells you what time of year it is.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "outdoors",
+        "alone"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-015",
+      "title": "Watch the sunset or sunrise",
+      "description": "Find a window or a spot with a view and stay until the colour fades.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 12,
+      "contexts": [
+        "outdoors",
+        "home",
+        "sleep"
+      ],
+      "targetStates": [
+        "tender",
+        "quiet",
+        "steady",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-016",
+      "title": "Visit a park or green space",
+      "description": "Walk slowly through it and sit on a bench if there is one.",
+      "type": "nature",
+      "effort": "medium",
+      "durationMinutes": 25,
+      "contexts": [
+        "outdoors",
+        "alone",
+        "health"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-017",
+      "title": "Listen to rain",
+      "description": "If it is raining, listen for a few minutes. If not, play a recording of it.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "sleep",
+        "low_energy"
+      ],
+      "targetStates": [
+        "tender",
+        "wobbly",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-018",
+      "title": "Smell something fresh",
+      "description": "Herbs, fruit peel, fresh air, or soap. Take one slow breath in.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 2,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-019",
+      "title": "Look at the stars",
+      "description": "Step outside after dark and look up for a few minutes.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "outdoors",
+        "sleep",
+        "alone"
+      ],
+      "targetStates": [
+        "quiet",
+        "tender",
+        "steady",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-020",
+      "title": "Bring a little green inside",
+      "description": "Put a leaf, a flower, or a sprig of herbs in a glass of water where you will see it.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "steady",
+        "tender",
+        "quiet",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "nature-021",
+      "title": "Feel the weather on your skin",
+      "description": "Stand outside for a minute and notice the temperature, the air, and the light.",
+      "type": "nature",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "outdoors",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-006",
+      "title": "Look up one thing you wondered about",
+      "description": "Follow a small question, such as why the sky is blue.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-007",
+      "title": "Read one page of something",
+      "description": "A book, an article, or a poem. Stop after a page if you like.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "home",
+        "alone",
+        "low_energy"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "tender",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-008",
+      "title": "Learn three words in another language",
+      "description": "Say them out loud twice.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-009",
+      "title": "Watch a short documentary clip",
+      "description": "Pick a few minutes about something you know little about.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "home",
+        "low_energy"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-010",
+      "title": "Listen to a short podcast segment",
+      "description": "Choose a topic that sounds interesting and listen to one segment.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "home",
+        "outdoors",
+        "low_energy"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "tender",
+        "wobbly",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-011",
+      "title": "Teach someone one thing you know",
+      "description": "Explain it in a few sentences. Teaching helps it stick.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "with_someone",
+        "relationships"
+      ],
+      "targetStates": [
+        "bright",
+        "steady"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-012",
+      "title": "Try a different route somewhere",
+      "description": "Take another way to a place you go often and notice what is new.",
+      "type": "learning",
+      "effort": "medium",
+      "durationMinutes": 20,
+      "contexts": [
+        "outdoors",
+        "health"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-013",
+      "title": "Learn a simple card or magic trick",
+      "description": "Follow a short tutorial and practise it once.",
+      "type": "learning",
+      "effort": "medium",
+      "durationMinutes": 15,
+      "contexts": [
+        "home",
+        "with_someone"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-014",
+      "title": "Write down one thing you learned today",
+      "description": "A fact, a habit, a name. Keep it in a note.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 4,
+      "contexts": [
+        "home",
+        "sleep",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "tender",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-015",
+      "title": "Find out where something comes from",
+      "description": "Pick an object near you and look up where or how it was made.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-016",
+      "title": "Revisit a skill you already have",
+      "description": "Spend a few minutes doing something you are good at, just to enjoy it.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "work"
+      ],
+      "targetStates": [
+        "steady",
+        "bright",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-017",
+      "title": "Read about someone who inspires you",
+      "description": "A short biography or a few quotes, whatever feels good.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "tender",
+        "steady",
+        "bright",
+        "quiet"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-018",
+      "title": "Follow a short drawing or cooking video",
+      "description": "Follow along for the first few minutes.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 10,
+      "contexts": [
+        "home",
+        "low_energy"
+      ],
+      "targetStates": [
+        "quiet",
+        "steady",
+        "bright",
+        "wobbly"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-019",
+      "title": "Memorise one line you like",
+      "description": "A lyric, a quote, a line of a poem. Say it a few times.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-020",
+      "title": "Explore a map",
+      "description": "Zoom in on a place you have never been and see what is there.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 8,
+      "contexts": [
+        "home",
+        "low_energy",
+        "alone"
+      ],
+      "targetStates": [
+        "bright",
+        "steady",
+        "quiet",
+        "tender"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    },
+    {
+      "id": "learning-021",
+      "title": "Learn one phone or keyboard trick",
+      "description": "One small thing that will save you time later.",
+      "type": "learning",
+      "effort": "low",
+      "durationMinutes": 5,
+      "contexts": [
+        "work",
+        "home",
+        "short_break"
+      ],
+      "targetStates": [
+        "steady",
+        "quiet",
+        "bright"
+      ],
+      "review": {
+        "status": "pending",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "drafted_for_review",
+        "reviewedAt": "2026-10-20T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Candidate. Not part of the catalog until the project owner approves it."
+      }
+    }
+  ]
+}
