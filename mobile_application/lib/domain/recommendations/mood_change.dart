@@ -11,7 +11,10 @@ const moodBeforeWindow = Duration(hours: 12);
 /// within [window] of it, or null if there is none.
 ///
 /// Only check-ins that carry a recognised mood word count, so a check-in with
-/// text and no mood does not stand in for one.
+/// text and no mood does not stand in for one. The word is the one the app works
+/// with ([SessionRecord.effectiveMood]: what the model read, else the picked word),
+/// the same one used to decide whether the check-in counts. Returning the picked word
+/// instead lost the "before" for every entry that was read by the model and had no word picked.
 String? moodBeforeFor({
   required DateTime shownAt,
   required List<SessionRecord> sessions,
@@ -26,7 +29,7 @@ String? moodBeforeFor({
       best = session;
     }
   }
-  return best?.mood?.trim();
+  return best?.effectiveMood;
 }
 
 /// The change from [before] to [after], from -2 to 2, or null if either is

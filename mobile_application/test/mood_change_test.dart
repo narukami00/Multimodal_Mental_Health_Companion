@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/models/emotion_result.dart';
 import 'package:solace_mobile/core/models/session_input.dart';
 import 'package:solace_mobile/core/models/session_record.dart';
 import 'package:solace_mobile/core/models/suggestion_record.dart';
@@ -60,6 +61,29 @@ void main() {
         ),
         isNull,
       );
+    });
+
+    test('a check-in the model read, with no word picked, still gives the before', () {
+      final read = SessionRecord(
+        id: 'r',
+        createdAt: DateTime(2026, 10, 1, 14),
+        mode: CaptureMode.text,
+        text: 'a quiet afternoon',
+        emotionResults: [
+          EmotionResult(
+            sessionId: 'r',
+            modality: EmotionModality.text,
+            timestamp: DateTime(2026, 10, 1, 14),
+            modelVersion: 'test',
+            mood: 'upbeat',
+            tier: 'clear',
+            pattern: 'T',
+            classes: const {'happy': 1.0},
+          ),
+        ],
+      );
+
+      expect(moodBeforeFor(shownAt: shown, sessions: [read]), 'Bright');
     });
 
     test('no check-ins is no answer', () {
