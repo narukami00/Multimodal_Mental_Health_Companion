@@ -185,13 +185,40 @@ class _WeekWaveState extends State<_WeekWave> with SingleTickerProviderStateMixi
     final known = [for (final d in widget.days) if (d.minutes != null) d.minutes!];
     final peak = known.reduce(math.max);
     final low = known.reduce(math.min);
+    final latest = widget.days.lastWhere((d) => d.minutes != null);
+    final latestWhen = widget.days.last.minutes != null ? 'yesterday' : _weekdays[latest.day.weekday - 1];
     return InsightCard(
       key: const ValueKey('week-wave'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      durationLabel(latest.minutes!),
+                      style: const TextStyle(fontSize: 26, height: 1.1, fontWeight: FontWeight.w800, color: insightInk),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'screen on $latestWhen',
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: insightMuted),
+                    ),
+                  ],
+                ),
+              ),
+              _RangePill(label: 'Low', value: durationLabel(low)),
+              const SizedBox(width: 6),
+              _RangePill(label: 'High', value: durationLabel(peak)),
+            ],
+          ),
+          const SizedBox(height: 14),
           SizedBox(
-            height: 120,
+            height: 110,
             child: AnimatedBuilder(
               animation: _draw,
               builder: (context, _) => CustomPaint(
@@ -211,26 +238,39 @@ class _WeekWaveState extends State<_WeekWave> with SingleTickerProviderStateMixi
                   child: Center(
                     child: Text(
                       _weekdays[d.day.weekday - 1].substring(0, 1),
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        color: insightMuted,
-                      ),
+                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: insightMuted),
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 10),
-          InsightBody(
-            'Screen time ran from ${durationLabel(low)} to ${durationLabel(peak)} '
-            'this week.',
-            strong: true,
-          ),
         ],
       ),
     );
   }
+}
+
+/// A small "Low 7 h 16 min" chip beside the week's headline number.
+class _RangePill extends StatelessWidget {
+  const _RangePill({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(color: const Color(0xFFF7F0E2), borderRadius: BorderRadius.circular(14)),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label.toUpperCase(),
+            style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: 1, color: insightMuted)),
+        const SizedBox(height: 1),
+        Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: insightSoft)),
+      ],
+    ),
+  );
 }
 
 class _WavePainter extends CustomPainter {

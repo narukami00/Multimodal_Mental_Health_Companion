@@ -14,6 +14,7 @@ import '../footprint/phone_patterns_controller.dart';
 import '../journal/session_detail_page.dart';
 import '../sessions/session_controller.dart';
 import 'insight_widgets.dart';
+import 'journal_breakdown_card.dart';
 
 /// The colour of each mood word. Colour is never the only carrier: every dot
 /// has a tooltip with its word, and the legend names them.
@@ -149,7 +150,12 @@ class _MoodTabState extends State<MoodTab> {
               ),
             ),
             const InsightLabel('YOUR JOURNALS'),
-            _JournalBreakdownCard(breakdown: JournalBreakdown.from(sessions, now)),
+            JournalBreakdownCard(
+              breakdown: JournalBreakdown.from(sessions, now),
+              colorForWord: _colorForWord,
+              modeIcon: _modeIcon,
+              modeName: _modeName,
+            ),
             if (throughDay != null) ...[
               const InsightLabel('THROUGH THE DAY'),
               _ThroughTheDay(data: throughDay),
@@ -592,119 +598,3 @@ class _DayEntryRow extends StatelessWidget {
   }
 }
 
-/// The journal side of the emotional picture for the last 30 days: how many of each kind of entry, how
-/// they read in all, what each kind tends to read as, and the overall lean. Descriptive, never a verdict.
-class _JournalBreakdownCard extends StatelessWidget {
-  const _JournalBreakdownCard({required this.breakdown});
-
-  final JournalBreakdown breakdown;
-
-  @override
-  Widget build(BuildContext context) {
-    final b = breakdown;
-    if (b.isEmpty) {
-      return const InsightCard(
-        key: ValueKey('journal-breakdown'),
-        child: InsightBody('No journal entries in the last 30 days yet.'),
-      );
-    }
-    final maxMode = b.byMode.values.reduce((a, c) => a > c ? a : c);
-    final lean = b.leaning;
-    final energy = b.energyWord;
-    return InsightCard(
-      key: const ValueKey('journal-breakdown'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${b.total} ${b.total == 1 ? 'entry' : 'entries'} in the last ${b.days} days',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: insightInk),
-          ),
-          const SizedBox(height: 14),
-          for (final mode in CaptureMode.values)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                key: ValueKey('journal-mode-${mode.name}'),
-                children: [
-                  Icon(_modeIcon(mode), size: 17, color: insightMuted),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 52,
-                    child: Text(_modeName(mode),
-                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: insightInk)),
-                  ),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(
-                        value: maxMode == 0 ? 0 : (b.byMode[mode] ?? 0) / maxMode,
-                        minHeight: 10,
-                        backgroundColor: const Color(0xFFF4EEDF),
-                        color: const Color(0xFFD9A441),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 28,
-                    child: Text('${b.byMode[mode]}',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: insightSoft)),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 4),
-          const Text('HOW THEY READ',
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: insightMuted)),
-          const SizedBox(height: 8),
-          if (b.read == 0)
-            const InsightBody('None of these entries has been read for how it felt yet.')
-          else ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Row(
-                key: const ValueKey('journal-mood-bar'),
-                children: [
-                  for (final w in JournalBreakdown.wordOrder)
-                    if ((b.moodCounts[w] ?? 0) > 0) Expanded(flex: b.moodCounts[w]!, child: Container(height: 12, color: _colorForWord(w))),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 14,
-              runSpacing: 4,
-              children: [
-                for (final w in JournalBreakdown.wordOrder)
-                  if ((b.moodCounts[w] ?? 0) > 0)
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      Container(width: 8, height: 8, decoration: BoxDecoration(color: _colorForWord(w), shape: BoxShape.circle)),
-                      const SizedBox(width: 5),
-                      Flexible(
-                        child: Text('$w ${b.moodCounts[w]} · ${(b.moodCounts[w]! * 100 / b.read).round()}%',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: insightSoft)),
-                      ),
-                    ]),
-              ],
-            ),
-            const SizedBox(height: 12),
-            InsightBody(
-              [
-                if (b.dominantWord != null) '${b.dominantWord} came up most.',
-                if (lean != null) 'Overall your entries read $lean${energy == null ? '' : ', with $energy energy'}.',
-              ].join(' '),
-              strong: true,
-            ),
-            for (final mode in CaptureMode.values)
-              if (b.leanByMode[mode] != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: InsightBody('Your ${_modeName(mode).toLowerCase()} entries mostly read ${b.leanByMode[mode]!.toLowerCase()}.'),
-                ),
-          ],
-        ],
-      ),
-    );
-  }
-}

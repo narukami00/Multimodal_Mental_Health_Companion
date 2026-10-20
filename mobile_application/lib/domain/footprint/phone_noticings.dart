@@ -10,13 +10,28 @@ enum NoticingKind { screen, rhythm, apps }
 
 /// One plain statement about the person's own phone use, backed by their data.
 class PhoneNoticing {
-  const PhoneNoticing({required this.kind, required this.meta, required this.text});
+  const PhoneNoticing({
+    required this.kind,
+    required this.meta,
+    required this.text,
+    this.value,
+    this.caption,
+    this.note,
+  });
 
   final NoticingKind kind;
 
   /// A short label for the card, such as "YOUR USUAL SCREEN TIME".
   final String meta;
+
+  /// The whole statement in a sentence (what a screen reader reads).
   final String text;
+
+  /// The same statement as a glanceable headline, such as "9 h 20 min", with a short [caption] under it
+  /// and an optional [note] for the extra detail. All three are null for a noticing without them.
+  final String? value;
+  final String? caption;
+  final String? note;
 }
 
 /// What the Insights page can say about phone patterns right now.
@@ -96,6 +111,9 @@ PhoneNoticings phoneNoticings(
                   'weekend day.'
             : 'Your screen is usually on for about ${_duration(weekday.median)} '
                   'a day.',
+        value: _duration(weekday.median),
+        caption: split ? 'on a weekday' : 'on a usual day',
+        note: split ? '${_duration(weekend.median)} on a weekend day' : null,
       ),
     );
   }
@@ -112,6 +130,11 @@ PhoneNoticings phoneNoticings(
     final steadiness = sleepRegularityMinutes(usable);
     final base = 'Your phone usually goes down around ${_clock(onsetMinute)} and '
         'is next picked up around ${_clock(wake.round())}.';
+    final steadyNote = steadiness == null
+        ? null
+        : steadiness < 5
+        ? 'Bedtime has been very steady'
+        : 'Bedtime varies by about ${_minutes(steadiness)}';
     noticings.add(
       PhoneNoticing(
         kind: NoticingKind.rhythm,
@@ -122,6 +145,9 @@ PhoneNoticings phoneNoticings(
             ? '$base The time it goes down has been very steady.'
             : '$base The time it goes down has varied by about '
                   '${_minutes(steadiness)}.',
+        value: '${_clock(onsetMinute)} to ${_clock(wake.round())}',
+        caption: 'phone goes down, then picked up',
+        note: steadyNote,
       ),
     );
   }
@@ -155,6 +181,8 @@ PhoneNoticings phoneNoticings(
         meta: 'WHERE TIME WENT THIS WEEK',
         text: 'Most of your phone time this week was ${top.key}, about '
             '${(top.value * 100 / all).round()}% of it.',
+        value: '${top.key[0].toUpperCase()}${top.key.substring(1)} ${(top.value * 100 / all).round()}%',
+        caption: "of this week's phone time",
       ),
     );
   }

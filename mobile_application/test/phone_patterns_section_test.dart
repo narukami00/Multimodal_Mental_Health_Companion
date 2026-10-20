@@ -149,10 +149,8 @@ void main() {
     await pump(tester);
 
     expect(find.text('YOUR USUAL SCREEN TIME'), findsOneWidget);
-    expect(
-      find.text('Your screen is usually on for about 3 h 20 min a day.'),
-      findsOneWidget,
-    );
+    expect(find.text('3 h 20 min'), findsOneWidget);
+    expect(find.text('on a usual day'), findsOneWidget);
     expect(find.text('YOUR USUAL NIGHT'), findsOneWidget);
     expect(find.text('WHERE TIME WENT THIS WEEK'), findsOneWidget);
     expect(key('phone-section-learning'), findsNothing);

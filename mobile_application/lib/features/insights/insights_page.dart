@@ -121,22 +121,41 @@ class _InsightsPageState extends State<InsightsPage> {
                         onSelected: (id) => setState(() => _selected = id),
                       ),
                       const SizedBox(height: 16),
-                      AnimatedSwitcher(
+                      // The outgoing tab is laid over the top of the new one and takes no space, so nothing
+                      // is ever centred inside a taller neighbour (that made the content sit low and then
+                      // jump up). The height eases to the new tab's, and the rise is a few pixels, not a
+                      // fraction of the tab's height.
+                      AnimatedSize(
                         duration: const Duration(milliseconds: 220),
-                        switchInCurve: Curves.easeOut,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween(
-                              begin: const Offset(0, 0.02),
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          layoutBuilder: (current, previous) => Stack(
+                            alignment: Alignment.topCenter,
+                            children: [
+                              for (final old in previous)
+                                Positioned(top: 0, left: 0, right: 0, child: IgnorePointer(child: old)),
+                              if (current != null) current,
+                            ],
                           ),
-                        ),
-                        child: KeyedSubtree(
-                          key: ValueKey(selected),
-                          child: _content(selected),
+                          transitionBuilder: (child, animation) => FadeTransition(
+                            opacity: animation,
+                            child: AnimatedBuilder(
+                              animation: animation,
+                              builder: (context, child) => Transform.translate(
+                                offset: Offset(0, (1 - animation.value) * 8),
+                                child: child,
+                              ),
+                              child: child,
+                            ),
+                          ),
+                          child: KeyedSubtree(
+                            key: ValueKey(selected),
+                            child: _content(selected),
+                          ),
                         ),
                       ),
                       const Padding(
