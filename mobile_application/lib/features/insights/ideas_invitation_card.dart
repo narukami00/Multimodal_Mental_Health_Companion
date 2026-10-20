@@ -240,10 +240,11 @@ class _Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = night ? const Color(0xFFFFF6E6) : const Color(0xFF3A3125);
+    // A solid warm primary at night needs dark text; the outlined one keeps light text.
+    final fg = night ? (filled ? const Color(0xFF3A2A0C) : const Color(0xFFFFF6E6)) : const Color(0xFF3A3125);
     return Material(
-      color: filled ? (night ? const Color(0x33FFFFFF) : const Color(0xE6FFFFFF)) : Colors.transparent,
-      shape: StadiumBorder(side: filled ? BorderSide.none : BorderSide(color: fg.withValues(alpha: 0.35))),
+      color: filled ? (night ? const Color(0xFFFFD98A) : const Color(0xE6FFFFFF)) : Colors.transparent,
+      shape: StadiumBorder(side: filled ? BorderSide.none : BorderSide(color: fg.withValues(alpha: night ? 0.6 : 0.35), width: 1.4)),
       child: InkWell(
         customBorder: const StadiumBorder(),
         onTap: onTap,
@@ -293,7 +294,9 @@ class _ScenePainter extends CustomPainter {
   };
 
   /// Lighter and flatter when gentle, so the scene never competes with a hard day.
-  Color _soften(Color c) => scene.gentle ? Color.lerp(c, const Color(0xFFF7EFE6), 0.28)! : c;
+  ///
+  /// Not at night: washing a dark sky toward cream turned it grey and left the white words on it hard to read.
+  Color _soften(Color c) => scene.gentle && scene.part != DayPart.night ? Color.lerp(c, const Color(0xFFF7EFE6), 0.28)! : c;
 
   static double _sin(double x) => math.sin(x * 2 * math.pi);
 
@@ -360,10 +363,16 @@ class _ScenePainter extends CustomPainter {
         canvas.drawPath(path, Paint()..color = bodyColor.withValues(alpha: gentle ? 0.10 : 0.16));
       }
     }
-    canvas.drawCircle(c, 17, Paint()..color = _soften(bodyColor));
     if (night) {
-      // A crescent: a second disc in the sky colour takes a bite out of the moon.
-      canvas.drawCircle(c + const Offset(7, -3), 15, Paint()..color = Color.lerp(top, bottom, 0.25)!);
+      // A crescent: the second disc is cut out of the moon, so it can never show as a patch of the wrong colour.
+      final moon = Path.combine(
+        PathOperation.difference,
+        Path()..addOval(Rect.fromCircle(center: c, radius: 17)),
+        Path()..addOval(Rect.fromCircle(center: c + const Offset(7, -3), radius: 15)),
+      );
+      canvas.drawPath(moon, Paint()..color = bodyColor);
+    } else {
+      canvas.drawCircle(c, 17, Paint()..color = _soften(bodyColor));
     }
 
     // Soft clouds drifting at different speeds.
