@@ -16,6 +16,7 @@ from tts_engine import get_tts_engine
 from video_socket import serve_video
 from journal_api import build_router as build_journal_router
 from emotion_client import default_client
+from model_files import build_router as build_model_files_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -164,6 +165,7 @@ async def websocket_session(
 
 
 app.include_router(build_journal_router(stt, default_client()))  # journal check-ins: transcribe + read the emotion, no chat model
+app.include_router(build_model_files_router())  # the on-phone speech model, downloaded once by the app with the person's OK
 
 
 @app.websocket("/ws/v1/video")

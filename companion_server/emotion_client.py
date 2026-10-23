@@ -86,6 +86,12 @@ class EmotionClient:
         """One upright JPEG frame taken at [t] (this process's monotonic clock). Droppable: None on any problem."""
         return await self._post("/v1/emotion/frame", "frame", timeout=0.6, droppable=True, params={"session_id": session_id, "t": t}, content=jpeg)
 
+    async def face_vector(self, session_id: str, raw: bytes) -> bool:
+        """The 1,400 face numbers a phone computed itself (float32, little endian). The service then uses them for this
+        session instead of camera frames. True when it accepted them."""
+        r = await self._post("/v1/emotion/face_vector", "face_vector", timeout=3.0, params={"session_id": session_id}, content=raw)
+        return bool(r and r.get("accepted"))
+
     async def text(self, session_id: str, text: str) -> Optional[Dict[str, Any]]:
         return await self._post("/v1/emotion/text", "text", json={"session_id": session_id, "text": text})
 

@@ -29,6 +29,7 @@ MIN_AUDIO_S = 0.5
 MAX_TEXT_CHARS = 20000
 WINDOW_S = 12.0  # long recordings are read in windows of about this length (the models were trained on short clips)
 FACE_SERVER_ENABLED = os.environ.get("SOLACE_EMOTION_FACE") == "1"
+FACE_VECTOR_BYTES = 1400 * 4  # the face numbers a phone can send instead of camera frames: 1,400 float32 values
 
 
 class TextEntry(BaseModel):
@@ -72,10 +73,26 @@ def build_router(stt: Any, emotion: Any) -> APIRouter:
         res = await emotion.frame(session_id, now, jpeg)
         return {"usable": None if not res or not res.get("accepted") else res.get("usable"), "accepted": bool(res and res.get("accepted"))}
 
+    @router.post("/face_features")
+    async def journal_face_features(request: Request, session_id: str) -> Dict[str, Any]:
+        """A phone that read the face ITSELF sends only the 1,400 resulting numbers (float32), never pictures. They are
+        used for this session's emotion reading instead of camera frames."""
+        raw = await request.body()
+        if len(raw) != FACE_VECTOR_BYTES:
+            raise HTTPException(400, f"expected {FACE_VECTOR_BYTES} bytes (1,400 float32 values)")
+        accepted = bool(emotion.usable and await emotion.face_vector(session_id, raw))
+        return {"accepted": accepted}
+
     @router.post("/audio")
-    async def journal_audio(request: Request, session_id: str, sample_rate: int = 16000, face: int = 0) -> Dict[str, Any]:
+    async def journal_audio(request: Request, session_id: str, sample_rate: int = 16000, face: int = 0,
+                            words: Optional[str] = None) -> Dict[str, Any]:
+        """[words]: what a phone with its own speech model already wrote down. They are used as they are (this server's
+        speech model does not run), and the audio is still read for emotion."""
         if not 8000 <= sample_rate <= 48000:
             raise HTTPException(400, "sample_rate out of range")
+        supplied = (words or "").strip()
+        if len(supplied) > MAX_TEXT_CHARS:
+            raise HTTPException(400, "words too long")
         pcm = await request.body()
         seconds = len(pcm) / 2 / sample_rate
         if seconds < MIN_AUDIO_S:
@@ -86,8 +103,11 @@ def build_router(stt: Any, emotion: Any) -> APIRouter:
         upload = None
         if emotion.usable:
             upload = asyncio.ensure_future(emotion.start_audio(session_id, turn_id, pcm, sample_rate, chunk_s=WINDOW_S))  # runs beside the transcription
-        async with stt_lock:
-            text, confidence, language = await asyncio.to_thread(stt.transcribe, pcm, sample_rate)
+        if supplied:
+            text, confidence, language = supplied, 1.0, "en"  # the phone already wrote it down: do not transcribe again
+        else:
+            async with stt_lock:
+                text, confidence, language = await asyncio.to_thread(stt.transcribe, pcm, sample_rate)
         text = (text or "").strip()
         res = None
         if emotion.usable:

@@ -9,26 +9,35 @@ set EMO_PY=F:\__Downloads\envs\face\Scripts\python.exe
 set EMO_URL=http://127.0.0.1:8766
 set SOLACE_EMOTION=0
 set SOLACE_EMOTION_URL=%EMO_URL%
-rem "start_solace.bat face" also loads the camera emotion model (more GPU memory; for video journals and calls)
-set EMOTION_FACE=0
-set SOLACE_EMOTION_FACE=0
-if /i "%~1"=="face" set EMOTION_FACE=1
-if /i "%~1"=="face" set SOLACE_EMOTION_FACE=1
+rem The camera emotion model (video journals and calls) is ON by default. "start_solace.bat noface" skips it to save GPU memory.
+set EMOTION_FACE=1
+set SOLACE_EMOTION_FACE=1
+if /i "%~1"=="noface" set EMOTION_FACE=0
+if /i "%~1"=="noface" set SOLACE_EMOTION_FACE=0
 
 echo.
 echo  [1/4] Emotion service (voice + text + camera emotion model)
 if not exist "%EMO_PY%" goto emo_missing
 rem -f: only a real success counts, so another program answering on this port (a 404) cannot pass for the service
 curl -sf -m 2 %EMO_URL%/healthz >nul 2>&1
+if errorlevel 1 goto emo_launch
+rem Already running: keep it only if its camera setting matches; otherwise restart it
+set WANT=false
+if "%EMOTION_FACE%"=="1" set WANT=true
+curl -sf -m 2 %EMO_URL%/healthz | findstr /c:"\"face\":%WANT%" >nul 2>&1
 if not errorlevel 1 goto emo_ok
+echo        running with a different camera setting - restarting it
+powershell -NoProfile -Command "Get-NetTCPConnection -State Listen -LocalPort 8766 -LocalAddress 127.0.0.1 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+ping -n 3 127.0.0.1 >nul
+:emo_launch
 start "Solace emotion service" /min cmd /c "cd /d %EMO_DIR% && %EMO_PY% -m uvicorn emotion_api:app --host 127.0.0.1 --port 8766"
-echo        loading models, about 50 seconds ...
+echo        loading models, about 50 seconds (up to 3 minutes on a cold start) ...
 set /a tries=0
 :emo_wait
 curl -sf -m 2 %EMO_URL%/healthz >nul 2>&1
 if not errorlevel 1 goto emo_ok
 set /a tries+=1
-if %tries% geq 45 goto emo_late
+if %tries% geq 90 goto emo_late
 ping -n 3 127.0.0.1 >nul
 goto emo_wait
 :emo_ok
@@ -36,7 +45,9 @@ echo        ready
 set SOLACE_EMOTION=1
 goto emo_done
 :emo_late
-echo        NOT ready after 90 s - continuing WITHOUT emotion (look at the "Solace emotion service" window)
+echo        still loading after 3 min - continuing; the companion server keeps retrying it every 10 s
+echo        (if it never comes up, look at the "Solace emotion service" window)
+set SOLACE_EMOTION=1
 goto emo_done
 :emo_missing
 echo        emotion environment not found - continuing without emotion
@@ -95,8 +106,15 @@ echo  [4/4] Companion server on port 8000 (first start loads the models, about 3
 echo        health: http://127.0.0.1:8000/healthz     Tailscale: ws://100.88.46.59:8000/ws/v1/session
 echo.
 title Solace companion server
+rem An older companion server would keep its old settings (and block the port): replace it
+powershell -NoProfile -Command "Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+echo        emotion=%SOLACE_EMOTION%  camera=%SOLACE_EMOTION_FACE%  language model=%SOLACE_LLAMACPP_URL%
 rem The voice (Kokoro, 350 MB) lives off the synced project folder; without it the server falls back to the small Piper voice.
 if exist "F:\__Downloads\envs\tts_models\kokoro-multi-lang-v1_0\model.onnx" set SOLACE_KOKORO_DIR=F:\__Downloads\envs\tts_models\kokoro-multi-lang-v1_0
+rem The phone's offline speech model (150 MB) is handed to the app from here, once, with the person's OK.
+if exist "F:\__Downloads\envs\stt_models\sherpa-onnx-whisper-base.en\base.en-encoder.int8.onnx" set SOLACE_PHONE_STT_DIR=F:\__Downloads\envs\stt_models\sherpa-onnx-whisper-base.en
+rem Likewise the camera models (about 19 MB) for reading the face on the phone itself.
+if exist "F:\__Downloads\envs\face_phone_models\b0_fp32.onnx" set SOLACE_PHONE_FACE_DIR=F:\__Downloads\envs\face_phone_models
 cd /d "%ROOT%companion_server"
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 echo.

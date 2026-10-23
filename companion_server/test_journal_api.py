@@ -55,6 +55,10 @@ class FakeEmotion:
         self.frames.append(len(jpeg))
         return {"accepted": True, "usable": 1}
 
+    async def face_vector(self, session_id, raw):
+        self.vectors = getattr(self, "vectors", []) + [(session_id, len(raw))]
+        return True
+
     async def reset(self, session_id):
         self.resets.append(session_id)
 
@@ -83,6 +87,45 @@ def test_voice_entry_is_transcribed_and_analysed_from_audio_and_words():
     assert body["duration_s"] == 2.0 and body["emotion"]["pattern"] == "AT"
     assert emo.audio and emo.finalized[0]["use_audio"] is True and emo.finalized[0]["face_window"] is None
     assert stt.calls == 1 and emo.resets == ["j2"]
+
+
+def test_words_from_the_phone_are_used_as_they_are_and_the_server_does_not_transcribe():
+    stt, emo = FakeStt("THE SERVER'S WORDS"), FakeEmotion()
+    r = client(stt, emo).post("/v1/journal/audio", params={"session_id": "jw", "words": "Hello. I feel fine, you know."}, content=PCM_2S)
+    body = r.json()
+    assert r.status_code == 200 and body["transcript"] == "Hello. I feel fine, you know."
+    assert stt.calls == 0  # the phone's model did the writing
+    assert emo.finalized[0]["text"] == "Hello. I feel fine, you know." and emo.finalized[0]["use_audio"] is True  # audio still read
+    assert body["emotion"]["pattern"] == "AT"
+
+
+def test_phone_words_still_go_through_the_safety_check_and_too_long_words_are_refused():
+    r = client().post("/v1/journal/audio", params={"session_id": "jx", "words": "I want to die"}, content=PCM_2S)
+    assert r.json()["safety"] == "urgent_support"
+    too_long = client().post("/v1/journal/audio", params={"session_id": "jy", "words": "a " * 20000}, content=PCM_2S)
+    assert too_long.status_code == 400
+
+
+def test_blank_words_fall_back_to_the_servers_own_transcription():
+    stt = FakeStt()
+    r = client(stt).post("/v1/journal/audio", params={"session_id": "jz", "words": "   "}, content=PCM_2S)
+    assert r.json()["transcript"] == "I had a long day and I feel tired." and stt.calls == 1
+
+
+def test_face_numbers_from_a_phone_are_passed_on_and_nothing_else_is_accepted():
+    emo = FakeEmotion()
+    c = client(emotion=emo)
+    r = c.post("/v1/journal/face_features", params={"session_id": "jf"}, content=b"\x00" * 5600)
+    assert r.status_code == 200 and r.json() == {"accepted": True}
+    assert emo.vectors == [("jf", 5600)]
+    for bad in (b"", b"\x00" * 5599, b"\x00" * 5604, b"\x00" * 6000):
+        assert c.post("/v1/journal/face_features", params={"session_id": "jf"}, content=bad).status_code == 400
+    assert len(emo.vectors) == 1
+
+
+def test_face_numbers_are_not_accepted_when_the_emotion_service_is_off():
+    r = client(emotion=FakeEmotion(usable=False)).post("/v1/journal/face_features", params={"session_id": "jf"}, content=b"\x00" * 5600)
+    assert r.status_code == 200 and r.json() == {"accepted": False}
 
 
 def test_the_emotion_service_being_off_still_gives_the_transcript_and_an_honest_null():
