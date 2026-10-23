@@ -584,6 +584,8 @@ class _StitchedEntry extends StatelessWidget {
     ).formatTimeOfDay(TimeOfDay.fromDateTime(session.createdAt));
     final snippet = session.text?.trim().isNotEmpty == true
         ? session.text!.trim()
+        : session.awaitingRecording
+        ? 'Waiting to be written down. Your recording is safe on this phone.'
         : session.effectiveMood != null
         ? 'It read as ${Moods.display(session.effectiveMood).toLowerCase()}.'
         : 'A gentle check-in, kept here.';

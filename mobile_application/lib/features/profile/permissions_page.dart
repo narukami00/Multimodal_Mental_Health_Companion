@@ -4,6 +4,11 @@ import '../../core/models/consent.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../core/widgets/visual_kit.dart';
 import '../../services/app_permission_service.dart';
+import '../../services/face_reading_choice.dart';
+import '../../services/model_pack_store.dart';
+import '../../services/phone_speech.dart';
+import '../../services/stt_model_store.dart';
+import '../models/on_device_model_widgets.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../consent/consent_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
@@ -15,10 +20,15 @@ import 'phone_patterns_card.dart';
 /// offers a way to the system screen that changes it. Nothing here pretends the
 /// app can switch an OS permission itself.
 class PermissionsPage extends StatefulWidget {
-  const PermissionsPage({this.permissions, this.phonePatterns, super.key});
+  const PermissionsPage({this.permissions, this.phonePatterns, this.speechModels, this.faceModels, this.faceChoice, super.key});
 
   /// Injectable so the page can be exercised without the platform channel.
   final AppPermissionService? permissions;
+
+  /// Injectable (tests): the on-device model stores. They default to the app-wide ones.
+  final ModelPackStore? speechModels;
+  final ModelPackStore? faceModels;
+  final FaceReadingChoice? faceChoice;
 
   /// The opt-in phone patterns control. Without it the row is not shown.
   final PhonePatternsController? phonePatterns;
@@ -162,6 +172,12 @@ class _PermissionsPageState extends State<PermissionsPage> {
                   const KitLabel('WHAT YOU HAVE AGREED TO IN SOLACE'),
                   _ConsentCard(consent: consent),
                 ],
+                const KitLabel('MODELS ON THIS PHONE'),
+                _OnDeviceModels(
+                  speech: widget.speechModels ?? PhoneSpeech.store,
+                  face: widget.faceModels ?? PhoneFace.store,
+                  choice: widget.faceChoice ?? PhoneFace.choice,
+                ),
                 const KitLabel('WHERE YOUR DATA GOES'),
                 const _LeavesDevice(),
                 const SizedBox(height: 12),
@@ -178,6 +194,80 @@ class _PermissionsPageState extends State<PermissionsPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The on-device models: optional extras that let this phone do some of the work itself. Downloaded once from the
+/// person's own companion server, kept only on this phone, and removable here at any time.
+class _OnDeviceModels extends StatelessWidget {
+  const _OnDeviceModels({required this.speech, required this.face, required this.choice});
+
+  final ModelPackStore speech;
+  final ModelPackStore face;
+  final FaceReadingChoice choice;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const KitCard(
+          key: ValueKey('models-intro'),
+          padding: EdgeInsets.fromLTRB(14, 12, 14, 12),
+          color: Color(0xFFEEF6FA),
+          child: Row(
+            children: [
+              Icon(Icons.phone_android_rounded, size: 18, color: Color(0xFF3F8FB5)),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'These are optional. They let this phone do some of the work itself, so Solace still helps when your '
+                  'companion server is away. Without them everything works through the server, as before. Each is '
+                  'downloaded once from your own server, never from anyone else, and you can remove it here at any time.',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.4, color: Color(0xFF3A6A82)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        OnDeviceModelCard(
+          store: speech,
+          keyPrefix: 'speech-model',
+          icon: Icons.graphic_eq_rounded,
+          color: const Color(0xFFD9674A),
+          title: 'Offline transcription',
+          what: 'Lets this phone write your voice and video journals down by itself, with no server and no internet. '
+              'Your words are checked for safety on the phone straight away. When the companion server is back, it '
+              'adds how your entry sounded, and the words stay as the phone wrote them.',
+          sizeText: 'About ${SttModelStore.approximateMegabytes} MB of storage. Removing it frees the space; voice journals '
+              'then wait for the companion server to be written down.',
+          removeTitle: 'Remove offline transcription?',
+          removeBody: 'Voice and video journals will then wait for the companion server to be written down. '
+              'You can download it again any time.',
+        ),
+        if (PhoneFace.pipelineReady) ...[
+          const SizedBox(height: 10),
+          OnDeviceModelCard(
+            store: face,
+            keyPrefix: 'face-model',
+            icon: Icons.face_retouching_natural_rounded,
+            color: const Color(0xFF6E73C8),
+            title: 'Camera models',
+            what: 'Lets this phone read your face itself for video journals. Only numbers describing your expressions '
+                'leave the phone, never pictures, and video journals keep working without the server. Without them, '
+                'the companion server reads your face from the video frames, as before.',
+            sizeText: 'About ${FaceModelStore.approximateMegabytes} MB of storage. Removing it frees the space and your '
+                'face goes back to being read by the companion server.',
+            removeTitle: 'Remove the camera models?',
+            removeBody: 'Your face will then be read by the companion server, with the video frames sent to it, as '
+                'before. You can download the models again any time.',
+            extra: FaceReadingChoiceControl(choice: choice),
+            onRemoved: () => choice.set(FaceReadingPlace.server),
+          ),
+        ],
+      ],
     );
   }
 }

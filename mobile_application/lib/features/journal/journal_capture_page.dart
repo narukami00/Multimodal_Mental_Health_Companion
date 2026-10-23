@@ -12,8 +12,14 @@ import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
 import '../../core/widgets/page_back_button.dart';
 import '../../services/journal_analysis_client.dart';
+import '../../services/face_reader.dart';
+import '../../services/face_reading_choice.dart';
 import '../../services/pcm_audio_recorder_service.dart';
+import '../../services/phone_speech.dart';
+import '../../services/phone_transcriber.dart';
 import '../../services/platform_frame_source.dart';
+import '../../services/stt_model_store.dart';
+import '../models/on_device_model_widgets.dart';
 import '../../services/video_frame_service.dart';
 import '../consent/consent_controller.dart';
 import '../consent/emotion_consent_sheets.dart';
@@ -41,8 +47,18 @@ class JournalCapturePage extends StatefulWidget {
     this.client,
     this.recorder,
     this.frameSource,
+    this.modelStore,
+    this.faceModelStore,
+    this.transcriberFor,
+    this.faceReader,
+    this.phoneFaceDirectory,
     super.key,
   }) : assert(mode != CaptureMode.text);
+
+  /// Replaceable for tests: where the offline speech and camera models live, and how to get a transcriber from them.
+  final SttModelStore? modelStore;
+  final FaceModelStore? faceModelStore;
+  final Future<PhoneTranscriber?> Function()? transcriberFor;
 
   final CaptureMode mode;
   final SessionController sessionController;
@@ -54,6 +70,10 @@ class JournalCapturePage extends StatefulWidget {
   final JournalAnalysisClient? client;
   final PcmAudioRecorderService? recorder;
   final FrameSource? frameSource;
+
+  /// Replaceable for tests: the on-phone face reader, and where its models are (null: the server reads the face).
+  final FaceReader? faceReader;
+  final Future<String?> Function()? phoneFaceDirectory;
 
   @override
   State<JournalCapturePage> createState() => _JournalCapturePageState();
@@ -88,6 +108,33 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
   String _message = '';
   SessionRecord? _saved;
   String _transcript = '';
+  bool _waiting = false; // saved while the server was away: the server reads how it sounded later
+  bool _waitingFace = false; // ...and, when the phone read the face itself, how the person looked (numbers only)
+
+  // Reading the face on the phone (only when the person chose that and the camera models are installed).
+  bool _phoneFace = false;
+  Float32List? _faceVector; // the pooled 1,400 numbers for the recording being held
+  bool _readingFrame = false;
+  FaceReader get _faceReader => widget.faceReader ?? PhoneFace.reader;
+
+  SttModelStore get _store => widget.modelStore ?? PhoneSpeech.store;
+
+  String? _heldWords; // what the phone wrote for the recording being held (asked once, kept for a retry)
+  bool _heldWordsTried = false;
+
+  Future<String?> _phoneWordsFor(Uint8List pcm) async {
+    if (!_heldWordsTried) {
+      _heldWords = await _writeDownOnPhone(pcm);
+      _heldWordsTried = true;
+    }
+    return _heldWords;
+  }
+
+  /// What the phone can write down by itself, or null when its speech model is not installed or heard nothing.
+  Future<String?> _writeDownOnPhone(Uint8List pcm) async {
+    final transcriber = await (widget.transcriberFor ?? PhoneSpeech.transcriber)();
+    return transcriber?.transcribe(pcm);
+  }
 
   @override
   void dispose() {
@@ -97,6 +144,7 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
     unawaited(_levelSub?.cancel());
     unawaited(_recorder.stopRecording());
     unawaited(_frames.stop());
+    if (_phoneFace) unawaited(_faceReader.close()); // the camera models are only held while a video journal is open
     if (widget.recorder == null) _recorder.dispose();
     super.dispose();
   }
@@ -113,9 +161,20 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
       _faceAllowed = consent.isGranted(ConsentKey.faceFeatures) || await askFaceConsent(context, consent);
       if (!mounted) return;
     }
+    // The person may have chosen to read their face on the phone. That needs the camera models and an Android that can
+    // run them; if the models cannot be opened the server reads the face, exactly as before.
+    _phoneFace = false;
+    _faceVector = null;
+    if (_video && _faceAllowed) {
+      final directory = await (widget.phoneFaceDirectory ?? PhoneFace.directoryForPhoneReading)();
+      if (directory != null) _phoneFace = await _faceReader.start(directory);
+      if (!mounted) return;
+    }
     _recordingId = DateTime.now().microsecondsSinceEpoch.toString();
     _pcm.clear();
     _held = null;
+    _heldWords = null;
+    _heldWordsTried = false;
     _seconds = 0;
     _message = '';
     _preview = null;
@@ -149,9 +208,20 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
     final now = DateTime.now();
     if (_faceAllowed && now.difference(_lastFrameSent) >= const Duration(seconds: 1)) {
       _lastFrameSent = now;
-      unawaited(_client.sendFrame(_recordingId, jpeg).then((usable) {
-        if (mounted && usable != null) setState(() => _faceUsable = usable);
-      }));
+      if (_phoneFace) {
+        // Read on the phone: the picture goes no further than this call; only numbers are kept.
+        if (!_readingFrame) {
+          _readingFrame = true;
+          unawaited(_faceReader.addJpeg(jpeg).then((reading) {
+            if (mounted && reading != null) setState(() => _faceUsable = reading.usable);
+          }).whenComplete(() => _readingFrame = false));
+        }
+        if (kFaceCompareWithServer) unawaited(_client.sendFrame(_recordingId, jpeg)); // testing builds only
+      } else {
+        unawaited(_client.sendFrame(_recordingId, jpeg).then((usable) {
+          if (mounted && usable != null) setState(() => _faceUsable = usable);
+        }));
+      }
     }
   }
 
@@ -164,6 +234,12 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
     await _recorder.stopRecording();
     await _frames.stop();
     _held = _pcm.takeBytes();
+    if (_phoneFace) {
+      for (var i = 0; i < 20 && _readingFrame; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50)); // let a frame that is being read finish
+      }
+      _faceVector = _faceReader.pooled();
+    }
     if (!mounted) return;
     if (_held!.length < 16000 * 2) {
       setState(() {
@@ -181,9 +257,33 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
     final pcm = _held;
     if (pcm == null) return;
     setState(() => _phase = _Phase.analysing);
-    final analysis = await _client.analyzeAudio(_recordingId, pcm, face: _faceAllowed);
+    // A phone with its own speech model always writes the words itself (server up or not); the server then only
+    // reads the recording for emotion. Without the model, the server writes the words down as before.
+    final phoneWords = await _phoneWordsFor(pcm);
+    if (!mounted) return;
+    // A face the phone read itself goes first, as numbers only, so the server reads voice, words and face together.
+    final faceVector = _faceVector;
+    if (faceVector != null) await _client.sendFaceFeatures(_recordingId, faceVector);
+    if (!mounted) return;
+    final analysis = await _client.analyzeAudio(_recordingId, pcm, face: _faceAllowed && (!_phoneFace || kFaceCompareWithServer), words: phoneWords);
     if (!mounted) return;
     if (analysis == null) {
+      // The server is not there right now. Journaling must not wait for it: keep the recording on the
+      // phone, save the entry as "waiting", and let the app read it for emotion when the server answers.
+      final waiting = await widget.sessionController.savePendingRecording(mode: widget.mode, pcm: pcm, text: phoneWords, faceVector: faceVector);
+      if (!mounted) return;
+      if (waiting != null) {
+        _held = null;
+        setState(() {
+          _phase = _Phase.done;
+          _saved = waiting;
+          _transcript = waiting.text ?? '';
+          _waiting = true;
+          _waitingFace = waiting.awaitingFace;
+        });
+        if (waiting.text != null) await _screenWords(waiting.text!);
+        return;
+      }
       setState(() {
         _phase = _Phase.failed;
         _message = "Couldn't reach the companion server, so nothing was written down. "
@@ -234,6 +334,21 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
     }
   }
 
+  /// The same words check the server does, but on the phone, so a person in distress is met at once even offline.
+  Future<void> _screenWords(String words) async {
+    final assessment = await widget.safetyController.assessText(source: 'journal', text: words);
+    if (assessment.level == SafetyLevel.clear || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SupportResourcesPage(
+          safetyController: widget.safetyController,
+          profileController: widget.profileController,
+          assessment: assessment,
+        ),
+      ),
+    );
+  }
+
   void _reset() {
     setState(() {
       _phase = _Phase.ready;
@@ -241,6 +356,9 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
       _message = '';
       _saved = null;
       _transcript = '';
+      _waiting = false;
+      _waitingFace = false;
+      _faceVector = null;
       _preview = null;
     });
   }
@@ -311,6 +429,8 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
                 _stage(idle: true),
                 const SizedBox(height: 22),
                 const TalkPromptLine(),
+                const SizedBox(height: 14),
+                _offlineModelCard(),
               ],
             ),
           ),
@@ -364,14 +484,44 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
                   child: Text('Saved to your journal', key: ValueKey('journal-saved'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _ink)),
                 ),
                 const SizedBox(height: 4),
-                const Center(
+                Center(
                   child: Text(
-                    'That was a moment for yourself. Thank you for showing up.',
+                    _waiting && _transcript.isNotEmpty
+                        ? (_waitingFace
+                            ? 'Written down on this phone. How you sounded and looked is read when the companion server is back.'
+                            : 'Written down on this phone. How it sounded is read when the companion server is back.')
+                        : 'That was a moment for yourself. Thank you for showing up.',
+                    key: const ValueKey('journal-saved-note'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13.5, height: 1.4, fontWeight: FontWeight.w600, color: _soft),
+                    style: const TextStyle(fontSize: 13.5, height: 1.4, fontWeight: FontWeight.w600, color: _soft),
                   ),
                 ),
                 const SizedBox(height: 18),
+                if (_waiting && _transcript.isEmpty)
+                  Container(
+                    key: const ValueKey('journal-waiting'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0xFFF2ECDD)),
+                    ),
+                    child: Text(
+                      _waitingFace
+                          ? "The companion server isn't reachable right now, so your recording is kept safely on this phone. "
+                              'Your face was read on this phone: only numbers about it are kept, never pictures. Your voice, '
+                              'words and face are read together when the server is back, then the recording is deleted.'
+                          : _video && _faceAllowed
+                              ? "The companion server isn't reachable right now, so your recording is kept safely on this phone. "
+                                  'It will be written down and read when the server is back. The camera is not read for an entry '
+                                  'made like this, only your voice.'
+                              : "The companion server isn't reachable right now, so your recording is kept safely on this phone. "
+                                  'It will be written down and read when the server is back, then the recording is deleted.',
+                      style: const TextStyle(fontSize: 14.5, height: 1.5, fontWeight: FontWeight.w600, color: _ink),
+                    ),
+                  )
+                else
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -390,6 +540,47 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
       case _Phase.failed:
         return const Center(child: Icon(Icons.cloud_off_rounded, size: 52, color: Color(0xFFC9B79A)));
     }
+  }
+
+  /// Small hints for the on-device models, shown before recording. Each says what the model is for and offers it; the
+  /// fuller explanation, sizes and removal live in Permissions & privacy. Downloaded once from the person's own
+  /// companion server, never a third party.
+  Widget _offlineModelCard() {
+    return OnDeviceModelsPanel(
+      rows: [
+        OnDeviceModelRow(
+          store: _store,
+          keyPrefix: 'offline-model',
+          icon: Icons.graphic_eq_rounded,
+          color: const Color(0xFFD9674A),
+          title: 'Offline transcription',
+          offer: 'Writes your recording down on this phone, with no server. About ${SttModelStore.approximateMegabytes} MB, '
+              'downloaded once from your own server (best on Wi-Fi).',
+          onText: () => 'This phone can write your recording down by itself, even without the server.',
+          removeTitle: 'Remove offline transcription?',
+          removeBody: 'Voice and video journals will then wait for the companion server to be written down. '
+              'You can download it again any time.',
+        ),
+        if (_video && PhoneFace.pipelineReady)
+          OnDeviceModelRow(
+            store: widget.faceModelStore ?? PhoneFace.store,
+            keyPrefix: 'face-model',
+            icon: Icons.face_retouching_natural_rounded,
+            color: const Color(0xFF6E73C8),
+            title: 'Read my face on this phone',
+            offer: 'Only numbers about your face ever leave the phone, never pictures. About '
+                '${FaceModelStore.approximateMegabytes} MB, from your own server.',
+            onText: () => PhoneFace.choice.place == FaceReadingPlace.phone
+                ? 'Your face is read on this phone: only numbers leave it. You can change this in Permissions & privacy.'
+                : 'On this phone. Your face is still read by the server: choose the phone in Permissions & privacy.',
+            removeTitle: 'Remove the camera models?',
+            removeBody: 'Your face will then be read by the companion server, with the video frames sent to it, '
+                'as before. You can download the models again any time.',
+            onInstalled: () => PhoneFace.choice.set(FaceReadingPlace.phone), // they downloaded it to use it
+            onRemoved: () => PhoneFace.choice.set(FaceReadingPlace.server),
+          ),
+      ],
+    );
   }
 
   /// The warm voice orb, or the live self view in a soft frame with a guide for the face.
@@ -454,6 +645,7 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
       case _Phase.done:
         return Column(
           children: [
+            if (!_waiting)
             _primary('See how it read', Icons.insights_rounded, () {
               final saved = _saved;
               if (saved == null) return;

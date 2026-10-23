@@ -41,6 +41,23 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
   static const _warm = Color(0xFFFFB534);
 
   Widget _readingSection() {
+    if (session.awaitingRecording) {
+      return Container(
+        key: const ValueKey('entry-waiting'),
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF6E2),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFF6E4C8)),
+        ),
+        child: const Text(
+          'This recording is kept safely on your phone and will be written down and read as soon as the '
+          'companion server is reachable. Then the recording is deleted from your phone.',
+          style: TextStyle(fontSize: 14, height: 1.5, fontWeight: FontWeight.w600, color: _ink),
+        ),
+      );
+    }
     final r = session.reading;
     if (r != null) return EmotionReadingCard(reading: r);
     final canRead =

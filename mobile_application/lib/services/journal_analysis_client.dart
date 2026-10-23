@@ -109,6 +109,29 @@ class JournalAnalysisClient {
   final JournalTransport _transport;
   final Future<Uri?> Function() _baseUri;
 
+  /// The face numbers a phone read ITSELF for a recording (1,400 float32 values, never pictures). The server then uses
+  /// them for this recording's emotion reading instead of camera frames. True when the server accepted them.
+  Future<bool> sendFaceFeatures(String sessionId, Float32List vector) async {
+    final base = await _baseUri();
+    if (base == null || vector.length != 1400) return false;
+    try {
+      final reply = await _transport(
+        method: 'POST',
+        uri: base.replace(path: '/v1/journal/face_features', queryParameters: {'session_id': sessionId}),
+        headers: const {'Content-Type': 'application/octet-stream'},
+        body: vector.buffer.asUint8List(vector.offsetInBytes, vector.lengthInBytes),
+        timeout: const Duration(seconds: 8),
+      );
+      if (reply.status != 200) return false;
+      return (jsonDecode(reply.body) as Map<String, dynamic>)['accepted'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The address of the first companion server that answers, or null when none does.
+  Future<Uri?> serverBase() => _baseUri();
+
   /// Text typed by the person: the words are analysed as they are.
   Future<JournalAnalysis?> analyzeText(String sessionId, String text) {
     return _send(
@@ -127,10 +150,14 @@ class JournalAnalysisClient {
     Uint8List pcm, {
     bool face = false,
     int sampleRate = 16000,
+    String? words,
   }) {
+    // [words] are what the phone's own speech model already wrote down: the server then uses them as they are
+    // instead of transcribing again, and only reads the recording for emotion.
+    final given = words?.trim() ?? '';
     return _send(
       '/v1/journal/audio',
-      {'session_id': sessionId, 'sample_rate': '$sampleRate', 'face': face ? '1' : '0'},
+      {'session_id': sessionId, 'sample_rate': '$sampleRate', 'face': face ? '1' : '0', if (given.isNotEmpty) 'words': given},
       pcm,
       contentType: 'application/octet-stream',
       timeout: const Duration(seconds: 120),

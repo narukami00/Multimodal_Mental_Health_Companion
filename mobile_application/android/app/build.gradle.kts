@@ -22,6 +22,11 @@ android {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
+    // ONNX Runtime has ONE native runtime in this app: the speech library's (sherpa_onnx) libonnxruntime.so. The face reading's
+    // Java layer is NOT taken from Maven (its own libonnxruntime.so is version-tagged VERS_1.28.0 and cannot coexist with the
+    // speech library's VERS_1.28.2); see tool/prepare_onnxruntime.py. Its Java classes are in libs/, and its patched native
+    // bridge (libonnxruntime4j_jni.so, which now links against the speech library's runtime) is in src/main/jniLibs/.
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.sysmentalhealth.solace_mobile"
@@ -39,6 +44,8 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Keeps MediaPipe and ONNX Runtime working after the shrinker (see proguard-rules.pro).
+            proguardFiles("proguard-rules.pro")
         }
     }
 }
@@ -51,6 +58,12 @@ dependencies {
     implementation("androidx.camera:camera-core:1.3.4")
     implementation("androidx.camera:camera-camera2:1.3.4")
     implementation("androidx.camera:camera-lifecycle:1.3.4")
+
+    // Reading the face on the phone (see FaceModels.kt): the two face networks run in ONNX Runtime (Java classes of 1.28.0 on
+    // the speech library's 1.28.2 runtime; see tool/prepare_onnxruntime.py), the expression numbers come from MediaPipe
+    // (1.1.0: the same version as the server's Python package).
+    implementation(files("libs/onnxruntime-android-1.28.0-classes.jar"))
+    implementation("com.google.mediapipe:tasks-vision:1.1.0")
 }
 
 flutter {

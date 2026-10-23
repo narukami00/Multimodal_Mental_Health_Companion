@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- MediaPipe (the on-phone face reading) asks for Android 7.0; the rest of the app still runs on Android 6.0. The face
+         reading is only started on Android 7.0 or newer (see MainActivity), so the library is never touched on 6.0. -->
+    <uses-sdk tools:overrideLibrary="com.google.mediapipe.tasks.vision, com.google.mediapipe.tasks.core, com.google.mediapipe.framework"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>

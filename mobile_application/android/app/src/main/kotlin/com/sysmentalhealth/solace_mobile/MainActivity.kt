@@ -33,6 +33,8 @@ class MainActivity : FlutterActivity() {
     private val USAGE_CHANNEL = "com.sysmentalhealth.solace_mobile/usage_collector"
     private val CAMERA_CONTROL_CHANNEL = "com.sysmentalhealth.solace_mobile/camera_control"
     private val CAMERA_STREAM_CHANNEL = "com.sysmentalhealth.solace_mobile/camera_stream"
+    private val FACE_CHANNEL = "com.sysmentalhealth.solace_mobile/face_models"
+    private val NOT_IMPLEMENTED = Any()
     private val PERMISSION_REQUEST_CODE = 1002
     private val CAMERA_PERMISSION_REQUEST_CODE = 1003
 
@@ -240,6 +242,42 @@ class MainActivity : FlutterActivity() {
                     result.success(usage.describeApps(packages))
                 }
                 else -> result.notImplemented()
+            }
+        }
+
+        // The three networks of the on-phone face reading. Everything around them is Dart; see FaceModels.kt.
+        // MediaPipe needs Android 7.0 (API 24); on older phones the face reading is simply not available.
+        val faceModels = if (Build.VERSION.SDK_INT >= 24) FaceModels(applicationContext) else null
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FACE_CHANNEL).setMethodCallHandler { call, result ->
+            if (faceModels == null) {
+                result.success(if (call.method == "load" || call.method == "isLoaded") false else null)
+                return@setMethodCallHandler
+            }
+            // Off the main thread: a network run takes tens of milliseconds, loading takes a second or two.
+            thread(start = true, name = "FaceModels") {
+                val outcome: Any? = try {
+                    when (call.method) {
+                        "load" -> faceModels.load(call.argument<String>("dir") ?: "")
+                        "isLoaded" -> faceModels.isLoaded()
+                        "close" -> { faceModels.close(); true }
+                        "decode" -> call.argument<ByteArray>("jpeg")?.let { faceModels.decode(it) }
+                        "yunet" -> call.argument<ByteArray>("bgr")?.let { faceModels.runYuNet(it) }
+                        "b0" -> call.argument<FloatArray>("input")?.let { faceModels.runB0(it) }
+                        "landmarks" -> {
+                            val rgb = call.argument<ByteArray>("rgb")
+                            val w = call.argument<Int>("w")
+                            val h = call.argument<Int>("h")
+                            if (rgb != null && w != null && h != null) faceModels.runLandmarker(rgb, w, h) else null
+                        }
+                        else -> NOT_IMPLEMENTED
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "face call ${call.method} failed: ${t.javaClass.simpleName}")
+                    null
+                }
+                mainHandler.post {
+                    if (outcome === NOT_IMPLEMENTED) result.notImplemented() else result.success(outcome)
+                }
             }
         }
     }

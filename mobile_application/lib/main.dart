@@ -28,6 +28,12 @@ import 'core/models/consent.dart';
 import 'features/call/call_page.dart';
 import 'providers/server/server_emotion_analyzer.dart';
 import 'services/journal_analysis_client.dart';
+import 'services/pending_recordings.dart';
+import 'services/face_reading_choice.dart';
+import 'services/phone_speech.dart';
+import 'services/stt_model_store.dart';
+import 'core/models/safety_assessment.dart';
+import 'features/safety/support_resources_page.dart';
 import 'features/consent/consent_controller.dart';
 import 'features/footprint/in_app_feature_recorder.dart';
 import 'features/footprint/break_prompt_controller.dart';
@@ -58,6 +64,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences = await SharedPreferences.getInstance();
   final journalClient = JournalAnalysisClient();
+  PhoneSpeech.store = SttModelStore(serverBase: journalClient.serverBase);
+  PhoneFace.store = FaceModelStore(serverBase: journalClient.serverBase);
+  PhoneFace.choice = FaceReadingChoice(preferences: preferences);
   // Typed entries are read by the companion server's real emotion model (only with the person's consent;
   // never an invented answer). The consent controller is created further down.
   ConsentController? emotionConsent;
@@ -67,6 +76,7 @@ Future<void> main() async {
       client: journalClient,
       consentGranted: () => emotionConsent?.isGranted(ConsentKey.emotionEstimate) ?? false,
     ),
+    pendingRecordings: PendingRecordings(),
   );
   await sessionController.load();
   final safetyController = SafetyController(
@@ -317,6 +327,45 @@ Future<void> main() async {
       (_) => openCheckInFromWidget(launchUri),
     );
   }
+
+  // Voice and video journals made while the server was away are kept on the phone; they are written down
+  // and read as soon as it answers (tried now, every minute, and whenever the app comes back to the front).
+  Future<void> writeDownWaiting() async {
+    if (sessionController.awaitingRecordings.isEmpty) return;
+    if (!consentController.isGranted(ConsentKey.emotionEstimate)) return;
+    await sessionController.processPending(
+      analyze: (id, pcm, words, faceVector) async {
+        // A phone that read the face itself sends only the numbers, first, so the server reads voice, words and face together.
+        if (faceVector != null) await journalClient.sendFaceFeatures(id, faceVector);
+        return journalClient.analyzeAudio(id, pcm, words: words);
+      },
+      onSafety: (session, level) async {
+        final signal = switch (level) {
+          'urgent_support' => SafetyLevel.urgentSupport,
+          'support_suggested' => SafetyLevel.supportSuggested,
+          _ => null,
+        };
+        if (signal == null) return;
+        final assessment = await safetyController.assessSignal(
+          source: 'journal',
+          assessment: SafetyAssessment(level: signal, matchedSignals: const ['server_safety_gate']),
+        );
+        navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) => SupportResourcesPage(
+              safetyController: safetyController,
+              profileController: profileController,
+              assessment: assessment,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  unawaited(writeDownWaiting());
+  Timer.periodic(const Duration(minutes: 1), (_) => unawaited(writeDownWaiting()));
+  AppLifecycleListener(onResume: () => unawaited(writeDownWaiting()));
 
   runApp(
     SolaceApp(

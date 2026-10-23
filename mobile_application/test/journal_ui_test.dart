@@ -65,7 +65,11 @@ void main() {
       await open(tester);
       expect(field(tester), isEmpty);
 
-      await tester.tap(find.byKey(const ValueKey('starter-Right now I feel…')));
+      final starter = find.byKey(const ValueKey('starter-Right now I feel…'));
+      await tester.pump(const Duration(seconds: 1)); // let the page finish fading in before tapping on it
+      await tester.ensureVisible(starter);
+      await tester.pump();
+      await tester.tap(starter);
       await tester.pump();
 
       expect(field(tester), 'Right now I feel… ');

@@ -10,7 +10,16 @@ class SessionRecord {
     this.text,
     this.mood,
     this.emotionResults = const [],
+    this.awaitingRecording = false,
+    this.awaitingFace = false,
   });
+
+  /// True while a voice or video recording of this entry is kept on the phone, waiting for the companion
+  /// server to write it down and read it. The entry has no words yet; they arrive when the server does.
+  final bool awaitingRecording;
+
+  /// Whether the person also agreed to the camera being read when this recording was made.
+  final bool awaitingFace;
 
   final String id;
   final DateTime createdAt;
@@ -50,6 +59,7 @@ class SessionRecord {
       'emotionResults': emotionResults
           .map((result) => result.toMap())
           .toList(),
+      if (awaitingRecording) 'awaiting': {'audio': true, 'face': awaitingFace},
     };
   }
 
@@ -60,6 +70,7 @@ class SessionRecord {
       orElse: () => CaptureMode.text,
     );
     final rawResults = map['emotionResults'] as List<dynamic>? ?? const [];
+    final awaiting = map['awaiting'];
 
     return SessionRecord(
       id: map['id'] as String? ?? '',
@@ -71,6 +82,8 @@ class SessionRecord {
           .whereType<Map<String, dynamic>>()
           .map(EmotionResult.fromMap)
           .toList(),
+      awaitingRecording: awaiting is Map && awaiting['audio'] == true,
+      awaitingFace: awaiting is Map && awaiting['face'] == true,
     );
   }
 }

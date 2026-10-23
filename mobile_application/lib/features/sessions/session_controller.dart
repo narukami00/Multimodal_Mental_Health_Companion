@@ -5,16 +5,22 @@ import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
 import '../../data/contracts/provider_contracts.dart';
 import '../../data/contracts/repository_contracts.dart';
+import '../../services/journal_analysis_client.dart';
+import '../../services/pending_recordings.dart';
 
 class SessionController extends ChangeNotifier {
   SessionController({
     required SessionRepository repository,
     required EmotionAnalyzer emotionAnalyzer,
+    PendingRecordings? pendingRecordings,
   })  : _repository = repository,
-        _emotionAnalyzer = emotionAnalyzer;
+        _emotionAnalyzer = emotionAnalyzer,
+        _pending = pendingRecordings;
 
   final SessionRepository _repository;
   final EmotionAnalyzer _emotionAnalyzer;
+  final PendingRecordings? _pending;
+  bool _processing = false;
   /// Called after an entry is saved, so other features can look at it. The
   /// callback must not throw into the save: failures there are theirs to catch.
   void Function(SessionRecord session)? onSaved;
@@ -108,11 +114,99 @@ class SessionController extends ChangeNotifier {
     return session;
   }
 
+  /// Voice and video entries whose recording is kept on the phone until the server can write it down.
+  List<SessionRecord> get awaitingRecordings => [
+        for (final s in _sessions)
+          if (s.awaitingRecording) s,
+      ];
+
+  /// Keeps a recording the server could not take right now, as an entry that says it is waiting. Returns
+  /// null (and saves nothing) when the phone cannot store the recording; the caller then keeps it in memory.
+  Future<SessionRecord?> savePendingRecording({
+    required CaptureMode mode,
+    required Uint8List pcm,
+    Float32List? faceVector,
+    String? text,
+  }) async {
+    final store = _pending;
+    if (store == null) return null;
+    final sessionId = DateTime.now().microsecondsSinceEpoch.toString();
+    if (!await store.save(sessionId, pcm)) return null;
+    // [faceVector]: the 1,400 numbers the phone read from the face itself (never pictures), kept beside the audio.
+    final keptFace = faceVector != null && await store.saveFace(sessionId, faceVector);
+    // [text] is what the phone itself wrote down, when it could; the server's version replaces it later.
+    final session = SessionRecord(
+      id: sessionId,
+      createdAt: DateTime.now(),
+      mode: mode,
+      text: (text?.trim().isEmpty ?? true) ? null : text!.trim(),
+      awaitingRecording: true,
+      awaitingFace: keptFace,
+    );
+    await _repository.save(session);
+    _sessions = [session, ..._sessions.where((item) => item.id != session.id)];
+    notifyListeners();
+    if (session.text != null) onSaved?.call(session);
+    return session;
+  }
+
+  /// Sends each waiting recording to the server, oldest first, and fills the entry in with the words and the
+  /// reading it gets back. Stops at the first one the server cannot take (it is down: do not hammer it).
+  /// [onSafety] hears of any entry whose words the server's safety check flagged. Returns how many were done.
+  Future<int> processPending({
+    required Future<JournalAnalysis?> Function(String id, Uint8List pcm, String? words, Float32List? faceVector) analyze,
+    void Function(SessionRecord session, String safety)? onSafety,
+  }) async {
+    final store = _pending;
+    if (store == null || _processing) return 0;
+    _processing = true;
+    var done = 0;
+    try {
+      final waiting = awaitingRecordings..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      for (final entry in waiting) {
+        final pcm = await store.read(entry.id);
+        if (pcm == null) {
+          // The recording is gone (cleared by the phone). Nothing can be written down; stop waiting for it.
+          await _replace(SessionRecord(id: entry.id, createdAt: entry.createdAt, mode: entry.mode));
+          continue;
+        }
+        final face = entry.awaitingFace ? await store.readFace(entry.id) : null;
+        final analysis = await analyze(entry.id, pcm, entry.text, face);
+        if (analysis == null) break;
+        // When the phone wrote the words down, those are the words (the server only reads the recording for
+        // emotion). The server's own transcript is used only for an entry the phone could not write down.
+        final words = entry.text ?? (analysis.transcript.isNotEmpty ? analysis.transcript : null);
+        final updated = SessionRecord(
+          id: entry.id,
+          createdAt: entry.createdAt,
+          mode: entry.mode,
+          text: words,
+          emotionResults: analysis.transcript.isEmpty ? const [] : analysis.toResults(sessionId: entry.id, at: entry.createdAt),
+        );
+        await _replace(updated);
+        await store.delete(entry.id);
+        done++;
+        final safety = analysis.safety;
+        if (safety != null) onSafety?.call(updated, safety);
+        if (updated.text != null && entry.text == null) onSaved?.call(updated); // others already saw the phone's words
+      }
+    } finally {
+      _processing = false;
+    }
+    return done;
+  }
+
+  Future<void> _replace(SessionRecord updated) async {
+    await _repository.save(updated);
+    _sessions = [for (final s in _sessions) s.id == updated.id ? updated : s];
+    notifyListeners();
+  }
+
   /// Entries that have words but no model reading yet (made before there was one, or without the server or
   /// the person's consent). Voice and video entries keep only their transcript, so they are read from that.
   List<SessionRecord> get unread => [
         for (final s in _sessions)
-          if (s.reading == null && (s.text?.trim().isNotEmpty ?? false)) s,
+          if (!s.awaitingRecording && s.reading == null && (s.text?.trim().isNotEmpty ?? false)) s,
       ];
 
   /// Reads a short piece of text (such as the note after a task) with the emotion model WITHOUT keeping
@@ -168,6 +262,7 @@ class SessionController extends ChangeNotifier {
     final matches = _sessions.where((s) => s.id == id).toList();
     if (matches.isEmpty) return;
     await _repository.delete(id);
+    await _pending?.delete(id);
     _sessions = [for (final s in _sessions) if (s.id != id) s];
     notifyListeners();
     onDeleted?.call(matches.first);
