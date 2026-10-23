@@ -4,6 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/models/consent.dart';
+import '../../services/check_in_reminder_service.dart';
+import '../checkin/check_in_mode_page.dart';
+import '../consent/consent_controller.dart';
+import 'onboarding_choices.dart';
 import '../../core/widgets/visual_kit.dart';
 import '../art/checkin_art.dart';
 import '../../data/contracts/onboarding_repository.dart';
@@ -16,8 +21,16 @@ class OnboardingFlow extends StatefulWidget {
     required this.repository,
     required this.profileController,
     required this.onComplete,
+    this.consent,
+    this.scheduleReminder,
     super.key,
   });
+
+  /// Where the voice and face choices are recorded. Defaults to the app's own; without one the page is left out.
+  final ConsentController? consent;
+
+  /// Turns the daily reminder on at the given minute (asking for notification permission) and says whether it worked.
+  final Future<bool> Function(int minutes)? scheduleReminder;
 
   final OnboardingRepository repository;
   final ProfileController profileController;
@@ -28,14 +41,29 @@ class OnboardingFlow extends StatefulWidget {
 }
 
 class _OnboardingFlowState extends State<OnboardingFlow> {
-  static const _pageCount = 7;
+  static const _pageCount = 10;
 
-  /// Where the sleep question sits. Pages before it keep their old indices, so
-  /// a half-finished onboarding resumes where it left off.
-  static const _sleepPage = 3;
+  /// The two pages that only make sense for someone who chose to use voice or video.
+  static const _readingPage = 3;
+  static const _modelsPage = 4;
 
-  /// The optional "what should I call you" step, just before the safety page.
-  static const _namePage = 5;
+  /// Where the sleep question sits.
+  static const _sleepPage = 5;
+
+  /// The optional "what should I call you" step.
+  static const _namePage = 7;
+
+  /// The optional daily reminder, just before the safety page.
+  static const _reminderPage = 8;
+
+  ConsentController? get _consent => widget.consent ?? CheckInModePage.consent;
+
+  /// Whether [page] is part of this person's onboarding: the voice and video pages are skipped for someone who chose text.
+  bool _shows(int page) {
+    if (page == _readingPage) return widget.repository.usesMedia == true && _consent != null;
+    if (page == _modelsPage) return widget.repository.usesMedia == true;
+    return true;
+  }
 
   late final PageController _pageController;
   late int _currentPage;
@@ -62,10 +90,48 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       return;
     }
 
-    await _pageController.nextPage(
+    var next = _currentPage + 1;
+    while (next < _pageCount - 1 && !_shows(next)) {
+      next++;
+    }
+    await _pageController.animateToPage(
+      next,
       duration: const Duration(milliseconds: 420),
       curve: Curves.easeOutCubic,
     );
+  }
+
+  /// Offers the daily reminder: a time, then notification permission. Nothing is claimed unless it was really set.
+  Future<void> _setReminder() async {
+    final profile = widget.profileController.profile;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: (profile.reminderMinutes ~/ 60) % 24, minute: profile.reminderMinutes % 60),
+      helpText: 'Check-in reminder time',
+    );
+    if (picked == null || !mounted) return;
+    final minutes = picked.hour * 60 + picked.minute;
+    var worked = false;
+    try {
+      worked = await (widget.scheduleReminder ?? _scheduleReal)(minutes);
+    } catch (_) {}
+    if (worked) {
+      await widget.profileController.setReminderMinutes(minutes);
+      await widget.profileController.setReminderEnabled(true);
+    }
+    if (!mounted) return;
+    if (!worked) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No reminder was set, because notifications are off for Solace. You can turn it on later in Settings.'),
+      ));
+    }
+    await _next();
+  }
+
+  static Future<bool> _scheduleReal(int minutes) async {
+    final service = CheckInReminderService.instance;
+    if (!await service.requestPermission()) return false;
+    return (await service.scheduleDaily(minutesPastMidnight: minutes)).isScheduled;
   }
 
   /// Keeps the name if they typed one, then moves on. Leaving it empty is fine.
@@ -138,18 +204,25 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                         const _WelcomePage(),
                         const _WaysToCheckInPage(),
                         const _PermissionPage(),
+                        _ReadingPage(consent: _consent),
+                        _ModelsPage(consent: _consent),
                         _SleepPage(controller: widget.profileController),
                         _CountryPage(controller: widget.profileController),
                         _NamePage(field: _name, onDone: _saveName),
+                        _ReminderPage(controller: widget.profileController),
                         const _SupportPage(),
                       ],
                     ),
                   ),
                   _BottomControls(
                     currentPage: _currentPage,
+                    dotCount: [for (var p = 0; p < _pageCount; p++) if (_shows(p)) p].length,
+                    dotIndex: [for (var p = 0; p < _currentPage; p++) if (_shows(p)) p].length,
                     pageCount: _pageCount,
                     sleepPage: _sleepPage,
                     namePage: _namePage,
+                    reminderPage: _reminderPage,
+                    onSetReminder: _setReminder,
                     onSaveName: _saveName,
                     onNext: _next,
                     onChooseMedia: _chooseMedia,
@@ -372,9 +445,13 @@ class _ChoiceButton extends StatelessWidget {
 class _BottomControls extends StatelessWidget {
   const _BottomControls({
     required this.currentPage,
+    required this.dotCount,
+    required this.dotIndex,
     required this.pageCount,
     required this.sleepPage,
     required this.namePage,
+    required this.reminderPage,
+    required this.onSetReminder,
     required this.onSaveName,
     required this.onNext,
     required this.onChooseMedia,
@@ -383,9 +460,13 @@ class _BottomControls extends StatelessWidget {
   });
 
   final int currentPage;
+  final int dotCount;
+  final int dotIndex;
   final int pageCount;
   final int sleepPage;
   final int namePage;
+  final int reminderPage;
+  final VoidCallback onSetReminder;
   final VoidCallback onSaveName;
   final VoidCallback onNext;
   final ValueChanged<bool> onChooseMedia;
@@ -402,14 +483,14 @@ class _BottomControls extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(
-              pageCount,
+              dotCount,
               (index) => AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: index == currentPage ? 24 : 8,
+                width: index == dotIndex ? 24 : 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: index == currentPage
+                  color: index == dotIndex
                       ? const Color(0xFFFFB534)
                       : const Color(0xFFEBDCC0),
                   borderRadius: BorderRadius.circular(100),
@@ -447,6 +528,25 @@ class _BottomControls extends StatelessWidget {
                     shadowColor: const Color(0x55FF7F50),
                     onPressed: () => onChooseMedia(false),
                   ),
+                ),
+              ],
+            )
+          else if (currentPage == reminderPage)
+            Column(
+              children: [
+                _PrimaryCtaButton(
+                  label: 'Set a reminder',
+                  icon: Icons.notifications_active_rounded,
+                  onPressed: onSetReminder,
+                ),
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: onNext,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.mutedInk,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                  child: const Text('Not now'),
                 ),
               ],
             )
@@ -667,6 +767,67 @@ class _PermissionPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// What Solace may read, asked once and kindly: same switches as Permissions & privacy.
+class _ReadingPage extends StatelessWidget {
+  const _ReadingPage({required this.consent});
+
+  final ConsentController? consent;
+
+  @override
+  Widget build(BuildContext context) {
+    final consent = this.consent;
+    return _OnboardingPage(
+      illustration: const _Scene(HeroScene.privacy),
+      eyebrow: 'Only if you want',
+      title: 'What may Solace\nnotice?',
+      body: 'A weak guess about how an entry sounds can make your journal more useful. It is always your call.',
+      extra: consent == null ? null : ReadingChoices(consent: consent),
+    );
+  }
+}
+
+/// Voice and video journals that work without the server, by keeping two small models on this phone.
+class _ModelsPage extends StatelessWidget {
+  const _ModelsPage({required this.consent});
+
+  final ConsentController? consent;
+
+  @override
+  Widget build(BuildContext context) {
+    final consent = this.consent;
+    return _OnboardingPage(
+      illustration: const _Scene(HeroScene.settings),
+      eyebrow: 'Works without the server',
+      title: 'Journal anywhere,\neven offline.',
+      body: 'Keep a small model on this phone and your voice and video journals are written down even when your server is off. '
+          'They are read later, when it is back.',
+      extra: consent == null
+          ? const OfflineModelChoices()
+          : ListenableBuilder(
+              listenable: consent,
+              builder: (context, _) => OfflineModelChoices(offerFace: consent.isGranted(ConsentKey.faceFeatures)),
+            ),
+    );
+  }
+}
+
+class _ReminderPage extends StatelessWidget {
+  const _ReminderPage({required this.controller});
+
+  final ProfileController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _OnboardingPage(
+      illustration: const _Scene(HeroScene.memory),
+      eyebrow: 'A gentle nudge',
+      title: 'Want a daily\nreminder?',
+      body: 'A quiet check-in reminder at a time that suits you. No streaks, and it fades away if you are busy.',
+      extra: ReminderChoice(controller: controller),
     );
   }
 }

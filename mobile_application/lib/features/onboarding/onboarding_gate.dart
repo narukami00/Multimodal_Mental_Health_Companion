@@ -22,6 +22,7 @@ import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
+import '../consent/consent_controller.dart';
 import 'onboarding_flow.dart';
 
 class OnboardingGate extends StatefulWidget {
@@ -38,6 +39,8 @@ class OnboardingGate extends StatefulWidget {
     this.breakPrompts,
     this.moments,
     this.memory,
+    this.consent,
+    this.scheduleReminder,
     super.key,
   });
 
@@ -53,6 +56,8 @@ class OnboardingGate extends StatefulWidget {
   final BreakPromptController? breakPrompts;
   final MomentsController? moments;
   final CompanionMemoryContext? memory;
+  final ConsentController? consent;
+  final Future<bool> Function(int minutes)? scheduleReminder;
 
   @override
   State<OnboardingGate> createState() => _OnboardingGateState();
@@ -157,6 +162,8 @@ class _OnboardingGateState extends State<OnboardingGate> {
     return OnboardingFlow(
       repository: widget.repository,
       profileController: widget.profileController,
+      consent: widget.consent,
+      scheduleReminder: widget.scheduleReminder,
       onComplete: () => setState(() => _isComplete = true),
     );
   }

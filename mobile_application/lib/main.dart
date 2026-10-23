@@ -381,6 +381,7 @@ Future<void> main() async {
       breakPrompts: breakPrompts,
       moments: moments,
       memory: memory,
+      consentController: consentController,
       navigatorKey: navigatorKey,
     ),
   );
@@ -400,6 +401,8 @@ class SolaceApp extends StatelessWidget {
     this.breakPrompts,
     this.moments,
     this.memory,
+    this.consentController,
+    this.scheduleReminder,
     this.navigatorKey,
     super.key,
   }) : safetyController =
@@ -441,6 +444,12 @@ class SolaceApp extends StatelessWidget {
   final MomentsController? moments;
   final CompanionMemoryContext? memory;
 
+  /// Where onboarding records the voice and face choices (the app's own in a real run).
+  final ConsentController? consentController;
+
+  /// Replaces the real reminder scheduling in onboarding (tests).
+  final Future<bool> Function(int minutes)? scheduleReminder;
+
   /// Lets the home-screen widget push the check-in flow from outside the tree.
   final GlobalKey<NavigatorState>? navigatorKey;
 
@@ -471,6 +480,8 @@ class SolaceApp extends StatelessWidget {
             breakPrompts: breakPrompts,
             moments: moments,
             memory: memory,
+            consent: consentController,
+            scheduleReminder: scheduleReminder,
           ),
         );
       },

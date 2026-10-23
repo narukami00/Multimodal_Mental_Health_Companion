@@ -1,4 +1,7 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:solace_mobile/core/models/consent.dart';
+import 'package:solace_mobile/features/consent/consent_controller.dart';
+import 'package:solace_mobile/data/repositories/in_memory_consent_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/data/repositories/in_memory_onboarding_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
@@ -43,6 +46,10 @@ void main() {
 
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
+    expect(find.textContaining('Want a daily'), findsOneWidget);
+
+    await tester.tap(find.text('Not now'));
+    await tester.pumpAndSettle();
     expect(find.text('Support is always nearby.'), findsOneWidget);
 
     await tester.tap(find.text('Start checking in'));
@@ -71,6 +78,8 @@ void main() {
   _sleepPageTests();
   _countryPageTests();
   _namePageTests();
+  _voiceAndVideoPageTests();
+  _reminderPageTests();
 }
 
 Future<ProfileController> _reachSleepPage(
@@ -81,7 +90,7 @@ Future<ProfileController> _reachSleepPage(
     repository: InMemoryProfileRepository(),
   );
   await profileController.load();
-  await repository.setCurrentPage(3);
+  await repository.setCurrentPage(5);
 
   await tester.pumpWidget(
     SolaceApp(
@@ -174,7 +183,7 @@ void _countryPageTests() {
     final repository = InMemoryOnboardingRepository();
     final profile = ProfileController(repository: InMemoryProfileRepository());
     await profile.load();
-    await repository.setCurrentPage(4);
+    await repository.setCurrentPage(6);
     await tester.pumpWidget(
       SolaceApp(
         onboardingRepository: repository,
@@ -205,7 +214,7 @@ void _namePageTests() {
     final repository = InMemoryOnboardingRepository();
     final profile = ProfileController(repository: InMemoryProfileRepository());
     await profile.load();
-    await repository.setCurrentPage(5);
+    await repository.setCurrentPage(7);
     await tester.pumpWidget(
       SolaceApp(
         onboardingRepository: repository,
@@ -224,7 +233,7 @@ void _namePageTests() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
     expect(profile.profile.displayName, 'Rafsan');
-    expect(find.text('Support is always nearby.'), findsOneWidget);
+    expect(find.textContaining('Want a daily'), findsOneWidget);
   });
 
   testWidgets('leaving the name blank, or skipping, keeps nothing and is fine', (tester) async {
@@ -232,6 +241,149 @@ void _namePageTests() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
     expect(profile.profile.displayName, anyOf(isNull, isEmpty));
+    expect(find.textContaining('Want a daily'), findsOneWidget);
+  });
+}
+
+void _voiceAndVideoPageTests() {
+  Future<(InMemoryOnboardingRepository, ConsentController)> start(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final repository = InMemoryOnboardingRepository();
+    await repository.setCurrentPage(2);
+    final consent = ConsentController(repository: InMemoryConsentRepository());
+    await consent.load();
+    await tester.pumpWidget(SolaceApp(
+      onboardingRepository: repository,
+      sessionController: _testSessionController(),
+      consentController: consent,
+    ));
+    await tester.pumpAndSettle();
+    return (repository, consent);
+  }
+
+  testWidgets('choosing voice and video leads to the reading choices, which are off until switched on', (tester) async {
+    final (repository, consent) = await start(tester);
+    await tester.tap(find.text('Allow access'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('What may Solace'), findsOneWidget);
+    expect(consent.isGranted(ConsentKey.emotionEstimate), isFalse);
+    expect(consent.isGranted(ConsentKey.faceFeatures), isFalse);
+
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('onboarding-consent-face')), matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    expect(consent.isGranted(ConsentKey.faceFeatures), isFalse); // the face switch waits for the voice one
+
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('onboarding-consent-voice')), matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    expect(consent.isGranted(ConsentKey.emotionEstimate), isTrue);
+    expect(consent.isGranted(ConsentKey.faceFeatures), isFalse);
+
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('onboarding-consent-voice')), matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    expect(consent.isGranted(ConsentKey.emotionEstimate), isFalse); // a considered no, changeable any time
+    expect(repository.usesMedia, isTrue);
+  });
+
+  testWidgets('then the offline models are offered, with the speech model first and the camera models only if the face is allowed', (tester) async {
+    final (_, consent) = await start(tester);
+    await tester.tap(find.text('Allow access'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    Future<void> panelLoads() async {
+      for (var i = 0; i < 20 && find.byKey(const ValueKey('models-panel')).evaluate().isEmpty; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // it looks at the phone's files
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    expect(find.textContaining('Journal anywhere'), findsOneWidget);
+    await panelLoads();
+    expect(find.text('Offline transcription'), findsOneWidget);
+    expect(find.text('Read my face on this phone'), findsNothing);
+    expect(find.textContaining('needs to be on right now'), findsOneWidget);
+
+    await consent.grant(ConsentKey.emotionEstimate); // the face needs the voice reading's OK first
+    await consent.grant(ConsentKey.faceFeatures);
+    await tester.pump();
+    await panelLoads();
+    expect(find.text('Read my face on this phone'), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('When do you usually'), findsOneWidget);
+  });
+
+  testWidgets('someone who chooses text never sees the voice and video pages', (tester) async {
+    await start(tester);
+    await tester.tap(find.text("I'll use text"));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('When do you usually'), findsOneWidget);
+  });
+}
+
+void _reminderPageTests() {
+  Future<ProfileController> reach(WidgetTester tester, Future<bool> Function(int) schedule) async {
+    final repository = InMemoryOnboardingRepository();
+    final profile = ProfileController(repository: InMemoryProfileRepository());
+    await profile.load();
+    await repository.setCurrentPage(8);
+    await tester.pumpWidget(SolaceApp(
+      onboardingRepository: repository,
+      sessionController: _testSessionController(),
+      profileController: profile,
+      scheduleReminder: schedule,
+    ));
+    await tester.pumpAndSettle();
+    return profile;
+  }
+
+  testWidgets('a reminder is only claimed once it was really scheduled', (tester) async {
+    int? scheduledAt;
+    final profile = await reach(tester, (minutes) async {
+      scheduledAt = minutes;
+      return true;
+    });
+    await tester.tap(find.text('Set a reminder'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(scheduledAt, isNotNull);
+    expect(profile.profile.reminderEnabled, isTrue);
+    expect(profile.profile.reminderMinutes, scheduledAt);
+    expect(find.text('Support is always nearby.'), findsOneWidget);
+  });
+
+  testWidgets('when notifications are off, no reminder is claimed, and the person is told', (tester) async {
+    final profile = await reach(tester, (_) async => false);
+    await tester.tap(find.text('Set a reminder'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(profile.profile.reminderEnabled, isFalse);
+    expect(find.textContaining('No reminder was set'), findsOneWidget);
+  });
+
+  testWidgets('"Not now" sets nothing', (tester) async {
+    var asked = false;
+    final profile = await reach(tester, (_) async {
+      asked = true;
+      return true;
+    });
+    await tester.tap(find.text('Not now'));
+    await tester.pumpAndSettle();
+    expect(asked, isFalse);
+    expect(profile.profile.reminderEnabled, isFalse);
     expect(find.text('Support is always nearby.'), findsOneWidget);
   });
 }
