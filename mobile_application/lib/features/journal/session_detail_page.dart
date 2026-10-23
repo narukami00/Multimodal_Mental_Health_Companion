@@ -7,6 +7,7 @@ import '../memory/keep_moment.dart';
 import '../../core/models/session_record.dart';
 import '../../core/widgets/page_back_button.dart';
 import 'emotion_reading_card.dart';
+import 'reading_status.dart';
 
 class SessionDetailPage extends StatefulWidget {
   const SessionDetailPage({
@@ -80,6 +81,7 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
   Future<void> _reanalyze() async {
     setState(() => _reading = true);
     final updated = await widget.onReanalyze!(session);
+    final why = updated == null ? await explainNoReading() : null; // what is actually in the way, not a guess
     if (!mounted) return;
     setState(() {
       _reading = false;
@@ -89,10 +91,8 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text(
-              "Couldn't read it: the companion server isn't reachable, or reading isn't switched on.",
-            ),
+          SnackBar(
+            content: Text(why!),
             behavior: SnackBarBehavior.floating,
           ),
         );

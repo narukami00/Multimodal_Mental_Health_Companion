@@ -9,6 +9,7 @@ import '../../core/theme/solace_palette.dart';
 import '../sessions/session_controller.dart';
 import '../insights/mood_tab.dart' show moodColors;
 import '../checkin/check_in_mode_page.dart';
+import 'reading_status.dart';
 import '../consent/emotion_consent_sheets.dart';
 import 'session_detail_page.dart';
 
@@ -858,6 +859,7 @@ class _UnreadEntriesBannerState extends State<_UnreadEntriesBanner> {
     setState(() => _busy = true);
     final total = widget.sessionController.unread.length;
     final read = await widget.sessionController.reanalyzeUnread();
+    final why = read == 0 ? await explainNoReading() : null; // what is actually in the way, not a guess
     if (!mounted) return;
     setState(() => _busy = false);
     ScaffoldMessenger.of(context)
@@ -868,8 +870,8 @@ class _UnreadEntriesBannerState extends State<_UnreadEntriesBanner> {
             read == total
                 ? 'Read $read earlier ${read == 1 ? 'entry' : 'entries'}.'
                 : read == 0
-                ? "Couldn't read them: the companion server isn't reachable, or reading isn't switched on."
-                : 'Read $read of $total. The rest will need the server again.',
+                ? why!
+                : 'Read $read of $total. The rest will wait for the server.',
           ),
           behavior: SnackBarBehavior.floating,
         ),

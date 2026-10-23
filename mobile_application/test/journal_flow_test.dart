@@ -249,6 +249,7 @@ void main() {
     /// Stops a mock recording while the server is away, and waits for the phone to keep it.
     Future<void> recordWhileServerIsAway(WidgetTester tester) async {
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(seconds: 3));
       await tester.tap(find.byKey(const ValueKey('journal-stop')));
@@ -298,6 +299,7 @@ void main() {
       await consent.grant(ConsentKey.emotionEstimate);
       await pump(tester, phone: _FakePhone('Phone words. Properly punctuated.'));
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(seconds: 3));
       await tester.tap(find.byKey(const ValueKey('journal-stop')));
@@ -318,6 +320,7 @@ void main() {
       await consent.grant(ConsentKey.emotionEstimate);
       await pump(tester);
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(seconds: 3));
       await tester.tap(find.byKey(const ValueKey('journal-stop')));
@@ -328,6 +331,35 @@ void main() {
       }
       expect(server.requests.last.query.containsKey('words'), isFalse);
       expect(sessions.sessions.single.text, 'I had a long day and I feel tired.');
+    });
+
+    testWidgets('declining the emotion reading still lets the phone write the words down privately: nothing is sent', (tester) async {
+      await pump(tester, phone: _FakePhone('Just for me.'));
+      await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80)));
+      await tester.pump(const Duration(milliseconds: 500));
+      for (var i = 0; i < 20 && find.byKey(const ValueKey('consent-decline')).evaluate().isEmpty; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.byKey(const ValueKey('consent-decline')));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80)));
+      for (var i = 0; i < 20 && find.byKey(const ValueKey('journal-stop')).evaluate().isEmpty; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.pump(const Duration(seconds: 3));
+      await tester.tap(find.byKey(const ValueKey('journal-stop')));
+      for (var i = 0; i < 20 && find.text('Written down on this phone. Nothing was sent anywhere.').evaluate().isEmpty; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text('Written down on this phone. Nothing was sent anywhere.'), findsOneWidget);
+      expect(server.requests, isEmpty);
+      expect(sessions.sessions.single.text, 'Just for me.');
+      expect(sessions.sessions.single.reading, isNull);
     });
 
     testWidgets('crisis words the phone wrote down open Support at once, even with no server', (tester) async {
@@ -375,6 +407,7 @@ void main() {
       final reader = _FakeFaceReader();
       await pump(tester, mode: CaptureMode.video, frames: camera, faceReader: reader, phoneFaceDirectory: () async => '/models');
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       for (var i = 0; i < 20 && reader.starts == 0; i++) {
         await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
         await tester.pump(const Duration(milliseconds: 100));
@@ -406,6 +439,7 @@ void main() {
       final reader = _FakeFaceReader(startWorks: false);
       await pump(tester, mode: CaptureMode.video, frames: camera, faceReader: reader, phoneFaceDirectory: () async => '/models');
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       for (var i = 0; i < 20 && reader.starts == 0; i++) {
         await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
         await tester.pump(const Duration(milliseconds: 100));
@@ -434,6 +468,7 @@ void main() {
       final reader = _FakeFaceReader();
       await pump(tester, mode: CaptureMode.video, frames: camera, faceReader: reader, phoneFaceDirectory: () async => '/models');
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       for (var i = 0; i < 20 && reader.starts == 0; i++) {
         await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
         await tester.pump(const Duration(milliseconds: 100));
@@ -478,6 +513,7 @@ void main() {
       final reader = _FakeFaceReader(enoughFrames: false);
       await pump(tester, mode: CaptureMode.video, frames: _Camera(), faceReader: reader, phoneFaceDirectory: () async => '/models');
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       for (var i = 0; i < 20 && reader.starts == 0; i++) {
         await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
         await tester.pump(const Duration(milliseconds: 100));
@@ -511,10 +547,12 @@ void main() {
       expect(find.textContaining('Nobody replies'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byKey(const ValueKey('emotion-consent-sheet')), findsOneWidget); // asked once, when it is needed
       await tester.tap(find.byKey(const ValueKey('consent-allow')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byKey(const ValueKey('journal-stop')), findsOneWidget);
@@ -539,9 +577,11 @@ void main() {
     testWidgets('without the persons OK nothing is recorded or sent', (tester) async {
       await pump(tester);
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.tap(find.byKey(const ValueKey('consent-decline')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byKey(const ValueKey('journal-start')), findsOneWidget);
@@ -555,6 +595,7 @@ void main() {
       server.reachable = false;
       await pump(tester);
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(seconds: 3));
       await tester.tap(find.byKey(const ValueKey('journal-stop')));
@@ -586,6 +627,7 @@ void main() {
       server.reachable = false;
       await pump(tester);
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(seconds: 3));
       await tester.tap(find.byKey(const ValueKey('journal-stop')));
@@ -616,6 +658,7 @@ void main() {
       server.body = {..._answer, 'transcript': 'I want to die', 'safety': 'urgent_support'};
       await pump(tester);
       await tester.tap(find.byKey(const ValueKey('journal-start')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80))); // the page first looks for a phone speech model
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(seconds: 3));
       await tester.tap(find.byKey(const ValueKey('journal-stop')));

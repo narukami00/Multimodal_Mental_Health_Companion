@@ -86,6 +86,26 @@ class EmotionClient:
         """One upright JPEG frame taken at [t] (this process's monotonic clock). Droppable: None on any problem."""
         return await self._post("/v1/emotion/frame", "frame", timeout=0.6, droppable=True, params={"session_id": session_id, "t": t}, content=jpeg)
 
+    async def health(self) -> Dict[str, Any]:
+        """What the app needs to say, in words, why there is no emotion reading: "off" (this server does not use the emotion
+        service), "ready", or "unavailable" (switched on, but the service does not answer: still loading, or not running).
+        Cached for a few seconds, and never counts against the circuit breaker."""
+        if not self.enabled:
+            return {"state": "off", "face": False}
+        now = time.monotonic()
+        cached = getattr(self, "_health", None)
+        if cached is not None and now - getattr(self, "_health_at", 0.0) < 5.0:
+            return cached
+        try:
+            r = await self._http().get("/healthz", timeout=0.8)
+            r.raise_for_status()
+            body = r.json()
+            out = {"state": "ready" if body.get("ready") else "unavailable", "face": bool(body.get("face"))}
+        except Exception:
+            out = {"state": "unavailable", "face": False}
+        self._health, self._health_at = out, now
+        return out
+
     async def face_vector(self, session_id: str, raw: bytes) -> bool:
         """The 1,400 face numbers a phone computed itself (float32, little endian). The service then uses them for this
         session instead of camera frames. True when it accepted them."""

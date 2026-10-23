@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/services/model_pack_store.dart';
 import 'package:solace_mobile/services/phone_transcriber.dart';
 import 'package:solace_mobile/services/stt_model_store.dart';
 
@@ -87,6 +88,45 @@ void main() {
     expect(await store.download(), isFalse);
     expect(await store.installed(), isNull);
     expect(Directory('${dir.path}/model').existsSync(), isFalse);
+  });
+
+  group('why a download did not finish', () {
+    test('a good download says installed, and the plain download() still answers true', () async {
+      expect(await store.downloadResult(), ModelDownload.installed);
+      expect(await store.download(), isTrue);
+    });
+
+    test('no server at all is "server away"', () async {
+      final away = SttModelStore(directory: () async => Directory('${dir.path}/model'), serverBase: () async => null);
+      expect(await away.downloadResult(), ModelDownload.serverAway);
+      final unreachable = SttModelStore(directory: () async => Directory('${dir.path}/model'), serverBase: () async => Uri.parse('http://127.0.0.1:1'));
+      expect(await unreachable.downloadResult(), ModelDownload.serverAway); // nothing listens: could not connect
+    });
+
+    test('a server without the model is "not on the server"', () async {
+      server.hasModel = false;
+      expect(await store.downloadResult(), ModelDownload.notOnServer);
+      expect(await store.installed(), isNull);
+    });
+
+    test('a file that arrives short is "interrupted" and nothing is kept', () async {
+      server.shortBy = 1;
+      expect(await store.downloadResult(), ModelDownload.interrupted);
+      expect(Directory('${dir.path}/model').existsSync(), isFalse);
+    });
+
+    test('a full phone is "no space", not a mystery', () async {
+      final full = SttModelStore(
+        directory: () async => throw FileSystemException('write failed', '/data', const OSError('No space left on device', 28)),
+        serverBase: () async => server.base,
+      );
+      expect(await full.downloadResult(), ModelDownload.noSpace);
+    });
+
+    test('the pack knows roughly how big it is, to say so', () {
+      expect(SttModelStore().sizeMegabytes, 153);
+      expect(FaceModelStore().sizeMegabytes, 19);
+    });
   });
 
   test('no server means no download, and removing deletes the model', () async {

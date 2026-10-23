@@ -20,7 +20,15 @@ class ModelPackController extends ChangeNotifier {
   String? message;
   bool _disposed = false;
 
-  static const downloadFailed = "Couldn't get it just now. Check that your companion server is on and connected, then try again.";
+  /// What to tell the person when a download did not finish: the real reason, in one calm sentence.
+  static String explainDownload(ModelDownload result, {int? megabytes}) => switch (result) {
+        ModelDownload.installed => '',
+        ModelDownload.serverAway => "Couldn't reach your companion server. Check that it's on and connected, then try again.",
+        ModelDownload.notOnServer => "Your companion server doesn't have this set up yet. Ask whoever runs it to add it, then try again.",
+        ModelDownload.interrupted => 'The download was interrupted, so nothing was kept. Try again, ideally on Wi-Fi.',
+        ModelDownload.noSpace => "There isn't enough free space on this phone${megabytes == null ? '' : ' (about $megabytes MB are needed)'}. "
+            'Free some up and try again.',
+      };
 
   void _onStoreChanged() => refresh();
 
@@ -38,14 +46,14 @@ class ModelPackController extends ChangeNotifier {
     progress = 0;
     message = null;
     notifyListeners();
-    final ok = await store.download(onProgress: (p) {
+    final result = await store.downloadResult(onProgress: (p) {
       if (_disposed) return;
       progress = p;
       notifyListeners();
     });
     if (_disposed) return;
     downloading = false;
-    message = ok ? null : downloadFailed;
+    message = result == ModelDownload.installed ? null : explainDownload(result, megabytes: store.sizeMegabytes);
     await refresh();
   }
 

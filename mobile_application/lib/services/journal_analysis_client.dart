@@ -129,6 +129,28 @@ class JournalAnalysisClient {
     }
   }
 
+  /// Whether the server can make emotion readings right now, from its own health report: "ready", "off" (this server does not
+  /// use emotion reading), "unavailable" (switched on but not answering), or "unknown" (an older server that does not say).
+  /// Null when no server can be reached at all.
+  Future<String?> emotionState() async {
+    final base = await _baseUri();
+    if (base == null) return null;
+    try {
+      final reply = await _transport(
+        method: 'GET',
+        uri: base.replace(path: '/healthz'),
+        headers: const {},
+        body: const [],
+        timeout: const Duration(seconds: 3),
+      );
+      if (reply.status != 200) return null;
+      final emotion = (jsonDecode(reply.body) as Map<String, dynamic>)['emotion'];
+      return emotion is Map && emotion['state'] is String ? emotion['state'] as String : 'unknown';
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The address of the first companion server that answers, or null when none does.
   Future<Uri?> serverBase() => _baseUri();
 

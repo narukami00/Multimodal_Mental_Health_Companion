@@ -111,6 +111,9 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
   bool _waiting = false; // saved while the server was away: the server reads how it sounded later
   bool _waitingFace = false; // ...and, when the phone read the face itself, how the person looked (numbers only)
 
+  // The person said no to emotion reading, so this entry is only written down, on this phone: nothing is sent anywhere.
+  bool _privateOnly = false;
+
   // Reading the face on the phone (only when the person chose that and the camera models are installed).
   bool _phoneFace = false;
   Float32List? _faceVector; // the pooled 1,400 numbers for the recording being held
@@ -151,23 +154,34 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
 
   Future<void> _start() async {
     final consent = widget.consentController;
-    if (!await askEmotionConsent(context, consent)) {
-      setState(() => _message = 'Writing down a recording needs the companion server, so it needs your OK first.');
+    final emotionAllowed = await askEmotionConsent(context, consent);
+    if (!mounted) return;
+    // Saying no to emotion reading must not stop someone journaling: a phone that can write the words down itself still
+    // can, and then nothing at all is sent to the server.
+    final phoneCanWrite = await (widget.transcriberFor ?? PhoneSpeech.transcriber)() != null;
+    if (!mounted) return;
+    if (!emotionAllowed && !phoneCanWrite) {
+      setState(() => _message = 'To write a recording down, Solace needs either your OK to send it to your companion server, '
+          'or the offline transcription model on this phone (you can get it below).');
       return;
     }
-    if (!mounted) return;
+    _privateOnly = !emotionAllowed;
     _faceAllowed = false;
-    if (_video) {
+    if (_video && !_privateOnly) {
       _faceAllowed = consent.isGranted(ConsentKey.faceFeatures) || await askFaceConsent(context, consent);
       if (!mounted) return;
     }
     // The person may have chosen to read their face on the phone. That needs the camera models and an Android that can
-    // run them; if the models cannot be opened the server reads the face, exactly as before.
+    // run them; if the models cannot be opened the server reads the face, exactly as before (and the person is told).
     _phoneFace = false;
     _faceVector = null;
+    var faceNote = '';
     if (_video && _faceAllowed) {
       final directory = await (widget.phoneFaceDirectory ?? PhoneFace.directoryForPhoneReading)();
-      if (directory != null) _phoneFace = await _faceReader.start(directory);
+      if (directory != null) {
+        _phoneFace = await _faceReader.start(directory);
+        if (!_phoneFace) faceNote = "Couldn't start reading your face on this phone, so your companion server will read it instead.";
+      }
       if (!mounted) return;
     }
     _recordingId = DateTime.now().microsecondsSinceEpoch.toString();
@@ -176,7 +190,7 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
     _heldWords = null;
     _heldWordsTried = false;
     _seconds = 0;
-    _message = '';
+    _message = faceNote;
     _preview = null;
     _faceUsable = null;
     if (!await _recorder.startRecording()) {
@@ -257,6 +271,7 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
     final pcm = _held;
     if (pcm == null) return;
     setState(() => _phase = _Phase.analysing);
+    if (_privateOnly) return _finishPrivately(pcm);
     // A phone with its own speech model always writes the words itself (server up or not); the server then only
     // reads the recording for emotion. Without the model, the server writes the words down as before.
     final phoneWords = await _phoneWordsFor(pcm);
@@ -332,6 +347,29 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
         ),
       );
     }
+  }
+
+  /// Writes the recording down on the phone and keeps only the words: no emotion reading, and nothing sent anywhere.
+  Future<void> _finishPrivately(Uint8List pcm) async {
+    final words = await _phoneWordsFor(pcm);
+    if (!mounted) return;
+    if (words == null) {
+      setState(() {
+        _phase = _Phase.failed;
+        _held = null;
+        _message = "I couldn't make out any words. Try again a little closer to the microphone.";
+      });
+      return;
+    }
+    final session = await widget.sessionController.saveAnalyzed(mode: widget.mode, text: words, emotionResults: (_) => const []);
+    _held = null; // the recording is gone for good
+    if (!mounted) return;
+    setState(() {
+      _phase = _Phase.done;
+      _saved = session;
+      _transcript = words;
+    });
+    await _screenWords(words);
   }
 
   /// The same words check the server does, but on the phone, so a person in distress is met at once even offline.
@@ -486,7 +524,9 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
                 const SizedBox(height: 4),
                 Center(
                   child: Text(
-                    _waiting && _transcript.isNotEmpty
+                    _privateOnly
+                        ? 'Written down on this phone. Nothing was sent anywhere.'
+                        : _waiting && _transcript.isNotEmpty
                         ? (_waitingFace
                             ? 'Written down on this phone. How you sounded and looked is read when the companion server is back.'
                             : 'Written down on this phone. How it sounded is read when the companion server is back.')
@@ -645,7 +685,7 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
       case _Phase.done:
         return Column(
           children: [
-            if (!_waiting)
+            if (!_waiting && !_privateOnly)
             _primary('See how it read', Icons.insights_rounded, () {
               final saved = _saved;
               if (saved == null) return;

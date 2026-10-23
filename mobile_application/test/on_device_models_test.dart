@@ -11,23 +11,24 @@ import 'package:solace_mobile/services/phone_speech.dart';
 
 /// A model pack that lives in memory: no files, no network.
 class _FakePack extends ModelPackStore {
-  _FakePack({this.downloadWorks = true}) : super(pack: 'fake', files: const ['a.bin'], folderName: 'fake');
+  _FakePack({this.downloadWorks = true, this.failure = ModelDownload.serverAway}) : super(pack: 'fake', files: const ['a.bin'], folderName: 'fake', sizeMegabytes: 153);
 
   bool present = false;
   bool downloadWorks;
+  ModelDownload failure; // why a download that does not work does not work
   int downloads = 0;
 
   @override
   Future<int?> installedBytes() async => present ? 153 * 1024 * 1024 : null;
 
   @override
-  Future<bool> download({void Function(double progress)? onProgress}) async {
+  Future<ModelDownload> downloadResult({void Function(double progress)? onProgress}) async {
     downloads++;
     onProgress?.call(0.5);
     if (downloadWorks) present = true;
     onProgress?.call(1);
     notifyListeners();
-    return downloadWorks;
+    return downloadWorks ? ModelDownload.installed : failure;
   }
 
   @override
@@ -115,6 +116,25 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('a-on')), findsOneWidget);
       expect(find.byKey(const ValueKey('a-message')), findsNothing);
+    });
+
+    testWidgets('each way a download can fail is explained in its own words', (tester) async {
+      const expected = {
+        ModelDownload.serverAway: "Couldn't reach your companion server",
+        ModelDownload.notOnServer: "doesn't have this set up yet",
+        ModelDownload.interrupted: 'The download was interrupted',
+        ModelDownload.noSpace: "There isn't enough free space on this phone (about 153 MB are needed)",
+      };
+      for (final entry in expected.entries) {
+        await tester.pumpWidget(_panel([_row(_FakePack(downloadWorks: false, failure: entry.key), 'a')]));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('a-download')));
+        await tester.pumpAndSettle();
+        final message = tester.widget<Text>(find.byKey(const ValueKey('a-message'))).data!;
+        expect(message, contains(entry.value), reason: '${entry.key}');
+        expect(message.toLowerCase(), isNot(contains('exception')), reason: '${entry.key}');
+        await tester.pumpWidget(const SizedBox());
+      }
     });
 
     testWidgets('removing asks first, "Keep it" changes nothing, and the install and remove callbacks fire only for real', (tester) async {

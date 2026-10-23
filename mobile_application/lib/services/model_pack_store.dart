@@ -5,6 +5,23 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+/// How a model download ended.
+enum ModelDownload {
+  installed,
+
+  /// The companion server could not be reached (or is in trouble).
+  serverAway,
+
+  /// The server is there, but does not have this model set up.
+  notOnServer,
+
+  /// The download broke off or arrived wrong; nothing was kept.
+  interrupted,
+
+  /// The phone has no room for it.
+  noSpace,
+}
+
 /// An on-device model pack (the speech model, the camera models): where it lives, whether it is all there, how to
 /// get it and how to remove it.
 ///
@@ -16,10 +33,14 @@ class ModelPackStore extends ChangeNotifier {
     required this.pack,
     required this.files,
     required this.folderName,
+    this.sizeMegabytes,
     Future<Directory> Function()? directory,
     Future<Uri?> Function()? serverBase,
   })  : _directory = directory ?? (() => _defaultDirectory(folderName)),
         _serverBase = serverBase;
+
+  /// About how much room the pack takes, for telling the person (null when not known).
+  final int? sizeMegabytes;
 
   /// The name the server knows the pack by (`/v1/models/<pack>`).
   final String pack;
@@ -67,25 +88,30 @@ class ModelPackStore extends ChangeNotifier {
     return total;
   }
 
-  /// Downloads the pack from the companion server. [onProgress] gets 0..1. Returns true when it is installed;
-  /// false (and nothing half-installed is left behind) when the server is away, does not have the pack, or a file
-  /// is wrong.
-  Future<bool> download({void Function(double progress)? onProgress}) async {
+  /// Downloads the pack from the companion server. [onProgress] gets 0..1. Returns true when it is installed; false
+  /// (and nothing half-installed is left behind) otherwise. [downloadResult] says why.
+  Future<bool> download({void Function(double progress)? onProgress}) async =>
+      await downloadResult(onProgress: onProgress) == ModelDownload.installed;
+
+  /// Like [download], but says how it ended, so the person can be told what is actually wrong.
+  Future<ModelDownload> downloadResult({void Function(double progress)? onProgress}) async {
     final base = await _serverBase?.call();
-    if (base == null) return false;
+    if (base == null) return ModelDownload.serverAway;
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    var gotManifest = false; // before it, a failure means the server could not be reached; after it, the download broke off
     try {
       final dir = await _directory();
       final manifestReply = await (await client.getUrl(base.replace(path: '/v1/models/$pack'))).close();
       if (manifestReply.statusCode != 200) {
         await manifestReply.drain<void>();
-        return false;
+        return manifestReply.statusCode == 404 ? ModelDownload.notOnServer : ModelDownload.serverAway;
       }
       final manifest = jsonDecode(await manifestReply.transform(utf8.decoder).join()) as Map<String, dynamic>;
       final listed = [
         for (final f in (manifest['files'] as List).whereType<Map>()) (name: f['name'] as String, size: (f['size'] as num).toInt()),
       ];
-      if (!files.every((n) => listed.any((f) => f.name == n))) return false;
+      if (!files.every((n) => listed.any((f) => f.name == n))) return ModelDownload.notOnServer;
+      gotManifest = true;
 
       await remove();
       await dir.create(recursive: true);
@@ -97,7 +123,8 @@ class ModelPackStore extends ChangeNotifier {
         final reply = await (await client.getUrl(base.replace(path: '/v1/models/$pack/${f.name}'))).close();
         if (reply.statusCode != 200) {
           await reply.drain<void>();
-          throw const HttpException('model file refused');
+          await remove();
+          return reply.statusCode == 404 ? ModelDownload.notOnServer : ModelDownload.interrupted;
         }
         final sink = part.openWrite();
         try {
@@ -109,21 +136,32 @@ class ModelPackStore extends ChangeNotifier {
         } finally {
           await sink.close();
         }
-        if (await part.length() != f.size) throw const HttpException('model file has the wrong size');
+        if (await part.length() != f.size) {
+          await remove();
+          return ModelDownload.interrupted;
+        }
         await part.rename('${dir.path}${Platform.pathSeparator}${f.name}');
       }
       await File('${dir.path}${Platform.pathSeparator}$_readyMarker').writeAsString(jsonEncode(manifest));
       onProgress?.call(1);
       final ok = await isInstalled();
       notifyListeners();
-      return ok;
+      return ok ? ModelDownload.installed : ModelDownload.interrupted;
     } catch (e) {
       debugPrint('[ModelPack:$pack] download failed: ${e.runtimeType}');
       await remove();
-      return false;
+      if (_isOutOfSpace(e)) return ModelDownload.noSpace;
+      return gotManifest ? ModelDownload.interrupted : ModelDownload.serverAway;
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// A full phone: "no space left on device" (28 on Android and Linux) or "disk full" (112 on Windows).
+  static bool _isOutOfSpace(Object e) {
+    if (e is! FileSystemException) return false;
+    final code = e.osError?.errorCode;
+    return code == 28 || code == 112;
   }
 
   /// Deletes the pack (and any half-finished download) from the phone.

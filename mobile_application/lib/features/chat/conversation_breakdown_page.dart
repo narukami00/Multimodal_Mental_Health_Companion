@@ -10,6 +10,7 @@ import '../checkin/check_in_mode_page.dart';
 import '../consent/emotion_consent_sheets.dart';
 import '../insights/mood_tab.dart' show moodColors;
 import '../journal/emotion_reading_card.dart' show EmotionReadingCard;
+import '../journal/reading_status.dart' show explainNoReading;
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
@@ -242,6 +243,7 @@ class _UnreadBannerState extends State<_UnreadBanner> {
         if (mounted) setState(() => _done = done);
       },
     );
+    final why = read == 0 ? await explainNoReading() : null; // what is actually in the way, not a guess
     if (!mounted) return;
     setState(() => _busy = false);
     ScaffoldMessenger.of(context)
@@ -253,8 +255,8 @@ class _UnreadBannerState extends State<_UnreadBanner> {
             read == total
                 ? 'Read $read ${read == 1 ? 'message' : 'messages'}.'
                 : read == 0
-                ? "Couldn't read them: the companion server isn't reachable, or reading isn't switched on."
-                : 'Read $read of $total. The rest need the server again.',
+                ? why!
+                : 'Read $read of $total. The rest will wait for the server.',
           ),
         ),
       );

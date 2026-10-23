@@ -93,6 +93,9 @@ async def healthz():
         "tts_engine": tts.name,
         "tts_sample_rate": tts.default_sample_rate,
         "recordings_dir": str(RECORDINGS_DIR),
+        # Whether emotion readings can be made right now: "off" / "ready" / "unavailable" (switched on but not answering).
+        # The app uses it to explain WHY there is no reading instead of guessing.
+        "emotion": await default_client().health(),
     }
 
 @app.get("/v1/models")

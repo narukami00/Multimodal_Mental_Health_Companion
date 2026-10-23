@@ -643,7 +643,10 @@ class FaqPage extends StatelessWidget {
           color: _blue,
           question: 'Does Solace work offline?',
           answer:
-              'Reflection, check-in and the journal work offline. A live '
+              'Reflection, check-in and written journals work offline. Voice and '
+              'video journals do too, once you have downloaded the offline '
+              'models (Permissions & privacy): they are kept on your phone '
+              'and read when your companion server is back. A live '
               'conversation needs a connection.',
         ),
       ],
