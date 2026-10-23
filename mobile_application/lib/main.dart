@@ -111,6 +111,7 @@ Future<void> main() async {
   } else if (profileController.profile.reminderEnabled) {
     final result = await CheckInReminderService.instance.scheduleDaily(
       minutesPastMidnight: profileController.profile.reminderMinutes,
+      displayName: profileController.profile.displayName,
     );
     if (!result.isScheduled) {
       // Keep the stored preference honest rather than claiming a reminder that

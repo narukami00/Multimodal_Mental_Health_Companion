@@ -6,6 +6,8 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../domain/rhythm/reminder_wording.dart';
+
 /// The status-bar mark (a flat white silhouette of the app icon) and the accent
 /// Android tints it with. Shared by every notification the app posts.
 const notificationIcon = 'ic_stat_solace';
@@ -173,8 +175,12 @@ class CheckInReminderService {
   }
 
   /// Schedules, replacing any existing reminder, at [minutesPastMidnight].
+  ///
+  /// The line shown is chosen when this runs (see [ReminderWording]): the app calls it on every launch, so the wording
+  /// changes from day to day while the app is in use, and stays steady on the days it is not opened.
   Future<ReminderScheduleResult> scheduleDaily({
     required int minutesPastMidnight,
+    String? displayName,
   }) async {
     if (!await initialize()) {
       return const ReminderScheduleResult(
@@ -219,7 +225,7 @@ class CheckInReminderService {
       await _plugin.zonedSchedule(
         id: reminderNotificationId,
         title: _title,
-        body: _body,
+        body: ReminderWording.body(minutesPastMidnight: minutesPastMidnight, day: next, name: displayName),
         scheduledDate: next,
         notificationDetails: _notificationDetails,
         // Inexact on purpose: a nudge, not an alarm. Android may shift this by

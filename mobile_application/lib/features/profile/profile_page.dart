@@ -1643,6 +1643,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
     // gentle nudge, so a few minutes of drift is fine.
     final result = await service.scheduleDaily(
       minutesPastMidnight: _controller.profile.reminderMinutes,
+      displayName: _controller.profile.displayName,
     );
     final scheduled = result.isScheduled;
     await _controller.setReminderEnabled(scheduled);
@@ -1673,6 +1674,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
 
     final result = await CheckInReminderService.instance.scheduleDaily(
       minutesPastMidnight: _controller.profile.reminderMinutes,
+      displayName: _controller.profile.displayName,
     );
     if (!result.isScheduled) {
       // Could not be re-registered, so stop claiming it is set.
@@ -1711,6 +1713,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
 
     await CheckInReminderService.instance.scheduleDaily(
       minutesPastMidnight: minutes,
+      displayName: _controller.profile.displayName,
     );
   }
 

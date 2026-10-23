@@ -128,10 +128,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     await _next();
   }
 
-  static Future<bool> _scheduleReal(int minutes) async {
+  Future<bool> _scheduleReal(int minutes) async {
     final service = CheckInReminderService.instance;
     if (!await service.requestPermission()) return false;
-    return (await service.scheduleDaily(minutesPastMidnight: minutes)).isScheduled;
+    final name = widget.profileController.profile.displayName;
+    return (await service.scheduleDaily(minutesPastMidnight: minutes, displayName: name)).isScheduled;
   }
 
   /// Keeps the name if they typed one, then moves on. Leaving it empty is fine.
