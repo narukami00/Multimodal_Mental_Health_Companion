@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/day_key.dart';
 import 'package:solace_mobile/core/models/app_description.dart';
 import 'package:solace_mobile/core/models/daily_features.dart';
 import 'package:solace_mobile/core/models/usage_event.dart';
@@ -28,7 +29,9 @@ class _Collector implements UsageCollectorService {
 }
 
 void main() {
-  final now = DateTime(2026, 10, 31, 9);
+  // Relative to the real date: the phone-patterns store prunes by the real clock, so fixed dates would age out.
+  final today = DateTime.now();
+  final now = DateTime(today.year, today.month, today.day, 9);
   late InMemoryDailyFeaturesRepository repository;
   late PhonePatternsController patterns;
   late ProfileController profile;
@@ -70,7 +73,7 @@ void main() {
   testWidgets('describes yesterday and opens My phone patterns', (tester) async {
     await repository.upsert(
       DailyFeatures(
-        dayKey: '2026-10-30',
+        dayKey: dayKey(DateTime(now.year, now.month, now.day - 1)),
         sources: const {'usage', 'usageFinal'},
         screenOnMinutes: 200,
         hourlyActiveMinutes: [for (var h = 0; h < 24; h++) h == 21 ? 40 : 5],
@@ -86,7 +89,10 @@ void main() {
     expect(find.textContaining('Busiest around 9 PM'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('day-rhythm-card')));
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    // The page has a gentle looping animation, so settle by time rather than waiting for stillness.
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     expect(find.byType(PhonePatternsPage), findsOneWidget);
   });
 }
