@@ -12,6 +12,7 @@ import '../models/on_device_model_widgets.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../consent/consent_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
+import 'data_ownership_section.dart';
 import 'phone_patterns_card.dart';
 
 /// What Solace can access, what it does with it, and what it never collects.
@@ -182,6 +183,7 @@ class _PermissionsPageState extends State<PermissionsPage> {
                 const _LeavesDevice(),
                 const SizedBox(height: 12),
                 const _NotCollected(),
+                const DataOwnershipSection(),
                 const SizedBox(height: 22),
                 const Text(
                   'Solace is a reflection space, not a medical or clinical '

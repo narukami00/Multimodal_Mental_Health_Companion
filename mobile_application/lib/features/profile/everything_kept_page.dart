@@ -9,6 +9,7 @@ import '../memory/companion_memory_context.dart';
 import '../memory/moments_controller.dart';
 import '../memory/what_sol_remembers_page.dart';
 import '../sessions/session_controller.dart';
+import 'data_ownership_section.dart';
 import 'phone_patterns_page.dart';
 import 'profile_controller.dart';
 
@@ -201,6 +202,7 @@ class EverythingKeptPage extends StatelessWidget {
           ),
         ),
       ),
+      const DataOwnershipSection(),
     ];
   }
 

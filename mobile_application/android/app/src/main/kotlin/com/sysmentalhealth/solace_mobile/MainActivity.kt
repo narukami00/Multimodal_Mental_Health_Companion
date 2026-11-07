@@ -34,6 +34,9 @@ class MainActivity : FlutterActivity() {
     private val CAMERA_CONTROL_CHANNEL = "com.sysmentalhealth.solace_mobile/camera_control"
     private val CAMERA_STREAM_CHANNEL = "com.sysmentalhealth.solace_mobile/camera_stream"
     private val FACE_CHANNEL = "com.sysmentalhealth.solace_mobile/face_models"
+    private val FILE_CHANNEL = "com.sysmentalhealth.solace_mobile/file_transfer"
+    private val SAVE_FILE_REQUEST_CODE = 1010
+    private val PICK_FILE_REQUEST_CODE = 1011
     private val NOT_IMPLEMENTED = Any()
     private val PERMISSION_REQUEST_CODE = 1002
     private val CAMERA_PERMISSION_REQUEST_CODE = 1003
@@ -53,6 +56,8 @@ class MainActivity : FlutterActivity() {
         CameraFrameCapture(this, this, flutterEngine?.renderer) { jpeg -> mainHandler.post { cameraSink?.success(jpeg) } }
     }
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingFileResult: MethodChannel.Result? = null
+    private var pendingFileBytes: ByteArray? = null
     private val audioManager by lazy {
         getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
@@ -204,6 +209,71 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // Saving and loading a backup of the person's own data through Android's document picker (they choose
+        // the place), and restarting the app so every screen reads what was restored or erased.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FILE_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "save" -> {
+                    val bytes = call.argument<ByteArray>("bytes")
+                    val name = call.argument<String>("name") ?: "solace-backup.json"
+                    if (bytes == null || pendingFileResult != null) {
+                        result.success(false)
+                    } else {
+                        try {
+                            pendingFileResult = result
+                            pendingFileBytes = bytes
+                            val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "application/json"
+                                putExtra(Intent.EXTRA_TITLE, name)
+                            }
+                            startActivityForResult(intent, SAVE_FILE_REQUEST_CODE)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "could not open the save picker: $e")
+                            pendingFileResult = null
+                            pendingFileBytes = null
+                            result.success(false)
+                        }
+                    }
+                }
+                "pick" -> {
+                    if (pendingFileResult != null) {
+                        result.success(null)
+                    } else {
+                        try {
+                            pendingFileResult = result
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "*/*"
+                            }
+                            startActivityForResult(intent, PICK_FILE_REQUEST_CODE)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "could not open the file picker: $e")
+                            pendingFileResult = null
+                            result.success(null)
+                        }
+                    }
+                }
+                "restart" -> {
+                    val launch = packageManager.getLaunchIntentForPackage(packageName)
+                    if (launch == null) {
+                        result.success(false)
+                    } else {
+                        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        val pending = android.app.PendingIntent.getActivity(
+                            this, 0, launch,
+                            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_CANCEL_CURRENT
+                        )
+                        val alarms = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+                        alarms.set(android.app.AlarmManager.RTC, System.currentTimeMillis() + 400, pending)
+                        result.success(true)
+                        mainHandler.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 150)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         // Device usage for the daily behavior row. Reads only the few event types
         // UsageCollector maps; the logic that reduces them lives in Dart.
         val usage = UsageCollector(applicationContext)
@@ -300,6 +370,38 @@ class MainActivity : FlutterActivity() {
             val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
             pendingPermissionResult?.success(granted)
             pendingPermissionResult = null
+        }
+    }
+
+    @Deprecated("Flutter's activity still reports document picks here")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != SAVE_FILE_REQUEST_CODE && requestCode != PICK_FILE_REQUEST_CODE) return
+        val result = pendingFileResult ?: return
+        val bytes = pendingFileBytes
+        pendingFileResult = null
+        pendingFileBytes = null
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) {
+            if (requestCode == SAVE_FILE_REQUEST_CODE) result.success(false) else result.success(null)
+            return
+        }
+        // Off the main thread: a backup can be several megabytes.
+        thread(start = true, name = "BackupFile") {
+            try {
+                if (requestCode == SAVE_FILE_REQUEST_CODE) {
+                    contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes ?: ByteArray(0)) }
+                    mainHandler.post { result.success(true) }
+                } else {
+                    val read = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    // A real backup is far smaller than this; refuse anything silly rather than fill memory.
+                    val usable = if (read != null && read.size <= 64 * 1024 * 1024) read else null
+                    mainHandler.post { result.success(usable) }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "backup file transfer failed: ${e.javaClass.simpleName}")
+                mainHandler.post { if (requestCode == SAVE_FILE_REQUEST_CODE) result.success(false) else result.success(null) }
+            }
         }
     }
 
