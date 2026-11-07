@@ -248,7 +248,7 @@ MoodThroughTheDay? moodThroughTheDay(
       best = difference;
       noticing =
           'In the ${p.part.lower}, ${p.heavier} of your ${p.total} check-ins '
-          'used Tender or Wobbly. In the rest of the day, $restHeavier of '
+          'used ${Moods.display('Tender')} or ${Moods.display('Wobbly')}. In the rest of the day, $restHeavier of '
           '$restTotal did.';
     }
   }

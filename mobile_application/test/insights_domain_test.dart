@@ -206,7 +206,7 @@ void dayPartTests() {
 
       expect(
         result.noticing,
-        'In the evening, 5 of your 8 check-ins used Tender or Wobbly. In the '
+        'In the evening, 5 of your 8 check-ins used Low or Tense. In the '
         'rest of the day, 0 of 10 did.',
       );
     });
