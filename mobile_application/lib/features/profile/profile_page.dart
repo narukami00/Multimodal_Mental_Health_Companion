@@ -35,6 +35,7 @@ import '../footprint/phone_patterns_controller.dart';
 import 'about_pages.dart';
 import 'baseline_quiz_page.dart';
 import 'permissions_page.dart';
+import 'therapist_summary_page.dart';
 import 'phone_patterns_page.dart';
 import 'profile_controller.dart';
 import 'profile_insights_page.dart';
@@ -416,6 +417,22 @@ class ProfilePage extends StatelessWidget {
                           ),
                         ),
                       ),
+                    _row(
+                      icon: Icons.picture_as_pdf_outlined,
+                      title: 'Summary for my therapist',
+                      tint: const Color(0xFFE4F2E9),
+                      onTint: const Color(0xFF3F823B),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => TherapistSummaryPage(
+                            sessionController: sessionController,
+                            suggestionController: suggestionController,
+                            profileController: profileController,
+                            phonePatterns: phonePatterns,
+                          ),
+                        ),
+                      ),
+                    ),
                     _row(
                       icon: Icons.inventory_2_outlined,
                       title: 'Everything Solace keeps',

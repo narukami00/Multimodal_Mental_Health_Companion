@@ -225,7 +225,7 @@ class MainActivity : FlutterActivity() {
                             pendingFileBytes = bytes
                             val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
-                                type = "application/json"
+                                type = if (name.endsWith(".pdf")) "application/pdf" else "application/json"
                                 putExtra(Intent.EXTRA_TITLE, name)
                             }
                             startActivityForResult(intent, SAVE_FILE_REQUEST_CODE)
