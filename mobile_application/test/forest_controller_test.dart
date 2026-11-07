@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/models/session_input.dart';
+import 'package:solace_mobile/core/models/session_record.dart';
 import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
 import 'package:solace_mobile/features/forest/forest_controller.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
@@ -23,9 +24,29 @@ void main() {
     return c;
   }
 
-  test('entries that were there before the forest are never counted', () async {
-    await sessions.saveSession(mode: CaptureMode.text, mood: 'Steady');
-    await sessions.saveSession(mode: CaptureMode.text, mood: 'Bright');
+  test('history is replayed: past days fill the tree quietly, and entries made today wait to be poured', () async {
+    final repository = InMemorySessionRepository();
+    final base = DateTime.now();
+    for (var d = 1; d <= 9; d++) {
+      // one check-in a day for nine earlier days
+      await repository.save(SessionRecord(
+        id: 'old$d',
+        createdAt: DateTime(base.year, base.month, base.day - d, 9),
+        mode: CaptureMode.text,
+        mood: 'Steady',
+      ));
+    }
+    sessions = SessionController(repository: repository, emotionAnalyzer: const MockEmotionAnalyzer());
+    await sessions.load();
+    await sessions.saveSession(mode: CaptureMode.text, mood: 'Bright'); // today
+    final forest = await start();
+    expect(forest.waiting, hasLength(1)); // only today's is poured
+    expect(forest.garden.finished, hasLength(1)); // nine waters: one tree, two on the next
+    expect(forest.garden.currentProgress, 2);
+    expect(forest.garden.finished.single.waters, isNotEmpty); // and it remembers what grew it
+  });
+
+  test('starting with nothing gives a seed', () async {
     final forest = await start();
     expect(forest.waiting, isEmpty);
     expect(forest.garden.currentProgress, 0);

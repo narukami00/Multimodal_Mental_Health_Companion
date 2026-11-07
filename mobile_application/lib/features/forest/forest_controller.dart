@@ -16,7 +16,7 @@ class ForestData {
       : seen = seen ?? <String>{},
         events = events ?? <WaterEvent>[];
 
-  /// False until the first scan: entries that existed before the forest did are noted but never counted.
+  /// False until the first scan has run.
   bool initialised;
   final Set<String> seen;
   final List<WaterEvent> events;
@@ -127,11 +127,12 @@ class ForestController extends ChangeNotifier {
     _scanning = true;
     try {
       var changed = false;
-      final baseline = !_data.initialised;
+      // Everything the person has done counts, history included: each entry and finished task is replayed with its own
+      // date through the same daily rules, so the forest never starts from nothing for someone who has been here a while.
       void take(String id, WaterKind kind, DateTime at) {
         if (!_data.seen.add(id)) return;
         changed = true;
-        if (!baseline) _data.events.add(WaterEvent(id: id, kind: kind, at: at));
+        _data.events.add(WaterEvent(id: id, kind: kind, at: at));
       }
 
       for (final s in _sessions.sessions) {
@@ -140,7 +141,7 @@ class ForestController extends ChangeNotifier {
       for (final r in _suggestions?.history ?? const []) {
         if (r.done == true) take('t:${r.id}', WaterKind.task, r.completedAt ?? r.acceptedAt ?? r.shownAt);
       }
-      if (baseline) {
+      if (!_data.initialised) {
         _data.initialised = true;
         changed = true;
       }
