@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/models/session_input.dart';
 import '../../domain/forest/forest_garden.dart';
+import '../goals/goals_controller.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
 
@@ -80,16 +81,19 @@ class ForestController extends ChangeNotifier {
     required ForestStore store,
     required SessionController sessions,
     SuggestionController? suggestions,
+    GoalsController? goals,
     this.config = const ForestConfig(),
     DateTime Function()? clock,
   })  : _store = store,
         _sessions = sessions,
         _suggestions = suggestions,
+        _goals = goals,
         _clock = clock ?? DateTime.now;
 
   final ForestStore _store;
   final SessionController _sessions;
   final SuggestionController? _suggestions;
+  final GoalsController? _goals;
   final ForestConfig config;
   final DateTime Function() _clock;
 
@@ -106,6 +110,7 @@ class ForestController extends ChangeNotifier {
     await _scan();
     _sessions.addListener(_scan);
     _suggestions?.addListener(_scan);
+    _goals?.addListener(_scan);
     // The card's sky follows the hour, so tell listeners now and then that time has moved on.
     _clockTick = Timer.periodic(const Duration(minutes: 10), (_) => notifyListeners());
     notifyListeners();
@@ -118,6 +123,7 @@ class ForestController extends ChangeNotifier {
     _clockTick?.cancel();
     _sessions.removeListener(_scan);
     _suggestions?.removeListener(_scan);
+    _goals?.removeListener(_scan);
     super.dispose();
   }
 
@@ -140,6 +146,14 @@ class ForestController extends ChangeNotifier {
       }
       for (final r in _suggestions?.history ?? const []) {
         if (r.done == true) take('t:${r.id}', WaterKind.task, r.completedAt ?? r.acceptedAt ?? r.shownAt);
+      }
+      // A day on which a phone goal was met waters once. It is noticed the morning after, so it is dated then
+      // (or at nine the next morning for older days), which lets today's pour play when the forest is opened.
+      for (final day in _goals?.metDayKeys ?? const <String>[]) {
+        final parsed = DateTime.tryParse(day);
+        if (parsed == null) continue;
+        final nineNext = DateTime(parsed.year, parsed.month, parsed.day + 1, 9);
+        take('g:$day', WaterKind.goal, nineNext.isAfter(now) ? now : nineNext);
       }
       if (!_data.initialised) {
         _data.initialised = true;

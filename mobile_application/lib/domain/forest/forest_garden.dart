@@ -33,7 +33,7 @@ class ForestConfig {
   final int journalExtraCapPerDay;
 }
 
-enum WaterKind { text, journal, task }
+enum WaterKind { text, journal, task, goal }
 
 /// One thing the person did that waters the tree.
 class WaterEvent {
@@ -119,12 +119,14 @@ Garden growGarden(List<WaterEvent> events, ForestConfig cfg) {
 
   String? day;
   var text = 0, task = 0, journals = 0, extra = 0, grownToday = 0;
+  var goalToday = false;
 
   for (final e in sorted) {
     final key = dayKey(e.at);
     if (key != day) {
       day = key;
       text = task = journals = extra = grownToday = 0;
+      goalToday = false;
     }
     var earned = 0;
     switch (e.kind) {
@@ -136,6 +138,12 @@ Garden growGarden(List<WaterEvent> events, ForestConfig cfg) {
       case WaterKind.task:
         if (task < cfg.taskCapPerDay) {
           task++;
+          earned = 1;
+        }
+      case WaterKind.goal:
+        // However many goals were met, a day of meeting them is one water.
+        if (!goalToday) {
+          goalToday = true;
           earned = 1;
         }
       case WaterKind.journal:

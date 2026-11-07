@@ -81,6 +81,7 @@ const dataRegistry = <DataEntry>[
     keys: ['footprint.dailyFeatures', 'footprint.breakAnnotations'],
     inTherapistSummary: true,
   ),
+  DataEntry(id: 'goals', label: 'Your phone goals', kind: DataKind.personal, keys: ['goals.list'], inTherapistSummary: true),
   DataEntry(id: 'safety', label: 'Support you were shown', kind: DataKind.personal, keys: ['safety.events']),
   DataEntry(id: 'profile', label: 'About you and your rhythm', kind: DataKind.personal, keys: ['profile.baseline']),
   DataEntry(id: 'therapist', label: 'Your therapist contact', kind: DataKind.personal, keys: ['profile.therapist_contact']),

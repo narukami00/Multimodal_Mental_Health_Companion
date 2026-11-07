@@ -17,11 +17,13 @@ const _kindText = {
   WaterKind.text: 'You did a check-in',
   WaterKind.journal: 'You recorded a journal',
   WaterKind.task: 'You did something kind for yourself',
+  WaterKind.goal: 'You met a phone goal',
 };
 const _kindShort = {
   WaterKind.text: 'Check-in',
   WaterKind.journal: 'Voice or video journal',
   WaterKind.task: 'Self-care activity',
+  WaterKind.goal: 'Phone goal',
 };
 const _settled = ['That is all it needed for now.', 'Slow and steady.', 'Rest well. It grows while you do.', 'A little more rooted than before.'];
 const _stageLines = ['', 'The seed is tucked into the soil.', 'A first green shoot.', 'Its first true leaves.', 'A little trunk of its own now.', 'Branches reaching out.', 'Strong roots, a wide crown.', ''];
