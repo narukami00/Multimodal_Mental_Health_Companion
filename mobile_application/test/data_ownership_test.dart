@@ -224,7 +224,11 @@ void main() {
       expect(files.restarts, 0);
 
       await tester.tap(find.byKey(const ValueKey('import-confirm')));
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+      // The restore alternates between the phone's file system (real time) and the app (fake time).
+      for (var i = 0; i < 40 && files.restarts == 0; i++) {
+        await tester.pump();
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      }
       await tester.pump();
       expect(files.restarts, 1);
     });
@@ -245,7 +249,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('erase-confirm')));
       // The erase alternates between the phone's file system (real time) and the app (fake time).
-      for (var i = 0; i < 6; i++) {
+      for (var i = 0; i < 40 && files.restarts == 0; i++) {
         await tester.pump();
         await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
       }
