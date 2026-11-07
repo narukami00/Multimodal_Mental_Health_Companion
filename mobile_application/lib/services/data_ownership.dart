@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/data/data_registry.dart';
 import '../domain/export/backup.dart';
 import 'check_in_reminder_service.dart';
 
@@ -109,7 +110,8 @@ class DataOwnership {
     final prefs = await _preferences();
     await prefs.reload();
     return buildBackup(
-      preferences: {for (final key in prefs.getKeys()) key: prefs.get(key)!},
+      // What the registry calls tied to this phone (the server address, the widget's line) is not part of a copy.
+      preferences: {for (final key in prefs.getKeys()) if (keyInBackup(key)) key: prefs.get(key)!},
       createdAt: _now(),
     );
   }
@@ -139,8 +141,12 @@ class DataOwnership {
   /// Replaces everything on this phone with the backup, then restarts so every screen reads the restored data.
   Future<void> restore(Backup backup) async {
     final prefs = await _preferences();
-    await prefs.clear();
+    // Replace what a copy holds; keep what belongs to this phone (the server address stays working).
+    for (final key in prefs.getKeys().toList()) {
+      if (keyInBackup(key)) await prefs.remove(key);
+    }
     for (final entry in backup.entries.entries) {
+      if (!keyInBackup(entry.key)) continue;
       switch (entry.value) {
         case BackupString(:final value):
           await prefs.setString(entry.key, value);
