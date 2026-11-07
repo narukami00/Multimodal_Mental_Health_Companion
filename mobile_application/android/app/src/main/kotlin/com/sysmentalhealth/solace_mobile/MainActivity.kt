@@ -35,6 +35,7 @@ class MainActivity : FlutterActivity() {
     private val CAMERA_STREAM_CHANNEL = "com.sysmentalhealth.solace_mobile/camera_stream"
     private val FACE_CHANNEL = "com.sysmentalhealth.solace_mobile/face_models"
     private val FILE_CHANNEL = "com.sysmentalhealth.solace_mobile/file_transfer"
+    private val QUICK_INBOX_CHANNEL = "com.sysmentalhealth.solace_mobile/quick_inbox"
     private val SAVE_FILE_REQUEST_CODE = 1010
     private val PICK_FILE_REQUEST_CODE = 1011
     private val NOT_IMPLEMENTED = Any()
@@ -270,6 +271,15 @@ class MainActivity : FlutterActivity() {
                         mainHandler.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 150)
                     }
                 }
+                else -> result.notImplemented()
+            }
+        }
+
+        // Check-ins typed in the home-screen pop-up wait in QuickInbox; the app collects them here and saves them
+        // as ordinary check-ins.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, QUICK_INBOX_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "drain" -> result.success(QuickInbox.drain(applicationContext))
                 else -> result.notImplemented()
             }
         }

@@ -5,4 +5,10 @@
     <string name="checkin_widget_eyebrow">SOLACE</string>
     <!-- Shown before today's check-in. -->
     <string name="checkin_widget_prompt">How are you, in one word?</string>
+    <string name="widget_write_description">Write a check-in</string>
+    <string name="widget_voice_description">Talk a check-in</string>
+    <string name="quick_write_hint">One word is enough</string>
+    <string name="quick_write_save">Save</string>
+    <string name="quick_write_cancel">Not now</string>
+    <string name="quick_write_saved">Saved. Thank you for checking in.</string>
 </resources>

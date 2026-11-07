@@ -53,8 +53,11 @@ class SessionController extends ChangeNotifier {
     required CaptureMode mode,
     String? text,
     String? mood,
+    // When the words were really written, for a check-in typed outside the app and saved later.
+    DateTime? at,
   }) async {
-    final sessionId = DateTime.now().microsecondsSinceEpoch.toString();
+    final when = at ?? DateTime.now();
+    final sessionId = when.microsecondsSinceEpoch.toString();
     final input = SessionInput(
       sessionId: sessionId,
       mode: mode,
@@ -69,7 +72,7 @@ class SessionController extends ChangeNotifier {
         : const <EmotionResult>[];
     final session = SessionRecord(
       id: sessionId,
-      createdAt: DateTime.now(),
+      createdAt: when,
       mode: mode,
       text: text,
       mood: mood,

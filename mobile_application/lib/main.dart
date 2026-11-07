@@ -25,6 +25,10 @@ import 'features/chat/chat_controller.dart';
 import 'features/chat/chat_message_reader.dart';
 import 'features/chat/chat_page.dart';
 import 'features/checkin/check_in_mode_page.dart';
+import 'features/checkin/quick_reply_importer.dart';
+import 'features/journal/journal_capture_page.dart';
+import 'core/models/session_input.dart';
+import 'services/quick_reply_inbox.dart';
 import 'core/models/consent.dart';
 import 'features/call/call_page.dart';
 import 'providers/server/server_emotion_analyzer.dart';
@@ -292,7 +296,23 @@ Future<void> main() async {
   final navigatorKey = GlobalKey<NavigatorState>();
 
   void openCheckInFromWidget(Uri? uri) {
-    if (uri == null || uri.host != 'checkin') return;
+    if (uri == null) return;
+    if (uri.host == 'voice') {
+      // The widget's microphone button goes straight to talking, the same page the check-in chooser opens.
+      navigatorKey.currentState?.push(
+        MaterialPageRoute<void>(
+          builder: (_) => JournalCapturePage(
+            mode: CaptureMode.voice,
+            sessionController: sessionController,
+            safetyController: safetyController,
+            profileController: profileController,
+            consentController: consentController,
+          ),
+        ),
+      );
+      return;
+    }
+    if (uri.host != 'checkin') return;
     navigatorKey.currentState?.push(
       MaterialPageRoute<void>(
         builder: (_) => CheckInModePage(
@@ -371,9 +391,37 @@ Future<void> main() async {
     );
   }
 
+  // Check-ins typed outside the app (the reminder's reply box, the home-screen pop-up) wait in an inbox and
+  // are saved here as ordinary text check-ins, with the same safety check as any other words.
+  final quickReplies = QuickReplyImporter(
+    drain: () => QuickReplyInbox.drain(preferences),
+    safety: safetyController,
+    sessions: sessionController,
+    showSupport: (assessment) async {
+      navigatorKey.currentState?.push(
+        MaterialPageRoute<void>(
+          builder: (_) => SupportResourcesPage(
+            safetyController: safetyController,
+            profileController: profileController,
+            assessment: assessment,
+          ),
+        ),
+      );
+    },
+  );
+
   unawaited(writeDownWaiting());
-  Timer.periodic(const Duration(minutes: 1), (_) => unawaited(writeDownWaiting()));
-  AppLifecycleListener(onResume: () => unawaited(writeDownWaiting()));
+  unawaited(quickReplies.run());
+  Timer.periodic(const Duration(minutes: 1), (_) {
+    unawaited(writeDownWaiting());
+    unawaited(quickReplies.run());
+  });
+  AppLifecycleListener(
+    onResume: () {
+      unawaited(writeDownWaiting());
+      unawaited(quickReplies.run());
+    },
+  );
 
   runApp(
     SolaceApp(

@@ -1,7 +1,9 @@
 package com.sysmentalhealth.solace_mobile
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.widget.RemoteViews
@@ -41,6 +43,24 @@ class CheckInWidgetProvider : HomeWidgetProvider() {
                         Uri.parse(LAUNCH_URI),
                     ),
                 )
+                // The pencil opens a small text pop-up over the home screen; the microphone opens straight to talking.
+                setOnClickPendingIntent(
+                    R.id.widget_write,
+                    PendingIntent.getActivity(
+                        context,
+                        REQUEST_WRITE,
+                        Intent(context, QuickWriteActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    ),
+                )
+                setOnClickPendingIntent(
+                    R.id.widget_voice,
+                    HomeWidgetLaunchIntent.getActivity(
+                        context,
+                        MainActivity::class.java,
+                        Uri.parse(VOICE_URI),
+                    ),
+                )
             }
             appWidgetManager.updateAppWidget(widgetId, views)
         }
@@ -52,5 +72,10 @@ class CheckInWidgetProvider : HomeWidgetProvider() {
 
         /** Deep link the widget opens; the app maps `checkin` to the flow. */
         const val LAUNCH_URI = "solace://checkin"
+
+        /** Deep link for the microphone button; the app opens the voice check-in. */
+        const val VOICE_URI = "solace://voice"
+
+        private const val REQUEST_WRITE = 4101
     }
 }

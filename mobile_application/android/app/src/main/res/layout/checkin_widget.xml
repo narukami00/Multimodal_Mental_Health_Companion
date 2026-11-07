@@ -44,4 +44,25 @@
             android:textSize="15sp"
             android:textStyle="bold" />
     </LinearLayout>
+
+    <!-- Type a check-in in a small pop-up, or talk one. -->
+    <ImageView
+        android:id="@+id/widget_write"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/widget_button"
+        android:contentDescription="@string/widget_write_description"
+        android:padding="9dp"
+        android:src="@drawable/ic_widget_write" />
+
+    <ImageView
+        android:id="@+id/widget_voice"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/widget_button"
+        android:contentDescription="@string/widget_voice_description"
+        android:padding="9dp"
+        android:src="@drawable/ic_widget_mic" />
 </LinearLayout>

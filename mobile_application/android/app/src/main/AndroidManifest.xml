@@ -48,6 +48,14 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- The small pop-up the widget's pencil opens: a text box over the home screen. Not reachable from anywhere else. -->
+        <activity
+            android:name=".QuickWriteActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/QuickWriteTheme"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
         <!-- Home-screen check-in widget. Tapping it opens the check-in flow. -->
         <receiver
             android:name=".CheckInWidgetProvider"

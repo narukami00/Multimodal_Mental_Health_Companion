@@ -7,6 +7,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../domain/rhythm/reminder_wording.dart';
+import 'quick_reply_inbox.dart';
 
 /// The status-bar mark (a flat white silhouette of the app icon) and the accent
 /// Android tints it with. Shared by every notification the app posts.
@@ -99,6 +100,17 @@ class CheckInReminderService {
       color: notificationColor,
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
+      // On a locked screen Android shows its own placeholder instead of the line.
+      visibility: NotificationVisibility.private,
+      actions: [
+        // Answer from the notification itself. The words are only held there; the app saves them when it is next
+        // open (see QuickReplyInbox).
+        AndroidNotificationAction(
+          quickReplyActionId,
+          'Reply',
+          inputs: [AndroidNotificationActionInput(label: 'One word is enough')],
+        ),
+      ],
     ),
   );
 
@@ -124,6 +136,7 @@ class CheckInReminderService {
         settings: const InitializationSettings(
           android: AndroidInitializationSettings(notificationIcon),
         ),
+        onDidReceiveBackgroundNotificationResponse: quickReplyBackground,
       );
       await _android?.createNotificationChannel(
         const AndroidNotificationChannel(
