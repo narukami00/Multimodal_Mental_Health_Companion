@@ -362,6 +362,8 @@ class _CheckInPanelState extends State<_CheckInPanel>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // the question sits in the middle of the free space above the button, not stuck to the top
+                    const Spacer(),
                     if (widget.eyebrow != null) ...[
                       Text(
                         widget.eyebrow!.toUpperCase(),

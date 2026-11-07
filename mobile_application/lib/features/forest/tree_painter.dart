@@ -26,7 +26,15 @@ class _Brush {
   /// Like the canvas' globalAlpha: multiplies every colour drawn while it is set.
   double ga = 1;
 
-  Color col(Rgb c, [double a = 1]) => Color.fromRGBO(c[0].round().clamp(0, 255), c[1].round().clamp(0, 255), c[2].round().clamp(0, 255), clamp01(a * ga));
+  /// The light of the hour: every colour is multiplied by it, so trees darken and warm with the sky.
+  Rgb light = const [255, 255, 255];
+
+  Color col(Rgb c, [double a = 1]) => Color.fromRGBO(
+        (c[0] * light[0] / 255).round().clamp(0, 255),
+        (c[1] * light[1] / 255).round().clamp(0, 255),
+        (c[2] * light[2] / 255).round().clamp(0, 255),
+        clamp01(a * ga),
+      );
   Paint fill(Rgb c, [double a = 1]) => Paint()..color = col(c, a);
   Paint stroke(Rgb c, double width, [double a = 1]) => Paint()
     ..color = col(c, a)
@@ -400,8 +408,9 @@ void _drawSoil(_Brush b, double s, double wet) {
 
 /// Draws species [sp] at stage [s] (0..7) with the trunk's base at the origin. [soil] adds the planting spot of the tree
 /// being grown; [wet] (0..1) darkens it after watering.
-void paintTree(Canvas canvas, TreeGeometry geo, TreeSpecies sp, double s, {bool soil = false, double wet = 0}) {
+void paintTree(Canvas canvas, TreeGeometry geo, TreeSpecies sp, double s, {bool soil = false, double wet = 0, Rgb? light}) {
   final b = _Brush(canvas);
+  if (light != null) b.light = light;
   if (soil) _drawSoil(b, s, wet);
   final rv = revealAt(s);
   if (rv.tree > 0.01) {
@@ -410,6 +419,13 @@ void paintTree(Canvas canvas, TreeGeometry geo, TreeSpecies sp, double s, {bool 
     b.ga = 1;
   }
   _drawYoung(b, s, rv.seedling);
+}
+
+/// Just the planting spot (turned earth) of the tree being grown, at the origin.
+void paintSoil(Canvas canvas, double s, double wet, {Rgb? light}) {
+  final b = _Brush(canvas);
+  if (light != null) b.light = light;
+  _drawSoil(b, s, wet);
 }
 
 /// A little watering can standing on the ground, drawn at the origin.
