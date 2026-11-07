@@ -261,7 +261,9 @@ class ForestWorld {
   void focusOnTree(double wx, double z, {double zoomTo = 1.9}) {
     camTargetX = wx;
     zoomTarget = zoomTo;
-    focusTarget = depthY(z) - 70;
+    // choose the fixed point so the tree's base lands in the upper part of the screen, clear of the sheet that opens below
+    final zfT = math.pow(zoomTo, lerp(1.0, 0.55, z)).toDouble();
+    focusTarget = zfT == 1 ? depthY(z) : ((380 - depthY(z) * zfT) / (1 - zfT)).clamp(300.0, 900.0);
     camV = 0;
   }
 
