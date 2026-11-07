@@ -664,7 +664,8 @@
         "reviewedAt": "2026-09-22T00:00:00Z",
         "clinicianSignoff": false,
         "notes": "Lifestyle entry reviewed for low-pressure use."
-      }
+      },
+      "guide": "breathing"
     },
     {
       "id": "mindfulness-004",
@@ -2318,7 +2319,8 @@
         "reviewedAt": "2026-10-20T16:18:08Z",
         "clinicianSignoff": false,
         "notes": "Lifestyle entry reviewed by the project owner for low-pressure use."
-      }
+      },
+      "guide": "grounding"
     },
     {
       "id": "mindfulness-009",
@@ -2371,7 +2373,8 @@
         "reviewedAt": "2026-10-20T16:18:08Z",
         "clinicianSignoff": false,
         "notes": "Lifestyle entry reviewed by the project owner for low-pressure use."
-      }
+      },
+      "guide": "longExhale"
     },
     {
       "id": "mindfulness-011",
@@ -2527,7 +2530,8 @@
         "reviewedAt": "2026-10-20T16:18:08Z",
         "clinicianSignoff": false,
         "notes": "Lifestyle entry reviewed by the project owner for low-pressure use."
-      }
+      },
+      "guide": "gratitude"
     },
     {
       "id": "mindfulness-017",
@@ -2688,6 +2692,59 @@
         "clinicianSignoff": false,
         "notes": "Lifestyle entry reviewed by the project owner for low-pressure use."
       }
+    },
+    {
+      "id": "mindfulness-023",
+      "title": "Breathe in a square",
+      "description": "Breathe in, hold, out, and rest, each for four slow counts, and let the pace carry you.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 3,
+      "contexts": [
+        "home",
+        "work",
+        "short_break"
+      ],
+      "targetStates": [
+        "wobbly",
+        "steady",
+        "tender"
+      ],
+      "review": {
+        "status": "approved",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "lifestyle_reviewer",
+        "reviewedAt": "2026-11-07T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Added with the guided exercises. Lifestyle tier, self-guided; not a treatment."
+      },
+      "guide": "boxBreathing"
+    },
+    {
+      "id": "mindfulness-024",
+      "title": "Look at a hard thought from further back",
+      "description": "Write the thought down, then answer it the way you would answer a friend.",
+      "type": "mindfulness",
+      "effort": "low",
+      "durationMinutes": 6,
+      "contexts": [
+        "home",
+        "alone"
+      ],
+      "targetStates": [
+        "wobbly",
+        "tender",
+        "steady"
+      ],
+      "review": {
+        "status": "approved",
+        "evidenceTier": "lifestyle",
+        "reviewerRole": "lifestyle_reviewer",
+        "reviewedAt": "2026-11-07T00:00:00Z",
+        "clinicianSignoff": false,
+        "notes": "Added with the guided exercises. Lifestyle tier, self-guided; not a treatment."
+      },
+      "guide": "reframe"
     },
     {
       "id": "productivity-007",

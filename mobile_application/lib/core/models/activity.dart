@@ -10,6 +10,10 @@ enum ActivityType {
 
 enum ActivityEffort { low, medium, high }
 
+/// An idea that Solace can walk the person through, with its own screen, instead of only describing it.
+/// Chosen and recommended like any other idea; the guide only changes how it is done.
+enum ExerciseGuide { breathing, longExhale, boxBreathing, grounding, gratitude, reframe }
+
 enum ActivityEvidenceTier { lifestyle, therapeutic }
 
 enum ActivityReviewStatus { approved, pending, rejected }
@@ -68,7 +72,11 @@ class Activity {
     required this.contexts,
     required this.targetStates,
     required this.review,
+    this.guide,
   });
+
+  /// Set when the idea has a guided screen.
+  final ExerciseGuide? guide;
 
   final String id;
   final String title;
@@ -101,12 +109,20 @@ class Activity {
       review: ActivityReviewMetadata.fromMap(
         map['review'] as Map<String, dynamic>? ?? const {},
       ),
+      guide: _optionalEnum(ExerciseGuide.values, map['guide'] as String?),
     );
   }
 
   static List<String> _strings(Object? value) {
     return (value as List<dynamic>? ?? const []).whereType<String>().toList();
   }
+}
+
+T? _optionalEnum<T extends Enum>(List<T> values, String? name) {
+  for (final value in values) {
+    if (value.name == name) return value;
+  }
+  return null;
 }
 
 T _enumValue<T extends Enum>(List<T> values, String? name, T fallback) {

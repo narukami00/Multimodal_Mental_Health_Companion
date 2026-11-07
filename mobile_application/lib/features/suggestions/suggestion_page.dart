@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../domain/recommendations/mood_change.dart';
 import '../../domain/recommendations/recommendation_engine.dart';
 import '../art/activity_art.dart';
+import '../exercises/exercise_page.dart';
 import '../insights/mood_tab.dart' show moodColors;
 import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
@@ -290,6 +291,34 @@ class _SuggestionPageState extends State<SuggestionPage> {
       _outcome = _Outcome.completed;
       _step = _Step.rate;
     });
+  }
+
+  /// Opens the guided screen for an idea that has one. Reaching its end is the same as saying "I'm done";
+  /// stopping early leaves the idea as it was, still being done.
+  Future<void> _openGuide(Activity activity) async {
+    final guide = activity.guide;
+    if (guide == null) return;
+    final finished = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => ExercisePage(guide: guide, title: activity.title, onWords: _screenWords),
+      ),
+    );
+    if (finished == true && mounted) await _finishDoing();
+  }
+
+  /// What was written in an exercise gets the same safety check as every other typed note. Nothing is kept.
+  Future<void> _screenWords(String words) async {
+    final assessment = await widget.safetyController.assessText(source: 'exercise', text: words);
+    if (assessment.level == SafetyLevel.clear || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SupportResourcesPage(
+          safetyController: widget.safetyController,
+          profileController: widget.profileController,
+          assessment: assessment,
+        ),
+      ),
+    );
   }
 
   /// "Something came up": it ends with no verdict, so nothing is learned about the idea.
@@ -729,7 +758,18 @@ class _SuggestionPageState extends State<SuggestionPage> {
                 style: TextStyle(color: AppColors.mutedInk, height: 1.5, fontSize: 13),
               ),
               const SizedBox(height: 26),
-              _ActionButton(label: "I'm done", filled: true, onPressed: _finishDoing),
+              // An idea with its own screen is walked through; finishing it there counts as done.
+              if (activity?.guide != null) ...[
+                _ActionButton(
+                  key: const ValueKey('begin-guided'),
+                  label: 'Begin guided exercise',
+                  filled: true,
+                  onPressed: () => _openGuide(activity!),
+                ),
+                const SizedBox(height: 10),
+                _ActionButton(label: "I'm done", filled: false, onPressed: _finishDoing),
+              ] else
+                _ActionButton(label: "I'm done", filled: true, onPressed: _finishDoing),
               const SizedBox(height: 10),
               _ActionButton(label: 'Something came up', filled: false, onPressed: _interruptDoing),
             ],
@@ -881,6 +921,7 @@ class _ActionButton extends StatelessWidget {
     required this.label,
     required this.filled,
     required this.onPressed,
+    super.key,
   });
 
   final String label;

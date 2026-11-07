@@ -11,7 +11,7 @@ void main() {
     () async {
       final activities = await AssetActivityLibraryRepository().load();
 
-      expect(activities, hasLength(152)); // the 40 starters and the 112 the project owner approved
+      expect(activities, hasLength(154)); // the 40 starters, the 112 the project owner approved, and 2 added with the guided exercises
       expect(
         activities.every(
           (activity) =>
@@ -20,7 +20,7 @@ void main() {
         ),
         isTrue,
       );
-      expect(activities.map((activity) => activity.id).toSet(), hasLength(152));
+      expect(activities.map((activity) => activity.id).toSet(), hasLength(154));
     },
   );
 

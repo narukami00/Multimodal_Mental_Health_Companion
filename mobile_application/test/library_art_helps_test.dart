@@ -127,7 +127,7 @@ void main() {
     testWidgets('lists the ideas by name, filters by kind, and opens one to show its scene and details', (tester) async {
       await pump(tester);
       expect(find.byKey(const ValueKey('library-summary')), findsOneWidget);
-      expect(find.text('152'), findsOneWidget); // the whole reviewed catalogue
+      expect(find.text('154'), findsOneWidget); // the whole reviewed catalogue
 
       await tester.tap(find.byKey(const ValueKey('kind-Move')));
       await tester.pumpAndSettle();
@@ -137,7 +137,7 @@ void main() {
         return k.value.startsWith('idea-') && k.value != 'idea-art' && k.value != 'idea-details' && k.value != 'idea-untried';
       });
       expect(tiles, findsWidgets);
-      expect(tiles.evaluate().length, lessThan(152));
+      expect(tiles.evaluate().length, lessThan(154));
 
       await tester.tap(tiles.first);
       await tester.pumpAndSettle();
