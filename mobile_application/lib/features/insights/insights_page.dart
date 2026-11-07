@@ -11,6 +11,7 @@ import 'helps_tab.dart';
 import 'insight_widgets.dart';
 import 'mood_tab.dart';
 import 'phone_tab.dart';
+import 'weeks_tab.dart';
 
 /// Insights: real reflections from what the person has shared and what their
 /// phone has shown, in tabs. Nothing here is invented: a tab with no data says
@@ -61,6 +62,7 @@ class _InsightsPageState extends State<InsightsPage> {
 
   List<_Tab> get _tabs => [
     const _Tab('mood', 'Mood', Icons.wb_twilight_rounded),
+    const _Tab('weeks', 'Weeks', Icons.calendar_view_week_rounded),
     if (widget.suggestionController != null)
       const _Tab('helps', 'Helps', Icons.favorite_rounded),
     if (widget.phonePatterns != null && widget.profileController != null)
@@ -84,6 +86,11 @@ class _InsightsPageState extends State<InsightsPage> {
       phonePatterns: widget.phonePatterns!,
       profileController: widget.profileController!,
       breakPrompts: widget.breakPrompts,
+      clock: widget.clock,
+    ),
+    'weeks' => WeeksTab(
+      sessionController: widget.sessionController,
+      suggestionController: widget.suggestionController,
       clock: widget.clock,
     ),
     'moments' => widget.momentsTab!,
