@@ -90,6 +90,7 @@ class _ForestPageState extends State<ForestPage> with TickerProviderStateMixin {
     final now = widget.controller.now;
     _world
       ..hour = now.hour + now.minute / 60 + now.second / 3600
+      ..weather = widget.controller.weather
       ..update(dt);
     _frame.value++;
     final index = _world.dispS.floor().clamp(0, 7);

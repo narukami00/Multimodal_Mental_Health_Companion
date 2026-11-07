@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/models/session_input.dart';
 import '../../domain/forest/forest_garden.dart';
+import '../../domain/forest/forest_sky.dart' show ForestWeather;
 import '../goals/goals_controller.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
@@ -103,6 +104,23 @@ class ForestController extends ChangeNotifier {
 
   bool get isLoaded => _loaded;
   DateTime get now => _clock();
+
+  /// Chooses the weather for a moment. The app sets it (it knows the country and how the last days felt); without it
+  /// the forest keeps its light, partly cloudy default.
+  ForestWeather Function(DateTime now)? weatherPicker;
+  int _weatherKey = -1;
+  ForestWeather _weather = ForestWeather.partly;
+
+  /// The weather now. Worked out at most once an hour, since it cannot change faster than that.
+  ForestWeather get weather {
+    final n = now;
+    final key = ((n.year * 100 + n.month) * 100 + n.day) * 100 + n.hour;
+    if (key != _weatherKey) {
+      _weatherKey = key;
+      _weather = weatherPicker?.call(n) ?? ForestWeather.partly;
+    }
+    return _weather;
+  }
 
   Future<void> load() async {
     _data = await _store.load();

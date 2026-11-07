@@ -1,5 +1,7 @@
 import 'features/forest/forest_controller.dart';
 import 'features/forest/forest_card_scene.dart' show ForestPalette;
+import 'core/constants/moods.dart';
+import 'domain/forest/forest_weather.dart';
 import 'features/goals/goals_controller.dart';
 import 'services/forest_widget_service.dart';
 import 'dart:async';
@@ -159,6 +161,16 @@ Future<void> main() async {
     );
   }
 
+  // The forest's weather follows the season and the climate of the country in the profile (no location is ever
+  // read), and leans a little with how the last few days felt.
+  forestController.weatherPicker = (at) => pickWeather(
+    now: at,
+    countryCode: profileController.profile.countryCode,
+    recentMoodScores: [
+      for (final s in sessionController.sessions)
+        if (at.difference(s.createdAt) < const Duration(days: 3)) ?Moods.score(s.effectiveMood),
+    ],
+  );
   forestController.addListener(pushForestWidget);
   pushForestWidget();
   // Loaded at startup so Home can ask whether a suggestion is due without
