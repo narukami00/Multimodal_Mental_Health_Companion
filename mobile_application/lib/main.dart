@@ -1,3 +1,4 @@
+import 'features/forest/forest_controller.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -124,6 +125,12 @@ Future<void> main() async {
     suggestionRepository: SharedPreferencesSuggestionRepository(preferences),
   );
   await suggestionController.load();
+  final forestController = ForestController(
+    store: SharedPreferencesForestStore(preferences),
+    sessions: sessionController,
+    suggestions: suggestionController,
+  );
+  await forestController.load();
   // Loaded at startup so Home can ask whether a suggestion is due without
   // waiting on an asset read during a rebuild.
   await suggestionController.warmUp();
@@ -383,6 +390,7 @@ Future<void> main() async {
       moments: moments,
       memory: memory,
       consentController: consentController,
+      forest: forestController,
       navigatorKey: navigatorKey,
     ),
   );
@@ -404,6 +412,7 @@ class SolaceApp extends StatelessWidget {
     this.memory,
     this.consentController,
     this.scheduleReminder,
+    this.forest,
     this.navigatorKey,
     super.key,
   }) : safetyController =
@@ -448,6 +457,9 @@ class SolaceApp extends StatelessWidget {
   /// Where onboarding records the voice and face choices (the app's own in a real run).
   final ConsentController? consentController;
 
+  /// The growing tree on Today and its forest page.
+  final ForestController? forest;
+
   /// Replaces the real reminder scheduling in onboarding (tests).
   final Future<bool> Function(int minutes)? scheduleReminder;
 
@@ -482,6 +494,7 @@ class SolaceApp extends StatelessWidget {
             moments: moments,
             memory: memory,
             consent: consentController,
+            forest: forest,
             scheduleReminder: scheduleReminder,
           ),
         );

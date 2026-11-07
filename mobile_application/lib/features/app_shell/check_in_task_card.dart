@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../forest/forest_card_scene.dart';
+
 bool get _isTestEnvironment {
   try {
     return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
@@ -46,8 +48,12 @@ class CheckInTaskCard extends StatefulWidget {
     this.onTaskAccept,
     this.onTaskOpen,
     this.onTaskDecline,
+    this.forest,
     super.key,
   });
+
+  /// With it, the panel shows the growing tree instead of the spinning sun.
+  final ForestCardData? forest;
 
   final String? eyebrow;
   final String headline;
@@ -121,9 +127,7 @@ class _CheckInTaskCardState extends State<CheckInTaskCard> {
                 AnimatedSlide(
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInCubic,
-                  offset: _taskLeaving
-                      ? const Offset(0, 0.10)
-                      : Offset.zero,
+                  offset: _taskLeaving ? const Offset(0, 0.10) : Offset.zero,
                   child: AnimatedOpacity(
                     duration: const Duration(milliseconds: 300),
                     opacity: _taskLeaving ? 0 : 1,
@@ -151,6 +155,7 @@ class _CheckInTaskCardState extends State<CheckInTaskCard> {
       subtitle: widget.subtitle,
       ctaLabel: widget.ctaLabel,
       onCta: widget.onCta,
+      forest: widget.forest,
     );
   }
 
@@ -260,8 +265,10 @@ class _CheckInPanel extends StatefulWidget {
     required this.ctaLabel,
     this.eyebrow,
     this.onCta,
+    this.forest,
   });
 
+  final ForestCardData? forest;
   final String? eyebrow;
   final String headline;
   final String subtitle;
@@ -282,7 +289,22 @@ class _CheckInPanelState extends State<_CheckInPanel>
   @override
   void initState() {
     super.initState();
-    if (!_isTestEnvironment) _sweep.repeat();
+    _syncSweep();
+  }
+
+  @override
+  void didUpdateWidget(_CheckInPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((oldWidget.forest == null) != (widget.forest == null)) _syncSweep();
+  }
+
+  /// The orange sweeps only on the original card; with the growing tree the card is still, so nothing runs for nothing.
+  void _syncSweep() {
+    if (widget.forest == null) {
+      if (!_isTestEnvironment && !_sweep.isAnimating) _sweep.repeat();
+    } else {
+      _sweep.stop();
+    }
   }
 
   @override
@@ -291,8 +313,108 @@ class _CheckInPanelState extends State<_CheckInPanel>
     super.dispose();
   }
 
+  /// The check-in panel with the growing tree: the orange melts into the sky of the hour on the right, the tree stands
+  /// level with the button, and the words sit on top. Tapping the tree side opens the forest; the button still checks in.
+  Widget _forestPanel(ForestCardData f) {
+    final p = f.palette;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: p.left,
+          stops: const [0, .55, 1],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: ForestCardPainter(
+                palette: p,
+                species: f.species,
+                stage: f.stage,
+                waterWaiting: f.waterWaiting,
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FractionallySizedBox(
+                widthFactor: .42,
+                heightFactor: 1,
+                child: GestureDetector(
+                  key: const ValueKey('forest-open'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: f.onOpen,
+                ),
+              ),
+            ),
+          ),
+          // At least the card's usual height, taller when the question needs more lines, so nothing is ever cut off.
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 244),
+            child: IntrinsicHeight(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.eyebrow != null) ...[
+                      Text(
+                        widget.eyebrow!.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.5,
+                          color: p.text.withValues(alpha: .78),
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                    ],
+                    FractionallySizedBox(
+                      widthFactor: .58,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        widget.headline.split(RegExp(r'\s+')).join(' '),
+                        style: TextStyle(
+                          fontSize: 23,
+                          height: 1.18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.7,
+                          color: p.text,
+                          shadows: const [
+                            Shadow(color: Color(0x80FFD68C), blurRadius: 10),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    _OrangeButton(
+                      label: widget.ctaLabel,
+                      onPressed: widget.onCta,
+                      height: 48,
+                      radius: 999,
+                      horizontalPadding: 30,
+                      prominent: false,
+                      light: true,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final forest = widget.forest;
+    if (forest != null) return _forestPanel(forest);
     return AnimatedBuilder(
       animation: _sweep,
       builder: (context, _) {
@@ -338,9 +460,9 @@ class _CheckInPanelState extends State<_CheckInPanel>
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.5,
-                          color: const Color(0xFF4A3213).withValues(
-                            alpha: 0.78,
-                          ),
+                          color: const Color(
+                            0xFF4A3213,
+                          ).withValues(alpha: 0.78),
                         ),
                       ),
                       const SizedBox(height: 9),

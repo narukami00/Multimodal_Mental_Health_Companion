@@ -23,6 +23,7 @@ import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
 import '../consent/consent_controller.dart';
+import '../forest/forest_controller.dart';
 import 'onboarding_flow.dart';
 
 class OnboardingGate extends StatefulWidget {
@@ -39,6 +40,7 @@ class OnboardingGate extends StatefulWidget {
     this.breakPrompts,
     this.moments,
     this.memory,
+    this.forest,
     this.consent,
     this.scheduleReminder,
     super.key,
@@ -56,6 +58,7 @@ class OnboardingGate extends StatefulWidget {
   final BreakPromptController? breakPrompts;
   final MomentsController? moments;
   final CompanionMemoryContext? memory;
+  final ForestController? forest;
   final ConsentController? consent;
   final Future<bool> Function(int minutes)? scheduleReminder;
 
@@ -156,6 +159,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
         breakPrompts: widget.breakPrompts,
         moments: widget.moments,
         memory: widget.memory,
+        forest: widget.forest,
       );
     }
 

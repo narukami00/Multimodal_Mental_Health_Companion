@@ -10,6 +10,7 @@ import '../../domain/home/home_card_priority.dart';
 import '../chat/chat_controller.dart';
 import '../chat/conversation_history.dart';
 import '../companion/companion_blob.dart';
+import '../forest/forest_card_scene.dart';
 import 'check_in_task_card.dart';
 
 bool get _isTestEnvironment {
@@ -47,6 +48,7 @@ class TodayPage extends StatelessWidget {
     this.rhythmCard,
     this.welcomeBackNotice,
     this.recapCard,
+    this.forestCard,
     this.onStartCheckIn,
     this.onOpenSupport,
     this.onOpenChat,
@@ -123,6 +125,9 @@ class TodayPage extends StatelessWidget {
 
   /// "Your week is ready", for the first few days after a week ends.
   final Widget? recapCard;
+
+  /// The growing tree inside the check-in card; null shows the original card.
+  final ForestCardData? forestCard;
 
   final VoidCallback? onStartCheckIn;
   final VoidCallback? onOpenSupport;
@@ -400,6 +405,7 @@ class TodayPage extends StatelessWidget {
             subtitle: card.subtitle,
             ctaLabel: card.action,
             onCta: _primaryAction(primaryCard),
+            forest: forestCard,
             task: taskOffer,
             onTaskAccept: onTaskAccept,
             onTaskOpen: onTaskOpen,

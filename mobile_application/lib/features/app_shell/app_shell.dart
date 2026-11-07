@@ -22,6 +22,9 @@ import '../checkin/check_in_mode_page.dart';
 import '../checkin/text_check_in_page.dart';
 import '../insights/helps_tab.dart' show IdeaActions;
 import '../insights/insights_page.dart';
+import '../forest/forest_card_scene.dart';
+import '../forest/forest_controller.dart';
+import '../forest/forest_page.dart';
 import '../insights/weekly_recap_card.dart';
 import '../journal/journal_page.dart';
 import '../footprint/break_prompt_card.dart';
@@ -68,6 +71,7 @@ class AppShell extends StatefulWidget {
     this.moments,
     this.memory,
     this.initialTab,
+    this.forest,
     super.key,
   });
 
@@ -83,6 +87,9 @@ class AppShell extends StatefulWidget {
   final MomentsController? moments;
   final CompanionMemoryContext? memory;
   final AppTab? initialTab;
+
+  /// The growing tree on the check-in card and its forest page. Without it the card is the original one.
+  final ForestController? forest;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -139,6 +146,7 @@ class _AppShellState extends State<AppShell> {
     widget.sessionController,
     widget.profileController,
     widget.suggestionController,
+    ?widget.forest,
   ]);
 
   /// The suggestion to offer, or null if there is nothing to show.
@@ -392,6 +400,7 @@ class _AppShellState extends State<AppShell> {
                   profileController: widget.profileController,
                   suggestionController: widget.suggestionController,
                 ),
+                forestCard: _forestCardData(),
                 recapCard: WeeklyRecapCard(
                   sessionController: widget.sessionController,
                   profileController: widget.profileController,
@@ -629,6 +638,26 @@ class _AppShellState extends State<AppShell> {
       unawaited(HapticFeedback.selectionClick());
     }
     setState(() => _selectedTab = tab);
+  }
+
+  /// What the check-in card needs to show the growing tree, or null while the forest is not ready.
+  ForestCardData? _forestCardData() {
+    final forest = widget.forest;
+    if (forest == null || !forest.isLoaded) return null;
+    final garden = forest.garden;
+    return ForestCardData(
+      palette: ForestPalette.forHour(forest.now.hour),
+      species: garden.currentSpecies,
+      stage: garden.stage,
+      waterWaiting: forest.waterWaiting,
+      onOpen: _openForest,
+    );
+  }
+
+  void _openForest() {
+    final forest = widget.forest;
+    if (forest == null) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ForestPage(controller: forest)));
   }
 
   /// Asks the Insights page to show a given tab (the recap card asks for 'weeks').
