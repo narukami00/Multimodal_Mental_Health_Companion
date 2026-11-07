@@ -336,111 +336,15 @@ class _PrimaryCtaButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 52,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFC14F), Color(0xFFFFB534)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x55FFB534),
-            blurRadius: 16,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(26),
-          child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Color(0xFF5A3E08),
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  icon,
-                  color: const Color(0xFF5A3E08),
-                  size: 18,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChoiceButton extends StatelessWidget {
-  const _ChoiceButton({
-    required this.label,
-    required this.gradient,
-    required this.foregroundColor,
-    required this.shadowColor,
-    required this.onPressed,
-  });
-
-  final String label;
-  final Gradient gradient;
-  final Color foregroundColor;
-  final Color shadowColor;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: shadowColor,
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(26),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: foregroundColor,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: FilledButton.icon(
+      onPressed: onPressed,
+      iconAlignment: IconAlignment.end,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+    ),
+  );
 }
 
 class _BottomControls extends StatelessWidget {
@@ -504,30 +408,16 @@ class _BottomControls extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _ChoiceButton(
-                    label: 'Allow access',
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFFC14F), Color(0xFFFFB534)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    foregroundColor: const Color(0xFF5A3E08),
-                    shadowColor: const Color(0x55FFB534),
+                  child: OutlinedButton(
                     onPressed: () => onChooseMedia(true),
+                    child: const Text('Allow access'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _ChoiceButton(
-                    label: "I'll use text",
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFF8E63), Color(0xFFFF7F50)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    foregroundColor: Colors.white,
-                    shadowColor: const Color(0x55FF7F50),
+                  child: OutlinedButton(
                     onPressed: () => onChooseMedia(false),
+                    child: const Text("I'll use text"),
                   ),
                 ),
               ],

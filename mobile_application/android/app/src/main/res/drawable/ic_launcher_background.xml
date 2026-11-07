@@ -5,18 +5,16 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:pathData="M0,0h108v108h-108z">
+    <path android:pathData="M0,0 h108 v108 h-108 Z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:startX="0"
-                android:startY="0"
-                android:endX="108"
-                android:endY="108"
-                android:type="linear">
-                <item android:color="#FFFFD88A" android:offset="0.0"/>
-                <item android:color="#FFFFB534" android:offset="0.55"/>
-                <item android:color="#FFFF8F5A" android:offset="1.0"/>
-            </gradient>
+                android:startX="29.41"
+                android:startY="11.41"
+                android:endX="78.59"
+                android:endY="96.59"
+                android:startColor="#C6552E"
+                android:endColor="#9F3925"
+                android:type="linear"/>
         </aapt:attr>
     </path>
 </vector>

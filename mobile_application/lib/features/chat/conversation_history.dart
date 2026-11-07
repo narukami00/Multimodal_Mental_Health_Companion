@@ -172,22 +172,6 @@ class ConversationHistorySheet extends StatelessWidget {
                         },
                         icon: const Icon(Icons.add_rounded, size: 18),
                         label: const Text('New'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _amber,
-                          foregroundColor: const Color(0xFF5A3B10),
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          textStyle: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
                       ),
                     ],
                   ),

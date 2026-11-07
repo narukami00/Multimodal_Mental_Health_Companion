@@ -105,15 +105,8 @@ class ConsentSheet extends StatelessWidget {
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
-              height: 50,
               child: ElevatedButton(
                 key: allowKey,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFB534),
-                  foregroundColor: const Color(0xFF3D2E14),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                ),
                 onPressed: onAllow,
                 child: Text(allowLabel, style: const TextStyle(fontWeight: FontWeight.w800)),
               ),

@@ -404,13 +404,6 @@ class _FilterSheetState extends State<_FilterSheet> {
                     onPressed: () => Navigator.of(
                       context,
                     ).pop(JournalFilter(moods: _moods, modes: _modes)),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFB534),
-                      foregroundColor: const Color(0xFF3D2E14),
-                      minimumSize: const Size.fromHeight(50),
-                      shape: const StadiumBorder(),
-                      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-                    ),
                     child: const Text('Apply'),
                   ),
                 ),
@@ -923,15 +916,9 @@ class _UnreadEntriesBannerState extends State<_UnreadEntriesBanner> {
             ),
           ),
           const SizedBox(width: 8),
-          FilledButton.tonal(
+          OutlinedButton(
             key: const ValueKey('read-earlier'),
             onPressed: _busy ? null : _read,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFFFE2A6),
-              foregroundColor: const Color(0xFF7A4E10),
-              minimumSize: const Size(0, 38),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-            ),
             child: Text(_busy ? 'Reading…' : 'Read now'),
           ),
         ],

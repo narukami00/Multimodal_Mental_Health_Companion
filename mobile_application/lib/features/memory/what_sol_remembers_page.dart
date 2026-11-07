@@ -356,28 +356,12 @@ class WhatSolRemembersPage extends StatelessWidget {
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
-  }) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      IconTile(icon: icon, color: color),
-      const SizedBox(width: 14),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: _ink, height: 1.25)),
-            const SizedBox(height: 3),
-            Text(subtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.4, color: _soft)),
-          ],
-        ),
-      ),
-      const SizedBox(width: 6),
-      Switch(
-        key: key,
-        value: value,
-        onChanged: onChanged,
-      ),
-    ],
+  }) => SettingRow(
+    icon: icon,
+    color: color,
+    title: title,
+    subtitle: subtitle,
+    trailing: Switch(key: key, value: value, onChanged: onChanged),
   );
 
   Widget _momentList(BuildContext context) {
@@ -499,11 +483,6 @@ class WhatSolRemembersPage extends StatelessWidget {
       },
       icon: const Icon(Icons.add_rounded, size: 18),
       label: const Text('Add a moment myself'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF8A5A0A),
-        side: const BorderSide(color: Color(0xFFE9D8B4)),
-        shape: const StadiumBorder(),
-      ),
     ),
   );
 

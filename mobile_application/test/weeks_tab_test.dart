@@ -52,7 +52,10 @@ void main() {
     ]);
     await pumpTab(tester, sessions);
     expect(find.byKey(const ValueKey('weeks-overall')), findsOneWidget);
-    expect(find.text('Over 2 weeks, you showed up on 3 days.'), findsOneWidget);
+    final overview = find.byKey(const ValueKey('weeks-overall'));
+    expect(find.descendant(of: overview, matching: find.text('2')), findsOneWidget);
+    expect(find.descendant(of: overview, matching: find.text('3')), findsOneWidget);
+    expect(find.text('Weeks with entries'), findsOneWidget);
     expect(find.text('9 to 15 Mar'), findsOneWidget);
     expect(find.text('2 to 8 Mar'), findsOneWidget);
     expect(tester.getTopLeft(find.byKey(const ValueKey('week-2026-03-09'))).dy,
@@ -63,8 +66,10 @@ void main() {
     final sessions = await controller([entry(DateTime(2026, 3, 3, 9), 'Steady')]);
     await tester.pumpWidget(MaterialApp(theme: AppTheme.light(), home: InsightsPage(sessionController: sessions, clock: () => now)));
     await tester.pump();
-    await tester.tap(find.text('Weeks'));
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(const ValueKey('insights-section-switcher')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('insights-tab-weeks')));
+    await tester.pumpAndSettle();
     expect(find.text('THE BIGGER PICTURE'), findsOneWidget);
   });
 }

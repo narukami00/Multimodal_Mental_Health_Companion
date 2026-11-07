@@ -221,17 +221,20 @@ void main() {
     testWidgets('keeping app names is a real switch', (tester) async {
       await consent.grant(ConsentKey.usageFootprint);
       await pump(tester);
+      expect(find.text('App names off · category totals only'), findsOneWidget);
 
       await tester.tap(key('patterns-keep-names'));
       await tester.pumpAndSettle();
 
       expect(consent.isGranted(ConsentKey.topAppNames), isTrue);
       expect(patterns.keepsAppNames, isTrue);
+      expect(find.text('Most-used app names kept on this phone'), findsOneWidget);
 
       await tester.tap(key('patterns-keep-names'));
       await tester.pumpAndSettle();
 
       expect(patterns.keepsAppNames, isFalse);
+      expect(find.text('App names off · category totals only'), findsOneWidget);
     });
 
     testWidgets('switching names off removes the stored ones', (tester) async {
@@ -297,7 +300,7 @@ void main() {
       await repository.upsert(_day('2026-10-02'));
       await pump(tester);
 
-      expect(find.text('Delete all stored patterns (2 days)'), findsOneWidget);
+      expect(find.text('Delete stored patterns'), findsOneWidget);
       await tester.tap(key('patterns-delete-all'));
       await tester.pumpAndSettle();
       expect(await repository.loadAll(), hasLength(2));

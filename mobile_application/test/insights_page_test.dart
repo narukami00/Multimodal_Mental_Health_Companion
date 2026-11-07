@@ -41,6 +41,11 @@ Future<void> _pump(
   await tester.pump(const Duration(milliseconds: 400));
 }
 
+Future<void> _openSections(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('insights-section-switcher')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('starts on Mood with an honest empty state, and nothing invented', (
     tester,
@@ -60,6 +65,7 @@ void main() {
   ) async {
     await _pump(tester, _controller());
 
+    await _openSections(tester);
     expect(find.byKey(const ValueKey('insights-tab-mood')), findsOneWidget);
     expect(find.byKey(const ValueKey('insights-tab-helps')), findsOneWidget);
     expect(find.byKey(const ValueKey('insights-tab-phone')), findsNothing);
@@ -69,8 +75,12 @@ void main() {
   testWidgets('Helps explains what would fill it', (tester) async {
     await _pump(tester, _controller());
 
+    await _openSections(tester);
     await tester.tap(find.byKey(const ValueKey('insights-tab-helps')));
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    final switcher = find.byKey(const ValueKey('insights-section-switcher'));
+    expect(find.descendant(of: switcher, matching: find.text('Helps')), findsOneWidget);
 
     expect(find.text('Nothing to say yet, and that is fine'), findsOneWidget);
     expect(find.textContaining('three tries'), findsOneWidget);
@@ -83,7 +93,9 @@ void main() {
     await _pump(tester, sessions, clock: DateTime.now); // Mood is now much taller than Helps
     final text = find.text('Nothing to say yet, and that is fine');
 
+    await _openSections(tester);
     await tester.tap(find.byKey(const ValueKey('insights-tab-helps')));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 110)); // mid-transition: both tabs are in the tree
     final during = tester.getTopLeft(text).dy;
     await tester.pump(const Duration(milliseconds: 600));

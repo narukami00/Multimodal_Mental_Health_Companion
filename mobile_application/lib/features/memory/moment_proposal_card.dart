@@ -127,12 +127,6 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
               FilledButton(
                 key: const ValueKey('moment-consent-yes'),
                 onPressed: () => answer(true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFB534),
-                  foregroundColor: const Color(0xFF3A2A06),
-                  shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                ),
                 child: const Text(
                   'Yes, let Sol know',
                   style: TextStyle(fontWeight: FontWeight.w800),
@@ -302,12 +296,6 @@ class _MomentProposalCardState extends State<MomentProposalCard> {
                                 ConsentStatus.notAsked;
                       });
                     },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFB534),
-                      foregroundColor: const Color(0xFF3A2A06),
-                      shape: const StadiumBorder(),
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                    ),
                     child: Text(
                       editing ? 'Save it' : 'Yes, remember it',
                       style: const TextStyle(fontWeight: FontWeight.w800),

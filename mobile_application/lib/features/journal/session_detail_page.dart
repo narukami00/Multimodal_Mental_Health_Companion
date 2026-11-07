@@ -343,11 +343,6 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
           );
           if (mounted) setState(() {});
         },
-        style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF96620C),
-          side: const BorderSide(color: Color(0x66FFB534)),
-          shape: const StadiumBorder(),
-        ),
         icon: Icon(
           KeepMoment.isKept(session.id) ? Icons.check_rounded : Icons.auto_awesome_rounded,
           size: 17,

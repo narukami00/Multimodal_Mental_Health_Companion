@@ -214,6 +214,18 @@ void main() {
   });
 
   group('catchUp', () {
+    test('collects the first of the seven completed chart days', () async {
+      now = _d(31, 12);
+      collector = _FakeCollector([_on(_d(24, 9)), _off(_d(24, 10))]);
+
+      await build().catchUp();
+
+      final first = (await repository.loadAll()).single;
+      expect(first.dayKey, '2026-10-24'); // Saturday, seven days before now.
+      expect(first.screenOnMinutes, 60);
+      expect(first.usageComplete, isTrue);
+    });
+
     test('fills in the days that have data, oldest first', () async {
       final written = await build().catchUp();
 

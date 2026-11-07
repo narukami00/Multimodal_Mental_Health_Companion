@@ -452,17 +452,8 @@ class _PersonCard extends StatelessWidget {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            height: 52,
             child: ElevatedButton.icon(
               key: const ValueKey('call-person'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFB534),
-                foregroundColor: const Color(0xFF3D2E14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
               onPressed: onCall,
               icon: const Icon(Icons.call_rounded, size: 20),
               label: Text(
@@ -550,17 +541,8 @@ class _AddPersonCard extends StatelessWidget {
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            height: 48,
             child: ElevatedButton.icon(
               key: const ValueKey('add-person'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFB534),
-                foregroundColor: const Color(0xFF3D2E14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
               onPressed: onAdd,
               icon: const Icon(Icons.add_rounded, size: 19),
               label: const Text(

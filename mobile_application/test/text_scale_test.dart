@@ -185,7 +185,7 @@ void main() {
         _noOverflow(tester);
       });
 
-      for (final tab in ['mood', 'helps', 'phone', 'moments']) {
+      for (final tab in ['mood', 'weeks', 'phone', 'moments']) {
         testWidgets('Insights, $tab tab', (tester) async {
           await show(
             tester,
@@ -198,11 +198,13 @@ void main() {
             ),
             scale: scale,
           );
+          await tester.tap(find.byKey(const ValueKey('insights-section-switcher')));
+          await tester.pumpAndSettle();
+          _noOverflow(tester);
           final finder = find.byKey(ValueKey('insights-tab-$tab'));
-          if (finder.evaluate().isNotEmpty) {
-            await tester.tap(finder);
-            await tester.pump(const Duration(milliseconds: 600));
-          }
+          await tester.ensureVisible(finder);
+          await tester.tap(finder);
+          await tester.pumpAndSettle();
           _noOverflow(tester);
         });
       }

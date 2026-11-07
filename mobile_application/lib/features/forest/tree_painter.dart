@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui';
 
 import '../../domain/forest/tree_geometry.dart';
@@ -8,14 +9,15 @@ import '../../domain/forest/tree_geometry.dart';
 
 typedef Rgb = List<double>;
 
-Rgb hexRgb(String h) {
+final _hexCache = <String, Rgb>{};
+
+Rgb hexRgb(String h) => _hexCache.putIfAbsent(h, () {
   final n = int.parse(h.substring(1), radix: 16);
   return [((n >> 16) & 255).toDouble(), ((n >> 8) & 255).toDouble(), ((n >> 0) & 255).toDouble()];
-}
+});
 
 Rgb _mix(Rgb a, Rgb b, double t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 Rgb _shade(Rgb c, double k) => k >= 0 ? _mix(c, [255, 255, 255], k) : _mix(c, [0, 0, 0], -k);
-double _easeInOut(double t) => 0.5 - 0.5 * math.cos(math.pi * clamp01(t));
 double _easeOut(double t) => 1 - math.pow(1 - clamp01(t), 3).toDouble();
 const _youngScale = 1.6;
 
@@ -124,11 +126,13 @@ void _drawLimbs(_Brush b, TreeGeometry geo, TreeSpecies sp, TreeReveal rv) {
   for (final s in geo.segs) {
     final f = clamp01((rv.rr - s.t0) / (s.t1 - s.t0));
     if (f <= 0.001) continue;
-    _limbBand(b, s, f, -0.5, 0.5, rv.thick, b.fill(bark));
+    final paint = b.fill(bark);
     if (s.w0 * rv.thick > 2.2) {
-      _limbBand(b, s, f, 0.12, 0.5, rv.thick, b.fill(lo, 0.5));
-      _limbBand(b, s, f, -0.42, -0.2, rv.thick, b.fill(hi, 0.55));
+      final p = _qpt(s, f * 0.48), t = _qtan(s, f * 0.48);
+      final across = Offset(-t.dy, t.dx) * s.w0 * rv.thick * 0.58;
+      paint.shader = Gradient.linear(p - across, p + across, [b.col(bark), b.col(hi), b.col(bark), b.col(lo)], [0, 0.25, 0.58, 1]);
     }
+    _limbBand(b, s, f, -0.5, 0.5, rv.thick, paint);
     if (s.d > 0) b.circle(s.x0, s.y0, s.w0 * rv.thick * 0.48, b.fill(bark));
   }
   for (final m in geo.bark) {
@@ -156,73 +160,144 @@ void _drawLimbs(_Brush b, TreeGeometry geo, TreeSpecies sp, TreeReveal rv) {
   }
 }
 
+void _leaf(Path path, Offset base, Offset tip, double width) {
+  final length = tip.distance;
+  if (length == 0) return;
+  final normal = Offset(-tip.dy, tip.dx) * (width / length);
+  final end = base + tip, a = base + tip * 0.27 + normal, z = base + tip * 0.72 + normal;
+  final c = base + tip * 0.65 - normal * 0.76, d = base + tip * 0.23 - normal * 0.76;
+  path
+    ..moveTo(base.dx, base.dy)
+    ..cubicTo(a.dx, a.dy, z.dx, z.dy, end.dx, end.dy)
+    ..cubicTo(c.dx, c.dy, d.dx, d.dy, base.dx, base.dy)
+    ..close();
+}
+
+({Path outline, Path shadows, Path glints}) _canopyPatch(TreeClump clump) {
+  final rnd = mulberry32((clump.x * 827 + clump.y * 613).round());
+  final outline = Path(), shadows = Path(), glints = Path();
+  for (final blob in clump.blobs) {
+    final center = Offset(blob.dx, blob.dy), radius = blob.r;
+    final points = List.generate(10, (i) {
+      final a = i * math.pi / 5, size = radius * (0.76 + rnd() * 0.34);
+      return center + Offset(math.cos(a) * size * 1.08, math.sin(a) * size * 0.86);
+    });
+    final start = (points.last + points.first) / 2;
+    outline.moveTo(start.dx, start.dy);
+    for (var i = 0; i < points.length; i++) {
+      final point = points[i], end = (point + points[(i + 1) % points.length]) / 2;
+      outline.quadraticBezierTo(point.dx, point.dy, end.dx, end.dy);
+    }
+    outline.close();
+    for (var i = 0; i < 5; i++) {
+      final a = rnd() * math.pi * 2, spread = 0.25 + rnd() * 0.52, len = radius * (0.18 + rnd() * 0.30);
+      final direction = Offset(math.cos(a), math.sin(a));
+      final base = center + Offset(direction.dx, direction.dy * 0.85) * (radius * spread);
+      _leaf(direction.dy < -0.16 ? glints : shadows, base, direction * len, len * 0.35);
+    }
+  }
+  return (outline: outline, shadows: shadows, glints: glints);
+}
+
+// Geometry is shared by the card and forest. Cache the paths in clump-local
+// coordinates so a growth frame only scales them and changes the lighting.
+final _patches = Expando<({Path outline, Path shadows, Path glints})>();
+({Path outline, Path shadows, Path glints}) _patchFor(TreeClump c) => _patches[c] ??= _canopyPatch(c);
+
+
 void _drawClumps(_Brush b, List<TreeClump> clumps, List<Rgb> cols, TreeReveal rv,
     {required double top, required double bot, bool back = false, double alpha = 1, double shrink = 1}) {
-  final list = <(TreeClump, double)>[];
-  for (final c in clumps) {
-    final k = _easeOut((rv.rr - c.t) / 0.16);
-    if (k <= 0.01) continue;
-    list.add((c, k * shrink));
-  }
-  if (list.isEmpty) return;
   final dark = cols[0], mid = cols[1], light = cols[2];
   final span = math.max(1.0, bot - top);
-  double vOf(double y) => clamp01((y - top) / span);
-  final under = back ? _shade(dark, -0.2) : dark;
-  for (final (c, k) in list) {
-    for (final bl in c.blobs) {
-      b.circle(c.x + bl.dx * k, c.y + bl.dy * k + bl.r * k * 0.2, bl.r * k, b.fill(under, alpha));
+  final canvas = b.canvas, paint = Paint();
+  final shadows = b.fill(dark, alpha * 0.54), glints = b.fill(light, alpha * (back ? 0.39 : 0.70));
+  for (final clump in clumps) {
+    final k = _easeOut((rv.rr - clump.t) / 0.20) * shrink;
+    if (k <= 0.01) continue;
+    final patch = _patchFor(clump);
+    final depth = clamp01((clump.y - top) / span), r = clump.r;
+    paint.shader = Gradient.linear(Offset(-r * 0.6, -r * 0.9), Offset(r * 0.45, r), [
+      b.col(_mix(mid, light, back ? 0.24 : 0.78 - depth * 0.3), alpha),
+      b.col(_mix(mid, dark, back ? 0.42 : depth * 0.36), alpha),
+      b.col(_shade(dark, back ? -0.14 : 0), alpha),
+    ], [0, 0.51, 1]);
+    canvas.save();
+    canvas.translate(clump.x, clump.y);
+    canvas.scale(k, k);
+    canvas.drawPath(patch.outline, paint);
+    canvas.drawPath(patch.shadows, shadows);
+    canvas.drawPath(patch.glints, glints);
+    canvas.restore();
+  }
+}
+
+({Path sprays, Path needles}) _tierPaths(TreeTier tier, double k) {
+  final y = tier.y, w = tier.w * k, h = tier.h * (0.45 + 0.55 * k), x = tier.lean * k;
+  final sprays = Path(), needles = Path();
+  for (final side in const [-1.0, 1.0]) {
+    for (var i = 0; i < 4; i++) {
+      final v = i / 3, tipX = x + side * w * lerp(1, 0.12, v);
+      final tipY = y + h * (0.09 + v * 0.18 + (i % 2) * 0.065);
+      final startY = y - h * lerp(0.77, 0.92, v), inner = x + (tipX - x) * 0.75;
+      sprays
+        ..moveTo(x, startY)
+        ..quadraticBezierTo(inner, y - h * 0.06, tipX, tipY)
+        ..quadraticBezierTo(inner, tipY + h * 0.04, inner, tipY - h * 0.07)
+        ..lineTo(inner - side * w * 0.13, tipY + h * 0.06)
+        ..quadraticBezierTo(x, tipY + h * 0.09, x, startY)
+        ..close();
+      if (i < 3) {
+        _leaf(needles, Offset(x + (tipX - x) * 0.33, y - h * (0.38 - v * 0.16)),
+            Offset((tipX - x) * 0.51, h * 0.31), math.min(w * 0.033, h * 0.044));
+      }
     }
   }
-  final hiBody = _mix(mid, light, 0.38), loBody = _mix(mid, dark, 0.5);
-  for (final (c, k) in list) {
-    for (final bl in c.blobs) {
-      final y = c.y + bl.dy * k, v = vOf(y);
-      b.circle(c.x + bl.dx * k - bl.r * k * 0.05, y - bl.r * k * 0.06, bl.r * k * 0.86, b.fill(_shade(_mix(hiBody, loBody, v), back ? -0.12 : 0), alpha));
-    }
-  }
-  if (back) return;
-  for (final (c, k) in list) {
-    for (final bl in c.blobs) {
-      final x = c.x + bl.dx * k - bl.r * k * 0.22, y = c.y + bl.dy * k - bl.r * k * 0.3, rr = bl.r * k * 0.66, v = vOf(y);
-      if (v > 0.7) continue;
-      final paint = Paint()..shader = Gradient.radial(Offset(x, y), rr, [b.col(light, 0.75 * alpha * (1 - v)), b.col(light, 0)]);
-      b.canvas.drawCircle(Offset(x, y), rr, paint);
-    }
-  }
+  _leaf(sprays, Offset(x, y - h * 0.30), Offset(x * 0.2, -h * 0.72), w * 0.28);
+  return (sprays: sprays, needles: needles);
 }
 
 void _drawTiers(_Brush b, TreeGeometry geo, List<Rgb> cols, TreeReveal rv) {
   final dark = cols[0], mid = cols[1], light = cols[2];
-  Path tierPath(TreeTier t, double k, double lift, double sx) {
-    final w = t.w * k * sx, h = t.h * (0.5 + 0.5 * k), y = t.y - lift, ax = t.lean * k;
-    final p = Path()
-      ..moveTo(ax, y - h)
-      ..quadraticBezierTo(-w * 0.3, y - h * 0.35, -w, y);
-    const m = 5;
-    for (var i = 0; i < m; i++) {
-      final xa = lerp(-w, w, i / m), xb = lerp(-w, w, (i + 1) / m);
-      p.quadraticBezierTo((xa + xb) / 2, y + h * 0.2, xb, y);
-    }
-    p.quadraticBezierTo(w * 0.3, y - h * 0.35, ax, y - h);
-    p.close();
-    return p;
-  }
-
-  for (final t in geo.tiers) {
-    final k = _easeOut((rv.rr - t.t) / 0.22);
+  final glints = b.fill(light, 0.49);
+  for (final tier in geo.tiers) {
+    final k = _easeOut((rv.rr - tier.t) / 0.23);
     if (k <= 0.01) continue;
-    b.canvas.drawPath(tierPath(t, k, 0, 1), b.fill(dark));
-    b.canvas.drawPath(tierPath(t, k, t.h * 0.1, 0.86), b.fill(mid));
-    final w = t.w * k, h = t.h * (0.5 + 0.5 * k), y = t.y - t.h * 0.12;
-    final paint = Paint()..shader = Gradient.linear(Offset(-w * 0.6, y - h), Offset(w * 0.1, y), [b.col(light, 0.8), b.col(light, 0)]);
-    final hi = Path()
-      ..moveTo(t.lean * k, y - h * 0.95)
-      ..quadraticBezierTo(-w * 0.3, y - h * 0.4, -w * 0.78, y - h * 0.05)
-      ..quadraticBezierTo(-w * 0.35, y - h * 0.2, t.lean * k, y - h * 0.5)
-      ..close();
-    b.canvas.drawPath(hi, paint);
+    final y = tier.y, w = tier.w * k, h = tier.h * (0.45 + 0.55 * k), x = tier.lean * k;
+    final paint = Paint()..shader = Gradient.linear(
+      Offset(x - w * 0.5, y - h), Offset(x + w * 0.43, y + h * 0.16),
+      [b.col(light), b.col(mid), b.col(dark)], [0, 0.63, 1],
+    );
+    final paths = _tierPaths(tier, k);
+    b.canvas.drawPath(paths.sprays, paint);
+    b.canvas.drawPath(paths.needles, glints);
   }
+}
+
+/// Hit shape in the same local coordinates used by the painter.
+Path matureTreeOutline(TreeGeometry geo, [TreeReveal? reveal]) {
+  final rv = reveal ?? revealAt(7);
+  final outline = Path();
+  for (final clump in geo.clumps) {
+    final k = _easeOut((rv.rr - clump.t) / 0.20);
+    if (k <= 0.01) continue;
+    outline.addPath(_patchFor(clump).outline, Offset.zero, matrix4: Float64List.fromList([
+      k, 0, 0, 0, 0, k, 0, 0, 0, 0, 1, 0, clump.x, clump.y, 0, 1,
+    ]));
+  }
+  for (final tier in geo.tiers) {
+    final k = _easeOut((rv.rr - tier.t) / 0.23);
+    if (k > 0.01) outline.addPath(_tierPaths(tier, k).sprays, Offset.zero);
+  }
+  for (final seg in geo.segs) {
+    final f = clamp01((rv.rr - seg.t0) / (seg.t1 - seg.t0));
+    if (f <= 0.001) continue;
+    final start = _qpt(seg, 0), end = _qpt(seg, f);
+    final a = _qtan(seg, 0), z = _qtan(seg, f);
+    final lhs = Offset(-a.dy, a.dx) * (seg.w0 * rv.thick / 2 + 2);
+    final rhs = Offset(-z.dy, z.dx) * (lerp(seg.w0, seg.w1, f) * rv.thick / 2 + 2);
+    outline.addPolygon([start + lhs, end + rhs, end - rhs, start - lhs], true);
+  }
+  return outline;
 }
 
 void _drawStrands(_Brush b, TreeGeometry geo, List<Rgb> cols, TreeReveal rv, int half) {
@@ -261,8 +336,13 @@ void _drawTouches(_Brush b, TreeGeometry geo, TreeSpecies sp, TreeReveal rv) {
         b.ellipse(t.x, t.y + 1, t.r * 0.8, t.r * 1.1, 0, b.fill(hexRgb('#8a6a32')));
         b.ellipse(t.x, t.y - t.r * 0.3, t.r * 0.95, t.r * 0.5, 0, b.fill(hexRgb('#5c4222')));
       case 'blossom':
-        b.circle(t.x, t.y, t.r, b.fill([255, 246, 249], 0.95));
-        b.circle(t.x, t.y, t.r * 0.4, b.fill(hexRgb('#f19bb6')));
+        final petals = Path();
+        for (var i = 0; i < 5; i++) {
+          final a = i * 2 * math.pi / 5 + t.x * 0.18;
+          petals.addOval(Rect.fromCircle(center: Offset(t.x + math.cos(a) * t.r * 0.60, t.y + math.sin(a) * t.r * 0.60), radius: t.r * 0.59));
+        }
+        b.canvas.drawPath(petals, b.fill([255, 246, 249], 0.95));
+        b.circle(t.x, t.y, t.r * 0.34, b.fill(hexRgb('#d77c92')));
       case 'catkins':
         final p = Path()
           ..moveTo(t.x, t.y)
@@ -284,6 +364,8 @@ void _drawWoody(_Brush b, TreeGeometry geo, TreeSpecies sp, TreeReveal rv) {
   for (var i = 0; i < geo.clumps.length; i++) {
     ((i % 5 == 1 || i % 5 == 3) ? back : front).add(geo.clumps[i]);
   }
+  back.sort((a, z) => a.y.compareTo(z.y));
+  front.sort((a, z) => a.y.compareTo(z.y));
   if (sp.form == 'conifer') {
     _drawLimbs(b, geo, sp, rv);
     _drawRoots(b, geo, sp, rv.thick, rv.sc);
@@ -296,7 +378,7 @@ void _drawWoody(_Brush b, TreeGeometry geo, TreeSpecies sp, TreeReveal rv) {
     _drawLimbs(b, geo, sp, rv);
     _drawClumps(b, front, cols, rv, top: top, bot: bot);
     if (sp.touch == 'blossom' && rv.touch > 0.01) {
-      _drawClumps(b, front, [for (final h in sp.leafEnd) hexRgb(h)], rv, top: top, bot: bot, alpha: rv.touch, shrink: 0.82);
+      _drawClumps(b, front, [for (final h in sp.leafEnd) hexRgb(h)], rv, top: top, bot: bot, alpha: rv.touch, shrink: 0.91);
     }
     if (sp.form == 'willow') _drawStrands(b, geo, cols, rv, 1);
   }
@@ -304,59 +386,81 @@ void _drawWoody(_Brush b, TreeGeometry geo, TreeSpecies sp, TreeReveal rv) {
   c.restore();
 }
 
-void _drawYoung(_Brush b, double s, double alpha) {
+
+void _drawYoung(_Brush b, TreeSpecies species, double s, double alpha) {
   if (alpha <= 0.01) return;
-  final c = b.canvas;
-  final saved = b.ga;
+  final c = b.canvas, saved = b.ga;
   c.save();
-  b.ga = saved * alpha;
   c.scale(_youngScale, _youngScale);
-  final stemCol = s < 2 ? hexRgb('#a8cf74') : hexRgb('#7fb157');
-  if (s < 1.6) {
-    final sink = smooth(0, 1, s) * 3, fade = 1 - smooth(1.1, 1.6, s);
-    final keep = b.ga;
-    b.ga = keep * fade;
-    b.ellipse(1, -5.5 + sink, 4.6, 3, -0.4, b.fill(hexRgb('#8a5f35')));
-    b.ellipse(-0.2, -6.6 + sink, 1.8, 1, -0.4, b.fill([255, 225, 180], 0.55));
-    b.ga = keep;
+  b.ga = saved * alpha;
+  final pine = species.form == 'conifer';
+  final slender = pine || species.form == 'willow';
+  if (s < 1.66) {
+    final bury = smooth(0, 1.18, s), fade = 1 - smooth(0.70, 1.58, s);
+    c.save();
+    c.clipRect(Rect.fromLTWH(-14, -16, 28, 16 - 4.2 * bury));
+    c.translate(-0.6 + bury, -6.9 + bury * 5.4);
+    c.rotate(-0.44 + bury * 0.19);
+    b.ga = saved * alpha * fade;
+    final w = slender ? 4.7 : 5.7, h = slender ? 2.5 : 3.9;
+    final seed = Path()
+      ..moveTo(w, 0)
+      ..cubicTo(w * 0.36, -h * 1.34, -w * 0.93, -h * 1.12, -w, -h * 0.12)
+      ..cubicTo(-w * 1.06, h * 1.23, w * 0.54, h * 1.13, w, 0)
+      ..close();
+    c.drawPath(seed, Paint()..shader = Gradient.linear(Offset(-w * 0.8, -h), Offset(w * 0.6, h), [
+      b.col(hexRgb('#e0b885')), b.col(hexRgb('#ad7746')), b.col(hexRgb('#825233')), b.col(hexRgb('#5e3927')),
+    ], [0, 0.39, 0.74, 1]));
+    c.drawPath(Path()
+      ..moveTo(-w * 0.70, -h * 0.32)
+      ..quadraticBezierTo(-w * 0.19, -h * 0.84, w * 0.45, -h * 0.23),
+      b.stroke(hexRgb('#f3d29e'), 0.55, 0.64));
+    c.restore();
+    b.ga = saved * alpha;
   }
   if (s > 1) {
-    final k = _easeInOut(s - 1), k2 = _easeInOut(s - 2);
-    final h = s < 2 ? 4 + 18 * k : 22 + 30 * k2;
-    final hook = s < 2 ? (1 - k) * 6 : 0.0;
-    final stem = Path()
-      ..moveTo(0, -3)
-      ..quadraticBezierTo(1.5 + hook, -h * 0.55, hook * 0.6, -h);
-    c.drawPath(stem, b.stroke(stemCol, s < 2 ? 2.2 : 2.2 + k2 * 0.9));
-    final cy = s < 2 ? -h : -22 - k2 * 2;
-    final open = s < 2 ? lerp(0.25, 1.15, k) : 1.15 + k2 * 0.15;
-    final size = s < 2 ? lerp(0.45, 1, k) : 1 - k2 * 0.15;
-    for (final side in [-1.0, 1.0]) {
-      c.save();
-      c.translate(s < 2 ? hook * 0.6 : 0, cy);
-      c.rotate(side * open);
-      b.ellipse(0, -6 * size, 3.4 * size, 6.2 * size, 0, b.fill(hexRgb('#9fcb6a')));
-      b.ellipse(-0.8 * size, -7 * size, 1.4 * size, 3.4 * size, 0, b.fill([220, 245, 180], 0.6));
-      c.restore();
+    final rise = smooth(1, 2, s), grow = smooth(2, 3.22, s);
+    final h = 2 + 18 * rise + 24 * grow;
+    final stem = TreeSeg(0, -1, 6.2 + grow * 0.8, -h * 0.54, 2.2 - rise * 2.8 + grow * 2.2, -h,
+        0.7 + rise * 1.2 + grow * 1.5, 0.64, 0, 0, 1);
+    final green = _mix(hexRgb('#699346'), hexRgb(species.bark), smooth(3, 3.75, s));
+    b.ga = saved * alpha * smooth(1, 1.31, s);
+    _limbBand(b, stem, 1, -0.5, 0.5, 1, Paint()..shader = Gradient.linear(Offset(0, -h), const Offset(3, 1), [
+      b.col(hexRgb('#b6cf72')), b.col(green), b.col(_mix(green, hexRgb('#4a5532'), 0.37)),
+    ], [0, 0.51, 1]));
+
+    void leaf(double along, double side, double length, double width, double up, {bool starter = false}) {
+      final base = _qpt(stem, along), tip = Offset(side * length, -length * up);
+      final body = Path();
+      _leaf(body, base, tip, width);
+      final paint = Paint()..shader = Gradient.linear(base, base + Offset(tip.dx * 0.76, tip.dy - width * 0.42), [
+        b.col(hexRgb('#4f792f')),
+        b.col(_mix(hexRgb(species.leaf[1]), hexRgb('#93b75a'), starter ? 0.74 : 0.35)),
+        b.col(_mix(hexRgb(species.leaf[2]), hexRgb('#d8dd91'), starter ? 0.52 : 0.24)),
+      ], [0, 0.62, 1]);
+      c.drawPath(body, paint);
+      if (length < 2 || pine) return;
+      c.drawPath(Path()
+        ..moveTo(base.dx, base.dy)
+        ..quadraticBezierTo(base.dx + tip.dx * 0.46, base.dy + tip.dy * 0.32, base.dx + tip.dx * 0.85, base.dy + tip.dy * 0.82),
+        b.stroke(hexRgb('#dce5a3'), 0.42, 0.64));
     }
-    if (s > 2) {
-      for (var i = 0; i < 4; i++) {
-        final g = _easeOut((k2 - i * 0.22) / 0.4);
-        if (g <= 0) continue;
-        final y = -26 - i * 7.5 * (0.6 + k2 * 0.4), side = i % 2 == 1 ? -1.0 : 1.0, len = (8 + 4 * (3 - i) / 3) * g;
-        c.save();
-        c.translate(0, y);
-        c.rotate(side * (0.95 - i * 0.12));
-        final leaf = Path()
-          ..moveTo(0, 0)
-          ..quadraticBezierTo(len * 0.45, -len * 0.45, 0, -len * 1.25)
-          ..quadraticBezierTo(-len * 0.45, -len * 0.45, 0, 0);
-        c.drawPath(leaf, b.fill(hexRgb('#5f9e40')));
-        c.drawLine(const Offset(0, -1), Offset(0, -len * 1.05), b.stroke([200, 235, 160], 0.7, 0.7));
-        c.restore();
-      }
+    final starter = 1.8 + rise * 7.2 - grow * 2.2;
+    leaf(1 - grow * 0.56, -1, starter, starter * (slender ? 0.21 : 0.43), 0.36, starter: true);
+    leaf(1 - grow * 0.58, 1, starter * 0.88, starter * (slender ? 0.21 : 0.41), 0.55, starter: true);
+    for (var i = 0; i < 4; i++) {
+      final open = smooth(i * 0.15, 0.53 + i * 0.14, grow);
+      if (open < 0.01) continue;
+      final len = (11.5 - i * 1.4) * open, side = i.isOdd ? -1.0 : 1.0, along = 0.53 + i * 0.13;
+      leaf(along, side, len, len * (slender ? 0.22 : 0.53), 0.52 + i * 0.14);
+      if (pine) leaf(along, -side, len * 0.82, len * 0.15, 1.20);
     }
-    if (s > 2.2) b.ellipse(0, -h - 1.5, 1.8, 3, 0, b.fill(hexRgb('#8cc35e')));
+    final bud = smooth(2.2, 2.92, s);
+    if (bud > 0) {
+      final tip = Path();
+      _leaf(tip, Offset(stem.x1, stem.y1 + 1), Offset(-0.4, -4.6 * bud), 1.8 * bud);
+      c.drawPath(tip, b.fill(hexRgb('#8eae58')));
+    }
   }
   c.restore();
   b.ga = saved;
@@ -408,22 +512,24 @@ void _drawSoil(_Brush b, double s, double wet) {
 
 /// Draws species [sp] at stage [s] (0..7) with the trunk's base at the origin. [soil] adds the planting spot of the tree
 /// being grown; [wet] (0..1) darkens it after watering.
-void paintTree(Canvas canvas, TreeGeometry geo, TreeSpecies sp, double s, {bool soil = false, double wet = 0, Rgb? light}) {
-  final b = _Brush(canvas);
+void paintTree(Canvas canvas, TreeGeometry geo, TreeSpecies sp, double s, {bool soil = false, double wet = 0, Rgb? light, double opacity = 1}) {
+  final b = _Brush(canvas)..ga = opacity;
   if (light != null) b.light = light;
   if (soil) _drawSoil(b, s, wet);
   final rv = revealAt(s);
-  if (rv.tree > 0.01) {
-    b.ga = rv.tree;
+  final woody = s > 3 && s < 4 ? smooth(3.15, 3.75, s) : rv.tree;
+  final young = s > 3 && s < 4 ? 1 - smooth(3.34, 3.88, s) : rv.seedling;
+  if (woody > 0.01) {
+    b.ga = opacity * woody;
     _drawWoody(b, geo, sp, rv);
-    b.ga = 1;
+    b.ga = opacity;
   }
-  _drawYoung(b, s, rv.seedling);
+  _drawYoung(b, sp, s, young);
 }
 
 /// Just the planting spot (turned earth) of the tree being grown, at the origin.
-void paintSoil(Canvas canvas, double s, double wet, {Rgb? light}) {
-  final b = _Brush(canvas);
+void paintSoil(Canvas canvas, double s, double wet, {Rgb? light, double opacity = 1}) {
+  final b = _Brush(canvas)..ga = opacity;
   if (light != null) b.light = light;
   _drawSoil(b, s, wet);
 }

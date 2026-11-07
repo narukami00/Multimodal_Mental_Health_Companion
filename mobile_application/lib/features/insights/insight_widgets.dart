@@ -7,16 +7,23 @@ const insightLine = Color(0x143B2F26);
 
 /// The white rounded card every Insights tab is made of.
 class InsightCard extends StatelessWidget {
-  const InsightCard({required this.child, this.padding = const EdgeInsets.all(16), super.key});
+  const InsightCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.gradient,
+    super.key,
+  });
 
   final Widget child;
   final EdgeInsets padding;
+  final Gradient? gradient;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: padding,
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: gradient == null ? Colors.white : null,
+      gradient: gradient,
       borderRadius: BorderRadius.circular(22),
       border: Border.all(color: insightLine),
       boxShadow: const [
@@ -101,7 +108,11 @@ class InsightEmpty extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: insightInk),
+          style: const TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w800,
+            color: insightInk,
+          ),
         ),
         const SizedBox(height: 6),
         Text(

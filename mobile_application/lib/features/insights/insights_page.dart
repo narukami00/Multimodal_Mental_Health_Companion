@@ -55,41 +55,81 @@ class InsightsPage extends StatefulWidget {
 }
 
 class _Tab {
-  const _Tab(this.id, this.label, this.icon);
+  const _Tab(this.id, this.label, this.icon, this.tint, this.accent);
   final String id;
   final String label;
   final IconData icon;
+  final Color tint;
+  final Color accent;
 }
 
 class _InsightsPageState extends State<InsightsPage> {
   String _selected = 'mood';
+  final _scroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _selected = widget.tabRequest?.value ?? _selected;
     widget.tabRequest?.addListener(_onTabRequest);
   }
 
   @override
   void dispose() {
     widget.tabRequest?.removeListener(_onTabRequest);
+    _scroll.dispose();
     super.dispose();
   }
 
   void _onTabRequest() {
     final id = widget.tabRequest?.value;
-    if (id != null && _tabs.any((t) => t.id == id)) setState(() => _selected = id);
+    if (id != null && _tabs.any((t) => t.id == id)) _select(id);
+  }
+
+  void _select(String id) {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    if (_selected != id) setState(() => _selected = id);
   }
 
   List<_Tab> get _tabs => [
-    const _Tab('mood', 'Mood', Icons.wb_twilight_rounded),
-    const _Tab('weeks', 'Weeks', Icons.calendar_view_week_rounded),
+    const _Tab(
+      'mood',
+      'Mood',
+      Icons.wb_twilight_rounded,
+      Color(0xFFFFE8DA),
+      Color(0xFF9A4E2C),
+    ),
+    const _Tab(
+      'weeks',
+      'Weeks',
+      Icons.calendar_view_week_rounded,
+      Color(0xFFEAE4FA),
+      Color(0xFF62518A),
+    ),
     if (widget.suggestionController != null)
-      const _Tab('helps', 'Helps', Icons.favorite_rounded),
+      const _Tab(
+        'helps',
+        'Helps',
+        Icons.favorite_rounded,
+        Color(0xFFE3F0DE),
+        Color(0xFF477450),
+      ),
     if (widget.phonePatterns != null && widget.profileController != null)
-      const _Tab('phone', 'Phone', Icons.smartphone_rounded),
+      const _Tab(
+        'phone',
+        'Phone',
+        Icons.smartphone_rounded,
+        Color(0xFFE1ECF9),
+        Color(0xFF415E8F),
+      ),
     if (widget.momentsTab != null)
-      const _Tab('moments', 'Moments', Icons.auto_awesome_rounded),
+      const _Tab(
+        'moments',
+        'Moments',
+        Icons.auto_awesome_rounded,
+        Color(0xFFE8E5FC),
+        Color(0xFF57558C),
+      ),
   ];
 
   Widget _content(String id) => switch (id) {
@@ -125,9 +165,11 @@ class _InsightsPageState extends State<InsightsPage> {
   @override
   Widget build(BuildContext context) {
     final tabs = _tabs;
-    final selected = tabs.any((t) => t.id == _selected)
-        ? _selected
-        : tabs.first.id;
+    final current = tabs.firstWhere(
+      (tab) => tab.id == _selected,
+      orElse: () => tabs.first,
+    );
+    final selected = current.id;
 
     return Scaffold(
       backgroundColor: SolaceColors.from(context).background,
@@ -148,6 +190,7 @@ class _InsightsPageState extends State<InsightsPage> {
             Positioned.fill(
               child: SafeArea(
                 child: SingleChildScrollView(
+                  controller: _scroll,
                   // Room for the floating pill, which overlays the page.
                   // Horizontal inset matches the Today page so cards line up
                   // across the app's pages.
@@ -157,10 +200,10 @@ class _InsightsPageState extends State<InsightsPage> {
                     children: [
                       _header(context),
                       const SizedBox(height: 16),
-                      _TabBar(
+                      _SectionSwitcher(
                         tabs: tabs,
-                        selected: selected,
-                        onSelected: (id) => setState(() => _selected = id),
+                        selected: current,
+                        onSelected: _select,
                       ),
                       const SizedBox(height: 16),
                       // The outgoing tab is laid over the top of the new one and takes no space, so nothing
@@ -179,21 +222,31 @@ class _InsightsPageState extends State<InsightsPage> {
                             alignment: Alignment.topCenter,
                             children: [
                               for (final old in previous)
-                                Positioned(top: 0, left: 0, right: 0, child: IgnorePointer(child: old)),
+                                Positioned(
+                                  top: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: IgnorePointer(child: old),
+                                ),
                               if (current != null) current,
                             ],
                           ),
-                          transitionBuilder: (child, animation) => FadeTransition(
-                            opacity: animation,
-                            child: AnimatedBuilder(
-                              animation: animation,
-                              builder: (context, child) => Transform.translate(
-                                offset: Offset(0, (1 - animation.value) * 8),
-                                child: child,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: AnimatedBuilder(
+                                  animation: animation,
+                                  builder: (context, child) =>
+                                      Transform.translate(
+                                        offset: Offset(
+                                          0,
+                                          (1 - animation.value) * 8,
+                                        ),
+                                        child: child,
+                                      ),
+                                  child: child,
+                                ),
                               ),
-                              child: child,
-                            ),
-                          ),
                           child: KeyedSubtree(
                             key: ValueKey(selected),
                             child: _content(selected),
@@ -340,80 +393,160 @@ class _InsightsPageState extends State<InsightsPage> {
   }
 }
 
-class _TabBar extends StatelessWidget {
-  const _TabBar({
+class _SectionSwitcher extends StatelessWidget {
+  const _SectionSwitcher({
     required this.tabs,
     required this.selected,
     required this.onSelected,
   });
 
   final List<_Tab> tabs;
-  final String selected;
+  final _Tab selected;
   final ValueChanged<String> onSelected;
+
+  Widget _icon(_Tab tab) => Container(
+    width: 38,
+    height: 38,
+    decoration: BoxDecoration(
+      color: tab.tint,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Icon(tab.icon, color: tab.accent, size: 20),
+  );
+
+  Future<void> _open(BuildContext context) async {
+    final palette = SolaceColors.from(context);
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: palette.surface,
+      constraints: const BoxConstraints(maxWidth: 520),
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Insights sections',
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: palette.ink,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close sections',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final tab in tabs)
+                      Semantics(
+                        selected: tab.id == selected.id,
+                        child: ListTile(
+                          key: ValueKey('insights-tab-${tab.id}'),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                          ),
+                          minTileHeight: 56,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          leading: _icon(tab),
+                          title: Text(
+                            tab.label,
+                            style: TextStyle(
+                              color: palette.ink,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          selected: tab.id == selected.id,
+                          selectedTileColor: palette.amber.withValues(
+                            alpha: 0.16,
+                          ),
+                          trailing: tab.id == selected.id
+                              ? Icon(Icons.check_rounded, color: tab.accent)
+                              : null,
+                          onTap: () => Navigator.of(context).pop(tab.id),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice != null && context.mounted) onSelected(choice);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xB8FFFFFF),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: insightLine),
-      ),
-      child: Row(
-        children: [
-          for (final tab in tabs)
-            Expanded(
-              child: Semantics(
-                button: true,
-                selected: tab.id == selected,
-                label: tab.label,
-                child: GestureDetector(
-                  key: ValueKey('insights-tab-${tab.id}'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onSelected(tab.id),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: tab.id == selected
-                          ? const Color(0xFFFFB534)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            tab.icon,
-                            size: 15,
-                            color: tab.id == selected
-                                ? insightInk
-                                : insightMuted,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            tab.label,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
-                              color: tab.id == selected
-                                  ? insightInk
-                                  : insightSoft,
-                            ),
-                          ),
-                        ],
+    final palette = SolaceColors.from(context);
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(18),
+      side: const BorderSide(color: insightLine),
+    );
+    return Material(
+      color: palette.surface,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: const ValueKey('insights-section-switcher'),
+        onTap: () => _open(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              _icon(selected),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Switch section',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: palette.mutedInk,
                       ),
                     ),
-                  ),
+                    Text(
+                      selected.label,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: palette.ink,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-        ],
+              Icon(Icons.keyboard_arrow_down_rounded, color: palette.mutedInk),
+            ],
+          ),
+        ),
       ),
     );
   }

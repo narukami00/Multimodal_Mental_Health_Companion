@@ -406,6 +406,7 @@ class TodayPage extends StatelessWidget {
             ctaLabel: card.action,
             onCta: _primaryAction(primaryCard),
             forest: forestCard,
+            journalFollowUp: primaryCard == HomeCardType.defaultAction,
             task: taskOffer,
             onTaskAccept: onTaskAccept,
             onTaskOpen: onTaskOpen,

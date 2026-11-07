@@ -49,11 +49,13 @@ class CheckInTaskCard extends StatefulWidget {
     this.onTaskOpen,
     this.onTaskDecline,
     this.forest,
+    this.journalFollowUp = false,
     super.key,
   });
 
   /// With it, the panel shows the growing tree instead of the spinning sun.
   final ForestCardData? forest;
+  final bool journalFollowUp;
 
   final String? eyebrow;
   final String headline;
@@ -156,6 +158,7 @@ class _CheckInTaskCardState extends State<CheckInTaskCard> {
       ctaLabel: widget.ctaLabel,
       onCta: widget.onCta,
       forest: widget.forest,
+      journalFollowUp: widget.journalFollowUp,
     );
   }
 
@@ -240,16 +243,9 @@ class _TaskButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    return _OrangeButton(
-      label: label,
-      onPressed: onPressed,
-      height: 44,
-      radius: 13,
-      horizontalPadding: 20,
-      prominent: filled,
-    );
-  }
+  Widget build(BuildContext context) => filled
+      ? FilledButton(onPressed: onPressed, child: Text(label))
+      : OutlinedButton(onPressed: onPressed, child: Text(label));
 }
 
 /// The check-in half: a saturated orange panel with a slowly sweeping gradient
@@ -266,9 +262,11 @@ class _CheckInPanel extends StatefulWidget {
     this.eyebrow,
     this.onCta,
     this.forest,
+    required this.journalFollowUp,
   });
 
   final ForestCardData? forest;
+  final bool journalFollowUp;
   final String? eyebrow;
   final String headline;
   final String subtitle;
@@ -355,34 +353,33 @@ class _CheckInPanelState extends State<_CheckInPanel>
           ),
           // At least the card's usual height, taller when the question needs more lines, so nothing is ever cut off.
           ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 244),
+            constraints: BoxConstraints(minHeight: widget.journalFollowUp ? 220 : 244),
             child: IntrinsicHeight(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // the question sits in the middle of the free space above the button, not stuck to the top
-                    const Spacer(),
                     if (widget.eyebrow != null) ...[
                       Text(
                         widget.eyebrow!.toUpperCase(),
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 1.5,
+                          letterSpacing: 1.3,
                           color: p.text.withValues(alpha: .78),
                         ),
                       ),
-                      const SizedBox(height: 9),
+                      const SizedBox(height: 12),
+                      const Spacer(),
                     ],
                     FractionallySizedBox(
-                      widthFactor: .58,
+                      widthFactor: .62,
                       alignment: Alignment.centerLeft,
                       child: Text(
                         widget.headline.split(RegExp(r'\s+')).join(' '),
                         style: TextStyle(
-                          fontSize: 23,
+                          fontSize: widget.journalFollowUp ? 26 : 23,
                           height: 1.18,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.7,
@@ -393,15 +390,11 @@ class _CheckInPanelState extends State<_CheckInPanel>
                         ),
                       ),
                     ),
+                    const SizedBox(height: 12),
                     const Spacer(),
-                    _OrangeButton(
+                    _HeroCheckInButton(
                       label: widget.ctaLabel,
                       onPressed: widget.onCta,
-                      height: 48,
-                      radius: 999,
-                      horizontalPadding: 30,
-                      prominent: false,
-                      light: true,
                     ),
                   ],
                 ),
@@ -496,14 +489,9 @@ class _CheckInPanelState extends State<_CheckInPanel>
                     // Inverted from the panel: a light pill on the orange,
                     // rather than an orange pill on a pale card. It reads as the
                     // one thing to press instead of blending into the page.
-                    _OrangeButton(
+                    _HeroCheckInButton(
                       label: widget.ctaLabel,
                       onPressed: widget.onCta,
-                      height: 48,
-                      radius: 999,
-                      horizontalPadding: 30,
-                      prominent: false,
-                      light: true,
                     ),
                   ],
                 ),
@@ -640,124 +628,56 @@ class _TickPainter extends CustomPainter {
 /// Dark ink on a bright orange gradient. The brown fill this replaces was never
 /// in the palette, and white on amber measures around 2:1, which is unreadable
 /// on a low-end panel in daylight.
-class _OrangeButton extends StatelessWidget {
-  const _OrangeButton({
-    required this.label,
-    required this.onPressed,
-    required this.height,
-    required this.radius,
-    required this.horizontalPadding,
-    required this.prominent,
-    this.light = false,
-  });
+class _HeroCheckInButton extends StatelessWidget {
+  const _HeroCheckInButton({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback? onPressed;
-  final double height;
-  final double radius;
-  final double horizontalPadding;
-  final bool prominent;
-
-  /// A pale pill for use on the orange panel, where an orange button would
-  /// disappear into its own background.
-  final bool light;
-
-  static const _ink = Color(0xFF3F2A0E);
 
   @override
   Widget build(BuildContext context) {
-    final solid = prominent || light;
-    final ink = solid ? _ink : const Color(0xFF5F4E3A);
-
+    final radius = BorderRadius.circular(999);
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        gradient: prominent
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFFFFC24F), Color(0xFFF09A18)],
-              )
-            : light
-            ? const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFFFFFFFF), Color(0xFFFFF4E2)],
-              )
-            : null,
-        border: prominent
-            ? null
-            : light
-            ? null
-            : Border.all(color: const Color(0x2E4A3728), width: 1.2),
-        // Two shadows on the cream pill: a tight one for contact and a wider,
-        // slightly spread-negative one for lift. A single shadow reads flat.
-        boxShadow: light
-            ? const [
-                BoxShadow(
-                  color: Color(0x33704004),
-                  blurRadius: 3,
-                  offset: Offset(0, 2),
-                ),
-                BoxShadow(
-                  color: Color(0x57704004),
-                  blurRadius: 22,
-                  spreadRadius: -4,
-                  offset: Offset(0, 10),
-                ),
-              ]
-            : prominent
-            ? const [
-                BoxShadow(
-                  color: Color(0x33E08A10),
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
-                ),
-              ]
-            : null,
+        borderRadius: radius,
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Color(0xFFFFF4E2)],
+        ),
+        boxShadow: const [
+          BoxShadow(color: Color(0x33704004), blurRadius: 3, offset: Offset(0, 2)),
+          BoxShadow(color: Color(0x57704004), blurRadius: 22, spreadRadius: -4, offset: Offset(0, 10)),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(radius),
+        borderRadius: radius,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(radius),
-          child: Container(
-            height: height,
-            padding: light
-                ? const EdgeInsets.only(left: 7, right: 26)
-                : EdgeInsets.symmetric(horizontal: horizontalPadding),
-            // widthFactor 1 makes the button hug its own content. Without it a
-            // Container carrying an alignment expands to whatever width its
-            // parent offers, turning a capsule into a full-width bar.
-            child: Center(
-              widthFactor: 1,
-              child: light
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const _TickDisc(),
-                        const SizedBox(width: 11),
-                        Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.1,
-                            color: ink,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Text(
+          borderRadius: radius,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 7, right: 26, top: 5, bottom: 5),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const _TickDisc(),
+                  const SizedBox(width: 11),
+                  Flexible(
+                    child: Text(
                       label,
-                      style: TextStyle(
-                        fontSize: 14.5,
+                      style: const TextStyle(
+                        fontSize: 15.5,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.1,
-                        color: ink,
+                        color: Color(0xFF3F2A0E),
                       ),
                     ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

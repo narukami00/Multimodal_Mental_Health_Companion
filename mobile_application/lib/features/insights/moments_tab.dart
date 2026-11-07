@@ -332,15 +332,9 @@ class _AddMomentSheetState extends State<_AddMomentSheet> {
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
-              height: 50,
               child: FilledButton(
                 key: const ValueKey('moment-keep'),
                 onPressed: enabled ? _keep : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFB534),
-                  foregroundColor: const Color(0xFF3A2A0C),
-                  shape: const StadiumBorder(),
-                ),
                 child: const Text('Keep this moment', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
               ),
             ),

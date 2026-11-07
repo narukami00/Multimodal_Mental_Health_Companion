@@ -5,6 +5,7 @@ import '../../domain/footprint/phone_noticings.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../profile/phone_patterns_page.dart';
 import '../profile/profile_controller.dart';
+import 'insight_widgets.dart';
 
 /// The real, data-backed part of Insights: what the person's own phone use has
 /// been, in plain statements, or an honest account of why there is nothing yet.
@@ -62,10 +63,22 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
     );
   }
 
-  static IconData _icon(NoticingKind kind) => switch (kind) {
-    NoticingKind.screen => Icons.smartphone_rounded,
-    NoticingKind.rhythm => Icons.bedtime_rounded,
-    NoticingKind.apps => Icons.donut_small_rounded,
+  static (IconData, Color, Color) _look(NoticingKind kind) => switch (kind) {
+    NoticingKind.screen => (
+      Icons.smartphone_rounded,
+      Color(0xFFDDE7FB),
+      Color(0xFF415E8F),
+    ),
+    NoticingKind.rhythm => (
+      Icons.bedtime_rounded,
+      Color(0xFFECE4FA),
+      Color(0xFF62518A),
+    ),
+    NoticingKind.apps => (
+      Icons.donut_small_rounded,
+      Color(0xFFF9E8CC),
+      Color(0xFF865719),
+    ),
   };
 
   @override
@@ -76,9 +89,8 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
     final Widget body;
     if (!on && result.isEmpty) {
       body = _invitation(
-        'Phone patterns is off, so nothing is being read. Turn it on and Solace '
-        'can show you your own usual: screen time, your nights, and where phone '
-        'time goes.',
+        'Phone patterns is off, so nothing is being read. Turn it on to see '
+            'screen time, night patterns, and app categories.',
         'See what this would show',
       );
     } else if (result.isLearning) {
@@ -87,36 +99,16 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _shell(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Column(
-              children: [
-                for (var i = 0; i < result.noticings.length; i++) ...[
-                  if (i > 0) const Divider(height: 1, thickness: 1, color: Color(0x143B2F26)),
-                  _row(result.noticings[i]),
-                ],
-              ],
-            ),
-          ),
+          for (final noticing in result.noticings) ...[
+            _row(noticing),
+            const SizedBox(height: 8),
+          ],
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
               key: const ValueKey('phone-section-details'),
               onPressed: _open,
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF96620C),
-                padding: const EdgeInsets.only(top: 6),
-                minimumSize: const Size(0, 34),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('See the details', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
-                  SizedBox(width: 2),
-                  Icon(Icons.chevron_right_rounded, size: 18),
-                ],
-              ),
+              child: const Text('See the details'),
             ),
           ),
         ],
@@ -126,30 +118,15 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
     return Column(
       key: const ValueKey('phone-patterns-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(2, 22, 2, 10),
-          child: Text(
-            'PHONE PATTERNS',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.3,
-              color: Color(0xFFA69883),
-            ),
-          ),
-        ),
-        body,
-      ],
+      children: [const InsightLabel('PHONE PATTERNS'), body],
     );
   }
 
-  Widget _shell({required Widget child, EdgeInsets padding = const EdgeInsets.all(16)}) => Container(
-    padding: padding,
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: const Color(0x143B2F26)),
+  Widget _shell({required Widget child}) => InsightCard(
+    gradient: const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFFE9EFFB), Colors.white],
     ),
     child: child,
   );
@@ -203,9 +180,7 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
           ),
           const SizedBox(height: 6),
           Text(
-            '$read of ${result.daysNeeded} days read. Solace says nothing about '
-            'what is usual for you until it has seen enough days to be '
-            'right.',
+            '$read of ${result.daysNeeded} days read',
             key: const ValueKey('phone-section-learning'),
             style: const TextStyle(
               fontSize: 12.5,
@@ -220,8 +195,8 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
             child: LinearProgressIndicator(
               value: (read / result.daysNeeded).clamp(0.0, 1.0),
               minHeight: 6,
-              backgroundColor: const Color(0xFFF3E7CE),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFFFFB534)),
+              backgroundColor: const Color(0xFFDDE7FB),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF526DB6)),
             ),
           ),
         ],
@@ -230,79 +205,105 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
   }
 
   /// One line of "your usual": the label, the number that matters, what it is, and an optional aside.
-  Widget _row(PhoneNoticing n) => Semantics(
-    container: true,
-    label: '${n.meta}. ${n.text}',
-    excludeSemantics: true,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: const Color(0xFFFFF3DC), borderRadius: BorderRadius.circular(13)),
-            child: Icon(_icon(n.kind), size: 20, color: const Color(0xFFB57A12)),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  n.meta,
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
-                    color: Color(0xFFBCAC8E),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                if (n.value != null) ...[
-                  Text(
-                    n.value!,
-                    style: const TextStyle(
-                      fontSize: 19,
-                      height: 1.2,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF3A3125),
-                    ),
-                  ),
-                  if (n.caption != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        n.caption!,
-                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF8A7B66)),
-                      ),
-                    ),
-                  if (n.note != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF7F0E2),
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                        child: Text(
-                          n.note!,
-                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF7A6A52)),
-                        ),
-                      ),
-                    ),
-                ] else
-                  Text(
-                    n.text,
-                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, height: 1.45, color: Color(0xFF3A3125)),
-                  ),
-              ],
+  Widget _row(PhoneNoticing n) {
+    final (icon, tint, accent) = _look(n.kind);
+    return Semantics(
+      container: true,
+      label: '${n.meta}. ${n.text}',
+      excludeSemantics: true,
+      child: InsightCard(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color.lerp(Colors.white, tint, 0.62)!, Colors.white],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: tint,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, size: 20, color: accent),
             ),
-          ),
-        ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    n.meta,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                      color: accent,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  if (n.value != null) ...[
+                    Text(
+                      n.value!,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF3A3125),
+                      ),
+                    ),
+                    if (n.caption != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          n.caption!,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF8A7B66),
+                          ),
+                        ),
+                      ),
+                    if (n.note != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF7F0E2),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Text(
+                            n.note!,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF7A6A52),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ] else
+                    Text(
+                      n.text,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        height: 1.45,
+                        color: Color(0xFF3A3125),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

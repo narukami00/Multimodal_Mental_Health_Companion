@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/solace_palette.dart';
 import 'page_back_button.dart';
 
 /// Shared building blocks for the visual pages: a painted hero header, cards, rings, bars, stat tiles
@@ -92,9 +93,21 @@ class _PageHeroState extends State<PageHero> with SingleTickerProviderStateMixin
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(seconds: 10));
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.progress == null && !_kitTesting) _c.repeat();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotion();
+  }
+
+  @override
+  void didUpdateWidget(PageHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.progress != oldWidget.progress) _syncMotion();
+  }
+
+  void _syncMotion() {
+    final animate = widget.progress == null && !_kitTesting && !MediaQuery.disableAnimationsOf(context);
+    if (animate && !_c.isAnimating) _c.repeat();
+    if (!animate) _c.stop();
   }
 
   @override
@@ -206,6 +219,8 @@ class HeroPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, Paint()..shader = ui.Gradient.linear(Offset.zero, Offset(0, size.height), [p.top, p.bottom]));
     final u = size.height * 0.62;
     final o = Offset(size.width * 0.74, size.height * 0.48);
+    final compactWidth = math.min(u, size.width * 0.36);
+    final compactCenter = Offset(size.width * 0.775, size.height * 0.45);
     _glow(canvas, o, u * 0.95, p.c, 0.6);
     switch (scene) {
       case HeroScene.rhythm:
@@ -219,13 +234,13 @@ class HeroPainter extends CustomPainter {
       case HeroScene.privacy:
         _privacy(canvas, o, u, p);
       case HeroScene.permissions:
-        _permissions(canvas, o, u, p);
+        _permissions(canvas, compactCenter, compactWidth, p);
       case HeroScene.memory:
         _memory(canvas, o, u, p);
       case HeroScene.baseline:
-        _baseline(canvas, o, u, p);
+        _baseline(canvas, compactCenter, compactWidth, p);
       case HeroScene.decisions:
-        _decisions(canvas, o, u, p);
+        _decisions(canvas, compactCenter, compactWidth, p);
       case HeroScene.about:
         _about(canvas, o, u, p);
       case HeroScene.terms:
@@ -240,26 +255,68 @@ class HeroPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant HeroPainter old) => old.t != t || old.scene != scene;
 
-  // ---- rhythm: a wave of days, each one a dot that glows as the light passes -------------------
+  // A single highlight passes along seven beads. It enters and exits outside
+  // the visible track so both ends of the animation loop have the same pose.
 
   void _rhythm(Canvas c, Size s, Offset o, double u, _HeroPalette p) {
-    final path = Path();
-    for (var i = 0; i <= 40; i++) {
-      final x = s.width * 0.42 + i / 40 * s.width * 0.56;
-      final y = o.dy + math.sin(i / 40 * 2 * math.pi * 1.5 + t * 2 * math.pi) * u * 0.18;
-      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    if (s.isEmpty) return;
+    final start = Offset(s.width * .46, o.dy + u * .13);
+    final end = Offset(s.width * .96, o.dy - u * .10);
+    final span = end.dx - start.dx;
+    final wave = Path()
+      ..moveTo(start.dx, start.dy)
+      ..cubicTo(start.dx + span * .14, o.dy - u * .34, start.dx + span * .29, o.dy - u * .24, start.dx + span * .49, o.dy)
+      ..cubicTo(start.dx + span * .68, o.dy + u * .25, start.dx + span * .84, o.dy + u * .23, end.dx, end.dy);
+    final track = _stroke(p.b, 1.65)
+      ..shader = ui.Gradient.linear(start, end, [
+        p.b.withValues(alpha: .08),
+        p.b.withValues(alpha: .48),
+        p.b.withValues(alpha: .31),
+      ], [0, .31, 1]);
+    c.drawPath(wave, track);
+
+    final metric = wave.computeMetrics().first;
+    final head = t * 1.32 - .09;
+    final tail = head - .20;
+    if (head > 0 && tail < 1) {
+      final from = metric.length * tail.clamp(0.0, 1.0);
+      final to = metric.length * head.clamp(0.0, 1.0);
+      final a = metric.getTangentForOffset(from)!.position;
+      final b = metric.getTangentForOffset(to)!.position;
+      final fade = (math.min(head, 1 - tail) / .08).clamp(0.0, 1.0);
+      final streak = _stroke(p.b, 2.55)
+        ..shader = ui.Gradient.linear(a, b, [
+          p.a.withValues(alpha: 0),
+          p.a.withValues(alpha: .65 * fade),
+          p.b.withValues(alpha: fade),
+        ], [0, .58, 1]);
+      c.drawPath(metric.extractPath(from, to), streak);
     }
-    c.drawPath(path, _stroke(p.a.withValues(alpha: 0.35), 3));
-    for (var i = 0; i < 14; i++) {
-      final f = i / 13;
-      final x = s.width * 0.45 + f * s.width * 0.5;
-      final y = o.dy + math.sin(f * 2 * math.pi * 1.5 + t * 2 * math.pi) * u * 0.18;
-      final near = (1 - ((f - ((t * 1.2) % 1.0)).abs() * 4)).clamp(0.0, 1.0);
-      _glow(c, Offset(x, y), u * 0.16 * (0.4 + near), p.b, 0.7 * near);
-      c.drawCircle(Offset(x, y), u * (0.035 + 0.02 * near), Paint()..color = Color.lerp(p.c, p.a, near)!);
+
+    final ink = Paint();
+    final bead = (u * .025).clamp(2.7, 4.2);
+    for (var i = 0; i < 7; i++) {
+      final f = .065 + i * .145;
+      final center = metric.getTangentForOffset(metric.length * f)!.position;
+      final proximity = (1 - (f - head).abs() / .115).clamp(0.0, 1.0);
+      final lit = proximity * proximity;
+      c.drawCircle(center, bead + lit * .8, ink..color = Color.lerp(p.bottom, p.a, lit)!);
+      c.drawCircle(center, bead + lit * .8, _stroke(p.b.withValues(alpha: .58 + lit * .42), 1.05));
+      if (lit > .12) {
+        c.drawCircle(center + const Offset(-.7, -.9), 1.1, ink..color = Colors.white.withValues(alpha: .8 * lit));
+      }
     }
-    c.drawCircle(Offset(s.width * 0.86, s.height * 0.2), u * 0.1, Paint()..color = const Color(0xFFFFC85A));
-    _glow(c, Offset(s.width * 0.86, s.height * 0.2), u * 0.35, const Color(0xFFFFD27A), 0.6);
+    if (head > 0 && head < 1) {
+      final center = metric.getTangentForOffset(metric.length * head)!.position;
+      final fade = (math.min(head, 1 - head) / .065).clamp(0.0, 1.0);
+      c.drawCircle(center, 2.15, ink..color = p.b.withValues(alpha: fade));
+      c.drawCircle(center, 1.15, ink..color = const Color(0xFFFFF5D8).withValues(alpha: fade));
+    }
+
+    final sun = Offset(s.width * .87, s.height * .22);
+    final radius = (u * .063).clamp(6.0, 11.0);
+    c.drawCircle(sun, radius + 3, _stroke(p.a.withValues(alpha: .44), 1));
+    c.drawCircle(sun, radius, ink..color = const Color(0xFFFFC85A));
   }
 
   // ---- noticed: a phone with a moon and orbiting readings ---------------------------------------
@@ -366,40 +423,63 @@ class HeroPainter extends CustomPainter {
     }
   }
 
-  // ---- permissions: switches and a lens, a mic, a pin ----------------------------------------------------
-
+  // A lock anchors the camera and microphone tiles in one compact panel.
   void _permissions(Canvas c, Offset o, double u, _HeroPalette p) {
-    final icons = [Offset(-u * 0.38, -u * 0.18), Offset(u * 0.38, -u * 0.18), Offset(-u * 0.2, u * 0.32), Offset(u * 0.2, u * 0.32)];
-    for (var i = 0; i < icons.length; i++) {
-      final on = _s(i * 0.25) > -0.2;
-      final pos = o + icons[i];
-      final bob = _s(i * 0.2) * u * 0.02;
-      final r = RRect.fromRectAndRadius(Rect.fromCenter(center: pos + Offset(0, bob), width: u * 0.34, height: u * 0.34), Radius.circular(u * 0.09));
-      c.drawShadow(Path()..addRRect(r), p.ink, 5, false);
-      c.drawRRect(r, Paint()..color = Colors.white);
-      final col = [p.a, p.b, p.a, p.b][i];
-      if (i == 0) {
-        c.drawCircle(pos + Offset(0, bob), u * 0.1, _stroke(col, 3));
-        c.drawCircle(pos + Offset(0, bob), u * 0.04, Paint()..color = col);
-      } else if (i == 1) {
-        c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: pos + Offset(0, bob - u * 0.02), width: u * 0.08, height: u * 0.16), Radius.circular(u * 0.04)), Paint()..color = col);
-        c.drawArc(Rect.fromCenter(center: pos + Offset(0, bob), width: u * 0.15, height: u * 0.15), 0, math.pi, false, _stroke(col, 2.5));
-      } else if (i == 2) {
-        c.drawCircle(pos + Offset(0, bob - u * 0.02), u * 0.07, Paint()..color = col);
-        c.drawPath(
-          Path()
-            ..moveTo(pos.dx - u * 0.06, pos.dy + bob)
-            ..lineTo(pos.dx + u * 0.06, pos.dy + bob)
-            ..lineTo(pos.dx, pos.dy + bob + u * 0.12)
-            ..close(),
-          Paint()..color = col,
-        );
-      } else {
-        c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: pos + Offset(0, bob), width: u * 0.16, height: u * 0.1), Radius.circular(u * 0.05)), Paint()..color = on ? col : p.c);
-        c.drawCircle(pos + Offset(on ? u * 0.04 : -u * 0.04, bob), u * 0.038, Paint()..color = Colors.white);
-      }
-    }
-    _sparkle(c, o + Offset(0, u * 0.02), u * 0.07 * (0.7 + 0.3 * _s()), Colors.white);
+    c.save();
+    c.translate(o.dx, o.dy);
+    c.scale(u / 100);
+    final frame = RRect.fromRectAndRadius(
+      const Rect.fromLTRB(-46, -31, 46, 38),
+      const Radius.circular(17),
+    );
+    final tile = RRect.fromRectAndRadius(
+      const Rect.fromLTRB(-33, 7, -3, 27),
+      const Radius.circular(7),
+    );
+    final shadow = frame.shift(const Offset(0, 4));
+    c.drawRRect(shadow, Paint()..color = p.ink.withValues(alpha: 0.10));
+    c.drawRRect(frame, Paint()..color = Colors.white.withValues(alpha: 0.85));
+    c.drawRRect(frame, _stroke(p.a.withValues(alpha: 0.18), 1.1));
+
+    final lock = RRect.fromRectAndRadius(
+      const Rect.fromLTRB(-12, -17, 12, -2),
+      const Radius.circular(5),
+    );
+    c.drawArc(
+      const Rect.fromLTWH(-6, -25, 12, 14),
+      math.pi,
+      math.pi,
+      false,
+      _stroke(p.ink, 2.6),
+    );
+    c.drawRRect(lock, Paint()..color = p.ink);
+    c.drawCircle(const Offset(0, -10), 1.9, Paint()..color = Colors.white);
+
+    final focus = (1 + _s(-0.25)) / 2;
+    final cameraColor = Color.lerp(p.a, p.ink, focus)!;
+    final micColor = Color.lerp(p.a, p.ink, 1 - focus)!;
+    c.drawRRect(tile, Paint()..color = p.c.withValues(alpha: 0.30 + focus * 0.35));
+    c.drawRRect(
+      tile.shift(const Offset(36, 0)),
+      Paint()..color = p.c.withValues(alpha: 0.30 + (1 - focus) * 0.35),
+    );
+
+    final cameraInk = _stroke(cameraColor, 1.5);
+    c.drawRRect(
+      RRect.fromRectAndRadius(const Rect.fromLTRB(-25, 13, -11, 22), const Radius.circular(2.4)),
+      cameraInk,
+    );
+    c.drawLine(const Offset(-21, 12), const Offset(-15, 12), cameraInk);
+    c.drawCircle(const Offset(-18, 17.5), 2.6, cameraInk);
+
+    final micInk = _stroke(micColor, 1.5);
+    c.drawRRect(
+      RRect.fromRectAndRadius(const Rect.fromLTRB(15.5, 11, 20.5, 19), const Radius.circular(2.5)),
+      micInk,
+    );
+    c.drawArc(const Rect.fromLTRB(13, 12, 23, 22), 0, math.pi, false, micInk);
+    c.drawLine(const Offset(18, 22), const Offset(18, 24), micInk);
+    c.restore();
   }
 
   // ---- memory: a constellation of kept moments ----------------------------------------------------------------
@@ -419,68 +499,113 @@ class HeroPainter extends CustomPainter {
     }
   }
 
-  // ---- baseline: a seedling opening toward the sun ----------------------------------------------------------------
-
+  // The seedling bends as one piece from its roots.
   void _baseline(Canvas c, Offset o, double u, _HeroPalette p) {
-    c.drawCircle(o + Offset(u * 0.28, -u * 0.4), u * 0.1, Paint()..color = const Color(0xFFFFC85A));
-    _glow(c, o + Offset(u * 0.28, -u * 0.4), u * 0.34, const Color(0xFFFFD27A), 0.6);
-    c.drawOval(Rect.fromCenter(center: o + Offset(0, u * 0.42), width: u * 0.8, height: u * 0.16), Paint()..color = const Color(0xFF9A6B3A));
-    final grow = 0.75 + 0.25 * (0.5 + 0.5 * _s(-0.25));
-    final stem = Path()
-      ..moveTo(o.dx, o.dy + u * 0.42)
-      ..quadraticBezierTo(o.dx - u * 0.05, o.dy + u * 0.1, o.dx + u * 0.02, o.dy - u * 0.28 * grow);
-    c.drawPath(stem, _stroke(p.a, 5));
-    void leaf(Offset base, double dir, double size) {
-      c.save();
-      c.translate(base.dx, base.dy);
-      c.rotate(dir * (0.7 + 0.1 * _s()));
-      c.drawPath(
-        Path()
-          ..moveTo(0, 0)
-          ..quadraticBezierTo(size * 0.6, -size * 0.55, size * 1.2, 0)
-          ..quadraticBezierTo(size * 0.6, size * 0.55, 0, 0),
-        Paint()..color = p.c,
-      );
-      c.restore();
-    }
+    c.save();
+    c.translate(o.dx, o.dy);
+    c.scale(u / 100);
+    const sun = Offset(25, -18);
+    _glow(c, sun, 28, p.b, 0.45);
+    c.drawCircle(sun, 12, Paint()..color = const Color(0xFFFFD47F));
 
-    leaf(o + Offset(0, u * 0.12), -1, u * 0.34);
-    leaf(o + Offset(0, -u * 0.02), 1, u * 0.3);
-    leaf(o + Offset(u * 0.02, -u * 0.26 * grow), 1, u * 0.2 * grow);
-    c.drawCircle(o + Offset(u * 0.02, -u * 0.3 * grow), u * 0.035, Paint()..color = p.b);
+    final meadow = Path()
+      ..moveTo(-44, 39)
+      ..cubicTo(-27, 25, -16, 27, -5, 33)
+      ..cubicTo(7, 27, 23, 24, 44, 39)
+      ..quadraticBezierTo(1, 53, -44, 39)
+      ..close();
+    c.drawPath(
+      meadow,
+      Paint()..shader = ui.Gradient.linear(
+        const Offset(0, 25),
+        const Offset(0, 47),
+        [p.c.withValues(alpha: 0.9), p.c.withValues(alpha: 0.34)],
+      ),
+    );
+
+    const root = Offset(-4, 37);
+    c.drawOval(
+      Rect.fromCenter(center: root, width: 37, height: 8),
+      Paint()..color = p.ink.withValues(alpha: 0.12),
+    );
+    c.translate(root.dx, root.dy);
+    c.rotate(0.085 * _s());
+    final stem = Path()
+      ..moveTo(0, 0)
+      ..cubicTo(-3, -13, -2, -29, 3, -45);
+    c.drawPath(stem, _stroke(p.ink, 2.7));
+
+    final left = Path()
+      ..moveTo(0, -22)
+      ..cubicTo(-10, -21, -21, -26, -27, -41)
+      ..cubicTo(-12, -41, -3, -36, 0, -22)
+      ..close();
+    final right = Path()
+      ..moveTo(1, -34)
+      ..cubicTo(4, -46, 14, -56, 28, -56)
+      ..cubicTo(26, -42, 16, -32, 1, -34)
+      ..close();
+    c.drawPath(left, Paint()..color = p.a);
+    c.drawPath(
+      right,
+      Paint()..shader = ui.Gradient.linear(
+        const Offset(2, -34),
+        const Offset(26, -56),
+        [p.a, p.c],
+      ),
+    );
+    final vein = _stroke(Colors.white.withValues(alpha: 0.43), 1);
+    c.drawPath(Path()..moveTo(-3, -25)..quadraticBezierTo(-12, -32, -21, -36), vein);
+    c.drawPath(Path()..moveTo(5, -36)..quadraticBezierTo(13, -44, 22, -50), vein);
+    c.restore();
   }
 
-  // ---- decisions: a fork in the path with a light choosing a branch -----------------------------------------------
-
+  // Three signals converge. A single highlight follows the resulting choice.
   void _decisions(Canvas c, Offset o, double u, _HeroPalette p) {
-    final start = o + Offset(-u * 0.45, u * 0.35);
-    final fork = o + Offset(-u * 0.05, u * 0.02);
-    final ends = [o + Offset(u * 0.46, -u * 0.36), o + Offset(u * 0.5, u * 0.12), o + Offset(u * 0.32, u * 0.42)];
-    final trunk = Path()
-      ..moveTo(start.dx, start.dy)
-      ..quadraticBezierTo(start.dx + u * 0.1, fork.dy + u * 0.1, fork.dx, fork.dy);
-    c.drawPath(trunk, _stroke(Colors.white.withValues(alpha: 0.9), u * 0.07));
-    final branches = <Path>[];
-    for (final e in ends) {
-      final b = Path()
-        ..moveTo(fork.dx, fork.dy)
-        ..quadraticBezierTo((fork.dx + e.dx) / 2, fork.dy, e.dx, e.dy);
-      branches.add(b);
-      c.drawPath(b, _stroke(Colors.white.withValues(alpha: 0.9), u * 0.05));
+    c.save();
+    c.translate(o.dx, o.dy);
+    c.scale(u / 100);
+    const inputs = [Offset(-39, -26), Offset(-43, 0), Offset(-39, 26)];
+    const hub = Offset(4, 0);
+    const result = Offset(40, 0);
+    final guide = _stroke(p.ink.withValues(alpha: 0.18), 1.6);
+    final active = _stroke(p.a, 2.2);
+
+    for (var i = 0; i < inputs.length; i++) {
+      final start = inputs[i];
+      final connector = Path()
+        ..moveTo(start.dx, start.dy)
+        ..cubicTo(-17, start.dy, -16, 0, hub.dx, hub.dy);
+      c.drawPath(connector, guide);
+      c.drawCircle(start, 5, Paint()..color = p.b.withValues(alpha: 0.20));
+      c.drawCircle(start, 2.5, Paint()..color = p.b);
+
+      final fraction = ((t - i * 0.055) / 0.43).clamp(0.0, 1.0);
+      final opacity = math.sin(math.pi * fraction);
+      final metric = connector.computeMetrics().first;
+      final point = metric.getTangentForOffset(metric.length * fraction)!.position;
+      c.drawCircle(point, 3.2, Paint()..color = p.b.withValues(alpha: opacity));
     }
-    final chosen = (t * 1.5).floor() % 3;
-    final f = (t * 1.5) % 1.0;
-    c.drawPath(branches[chosen], _stroke(p.a.withValues(alpha: 0.9), u * 0.05));
-    for (var i = 0; i < ends.length; i++) {
-      final hit = i == chosen && f > 0.7;
-      _glow(c, ends[i], u * 0.14, p.b, hit ? 0.8 : 0.3);
-      c.drawCircle(ends[i], u * 0.055, Paint()..color = hit ? p.a : p.c);
-    }
-    final tm = trunk.computeMetrics().first;
-    final bm = branches[chosen].computeMetrics().first;
-    final pos = f < 0.4 ? tm.getTangentForOffset(tm.length * (f / 0.4))!.position : bm.getTangentForOffset(bm.length * ((f - 0.4) / 0.6))!.position;
-    _glow(c, pos, u * 0.12, Colors.white, 0.9);
-    c.drawCircle(pos, u * 0.035, Paint()..color = Colors.white);
+
+    c.drawLine(hub, result, guide);
+    final send = ((t - 0.47) / 0.28).clamp(0.0, 1.0);
+    final settle = ((t - 0.73) / 0.27).clamp(0.0, 1.0);
+    active.color = p.a.withValues(alpha: 1 - Curves.easeInOut.transform(settle));
+    c.drawLine(hub, Offset.lerp(hub, result, Curves.easeInOut.transform(send))!, active);
+
+    c.drawCircle(hub, 12, Paint()..color = p.c.withValues(alpha: 0.55));
+    c.drawCircle(hub, 9, Paint()..color = Colors.white);
+    c.drawCircle(hub, 9, _stroke(p.a.withValues(alpha: 0.45), 1.3));
+    _sparkle(c, hub, 4.8 + 1.5 * math.sin(math.pi * send), p.a);
+    c.drawCircle(result, 8, Paint()..color = Color.lerp(p.c, p.a, send * (1 - settle))!);
+    c.drawPath(
+      Path()
+        ..moveTo(36.5, 0)
+        ..lineTo(39, 2.5)
+        ..lineTo(43.5, -2.5),
+      _stroke(p.ink, 1.45),
+    );
+    c.restore();
   }
 
   // ---- about: the sun with petals --------------------------------------------------------------------------------------------
@@ -578,29 +703,31 @@ class HeroPainter extends CustomPainter {
 
 /// A white rounded card, the surface of the visual pages.
 class KitCard extends StatelessWidget {
-  const KitCard({required this.child, this.padding = const EdgeInsets.all(16), this.color = Colors.white, this.onTap, super.key});
+  const KitCard({required this.child, this.padding = const EdgeInsets.all(16), this.color, this.gradient, this.onTap, super.key});
 
   final Widget child;
   final EdgeInsets padding;
-  final Color color;
+  final Color? color;
+  final Gradient? gradient;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final box = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: kitLine),
-        boxShadow: const [BoxShadow(color: Color(0x14B0782A), blurRadius: 18, spreadRadius: -8, offset: Offset(0, 8))],
-      ),
-      child: child,
+    final radius = BorderRadius.circular(24);
+    final decoration = BoxDecoration(
+      color: color ?? SolaceColors.from(context).surface,
+      gradient: gradient,
+      borderRadius: radius,
+      border: Border.all(color: kitLine),
+      boxShadow: const [BoxShadow(color: Color(0x14B0782A), blurRadius: 18, spreadRadius: -8, offset: Offset(0, 8))],
     );
-    if (onTap == null) return box;
+    if (onTap == null) return Container(decoration: decoration, padding: padding, child: child);
     return Material(
       color: Colors.transparent,
-      child: InkWell(borderRadius: BorderRadius.circular(24), onTap: onTap, child: box),
+      child: Ink(
+        decoration: decoration,
+        child: InkWell(borderRadius: radius, onTap: onTap, child: Padding(padding: padding, child: child)),
+      ),
     );
   }
 }
@@ -789,7 +916,7 @@ class MiniBars extends StatelessWidget {
 
 /// A row for a setting: icon tile, title, a short line, and a trailing control.
 class SettingRow extends StatelessWidget {
-  const SettingRow({required this.icon, required this.color, required this.title, this.subtitle, this.trailing, this.onTap, super.key});
+  const SettingRow({required this.icon, required this.color, required this.title, this.subtitle, this.trailing, this.onTap, this.padding = const EdgeInsets.symmetric(vertical: 9), super.key});
 
   final IconData icon;
   final Color color;
@@ -797,14 +924,16 @@ class SettingRow extends StatelessWidget {
   final String? subtitle;
   final Widget? trailing;
   final VoidCallback? onTap;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final palette = SolaceColors.from(context);
+    final row = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 9),
+        padding: padding,
         child: Row(
           children: [
             IconTile(icon: icon, color: color),
@@ -813,10 +942,10 @@ class SettingRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: kitInk)),
+                  Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: palette.ink)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
-                    Text(subtitle!, style: const TextStyle(fontSize: 12, height: 1.3, fontWeight: FontWeight.w600, color: kitMuted)),
+                    Text(subtitle!, style: TextStyle(fontSize: 12, height: 1.3, fontWeight: FontWeight.w600, color: palette.mutedInk)),
                   ],
                 ],
               ),
@@ -827,6 +956,7 @@ class SettingRow extends StatelessWidget {
         ),
       ),
     );
+    return trailing is Switch ? MergeSemantics(child: row) : row;
   }
 }
 

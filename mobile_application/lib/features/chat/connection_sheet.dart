@@ -296,12 +296,6 @@ class _ConnectionSheetViewState extends State<ConnectionSheetView> {
   }
 
   Widget _actions() {
-    final ButtonStyle filled = FilledButton.styleFrom(
-      backgroundColor: kitCoral,
-      foregroundColor: Colors.white,
-      minimumSize: const Size.fromHeight(50),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -336,25 +330,13 @@ class _ConnectionSheetViewState extends State<ConnectionSheetView> {
                   onPressed: widget.onPing,
                   icon: const Icon(Icons.network_ping_rounded, size: 18),
                   label: const Text('Test ping'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: kitInk,
-                    minimumSize: const Size.fromHeight(50),
-                    side: const BorderSide(color: Color(0xFFDDD2BE)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: FilledButton(
+                child: OutlinedButton(
                   key: const ValueKey('connection-disconnect'),
                   onPressed: widget.onDisconnect,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFEDE6D8),
-                    foregroundColor: kitInk,
-                    minimumSize: const Size.fromHeight(50),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
                   child: const Text('Disconnect'),
                 ),
               ),
@@ -364,7 +346,6 @@ class _ConnectionSheetViewState extends State<ConnectionSheetView> {
           FilledButton(
             key: const ValueKey('connection-connect'),
             onPressed: _connecting ? null : _connect,
-            style: filled,
             child: _connecting
                 ? const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -372,7 +353,7 @@ class _ConnectionSheetViewState extends State<ConnectionSheetView> {
                       SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                       SizedBox(width: 10),
                       Text('Connecting'),
@@ -390,31 +371,15 @@ class _ConnectionSheetViewState extends State<ConnectionSheetView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const IconTile(icon: Icons.record_voice_over_rounded, color: kitAmber, size: 38),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Speak replies aloud',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: kitInk),
-                    ),
-                    Text(
-                      'New voices are coming.',
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: kitMuted),
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                key: const ValueKey('connection-tts'),
-                value: widget.ttsEnabled,
-                onChanged: widget.onTtsChanged,
-              ),
-            ],
+          SettingRow(
+            icon: Icons.record_voice_over_rounded,
+            color: kitAmber,
+            title: 'Speak replies aloud',
+            trailing: Switch(
+              key: const ValueKey('connection-tts'),
+              value: widget.ttsEnabled,
+              onChanged: widget.onTtsChanged,
+            ),
           ),
           if (widget.ttsEnabled) ...[
             const SizedBox(height: 12),

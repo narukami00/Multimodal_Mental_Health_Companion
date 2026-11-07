@@ -11,10 +11,8 @@ import '../../services/usage_collector_service.dart';
 /// never needs reading again. A row collected during its own day lacks it.
 const usageFinalSource = 'usageFinal';
 
-/// How many days back catch-up reaches. The spike found Android keeps about ten
-/// days of events on a real device; seven leaves margin for phones that keep
-/// less.
-const usageBackfillDays = 7;
+/// The seven completed days shown in Insights, plus today's partial reading.
+const usageBackfillDays = 8;
 
 /// Reads device usage for a day, reduces it, and merges the result into that
 /// day's row.

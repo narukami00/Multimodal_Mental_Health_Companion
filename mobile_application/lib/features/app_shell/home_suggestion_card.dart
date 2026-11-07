@@ -253,7 +253,6 @@ class ActivitySuggestionCard extends StatelessWidget {
                         child: _AnswerButton(
                           key: const ValueKey('suggestion-decline'),
                           label: 'Not now',
-                          ink: palette.ink,
                           filled: false,
                           onPressed: onDecline,
                         ),
@@ -263,7 +262,6 @@ class ActivitySuggestionCard extends StatelessWidget {
                         child: _AnswerButton(
                           key: const ValueKey('suggestion-accept'),
                           label: "I'll try it",
-                          ink: palette.ink,
                           filled: true,
                           onPressed: onAccept,
                         ),
@@ -289,49 +287,14 @@ class ActivitySuggestionCard extends StatelessWidget {
 /// Both answers also get the same size and weight, because neither is the
 /// better thing to do.
 class _AnswerButton extends StatelessWidget {
-  const _AnswerButton({
-    required this.label,
-    required this.ink,
-    required this.filled,
-    required this.onPressed,
-    super.key,
-  });
+  const _AnswerButton({required this.label, required this.filled, required this.onPressed, super.key});
 
   final String label;
-  final Color ink;
   final bool filled;
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: filled ? ink : Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onPressed,
-        child: Container(
-          height: 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: filled
-                ? null
-                : Border.all(color: ink.withValues(alpha: 0.30), width: 1.5),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              // Dark ink on the pale card fill rather than a wash of the
-              // palette colour, which was measuring about 2.5:1.
-              color: filled ? const Color(0xFFFFFDF8) : ink.withValues(alpha: 1),
-            ),
-          ),
-        ),
-      ),
-    );
-   }
+  Widget build(BuildContext context) => filled
+      ? FilledButton(onPressed: onPressed, child: Text(label))
+      : OutlinedButton(onPressed: onPressed, child: Text(label));
 }
-

@@ -38,17 +38,21 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80)));
       await tester.pump(const Duration(milliseconds: 120));
     }
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(seconds: 4));
   }
 
-  testWidgets('the scene fills the whole screen, and the card sits at the bottom of it', (tester) async {
+  testWidgets('the scene fills the screen and the compact stamp sits at the bottom', (tester) async {
     await pumpPage(tester);
     final screen = tester.getSize(find.byType(Scaffold));
     final scene = tester.getSize(find.byKey(const ValueKey('forest-scene')));
+    final stamp = tester.getRect(find.byKey(const ValueKey('forest-growth-stamp')));
     expect(scene.height, greaterThan(screen.height * .95));
     expect(scene.width, closeTo(screen.width, 1));
     expect(tester.getBottomLeft(find.byKey(const ValueKey('forest-stage'))).dy, greaterThan(screen.height * .7));
     expect(tester.getTopLeft(find.byKey(const ValueKey('forest-back'))).dy, lessThan(screen.height * .15));
+    expect(stamp.center.dx, closeTo(scene.width / 2, 1));
+    expect(stamp.width, lessThan(scene.width * .65));
+    expect(stamp.height, lessThan(60));
   });
 
   testWidgets('with nothing waiting it just shows the forest, quietly', (tester) async {
@@ -56,6 +60,8 @@ void main() {
     expect(find.text('YOUR FOREST'), findsOneWidget);
     expect(find.byKey(const ValueKey('forest-stage')), findsOneWidget);
     expect(find.text('A new seed'), findsOneWidget);
+    expect(find.byKey(const ValueKey('forest-watering-caption')), findsNothing);
+    expect(find.byTooltip('Forest sky'), findsNothing);
     expect(find.descendant(of: find.byKey(const ValueKey('forest-count')), matching: find.text('0')), findsOneWidget);
   });
 
@@ -64,11 +70,14 @@ void main() {
     await sessions.saveSession(mode: CaptureMode.voice, text: 'hello');
     expect(forest.waiting, hasLength(2));
     await pumpPage(tester);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byKey(const ValueKey('forest-watering-caption')), findsOneWidget);
     await playOut(tester);
 
     expect(forest.waterWaiting, isFalse);
     expect(forest.garden.currentProgress, 3); // 1 for the check-in, 2 for the first voice journal
     expect(find.text('Seedling'), findsOneWidget); // stage 3
+    expect(find.byKey(const ValueKey('forest-watering-caption')), findsNothing);
   });
 
   testWidgets('opening again shows the tree where it is, with nothing to pour', (tester) async {
@@ -92,6 +101,21 @@ void main() {
     expect(find.byKey(const ValueKey('tree-breakdown')), findsOneWidget);
     expect(find.text('Tree 1 · Oak'), findsOneWidget);
     expect(find.text('WHAT GREW IT'), findsOneWidget);
+    final scene = tester.getRect(find.byKey(const ValueKey('forest-scene')));
+    final panel = tester.getRect(find.byKey(const ValueKey('tree-breakdown')));
+    expect(panel.left, greaterThan(scene.center.dx));
+    expect(panel.bottom, lessThan(scene.bottom));
+    expect(find.byType(BottomSheet), findsNothing);
+    final home = find.byKey(const ValueKey('forest-home'));
+    final count = tester.getRect(find.byKey(const ValueKey('forest-count')));
+    final button = tester.getRect(home);
+    expect(button.center.dx, closeTo(count.center.dx, 1));
+    expect(button.top, greaterThan(count.bottom));
+    expect(find.descendant(of: home, matching: find.byIcon(Icons.park_rounded)), findsOneWidget);
+    await tester.tap(home);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('tree-breakdown')), findsNothing);
+    expect(find.byKey(const ValueKey('forest-stage')), findsOneWidget);
   });
 
   testWidgets('tapping empty ground does nothing', (tester) async {

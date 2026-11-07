@@ -110,8 +110,12 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          FilledButton(
             key: const ValueKey('patterns-confirm-delete'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Delete'),
           ),
@@ -149,7 +153,7 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
                   if (!_loaded)
                     _Reveal(
                       index: 1,
-                      child: _card(
+                      child: KitCard(
                         child: const SizedBox(
                           height: 120,
                           child: Center(child: SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))),
@@ -177,34 +181,6 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
     );
   }
 
-  Widget _card({
-    required Widget child,
-    Gradient? gradient,
-    EdgeInsets? padding,
-    Key? key,
-  }) {
-    return Container(
-      key: key,
-      width: double.infinity,
-      padding: padding ?? const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: gradient == null ? Colors.white : null,
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _line),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14B0782A),
-            blurRadius: 18,
-            spreadRadius: -8,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-
   static const _label = TextStyle(
     fontSize: 11,
     fontWeight: FontWeight.w800,
@@ -223,26 +199,24 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
     final (chip, text, icon) = switch (_patterns.status) {
       PhonePatternsStatus.on => (
         'On',
-        'Reading on this phone while you use it. Turn it off any time.',
+        'Reading phone usage on this device.',
         Icons.check_rounded,
       ),
       PhonePatternsStatus.needsAndroidAccess => (
         'Needs access',
-        "You said yes, but Android's usage access is off for Solace, so "
-            'nothing is being read.',
+        "Nothing is being read. Allow Solace’s usage access in Android.",
         Icons.lock_open_rounded,
       ),
       PhonePatternsStatus.off => (
         'Off',
-        'Nothing is being read. You can turn this on if you would like Solace '
-            'to learn your own rhythm.',
+        'Nothing is being read.',
         Icons.pause_rounded,
       ),
     };
     final on = _patterns.status == PhonePatternsStatus.on;
     final tone = on ? const Color(0xFF3F823B) : const Color(0xFFB57A12);
 
-    return _card(
+    return KitCard(
       gradient: LinearGradient(
         colors: on
             ? const [Color(0xFFEFF8EF), Color(0xFFFFFFFF)]
@@ -286,16 +260,7 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
                 builder: (_) => PermissionsPage(phonePatterns: _patterns),
               ),
             ),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF96620C),
-              padding: EdgeInsets.zero,
-              minimumSize: const Size(0, 34),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: const Text(
-              'Manage in Permissions & privacy',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-            ),
+            child: const Text('Manage in Permissions & privacy'),
           ),
         ],
       ),
@@ -305,7 +270,7 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
   Widget _yesterdayCard(BuildContext context) {
     final row = latestFinishedDay(_rows, _now);
     if (row == null) {
-      return _card(
+      return KitCard(
         child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -346,7 +311,7 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
     final categories = summary.topCategories;
     final nothing = stats.isEmpty && night == null && categories.isEmpty;
 
-    return _card(
+    return KitCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -474,7 +439,7 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
     final midStart = starts[starts.length ~/ 2];
     final midEnd = ends[ends.length ~/ 2];
 
-    return _card(
+    return KitCard(
       key: const ValueKey('patterns-sleep'),
       gradient: const LinearGradient(colors: [Color(0xFFEEF1FB), Color(0xFFFFFFFF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
       child: Column(
@@ -552,7 +517,7 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
     final usual = sorted.isEmpty ? 0 : sorted[sorted.length ~/ 2];
     final busiestDay = known.isEmpty ? null : days.firstWhere((d) => d.minutes == peak).day;
 
-    return _card(
+    return KitCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -646,35 +611,39 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
   Widget _controlsCard(BuildContext context) {
     final retention = widget.profileController.profile.featureRetentionDays;
     final active = _patterns.status != PhonePatternsStatus.off;
+    final asks = !widget.profileController.profile.patternPromptsMuted;
 
-    return _card(
+    return KitCard(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('YOUR CONTROLS', style: _label),
           const SizedBox(height: 8),
-          _switchRow(
-            switchKey: const ValueKey('patterns-keep-names'),
+          SettingRow(
             icon: Icons.apps_rounded,
             color: const Color(0xFF6E73C8),
-            title: 'Keep the names of the apps I use most',
-            subtitle: active
-                ? 'Off keeps only totals by kind of app.'
-                : 'Turn phone patterns on first.',
-            value: _patterns.keepsAppNames,
-            onChanged: active ? _patterns.setKeepAppNames : null,
+            title: !active
+                ? 'Turn phone patterns on first.'
+                : _patterns.keepsAppNames
+                    ? 'Most-used app names kept on this phone'
+                    : 'App names off · category totals only',
+            trailing: Switch(
+              key: const ValueKey('patterns-keep-names'),
+              value: _patterns.keepsAppNames,
+              onChanged: active ? _patterns.setKeepAppNames : null,
+            ),
           ),
-          const Divider(height: 18, color: _line),
-          _switchRow(
-            switchKey: const ValueKey('patterns-ask-switch'),
+          const Divider(height: 1, color: _line),
+          SettingRow(
             icon: Icons.chat_bubble_outline_rounded,
             color: const Color(0xFFD9674A),
-            title: 'Ask me when my days look different',
-            subtitle: 'At most once a week, never for one odd day.',
-            value: !widget.profileController.profile.patternPromptsMuted,
-            onChanged: (on) =>
-                widget.profileController.setPatternPromptsMuted(!on),
+            title: asks ? 'Ask about lasting changes at most weekly' : 'Routine questions are off',
+            trailing: Switch(
+              key: const ValueKey('patterns-ask-switch'),
+              value: asks,
+              onChanged: (on) => widget.profileController.setPatternPromptsMuted(!on),
+            ),
           ),
           const Divider(height: 18, color: _line),
           Row(
@@ -711,76 +680,28 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
                 ),
             ],
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'A shorter time removes older days right away.',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.45, color: _soft),
-          ),
+          if (_rows.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'A shorter time removes older days right away.',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.45, color: _soft),
+            ),
+          ],
           if (_usageDays > 0) ...[
             const SizedBox(height: 14),
-            OutlinedButton(
+            OutlinedButton.icon(
               key: const ValueKey('patterns-delete-all'),
               onPressed: _confirmDelete,
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFB5503C),
-                side: const BorderSide(color: Color(0xFFF0CFC6)),
-                shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                foregroundColor: Theme.of(context).colorScheme.error,
+                side: BorderSide(color: Theme.of(context).colorScheme.error.withValues(alpha: .32)),
               ),
-              // A Row with a Flexible label, so the long label wraps at large
-              // text sizes instead of running off the screen.
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.delete_outline_rounded, size: 17),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      'Delete all stored patterns ($_usageDays '
-                      '${_usageDays == 1 ? 'day' : 'days'})',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ],
-              ),
+              icon: const Icon(Icons.delete_outline_rounded, size: 17),
+              label: const Text('Delete stored patterns'),
             ),
           ],
         ],
       ),
-    );
-  }
-
-  Widget _switchRow({
-    required Key switchKey,
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool>? onChanged,
-  }) {
-    return Row(
-      children: [
-        IconTile(icon: icon, color: color),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: _ink, height: 1.25)),
-              const SizedBox(height: 3),
-              Text(subtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.4, color: _soft)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 6),
-        Switch(
-          key: switchKey,
-          value: value,
-          onChanged: onChanged,
-        ),
-      ],
     );
   }
 

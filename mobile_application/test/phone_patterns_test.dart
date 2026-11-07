@@ -380,7 +380,10 @@ void main() {
       await pump(tester);
 
       expect(find.text('On'), findsOneWidget);
-      expect(find.textContaining('keeping a few numbers a day'), findsOneWidget);
+      expect(
+        find.textContaining('Screen time and app categories stay on this phone'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('re-checks Android when the app returns to the foreground', (

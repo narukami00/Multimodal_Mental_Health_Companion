@@ -81,17 +81,8 @@ class CareContactsPage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(22, 8, 22, 20),
       child: SizedBox(
         width: double.infinity,
-        height: 48,
         child: ElevatedButton.icon(
           key: const ValueKey('add-contact'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFFB534),
-            foregroundColor: const Color(0xFF3D2E14),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
           onPressed: () => _editContact(context, null),
           icon: const Icon(Icons.add_rounded, size: 19),
           label: const Text(
@@ -363,14 +354,6 @@ class _ContactCard extends StatelessWidget {
                   height: 44,
                   child: ElevatedButton.icon(
                     key: ValueKey('call-${contact.id}'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFB534),
-                      foregroundColor: const Color(0xFF3D2E14),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
                     onPressed: onCall,
                     icon: const Icon(Icons.call_rounded, size: 17),
                     label: const Text(
@@ -568,17 +551,8 @@ class _ContactEditorSheetState extends State<_ContactEditorSheet> {
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            height: 44,
             child: ElevatedButton(
               key: const ValueKey('save-contact'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFB534),
-                foregroundColor: const Color(0xFF3D2E14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
               onPressed: _canSave ? _save : null,
               child: const Text(
                 'Save contact',

@@ -25,9 +25,23 @@ abstract final class AppTheme {
       primary: palette.amber,
       onPrimary: AppColors.deepAmber,
       secondary: palette.coral,
-      onSecondary: Colors.white,
+      onSecondary: const Color(0xFF3D2E14),
       surface: palette.background,
       onSurface: palette.ink,
+    );
+    final actionShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
+    const actionSize = Size(0, 48);
+    const actionPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 10);
+    const actionText = TextStyle(fontSize: 14, fontWeight: FontWeight.w800);
+    final filledAction = FilledButton.styleFrom(
+      backgroundColor: palette.amber,
+      foregroundColor: AppColors.deepAmber,
+      disabledBackgroundColor: palette.ink.withValues(alpha: .09),
+      disabledForegroundColor: palette.ink.withValues(alpha: .45),
+      minimumSize: actionSize,
+      padding: actionPadding,
+      textStyle: actionText,
+      shape: actionShape,
     );
 
     return ThemeData(
@@ -64,16 +78,38 @@ abstract final class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF96620C),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          foregroundColor: const Color(0xFF81530C),
+          minimumSize: actionSize,
+          padding: actionPadding,
+          textStyle: actionText,
+          shape: actionShape,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(style: filledAction),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: filledAction.copyWith(elevation: const WidgetStatePropertyAll(0)),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          backgroundColor: palette.surface,
+          foregroundColor: palette.ink,
+          disabledForegroundColor: palette.ink.withValues(alpha: .45),
+          minimumSize: actionSize,
+          padding: actionPadding,
+          textStyle: actionText,
+          shape: actionShape,
+          side: BorderSide(color: palette.ink.withValues(alpha: .22)),
         ),
       ),
       switchTheme: SwitchThemeData(
-        thumbColor: const WidgetStatePropertyAll(Colors.white),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled) ? palette.surface : Colors.white,
+        ),
         trackColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? const Color(0xFFFFB534)
-              : const Color(0xFFD9CFBE),
+          (states) {
+            if (states.contains(WidgetState.disabled)) return palette.ink.withValues(alpha: .13);
+            return states.contains(WidgetState.selected) ? palette.amber : Color.lerp(palette.surface, palette.ink, .25);
+          },
         ),
         trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
       ),
@@ -82,24 +118,18 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(24),
         ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: palette.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: palette.surface.withValues(alpha: 0.92),
         indicatorColor: palette.amber.withValues(alpha: 0.22),
         labelTextStyle: WidgetStatePropertyAll(
           const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: palette.amber,
-          foregroundColor: AppColors.deepAmber,
-          minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
         ),
       ),
     );

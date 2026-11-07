@@ -671,12 +671,6 @@ class _CompletionView extends StatelessWidget {
           onPressed: onRedo,
           icon: const Icon(Icons.restart_alt_rounded),
           label: const Text('Redo the questions'),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(0, 50),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            foregroundColor: const Color(0xFF96620C),
-            side: const BorderSide(color: Color(0xFFE2D6C0)),
-          ),
         ),
         TextButton(
           key: const ValueKey('baseline-fits-button'),

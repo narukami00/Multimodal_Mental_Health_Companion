@@ -1,7 +1,11 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/models/session_input.dart';
 import 'package:solace_mobile/core/theme/app_theme.dart';
+import 'package:solace_mobile/core/widgets/visual_kit.dart';
 import 'package:solace_mobile/data/repositories/asset_activity_library_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
@@ -111,6 +115,25 @@ void main() {
     // Every day of the strip renders, and none of them is alarm-styled.
     final dots = tester.widgetList<RhythmDot>(find.byType(RhythmDot));
     expect(dots.length, 7);
+  });
+
+  testWidgets('the hero pulse moves and loops back to the same pose', (tester) async {
+    final frames = await tester.runAsync(() async {
+      final pixels = <Uint8List>[];
+      for (final phase in [0.0, 0.46, 1.0]) {
+        final recorder = ui.PictureRecorder();
+        HeroPainter(HeroScene.rhythm, phase).paint(Canvas(recorder), const Size(360, 210));
+        final picture = recorder.endRecording();
+        final image = picture.toImageSync(360, 210);
+        picture.dispose();
+        final bytes = (await image.toByteData())!;
+        pixels.add(bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes));
+        image.dispose();
+      }
+      return pixels;
+    });
+    expect(listEquals(frames![0], frames[1]), isFalse);
+    expect(listEquals(frames[0], frames[2]), isTrue);
   });
 
   testWidgets('opens the detail page and toggles today as rest', (

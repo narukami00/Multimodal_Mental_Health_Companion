@@ -13,6 +13,7 @@ import 'package:solace_mobile/features/consent/consent_controller.dart';
 import 'package:solace_mobile/features/footprint/phone_patterns_controller.dart';
 import 'package:solace_mobile/features/insights/insights_page.dart';
 import 'package:solace_mobile/features/insights/phone_patterns_section.dart';
+import 'package:solace_mobile/features/insights/phone_tab.dart';
 import 'package:solace_mobile/features/profile/phone_patterns_page.dart';
 import 'package:solace_mobile/features/profile/profile_controller.dart';
 import 'package:solace_mobile/features/sessions/session_controller.dart';
@@ -26,11 +27,14 @@ class _Collector implements UsageCollectorService {
   @override
   Future<bool> openAccessSettings() async => true;
   @override
-  Future<List<UsageEvent>> events({required DateTime from, required DateTime to}) async =>
-      const [];
+  Future<List<UsageEvent>> events({
+    required DateTime from,
+    required DateTime to,
+  }) async => const [];
   @override
-  Future<Map<String, AppDescription>> describeApps(List<String> packages) async =>
-      const {};
+  Future<Map<String, AppDescription>> describeApps(
+    List<String> packages,
+  ) async => const {};
 }
 
 String _key(DateTime day) =>
@@ -72,7 +76,11 @@ void main() {
     await profile.load();
   });
 
-  Future<void> pump(WidgetTester tester, {bool withSection = true}) async {
+  Future<void> pump(
+    WidgetTester tester, {
+    bool withSection = true,
+    bool withChart = false,
+  }) async {
     tester.view.physicalSize = const Size(1080, 4000);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() {
@@ -86,11 +94,17 @@ void main() {
         home: withSection
             ? Scaffold(
                 body: SingleChildScrollView(
-                  child: PhonePatternsSection(
-                    phonePatterns: patterns,
-                    profileController: profile,
-                    clock: () => _now,
-                  ),
+                  child: withChart
+                      ? PhoneTab(
+                          phonePatterns: patterns,
+                          profileController: profile,
+                          clock: () => _now,
+                        )
+                      : PhonePatternsSection(
+                          phonePatterns: patterns,
+                          profileController: profile,
+                          clock: () => _now,
+                        ),
                 ),
               )
             : InsightsPage(
@@ -105,6 +119,28 @@ void main() {
   }
 
   Finder key(String value) => find.byKey(ValueKey(value));
+
+  testWidgets(
+    'Saturday has its own reading and Sunday can be an explicit gap',
+    (tester) async {
+      for (final back in [7, 5, 4, 1]) {
+        await repository.upsert(_day(back));
+      }
+      await pump(tester, withChart: true);
+
+      expect(find.text('Sat'), findsOneWidget);
+      expect(find.text('Sun'), findsOneWidget);
+      await tester.tap(key('phone-wave-day-0'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sat, 24 Oct'), findsOneWidget);
+      expect(tester.widget<Text>(key('phone-wave-reading')).data, '3 h 20 min');
+
+      await tester.tap(key('phone-wave-day-1'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sun, 25 Oct'), findsOneWidget);
+      expect(tester.widget<Text>(key('phone-wave-reading')).data, 'No reading');
+    },
+  );
 
   testWidgets('off and empty: a quiet invitation, no numbers', (tester) async {
     await pump(tester);
@@ -156,17 +192,18 @@ void main() {
     expect(key('phone-section-learning'), findsNothing);
   });
 
-  testWidgets('turned off later but with days still stored: shows them, not an invitation', (
-    tester,
-  ) async {
-    for (var back = 1; back <= 28; back++) {
-      await repository.upsert(_day(back));
-    }
-    await pump(tester);
+  testWidgets(
+    'turned off later but with days still stored: shows them, not an invitation',
+    (tester) async {
+      for (var back = 1; back <= 28; back++) {
+        await repository.upsert(_day(back));
+      }
+      await pump(tester);
 
-    expect(key('phone-section-off'), findsNothing);
-    expect(find.text('YOUR USUAL SCREEN TIME'), findsOneWidget);
-  });
+      expect(key('phone-section-off'), findsNothing);
+      expect(find.text('YOUR USUAL SCREEN TIME'), findsOneWidget);
+    },
+  );
 
   testWidgets('the details link opens My phone patterns', (tester) async {
     await consent.grant(ConsentKey.usageFootprint);
@@ -198,12 +235,13 @@ void main() {
     expect(find.textContaining('10 of 14 days read'), findsOneWidget);
   });
 
-  testWidgets('the Insights page without the controllers shows no such section', (
-    tester,
-  ) async {
-    await pump(tester, withSection: false);
+  testWidgets(
+    'the Insights page without the controllers shows no such section',
+    (tester) async {
+      await pump(tester, withSection: false);
 
-    expect(find.text('PHONE PATTERNS'), findsNothing);
-    expect(find.text('Insights'), findsOneWidget);
-  });
+      expect(find.text('PHONE PATTERNS'), findsNothing);
+      expect(find.text('Insights'), findsOneWidget);
+    },
+  );
 }

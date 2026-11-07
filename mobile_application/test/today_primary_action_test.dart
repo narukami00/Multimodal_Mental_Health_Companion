@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:solace_mobile/core/theme/app_theme.dart';
 import 'package:solace_mobile/domain/home/home_card_priority.dart';
 import 'package:solace_mobile/features/app_shell/today_page.dart';
+import 'package:solace_mobile/features/forest/forest_card_scene.dart';
 
 /// Every one of these cards used to run the check-in flow, whatever its own
 /// label said. These tests check each card does what it promises.
@@ -13,6 +14,7 @@ Future<void> _pump(
   VoidCallback? onOpenSupport,
   VoidCallback? onOpenChat,
   VoidCallback? onContinueSetup,
+  ForestCardData? forestCard,
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.0;
@@ -27,6 +29,7 @@ Future<void> _pump(
       home: Scaffold(
         body: TodayPage(
           primaryCard: type,
+          forestCard: forestCard,
           onStartCheckIn: onStartCheckIn,
           onOpenSupport: onOpenSupport,
           onOpenChat: onOpenChat,
@@ -99,9 +102,13 @@ void main() {
       HomeCardType.defaultAction,
       onOpenChat: () => chat = true,
       onStartCheckIn: () => checkIn = true,
+      forestCard: ForestCardData(palette: ForestPalette.day, species: 0, stage: 0, waterWaiting: false, onOpen: () {}),
     );
 
-    expect(find.textContaining('Got anything'), findsOneWidget);
+    final heading = tester.getRect(find.text("TODAY'S JOURNAL"));
+    final headline = tester.getRect(find.text('Got anything else to say?'));
+    final button = tester.getRect(find.ancestor(of: find.text('Add to today'), matching: find.byType(InkWell)).first);
+    expect(headline.top - heading.bottom, closeTo(button.top - headline.bottom, 1));
     await tester.tap(find.text('Add to today'));
     await tester.pump();
 

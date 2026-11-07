@@ -875,7 +875,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
   }
 }
 
-/// A pill button: a warm gradient when it is the main answer, a quiet outline otherwise.
+/// An activity action with primary or secondary emphasis.
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.label,
@@ -888,48 +888,12 @@ class _ActionButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => SizedBox(width: double.infinity, child: _button(context));
-
-  Widget _button(BuildContext context) {
-    final radius = BorderRadius.circular(18);
-    if (filled) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          gradient: const LinearGradient(colors: [Color(0xFFFFB534), Color(0xFFFF8F5A)]),
-          boxShadow: const [BoxShadow(color: Color(0x40FF8F5A), blurRadius: 16, offset: Offset(0, 6))],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: radius,
-            onTap: onPressed,
-            child: Container(
-              height: 54,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 54),
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        shape: RoundedRectangleBorder(borderRadius: radius),
-        side: BorderSide(color: AppColors.mutedInk.withValues(alpha: 0.35)),
-        foregroundColor: AppColors.mutedInk,
-        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-      ),
-      child: Text(label),
-    );
-  }
+  Widget build(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: filled
+        ? FilledButton(onPressed: onPressed, child: Text(label))
+        : OutlinedButton(onPressed: onPressed, child: Text(label)),
+  );
 }
 
 /// The activity's painted scene across the top of a page, with a soft rounded foot.

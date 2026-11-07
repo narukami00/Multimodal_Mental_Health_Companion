@@ -105,6 +105,73 @@ class ForestCardPainter extends CustomPainter {
   final double stage;
   final bool waterWaiting;
 
+  static final _cloudShape = Path()
+    ..moveTo(0, 13)
+    ..cubicTo(5, 9, 12, 9, 18, 8)
+    ..cubicTo(21, 3, 30, 2, 35, 5)
+    ..cubicTo(40, -1, 50, -2, 57, 5)
+    ..cubicTo(65, 3, 73, 8, 74, 11)
+    ..cubicTo(82, 11, 89, 13, 92, 15)
+    ..cubicTo(76, 18, 20, 19, 0, 13)
+    ..close();
+
+  void _paintSkyDetails(Canvas canvas, Size size, bool night) {
+    final p = palette, width = size.width, height = size.height;
+    final pale = night ? const Color(0xFF9A9DCD) : Color.lerp(Colors.white, p.sun, .12)!;
+    final cloud = Paint()..shader = ui.Gradient.linear(
+      Offset.zero,
+      const Offset(0, 18),
+      [pale.withValues(alpha: night ? .20 : .74), p.skyA.withValues(alpha: night ? .08 : .38)],
+    );
+    for (final (x, y, scale) in const [(.68, .31, .92), (.80, .12, .52), (.64, .50, .56)]) {
+      final k = math.min(1.0, width / 365) * scale;
+      canvas.save();
+      canvas.translate(width * x, height * y);
+      canvas.scale(k, k);
+      canvas.drawPath(_cloudShape, cloud);
+      canvas.restore();
+    }
+    if (night) return;
+
+    final birds = Path();
+    for (final (x, y, wing) in const [(.83, .42, 4.2), (.88, .40, 3.2), (.91, .46, 2.6)]) {
+      final bx = width * x, by = height * y;
+      birds
+        ..moveTo(bx - wing, by - wing * .35)
+        ..quadraticBezierTo(bx - wing * .48, by - wing * .45, bx, by)
+        ..quadraticBezierTo(bx + wing * .47, by - wing * .61, bx + wing, by - wing * .48);
+    }
+    canvas.drawPath(birds, Paint()
+      ..color = const Color(0xFF414C62).withValues(alpha: .64)
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke);
+  }
+
+  void _paintGrass(Canvas canvas, double width, double baseY) {
+    final far = Path(), near = Path();
+    for (var row = 0; row < 3; row++) {
+      final count = 6 + row * 2;
+      for (var i = 0; i < count; i++) {
+        final r = mulberry32(432 + row * 367 + i * 619);
+        final x = width * (.31 + .70 * (i + r() * .85) / count);
+        final y = baseY + 3 + row * 13 + r() * 8;
+        final size = (.54 + row * .18) * (.75 + r() * .5);
+        final path = row == 0 ? far : near;
+        for (final (spread, length) in const [(-3.8, 5.5), (-1.4, 8.2), (1.8, 6.9), (4.2, 4.7)]) {
+          final root = x + spread * size * .21;
+          path
+            ..moveTo(root, y)
+            ..quadraticBezierTo(x + spread * size * .45, y - 3 * size, x + spread * size, y - length * size)
+            ..quadraticBezierTo(x + spread * size * .70, y - 2 * size, root + .9 * size, y)
+            ..close();
+        }
+      }
+    }
+    canvas.drawPath(far, Paint()..color = Color.lerp(palette.ground.last, const Color(0xFF346342), .38)!.withValues(alpha: .49));
+    canvas.drawPath(near, Paint()..color = Color.lerp(palette.ground.last, const Color(0xFF31563B), .46)!.withValues(alpha: .62));
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
@@ -139,6 +206,7 @@ class ForestCardPainter extends CustomPainter {
     final night = p.name == 'night';
     canvas.drawCircle(Offset(sx, sy), night ? 9 : 11, Paint()..color = p.sun);
     if (night) canvas.drawCircle(Offset(sx + 4, sy - 2), 8, Paint()..color = const Color(0xE61D2655));
+    _paintSkyDetails(canvas, size, night);
 
     // the tree layer on the right, sized by the card
     final tw = math.min(210.0, w * .62);
@@ -175,6 +243,7 @@ class ForestCardPainter extends CustomPainter {
       ),
       Paint()..color = const Color(0xFF162018).withValues(alpha: p.shadowAlpha * (.35 + .65 * grow)),
     );
+    _paintGrass(canvas, tw, baseY);
 
     final sp = treeSpecies[species];
     var sc = (h - 62) / (sp.height + 30);

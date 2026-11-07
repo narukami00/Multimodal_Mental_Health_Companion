@@ -148,17 +148,7 @@ class _BaselineRow extends StatelessWidget {
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            height: 42,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFF6E2),
-                foregroundColor: const Color(0xFFB57A12),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: Color(0xFFF6E2BC)),
-                ),
-              ),
+            child: OutlinedButton(
               onPressed: onTap,
               child: Text(
                 isComplete ? 'Review baseline' : 'Continue baseline',
@@ -938,27 +928,6 @@ class ProfilePage extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE8E0D0),
-                foregroundColor: const Color(0xFF93887A),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: null,
-              icon: const Icon(Icons.download_rounded, size: 18),
-              label: const Text(
-                'Generate Export File · Coming soon',
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
           const SizedBox(height: 8),
           Center(
             child: TextButton(
@@ -1536,16 +1505,7 @@ class _EditProfileFormState extends State<_EditProfileForm> {
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
-          height: 44,
           child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFB534),
-              foregroundColor: const Color(0xFF3D2E14),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
             onPressed: _saving ? null : _save,
             child: const Text(
               'Save Profile',
@@ -1795,14 +1755,6 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
                       color: kitInk,
                     ),
                   ),
-                  Text(
-                    'Make Solace feel like yours',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: kitMuted,
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -1816,7 +1768,6 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
               icon: Icons.vibration_rounded,
               color: kitAmber,
               title: 'Gentle Haptics',
-              subtitle: 'Subtle vibrational cues on taps and sliders',
               value: profile.hapticsEnabled,
               onChanged: _setHaptics,
             ),
@@ -1825,7 +1776,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
               icon: Icons.graphic_eq_rounded,
               color: const Color(0xFF6E73C8),
               title: 'Soft Ambient Breath Audio',
-              subtitle: 'A calm soundscape during grounding pauses',
+              subtitle: 'During grounding pauses',
               value: profile.ambientAudioEnabled,
               onChanged: _setAmbientAudio,
             ),
@@ -1847,8 +1798,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
               key: const ValueKey('toggle-idea-push'),
               icon: Icons.notifications_none_rounded,
               color: const Color(0xFF4F9D76),
-              title: 'Nudge me about ideas',
-              subtitle: 'A quiet note that a gentle idea is waiting',
+              title: 'Idea reminders',
               value: profile.ideaPushEnabled,
               onChanged: _setIdeaPush,
             ),
@@ -1858,9 +1808,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
                 icon: Icons.bedtime_outlined,
                 color: const Color(0xFF6E73C8),
                 title: 'Quiet hours',
-                subtitle:
-                    'No idea nudges while you sleep. Your check-in reminder '
-                    'still arrives when you set it.',
+                subtitle: 'Pauses idea reminders. Check-in reminders still arrive.',
                 value: profile.quietHoursEnabled,
                 onChanged: (on) => _controller.setQuietHours(enabled: on),
               ),
@@ -1912,16 +1860,7 @@ class _AppSettingsFormState extends State<_AppSettingsForm> {
         const SizedBox(height: 22),
         SizedBox(
           width: double.infinity,
-          height: 50,
           child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFB534),
-              foregroundColor: const Color(0xFF3D2E14),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
             onPressed: () => Navigator.of(context).pop(),
             child: const Text(
               'Done',
@@ -2004,7 +1943,7 @@ class _SettingToggle extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.value,
     required this.onChanged,
     super.key,
@@ -2013,54 +1952,21 @@ class _SettingToggle extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconTile(icon: icon, color: color, size: 38),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: kitInk,
-                ),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  height: 1.3,
-                  fontWeight: FontWeight.w600,
-                  color: kitMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Switch(
-          value: value,
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => SettingRow(
+    icon: icon,
+    color: color,
+    title: title,
+    subtitle: subtitle,
+    padding: EdgeInsets.zero,
+    trailing: Switch(value: value, onChanged: onChanged),
+  );
 }
 
-/// Daily check-in reminder: a switch, a tappable time, and an honest status.
-///
-/// The status line states the real next fire time and offers a way to confirm
-/// delivery immediately.
 class _ReminderSetting extends StatelessWidget {
   const _ReminderSetting({
     required this.enabled,
@@ -2534,16 +2440,7 @@ class _TherapistSheetContentState extends State<_TherapistSheetContent> {
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
-          height: 44,
           child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFB534),
-              foregroundColor: const Color(0xFF3D2E14),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
             onPressed: _saving ? null : _save,
             child: Text(
               widget.controller.hasContact ? 'Update Contact' : 'Save Contact',
@@ -2676,13 +2573,6 @@ class _TherapistSheetContentState extends State<_TherapistSheetContent> {
                 child: SizedBox(
                   height: 44,
                   child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF3F823B),
-                      side: const BorderSide(color: Color(0xFFD4E8D4)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
                     onPressed: () => _call(contact.phone),
                     icon: const Icon(Icons.call_outlined, size: 18),
                     label: const Text(
@@ -2701,13 +2591,6 @@ class _TherapistSheetContentState extends State<_TherapistSheetContent> {
                 child: SizedBox(
                   height: 44,
                   child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFB57A12),
-                      side: const BorderSide(color: Color(0xFFF2ECDD)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
                     onPressed: () => _sendEmail(contact.email),
                     icon: const Icon(Icons.email_outlined, size: 18),
                     label: const Text(
@@ -2723,27 +2606,6 @@ class _TherapistSheetContentState extends State<_TherapistSheetContent> {
           ],
         ),
         const SizedBox(height: 10),
-        // Send summary — coming soon
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE8E0D0),
-              foregroundColor: const Color(0xFF93887A),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            onPressed: null,
-            icon: const Icon(Icons.share_outlined, size: 18),
-            label: const Text(
-              'Send 1-Page Summary Brief · Coming soon',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ),
         const SizedBox(height: 14),
         // Remove contact
         Center(
@@ -3020,15 +2882,7 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
                   if (!_editing && widget.controller.canAddMore)
                     SizedBox(
                       width: double.infinity,
-                      height: 44,
                       child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFB57A12),
-                          side: const BorderSide(color: Color(0xFFF2ECDD)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
                         onPressed: _startAdd,
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text(
@@ -3043,16 +2897,7 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
-                    height: 44,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFFB534),
-                        foregroundColor: const Color(0xFF3D2E14),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
                       onPressed: () => Navigator.of(context).pop(),
                       child: const Text(
                         'Done',
@@ -3353,13 +3198,6 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
                 ),
               ),
               OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFB57A12),
-                  side: const BorderSide(color: Color(0xFFE2D6C0)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
                 onPressed: _pickTime,
                 child: const Text(
                   'Change',
@@ -3453,16 +3291,7 @@ class _HabitsSheetContentState extends State<_HabitsSheetContent> {
         // Action buttons
         SizedBox(
           width: double.infinity,
-          height: 44,
           child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFB534),
-              foregroundColor: const Color(0xFF3D2E14),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
             onPressed: _selectedDays.isEmpty || _saving ? null : _save,
             child: Text(
               _editingId != null ? 'Update Reminder' : 'Set Reminder',

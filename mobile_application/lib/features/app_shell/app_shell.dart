@@ -657,7 +657,12 @@ class _AppShellState extends State<AppShell> {
   void _openForest() {
     final forest = widget.forest;
     if (forest == null) return;
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ForestPage(controller: forest)));
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      // Keep the continuously painted scene attached to the route during
+      // the zoom transition, including when the route closes.
+      allowSnapshotting: false,
+      builder: (_) => ForestPage(controller: forest),
+    ));
   }
 
   /// Asks the Insights page to show a given tab (the recap card asks for 'weeks').

@@ -70,9 +70,24 @@ class _ActivityArtState extends State<ActivityArt> with SingleTickerProviderStat
   late final AnimationController _controller = AnimationController(vsync: this, duration: const Duration(seconds: 12));
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.animate && widget.progress == null && !_isTestEnvironment) _controller.repeat();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotion();
+  }
+
+  @override
+  void didUpdateWidget(ActivityArt oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animate != widget.animate || oldWidget.progress != widget.progress) {
+      _syncMotion();
+    }
+  }
+
+  void _syncMotion() {
+    final animate = widget.animate && widget.progress == null &&
+        !_isTestEnvironment && !MediaQuery.disableAnimationsOf(context);
+    if (animate && !_controller.isAnimating) _controller.repeat();
+    if (!animate && _controller.isAnimating) _controller.reset();
   }
 
   @override
@@ -108,6 +123,7 @@ class ActivityArtPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
     final p = ActivityArt.paletteFor(type);
     canvas.drawRect(
       Offset.zero & size,
@@ -217,78 +233,84 @@ class ActivityArtPainter extends CustomPainter {
     return tan?.position ?? Offset.zero;
   }
 
-  // ---- movement: a path climbing the hills, with a light travelling it ----------------------
-
+  // The trail and each footfall stay inside the scene, even in circular previews.
   void _movement(Canvas c, Size s, ArtPalette p) {
     final u = math.min(s.width, s.height);
-    final sun = Offset(s.width * 0.74, s.height * 0.3);
-    _glow(c, sun, u * 0.55, const Color(0xFFFFC14D), 0.5 + 0.1 * _s(t));
-    c.drawCircle(sun, u * 0.12, Paint()..color = const Color(0xFFFFB547));
-    c.drawCircle(sun, u * 0.09, Paint()..color = const Color(0xFFFFD27A));
+    Offset at(double x, double y) => Offset(s.width * x, s.height * y);
+    final sun = at(0.69, 0.28);
+    _glow(c, sun, u * 0.38, p.a, 0.42);
+    c.drawCircle(sun, u * 0.105, Paint()..color = const Color(0xFFFFCB78));
+    _bird(c, at(0.37, 0.27), u * 0.027, p.ink.withValues(alpha: 0.52), _s(t, 0, 3));
+    _bird(c, at(0.43, 0.31), u * 0.021, p.ink.withValues(alpha: 0.42), _s(t, 0.2, 3));
 
-    _hill(c, s, s.height * 0.6, u * 0.05, 0.6, 1.2, p.c.withValues(alpha: 0.85));
-    _hill(c, s, s.height * 0.72, u * 0.06, 2.4, 0.9, const Color(0xFFEFA86B));
-    _hill(c, s, s.height * 0.86, u * 0.04, 4.0, 1.4, const Color(0xFFE08B55));
+    _hill(c, s, s.height * 0.54, u * 0.065, 0.3, 1.05, const Color(0xFFE4BC8F));
+    _hill(c, s, s.height * 0.65, u * 0.095, 1.7, 0.8, const Color(0xFFD5C69A));
+    _hill(c, s, s.height * 0.84, u * 0.06, 1.1, 1.1, const Color(0xFFB8BA88));
 
-    final path = Path()
-      ..moveTo(s.width * 0.12, s.height * 1.02)
-      ..cubicTo(s.width * 0.42, s.height * 0.92, s.width * 0.18, s.height * 0.78, s.width * 0.48, s.height * 0.7)
-      ..cubicTo(s.width * 0.66, s.height * 0.65, s.width * 0.56, s.height * 0.6, s.width * 0.64, s.height * 0.58);
-    // a road that narrows into the distance
-    final road = path.computeMetrics().first;
-    final left = <Offset>[], right = <Offset>[];
-    const steps = 60;
-    for (var i = 0; i <= steps; i++) {
-      final f = i / steps;
-      final tan = road.getTangentForOffset(road.length * f)!;
-      final normal = Offset(-tan.vector.dy, tan.vector.dx) / tan.vector.distance;
-      final half = u * (0.085 * (1 - f) + 0.012);
-      left.add(tan.position + normal * half);
-      right.add(tan.position - normal * half);
-    }
-    final shape = Path()..moveTo(left.first.dx, left.first.dy);
-    for (final o in left.skip(1)) {
-      shape.lineTo(o.dx, o.dy);
-    }
-    for (final o in right.reversed) {
-      shape.lineTo(o.dx, o.dy);
-    }
-    shape.close();
-    c.drawPath(shape, Paint()..color = const Color(0xFFFFEFD3));
+    final start = at(0.22, 0.78);
+    final bend = at(0.53, 0.67);
+    final end = at(0.76, 0.59);
+    final first = at(0.34, 0.81);
+    final second = at(0.42, 0.64);
+    final third = at(0.63, 0.70);
+    final fourth = at(0.67, 0.57);
+    final wide = u * 0.049;
+    final narrow = u * 0.015;
+
+    final trail = Path()
+      ..moveTo(start.dx, start.dy - wide)
+      ..cubicTo(first.dx, first.dy - wide, second.dx, second.dy - wide * 0.65, bend.dx, bend.dy - wide * 0.65)
+      ..cubicTo(third.dx, third.dy - wide * 0.60, fourth.dx, fourth.dy - narrow, end.dx, end.dy - narrow)
+      ..quadraticBezierTo(end.dx + narrow, end.dy, end.dx, end.dy + narrow)
+      ..cubicTo(fourth.dx, fourth.dy + narrow, third.dx, third.dy + wide * 0.60, bend.dx, bend.dy + wide * 0.65)
+      ..cubicTo(second.dx, second.dy + wide * 0.65, first.dx, first.dy + wide, start.dx, start.dy + wide)
+      ..quadraticBezierTo(start.dx - wide, start.dy, start.dx, start.dy - wide)
+      ..close();
     c.drawPath(
-      shape,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = const Color(0xFFF2C58E),
+      trail,
+      Paint()..shader = ui.Gradient.linear(end, start, [const Color(0xFFFFEDD0), const Color(0xFFE5AE7D)]),
     );
 
-    final m = path.computeMetrics().first;
-    // footprints appear behind the light and fade
-    for (var i = 0; i < 9; i++) {
-      final f = 0.06 + i * 0.1;
-      final since = (t - f + 1) % 1.0;
-      final a = (1 - since * 1.6).clamp(0.0, 1.0);
-      if (a <= 0 || since > 0.6) continue;
-      final o = _on(m, f) + Offset(i.isEven ? -u * 0.012 : u * 0.012, 0);
-      c.drawOval(
-        Rect.fromCenter(center: o, width: u * 0.03, height: u * 0.045),
-        Paint()..color = const Color(0xFFD9824A).withValues(alpha: 0.55 * a),
+    final walk = Path()
+      ..moveTo(start.dx, start.dy)
+      ..cubicTo(first.dx, first.dy, second.dx, second.dy, bend.dx, bend.dy)
+      ..cubicTo(third.dx, third.dy, fourth.dx, fourth.dy, end.dx, end.dy);
+    final metric = walk.computeMetrics().first;
+    final phase = (t * 2 + 0.20) % 1;
+    final step = _s(phase, 0, 8);
+    final visibility = Curves.easeInOut.transform(
+      (math.min(phase, 1 - phase) * 8).clamp(0.0, 1.0),
+    );
+    final foot = _on(metric, phase);
+    final scale = u * (0.012 - 0.003 * phase);
+    c.drawOval(
+      Rect.fromCenter(center: foot, width: scale * 12, height: scale * 3.6),
+      Paint()..color = p.ink.withValues(alpha: 0.18 * visibility),
+    );
+
+    c.save();
+    c.translate(foot.dx, foot.dy);
+    c.scale(scale);
+    final ink = Paint()
+      ..color = const Color(0xFF543B2D).withValues(alpha: visibility)
+      ..strokeWidth = 1.65
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final torso = Offset(-0.1, -6.5 + step.abs() * 0.6);
+    final shoulder = Offset(1.1, torso.dy - 6);
+    for (final stride in [-step, step]) {
+      c.drawPath(
+        Path()
+          ..moveTo(torso.dx, torso.dy)
+          ..lineTo(stride * 2.5, -3.2 - math.max(0, stride) * 1.6)
+          ..lineTo(stride * 4.5, -math.max(0, stride) * 2.3),
+        ink,
       );
     }
-    final pos = _on(m, t);
-    final r = u * (0.055 - 0.025 * t);
-    for (var i = 5; i >= 1; i--) {
-      final o = _on(m, (t - i * 0.025 + 1) % 1.0);
-      c.drawCircle(o, r * (1 - i * 0.12), Paint()..color = Colors.white.withValues(alpha: 0.5 - i * 0.08));
-    }
-    _glow(c, pos, r * 3.2, const Color(0xFFFFE08A), 0.8);
-    c.drawCircle(pos, r, Paint()..color = Colors.white);
-
-    for (var i = 0; i < 3; i++) {
-      final bx = ((t * 0.5 + i * 0.3) % 1.0) * (s.width + 60) - 30;
-      _bird(c, Offset(bx, s.height * (0.2 + 0.07 * i) + 4 * _s(t, i * 0.3, 2)), u * (0.035 - i * 0.005), const Color(0xFF9A5B2D).withValues(alpha: 0.7), _s(t, i * 0.2, 6));
-    }
+    c.drawLine(torso, shoulder, ink..strokeWidth = 2.8);
+    c.drawLine(shoulder, Offset(1.4 + step * 4, shoulder.dy + 4.2), ink..strokeWidth = 1.5);
+    c.drawCircle(shoulder + const Offset(0.8, -3.5), 2.35, Paint()..color = ink.color);
+    c.restore();
   }
 
   // ---- social: two circles drawing together, little hearts rising -------------------------------
@@ -467,83 +489,84 @@ class ActivityArtPainter extends CustomPainter {
     }
   }
 
-  // ---- learning: an open book letting go of small lights --------------------------------------------
-
+  // A page lifts from the spine and settles into the same shape as the left page.
   void _learning(Canvas c, Size s, ArtPalette p) {
     final u = math.min(s.width, s.height);
-    final cx = s.width / 2, cy = s.height * 0.66;
-    _glow(c, Offset(cx, cy - u * 0.2), u * 0.6, const Color(0xFFFFE08A), 0.55);
+    final center = Offset(s.width / 2, s.height * 0.59);
+    _glow(c, center - Offset(0, u * 0.17), u * 0.52, p.c, 0.65);
+    c.save();
+    c.translate(center.dx, center.dy);
+    c.scale(u / 100);
 
-    final stars = <Offset>[
-      Offset(cx - u * 0.3, cy - u * 0.42),
-      Offset(cx - u * 0.12, cy - u * 0.58),
-      Offset(cx + u * 0.08, cy - u * 0.44),
-      Offset(cx + u * 0.26, cy - u * 0.6),
-      Offset(cx + u * 0.34, cy - u * 0.36),
-    ];
-    final line = Paint()
-      ..color = p.a.withValues(alpha: 0.45)
-      ..strokeWidth = 1.4;
-    for (var i = 0; i < stars.length - 1; i++) {
-      final a = 0.5 + 0.5 * _s(t, i * 0.17, 1);
-      line.color = p.a.withValues(alpha: 0.2 + 0.35 * a);
-      c.drawLine(stars[i], stars[i + 1], line);
-    }
-    for (var i = 0; i < stars.length; i++) {
-      final tw = 0.6 + 0.4 * _s(t, i * 0.21, 2);
-      _glow(c, stars[i], u * 0.07, const Color(0xFFFFD27A), 0.8 * tw);
-      _sparkle(c, stars[i], u * 0.04 * tw + u * 0.01, Colors.white);
-    }
-
-    final page = Paint()..color = const Color(0xFFFFFBF1);
-    final edge = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = p.b.withValues(alpha: 0.7);
-    Path half(double dir) => Path()
-      ..moveTo(cx, cy + u * 0.12)
-      ..quadraticBezierTo(cx + dir * u * 0.16, cy + u * 0.06, cx + dir * u * 0.34, cy + u * 0.12)
-      ..lineTo(cx + dir * u * 0.34, cy - u * 0.14)
-      ..quadraticBezierTo(cx + dir * u * 0.16, cy - u * 0.2, cx, cy - u * 0.14)
-      ..close();
-    c.drawPath(
-      Path()
-        ..moveTo(cx, cy + u * 0.16)
-        ..lineTo(cx - u * 0.37, cy + u * 0.16)
-        ..lineTo(cx - u * 0.37, cy - u * 0.1)
-        ..lineTo(cx + u * 0.37, cy - u * 0.1)
-        ..lineTo(cx + u * 0.37, cy + u * 0.16)
-        ..close(),
-      Paint()..color = p.b,
+    c.drawOval(
+      Rect.fromCenter(center: const Offset(0, 19), width: 81, height: 14),
+      Paint()..color = p.ink.withValues(alpha: 0.13),
     );
-    c.drawPath(half(-1), page);
-    c.drawPath(half(1), page);
-    c.drawPath(half(-1), edge);
-    c.drawPath(half(1), edge);
-    final ink = Paint()
-      ..color = p.a.withValues(alpha: 0.35)
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < 4; i++) {
-      final y = cy - u * 0.08 + i * u * 0.05;
-      c.drawLine(Offset(cx - u * 0.29, y), Offset(cx - u * 0.06, y + u * 0.012), ink);
-    }
-    // a page turning
-    final flip = (t * 2) % 1.0;
-    final k = math.cos(flip * math.pi);
-    final x = cx + k * u * 0.3;
-    final turning = Path()
-      ..moveTo(cx, cy + u * 0.12)
-      ..quadraticBezierTo((cx + x) / 2, cy + u * 0.04 - u * 0.05 * math.sin(flip * math.pi), x, cy + u * 0.1)
-      ..lineTo(x, cy - u * 0.14)
-      ..quadraticBezierTo((cx + x) / 2, cy - u * 0.24 - u * 0.04 * math.sin(flip * math.pi), cx, cy - u * 0.14)
+    final cover = Path()
+      ..moveTo(0, 19)
+      ..quadraticBezierTo(-15, 13, -36, 17)
+      ..quadraticBezierTo(-39, 17, -39, 14)
+      ..lineTo(-37, -13)
+      ..quadraticBezierTo(-16, -18, 0, -12)
+      ..quadraticBezierTo(16, -18, 37, -13)
+      ..lineTo(39, 14)
+      ..quadraticBezierTo(39, 17, 36, 17)
+      ..quadraticBezierTo(15, 13, 0, 19)
       ..close();
-    c.drawPath(turning, Paint()..color = const Color(0xFFFFF6DE));
-    c.drawPath(turning, edge);
-    for (var i = 0; i < 4; i++) {
-      final f = (t * 0.7 + i / 4) % 1.0;
-      c.drawCircle(Offset(cx + math.sin((f * 2 + i) * math.pi) * u * 0.12, cy - u * 0.15 - f * u * 0.4), u * 0.01, Paint()..color = const Color(0xFFFFD27A).withValues(alpha: math.sin(f * math.pi)));
+    c.drawPath(cover, Paint()..color = p.b);
+
+    final edge = Paint()
+      ..color = p.b.withValues(alpha: 0.45)
+      ..strokeWidth = 0.85
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    final ink = Paint()
+      ..color = p.ink.withValues(alpha: 0.28)
+      ..strokeWidth = 0.9
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    void page(double direction, double lift) {
+      final x = 34 * direction;
+      final y = 23 * lift;
+      final shape = Path()
+        ..moveTo(0, 14)
+        ..quadraticBezierTo(x * 0.48, 7 - y * 0.62, x, 12 - y)
+        ..lineTo(x * 0.95, -16 - y)
+        ..quadraticBezierTo(x * 0.48, -23 - y * 0.68, 0, -16)
+        ..close();
+      c.drawPath(
+        shape,
+        Paint()..shader = ui.Gradient.linear(
+          const Offset(0, 0),
+          Offset(x, -y),
+          [const Color(0xFFF6E3BE), const Color(0xFFFFFCF2)],
+        ),
+      );
+      c.drawPath(shape, edge);
+      for (var i = 0; i < 4; i++) {
+        final lineY = -10.0 + i * 5.1;
+        final end = i == 3 ? 0.62 : 0.80;
+        c.drawPath(
+          Path()
+            ..moveTo(x * 0.16, lineY - y * 0.17)
+            ..quadraticBezierTo(x * 0.42, lineY - 4 - y * 0.48, x * end, lineY - 2 - y * end),
+          ink,
+        );
+      }
     }
+
+    page(-1, 0);
+    page(1, 0);
+    final flip = Curves.easeInOutCubic.transform(((t - 0.22) / 0.29).clamp(0.0, 1.0));
+    if (flip > 0 && flip < 1) {
+      final angle = math.pi * flip;
+      page(math.cos(angle), math.sin(angle));
+    }
+
+    _sparkle(c, const Offset(-23, -33), 3.4 + 0.65 * _s(t), p.a.withValues(alpha: 0.66));
+    _sparkle(c, const Offset(26, -35), 2.2 + 0.65 * _s(t, 0.3), p.a.withValues(alpha: 0.49));
+    c.restore();
   }
 
   // ---- productivity: a card ticking itself off -------------------------------------------------------

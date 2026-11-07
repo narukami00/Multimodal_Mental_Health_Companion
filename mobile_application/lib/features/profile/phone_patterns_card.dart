@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/visual_kit.dart';
 import '../footprint/phone_patterns_controller.dart';
 
 /// The "Phone patterns" row on the permissions page.
@@ -127,50 +128,32 @@ class _PhonePatternsCardState extends State<PhonePatternsCard>
       PhonePatternsStatus.off => (
         'Off',
         false,
-        'Off. Nothing is read. If you turn it on, Solace notices when your '
-            'screen is on and which kind of app is in front, to learn your own '
-            'rhythm. It stays on this phone.',
+        'Nothing is read. Enable to keep screen time and app categories on this phone.',
       ),
       PhonePatternsStatus.needsAndroidAccess => (
         'Needs access',
         false,
-        'You said yes, but Android\'s usage access is off for Solace, so '
-            'nothing is being read. Switch it on in Android, or turn this off.',
+        'Nothing is read until you allow usage access in Android.',
       ),
       PhonePatternsStatus.on => (
         'On',
         true,
-        'Solace is noticing when your screen is on and which kind of app is in '
-            'front, and keeping a few numbers a day on this phone. It never '
-            'reads what is inside an app, a message or a notification.',
+        'Screen time and app categories stay on this phone. App contents, messages and notifications are never read.',
       ),
     };
 
-    return Container(
+    return KitCard(
       key: const ValueKey('permission-phone-patterns'),
       padding: const EdgeInsets.fromLTRB(16, 14, 14, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF2ECDD)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3DC),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: const Icon(
-                  Icons.phone_android_rounded,
-                  size: 19,
-                  color: Color(0xFFB57A12),
-                ),
+              const IconTile(
+                icon: Icons.phone_android_rounded,
+                color: Color(0xFFB57A12),
+                size: 38,
               ),
               const SizedBox(width: 12),
               const Expanded(
@@ -183,7 +166,12 @@ class _PhonePatternsCardState extends State<PhonePatternsCard>
                   ),
                 ),
               ),
-              Flexible(child: _Chip(label: chip, on: chipOn)),
+              Flexible(
+                child: StatusPill(
+                  chip,
+                  color: chipOn ? const Color(0xFF3F823B) : kitSoft,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -250,45 +238,8 @@ class _PhonePatternsCardState extends State<PhonePatternsCard>
     return TextButton.icon(
       key: ValueKey(key),
       onPressed: onPressed,
-      style: TextButton.styleFrom(
-        foregroundColor: const Color(0xFF96620C),
-        padding: const EdgeInsets.only(right: 8),
-        minimumSize: const Size(0, 34),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
       icon: Icon(icon, size: 16),
-      label: Text(
-        label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.on});
-
-  final String label;
-  final bool on;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: on ? const Color(0xFFEBF7EB) : const Color(0xFFF4F1E7),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          color: on ? const Color(0xFF3F823B) : const Color(0xFF7A6E5D),
-        ),
-      ),
+      label: Text(label),
     );
   }
 }

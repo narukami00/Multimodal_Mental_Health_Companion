@@ -713,28 +713,13 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
   }
 
   Widget _primary(String label, IconData icon, VoidCallback onTap, Key key) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [_warm, Color(0xFFFF8F5A)]),
-        borderRadius: BorderRadius.circular(27),
-        boxShadow: const [BoxShadow(color: Color(0x40FF8F5A), blurRadius: 16, offset: Offset(0, 6))],
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 54,
-        child: ElevatedButton.icon(
-          key: key,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
-          ),
-          onPressed: onTap,
-          icon: Icon(icon, size: 20),
-          label: Text(label, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
-        ),
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        key: key,
+        onPressed: onTap,
+        icon: Icon(icon, size: 20),
+        label: Text(label),
       ),
     );
   }
