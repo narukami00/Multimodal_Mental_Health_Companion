@@ -253,16 +253,18 @@ class _MoodGrid extends StatelessWidget {
     final isToday = day.day == today;
     final words = day.entries.isEmpty ? <String>[] : day.moods;
     final names = {for (final w in words) Moods.display(w)}.join(', ');
+    final unread = day.unread.length;
+    final tappable = words.isNotEmpty || unread > 0;
     final label =
         '${_weekdays[day.day.weekday - 1]} ${day.day.day} ${_months[day.day.month - 1]}'
-        ' · ${words.isEmpty ? 'no check-in' : '${words.length} ${words.length == 1 ? 'entry' : 'entries'}: $names'}';
+        ' · ${words.isEmpty ? (unread > 0 ? '$unread ${unread == 1 ? 'entry' : 'entries'}, not read yet' : 'no check-in') : '${words.length} ${words.length == 1 ? 'entry' : 'entries'}: $names'}';
     return Semantics(
       label: label,
-      button: words.isNotEmpty,
+      button: tappable,
       child: GestureDetector(
         key: ValueKey('mood-day-${dayKey(day.day)}'),
         behavior: HitTestBehavior.opaque,
-        onTap: words.isEmpty ? null : () => onTapDay(day),
+        onTap: tappable ? () => onTapDay(day) : null,
         child: SizedBox(
           width: 34,
           height: 34,
@@ -277,6 +279,7 @@ class _MoodGrid extends StatelessWidget {
                 painter: _DayDotPainter(
                   colors: [for (final w in words) moodColors[w] ?? const Color(0xFFB4ADD6)],
                   isToday: isToday,
+                  unread: unread > 0,
                 ),
               ),
             ),
@@ -290,16 +293,32 @@ class _MoodGrid extends StatelessWidget {
 /// One circle per day, cut into a slice per entry in the order they were made (clockwise from the top),
 /// so a day with a low, an even and a calm entry shows all three colours instead of only the last.
 class _DayDotPainter extends CustomPainter {
-  const _DayDotPainter({required this.colors, required this.isToday});
+  const _DayDotPainter({required this.colors, required this.isToday, this.unread = false});
 
   final List<Color> colors;
   final bool isToday;
+
+  /// The day has an entry that has not been read yet (no mood word to colour it with).
+  final bool unread;
 
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
     final c = rect.center;
     final r = size.width / 2;
+    if (colors.isEmpty && unread) {
+      // Written, not read yet: a soft blue-grey ring around a small solid centre, so it is clearly not an empty day.
+      canvas.drawCircle(
+        c,
+        r - 0.8,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = isToday ? 2 : 1.6
+          ..color = isToday ? insightInk : unreadDotColor,
+      );
+      canvas.drawCircle(c, r * 0.42, Paint()..color = unreadDotColor);
+      return;
+    }
     if (colors.isEmpty) {
       canvas.drawCircle(
         c,
@@ -339,7 +358,8 @@ class _DayDotPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _DayDotPainter old) => old.colors.join() != colors.join() || old.isToday != isToday;
+  bool shouldRepaint(covariant _DayDotPainter old) =>
+      old.colors.join() != colors.join() || old.isToday != isToday || old.unread != unread;
 }
 
 class _Legend extends StatelessWidget {
@@ -370,9 +390,26 @@ class _Legend extends StatelessWidget {
             ),
           ],
         ),
+      Row(
+        key: const ValueKey('legend-unread'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: unreadDotColor, width: 1.6)),
+            child: const Center(child: SizedBox(width: 3, height: 3, child: DecoratedBox(decoration: BoxDecoration(color: unreadDotColor, shape: BoxShape.circle)))),
+          ),
+          const SizedBox(width: 5),
+          const Text('Not read yet', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: insightSoft)),
+        ],
+      ),
     ],
   );
 }
+
+/// The soft blue-grey of a day with an entry that has not been read yet.
+const unreadDotColor = Color(0xFF8E9BBE);
 
 /// How the mood words were spread over the four parts of the day. Each part is
 /// one stacked bar of the words chosen then, so it shows how many check-ins there
@@ -507,6 +544,7 @@ class _DaySheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = '${_weekdays[day.day.weekday - 1]} ${day.day.day} ${_months[day.day.month - 1]}';
+    final all = [...day.entries, ...day.unread]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -518,11 +556,11 @@ class _DaySheet extends StatelessWidget {
             Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: insightInk)),
             const SizedBox(height: 2),
             Text(
-              '${day.entries.length} ${day.entries.length == 1 ? 'entry' : 'entries'}, in the order you made them',
+              '${all.length} ${all.length == 1 ? 'entry' : 'entries'}, in the order you made them',
               style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: insightMuted),
             ),
             const SizedBox(height: 14),
-            for (final e in day.entries) _DayEntryRow(entry: e, onTap: () => onOpen(e)),
+            for (final e in all) _DayEntryRow(entry: e, onTap: () => onOpen(e)),
           ],
         ),
       ),

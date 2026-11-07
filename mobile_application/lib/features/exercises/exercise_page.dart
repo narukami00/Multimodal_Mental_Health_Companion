@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/activity.dart';
 import '../../domain/exercises/exercise_plan.dart';
 import '../art/activity_art.dart';
+import 'guide_glyph.dart';
 
 /// A guided exercise, full screen and quiet: a breathing circle to follow, the five senses to walk through, or
 /// a few short questions to write against. Nothing is timed against the person and nothing they write is kept.
@@ -159,7 +160,7 @@ class _ExercisePageState extends State<ExercisePage> with SingleTickerProviderSt
   Widget _intro(ArtPalette p) {
     return _frame(
       children: [
-        _OrbHint(palette: p),
+        GuideGlyph(guide: widget.guide, size: 150),
         const SizedBox(height: 28),
         Text(widget.title, textAlign: TextAlign.center, style: _title(p)),
         const SizedBox(height: 12),

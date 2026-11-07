@@ -5,6 +5,7 @@ import '../../core/models/suggestion_record.dart';
 import '../../domain/insights/what_helped.dart';
 import '../suggestions/suggestion_controller.dart';
 import '../art/activity_art.dart';
+import 'guided_exercises_card.dart';
 import 'ideas_invitation_card.dart';
 import 'insight_widgets.dart';
 
@@ -21,7 +22,17 @@ IconData _icon(ActivityType type) => switch (type) {
 /// What the Helps tab's "Want to try something?" card can do, supplied by the app shell (which owns the
 /// controllers the idea page needs).
 class IdeaActions {
-  const IdeaActions({required this.ask, required this.resume, required this.finish, required this.interrupt});
+  const IdeaActions({
+    required this.ask,
+    required this.resume,
+    required this.finish,
+    required this.interrupt,
+    this.startGuided,
+  });
+
+  /// Start a guided exercise straight away (written down as started, like any idea they say yes to). Without it
+  /// there is no "Guided exercises" card.
+  final void Function(Activity activity)? startGuided;
 
   /// Open the page that asks how they are and offers an idea.
   final VoidCallback ask;
@@ -66,12 +77,15 @@ class HelpsTab extends StatelessWidget {
         );
         final progress = helpsProgress(suggestionController.history, suggestionController.library);
         final invitation = _invitation();
+        final guided = _guided();
         if (kinds.isEmpty) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ?invitation,
               if (invitation != null) const SizedBox(height: 14),
+              ?guided,
+              if (guided != null) const SizedBox(height: 14),
               const InsightCard(
                 key: ValueKey('helps-how'),
                 child: Column(
@@ -103,6 +117,8 @@ class HelpsTab extends StatelessWidget {
           children: [
             ?invitation,
             if (invitation != null) const SizedBox(height: 14),
+            ?guided,
+            if (guided != null) const SizedBox(height: 14),
             for (final kind in kinds) ...[
               _KindCard(kind: kind),
               const SizedBox(height: 10),
@@ -127,6 +143,17 @@ class HelpsTab extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// The guided exercises, each one a tap away. Hidden while an idea is under way (one thing at a time), and when the
+  /// shell offers no way to start one.
+  Widget? _guided() {
+    final start = ideaActions?.startGuided;
+    if (start == null) return null;
+    if (suggestionController.doingNow(now: (clock ?? DateTime.now)()) != null) return null;
+    final guided = [for (final a in suggestionController.library) if (a.guide != null) a];
+    if (guided.isEmpty) return null;
+    return GuidedExercisesCard(activities: guided, onStart: start);
   }
 
   /// The card at the top. With an idea under way it shows that instead, and offers no way to ask for another.

@@ -1028,6 +1028,13 @@ class _DetailsCard extends StatelessWidget {
                 leading: Icon(Icons.schedule_rounded, size: 15, color: palette.ink),
                 label: '${activity.durationMinutes} min',
               ),
+              if (activity.guide != null)
+                _Fact(
+                  key: const ValueKey('fact-guided'),
+                  color: palette,
+                  leading: Icon(Icons.auto_awesome_rounded, size: 15, color: palette.ink),
+                  label: 'Guided',
+                ),
               _Fact(
                 key: const ValueKey('fact-effort'),
                 color: palette,

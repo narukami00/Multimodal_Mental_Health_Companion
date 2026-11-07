@@ -8,7 +8,9 @@ import '../memory/companion_memory_context.dart';
 import '../memory/what_sol_remembers_page.dart';
 import '../memory/moment_proposal_card.dart';
 import '../memory/moments_controller.dart';
+import '../../core/models/activity.dart';
 import '../../core/models/safety_assessment.dart';
+import '../../domain/recommendations/recommendation_engine.dart';
 import '../../core/models/suggestion_record.dart';
 import '../../core/navigation/app_tab.dart';
 import '../../core/day_key.dart';
@@ -230,6 +232,24 @@ class _AppShellState extends State<AppShell> {
       choice.recommendation,
       context: choice.context,
       proactive: true,
+    );
+    await widget.suggestionController.startDoing(record.id);
+    if (!mounted) return;
+    await _openIdea(resumeRecordId: record.id);
+  }
+
+  /// A guided exercise chosen on purpose from the Helps tab: written down as started (they chose it, so it is a
+  /// yes), then opened on the screen that offers to begin it.
+  Future<void> _startGuided(Activity activity) async {
+    final context = buildRecommendationContext(
+      profile: widget.profileController.profile,
+      sessions: widget.sessionController.sessions,
+      extraTags: widget.breakPrompts?.activeThemes() ?? const [],
+    );
+    final record = await widget.suggestionController.commit(
+      Recommendation.restored(activity, null),
+      context: context,
+      fresh: true,
     );
     await widget.suggestionController.startDoing(record.id);
     if (!mounted) return;
@@ -573,6 +593,7 @@ class _AppShellState extends State<AppShell> {
                   resume: (record) => _openIdea(resumeRecordId: record.id),
                   finish: _finishDoing,
                   interrupt: _interruptDoing,
+                  startGuided: _startGuided,
                 ),
                 phonePatterns: widget.phonePatterns,
                 profileController: widget.profileController,
