@@ -1,4 +1,5 @@
 import 'features/forest/forest_controller.dart';
+import 'features/goals/goals_controller.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -129,10 +130,18 @@ Future<void> main() async {
     suggestionRepository: SharedPreferencesSuggestionRepository(preferences),
   );
   await suggestionController.load();
+  // Phone-use goals, judged from the stored daily rows (yesterday and earlier), and the forest waters they earn.
+  final goalsController = GoalsController(
+    preferences: preferences,
+    loadRows: SharedPreferencesDailyFeaturesRepository(preferences).loadAll,
+    restDays: () => profileController.restDays,
+  );
+  await goalsController.load();
   final forestController = ForestController(
     store: SharedPreferencesForestStore(preferences),
     sessions: sessionController,
     suggestions: suggestionController,
+    goals: goalsController,
   );
   await forestController.load();
   // Loaded at startup so Home can ask whether a suggestion is due without
@@ -172,6 +181,9 @@ Future<void> main() async {
     repository: dailyFeatures,
   );
   await phonePatterns.refresh();
+  phonePatterns.goals = goalsController;
+  // Rest days change what is judged, so a new rest day is looked at again.
+  profileController.addListener(() => unawaited(goalsController.refresh()));
 
   // Catches up on device usage when the app opens, returns to the foreground, or
   // phone patterns is switched on. Reads nothing unless both the person's
@@ -187,7 +199,7 @@ Future<void> main() async {
     ),
   )..start();
   // Not awaited: the first screen should not wait on a week of events.
-  unawaited(usageRunner.run());
+  unawaited(usageRunner.run().then((_) => goalsController.refresh()));
 
   // Asks, once and gently, whether anything is going on when the person's days
   // look different from their own usual. It only ever asks about a shift across
@@ -420,6 +432,8 @@ Future<void> main() async {
     onResume: () {
       unawaited(writeDownWaiting());
       unawaited(quickReplies.run());
+      // A new morning: yesterday is now a finished day to look at.
+      unawaited(usageRunner.run().then((_) => goalsController.refresh()));
     },
   );
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/daily_features.dart';
 import '../../domain/footprint/phone_noticings.dart';
 import '../footprint/phone_patterns_controller.dart';
+import '../goals/goals_controller.dart';
 import '../profile/phone_patterns_page.dart';
 import '../profile/profile_controller.dart';
 import 'insight_widgets.dart';
@@ -118,7 +119,63 @@ class _PhonePatternsSectionState extends State<PhonePatternsSection> {
     return Column(
       key: const ValueKey('phone-patterns-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [const InsightLabel('PHONE PATTERNS'), body],
+      children: [
+        const InsightLabel('PHONE PATTERNS'),
+        body,
+        if (on && _patterns.goals != null) _goalsLine(_patterns.goals!),
+      ],
+    );
+  }
+
+  /// How the goals are going, in one quiet card: the last week as dots, and a way into the details.
+  Widget _goalsLine(GoalsController goals) {
+    return ListenableBuilder(
+      listenable: goals,
+      builder: (context, _) {
+        final week = goals.lastWeek;
+        final recent = goals.days.length <= 7 ? goals.days : goals.days.sublist(goals.days.length - 7);
+        final text = !goals.hasGoals
+            ? 'Want something gentle to aim for? A goal is looked at the morning after, and meeting one waters your tree.'
+            : week.judged == 0
+            ? 'Your goals are set. Yesterday\'s numbers arrive in the morning.'
+            : 'You met a goal on ${week.met} of the last ${week.judged} ${week.judged == 1 ? 'day' : 'days'}.';
+        return Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: InkWell(
+            key: const ValueKey('phone-section-goals'),
+            borderRadius: BorderRadius.circular(24),
+            onTap: _open,
+            child: _shell(
+              child: Row(
+                children: [
+                  const Icon(Icons.flag_rounded, size: 20, color: Color(0xFF96620C)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      text,
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, height: 1.45, color: Color(0xFF5E513F)),
+                    ),
+                  ),
+                  if (recent.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    for (final d in recent)
+                      Container(
+                        width: 9,
+                        height: 9,
+                        margin: const EdgeInsets.only(left: 3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: d.anyMet ? const Color(0xFFFFB534) : Colors.transparent,
+                          border: Border.all(color: d.anyMet ? const Color(0xFFFFB534) : const Color(0x663B2F26), width: 1.2),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

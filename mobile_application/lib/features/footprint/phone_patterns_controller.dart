@@ -5,6 +5,7 @@ import '../../core/models/daily_features.dart';
 import '../../data/contracts/daily_features_repository.dart';
 import '../../services/usage_collector_service.dart';
 import '../consent/consent_controller.dart';
+import '../goals/goals_controller.dart';
 
 /// Where "phone patterns" stands for this person right now.
 enum PhonePatternsStatus {
@@ -43,6 +44,10 @@ class PhonePatternsController extends ChangeNotifier {
   final UsageCollectorService _collector;
   final DailyFeaturesRepository _repository;
   bool _androidAccess = false;
+
+  /// The person's phone-use goals, shown beside the patterns they are judged from. Set once at start-up; null in
+  /// tests that do not need it.
+  GoalsController? goals;
 
   PhonePatternsStatus get status {
     if (!_consent.isGranted(ConsentKey.usageFootprint)) {

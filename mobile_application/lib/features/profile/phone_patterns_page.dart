@@ -11,6 +11,7 @@ import '../../domain/footprint/day_rhythm.dart';
 import '../../domain/footprint/day_summary.dart';
 import '../footprint/day_rhythm_card.dart';
 import '../footprint/phone_patterns_controller.dart';
+import '../goals/goals_card.dart';
 import 'permissions_page.dart';
 import 'profile_controller.dart';
 
@@ -37,8 +38,9 @@ bool get _inTest {
 /// "My phone patterns": exactly what Solace has noticed about phone use, with
 /// every control over it in one place.
 ///
-/// It describes and never judges: no good or bad, no targets, no comparison with
-/// anyone. Sleep is labelled an estimate wherever it appears.
+/// It describes and never judges: no good or bad, no comparison with anyone. The only targets are the ones the
+/// person sets themselves in "Your goals", and a miss there is "not this time". Sleep is labelled an estimate
+/// wherever it appears.
 class PhonePatternsPage extends StatefulWidget {
   const PhonePatternsPage({
     required this.phonePatterns,
@@ -163,6 +165,10 @@ class _PhonePatternsPageState extends State<PhonePatternsPage> {
                   else ...[
                     _Reveal(index: 1, child: _yesterdayCard(context)),
                     const SizedBox(height: 12),
+                    if (_patterns.goals != null) ...[
+                      _Reveal(index: 2, child: GoalsCard(goals: _patterns.goals!)),
+                      const SizedBox(height: 12),
+                    ],
                     if (_sleepCardShown) ...[
                       _Reveal(index: 2, child: _sleepCard(context)),
                       const SizedBox(height: 12),
