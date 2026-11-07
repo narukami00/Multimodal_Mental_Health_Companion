@@ -330,6 +330,12 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
+  /// Remembers that the recap for the week starting [weekKey] ('yyyy-MM-dd') was opened or dismissed on Today.
+  Future<void> markRecapSeen(String weekKey) async {
+    _profile = _profile.copyWith(recapSeenWeek: weekKey);
+    await _persist();
+  }
+
   Future<void> _persist() async {
     await _repository.save(_profile);
     notifyListeners();

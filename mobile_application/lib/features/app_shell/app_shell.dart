@@ -22,6 +22,7 @@ import '../checkin/check_in_mode_page.dart';
 import '../checkin/text_check_in_page.dart';
 import '../insights/helps_tab.dart' show IdeaActions;
 import '../insights/insights_page.dart';
+import '../insights/weekly_recap_card.dart';
 import '../journal/journal_page.dart';
 import '../footprint/break_prompt_card.dart';
 import '../footprint/day_rhythm_card.dart';
@@ -391,6 +392,12 @@ class _AppShellState extends State<AppShell> {
                   profileController: widget.profileController,
                   suggestionController: widget.suggestionController,
                 ),
+                recapCard: WeeklyRecapCard(
+                  sessionController: widget.sessionController,
+                  profileController: widget.profileController,
+                  suggestionController: widget.suggestionController,
+                  onOpen: _openWeeks,
+                ),
                 welcomeBackNotice: WelcomeBackNotice(
                   sessionController: widget.sessionController,
                   profileController: widget.profileController,
@@ -549,6 +556,7 @@ class _AppShellState extends State<AppShell> {
               ),
               JournalPage(sessionController: widget.sessionController),
               InsightsPage(
+                tabRequest: _insightsTabRequest,
                 sessionController: widget.sessionController,
                 suggestionController: widget.suggestionController,
                 ideaActions: IdeaActions(
@@ -621,6 +629,15 @@ class _AppShellState extends State<AppShell> {
       unawaited(HapticFeedback.selectionClick());
     }
     setState(() => _selectedTab = tab);
+  }
+
+  /// Asks the Insights page to show a given tab (the recap card asks for 'weeks').
+  final ValueNotifier<String?> _insightsTabRequest = ValueNotifier<String?>(null);
+
+  void _openWeeks() {
+    _insightsTabRequest.value = null;
+    _insightsTabRequest.value = 'weeks';
+    _selectTab(AppTab.insights);
   }
 
   /// The smallest way back in after time away: straight to the typed check-in.

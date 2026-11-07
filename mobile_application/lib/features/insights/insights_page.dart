@@ -26,8 +26,12 @@ class InsightsPage extends StatefulWidget {
     this.momentsTab,
     this.ideaActions,
     this.clock,
+    this.tabRequest,
     super.key,
   });
+
+  /// Lets something outside (the Today recap card) ask for a tab by id.
+  final ValueNotifier<String?>? tabRequest;
 
   final SessionController sessionController;
 
@@ -59,6 +63,23 @@ class _Tab {
 
 class _InsightsPageState extends State<InsightsPage> {
   String _selected = 'mood';
+
+  @override
+  void initState() {
+    super.initState();
+    widget.tabRequest?.addListener(_onTabRequest);
+  }
+
+  @override
+  void dispose() {
+    widget.tabRequest?.removeListener(_onTabRequest);
+    super.dispose();
+  }
+
+  void _onTabRequest() {
+    final id = widget.tabRequest?.value;
+    if (id != null && _tabs.any((t) => t.id == id)) setState(() => _selected = id);
+  }
 
   List<_Tab> get _tabs => [
     const _Tab('mood', 'Mood', Icons.wb_twilight_rounded),

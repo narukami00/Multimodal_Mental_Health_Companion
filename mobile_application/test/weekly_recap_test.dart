@@ -126,4 +126,41 @@ void main() {
       expect(overallSummary(recaps)!.any((l) => l.contains('most often check in')), isFalse);
     });
   });
+
+  group('when the Today card is offered', () {
+    // The week of Monday 2 to Sunday 8 March 2026 is the finished week.
+    final recaps = weeklyRecaps([entry(DateTime(2026, 3, 3, 9))], const [], DateTime(2026, 3, 9, 8));
+
+    WeekRecap? at(DateTime day, {String? seen}) => RecapNudge.forToday(weeklyRecaps([entry(DateTime(2026, 3, 3, 9))], const [], day), day, seen);
+
+    test('on the Monday, Tuesday and Wednesday after the week ends', () {
+      expect(at(DateTime(2026, 3, 9, 8)), isNotNull);
+      expect(at(DateTime(2026, 3, 10, 22)), isNotNull);
+      expect(at(DateTime(2026, 3, 11, 8)), isNotNull);
+    });
+
+    test('not during the week itself, and not after the first few days', () {
+      expect(at(DateTime(2026, 3, 8, 20)), isNull);
+      expect(at(DateTime(2026, 3, 12, 8)), isNull);
+      expect(at(DateTime(2026, 3, 20, 8)), isNull);
+    });
+
+    test('once it was opened or dismissed it does not come back', () {
+      expect(at(DateTime(2026, 3, 10), seen: RecapNudge.weekKey(DateTime(2026, 3, 2))), isNull);
+      expect(at(DateTime(2026, 3, 10), seen: RecapNudge.weekKey(DateTime(2026, 2, 23))), isNotNull);
+    });
+
+    test('a week with nothing in it gets no card', () {
+      final other = weeklyRecaps([entry(DateTime(2026, 2, 17))], const [], DateTime(2026, 3, 10));
+      expect(RecapNudge.forToday(other, DateTime(2026, 3, 10), null), isNull);
+      expect(recaps, isNotEmpty);
+    });
+
+    test('the look changes from week to week and cycles through three', () {
+      final looks = [for (var w = 0; w < 6; w++) RecapNudge.variantFor(DateTime(2026, 3, 2).add(Duration(days: 7 * w)))];
+      expect(looks.toSet().length, 3);
+      expect(looks[0], isNot(looks[1]));
+      expect(looks[0], looks[3]);
+    });
+  });
 }

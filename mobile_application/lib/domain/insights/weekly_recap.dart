@@ -162,3 +162,29 @@ List<String>? overallSummary(List<WeekRecap> recaps) {
   }
   return out;
 }
+
+/// When the Today card for a finished week is offered: only the week that has just ended, only for the first few days
+/// after it (Monday to Wednesday), and only until it has been opened or dismissed once. After that it goes quiet by
+/// itself, and the next finished week brings its own card.
+abstract final class RecapNudge {
+  /// Days after the week's end (Sunday) the card is offered: Monday, Tuesday and Wednesday.
+  static const visibleDays = 3;
+
+  /// The week to offer today, or null. [seenWeek] is the Monday key of the newest week already opened or dismissed.
+  static WeekRecap? forToday(List<WeekRecap> recaps, DateTime now, String? seenWeek) {
+    final lastMonday = mondayOf(now).subtract(const Duration(days: 7));
+    for (final recap in recaps) {
+      if (recap.weekStart != lastMonday) continue;
+      final since = dateOnly(now).difference(recap.weekEnd).inDays;
+      if (since < 1 || since > visibleDays) return null;
+      if (weekKey(recap.weekStart) == seenWeek) return null;
+      return recap;
+    }
+    return null;
+  }
+
+  static String weekKey(DateTime monday) => dayKey(monday);
+
+  /// Which of three looks the week's card wears, so it feels a little different each week.
+  static int variantFor(DateTime monday) => (monday.difference(DateTime(2024)).inDays ~/ 7) % 3;
+}

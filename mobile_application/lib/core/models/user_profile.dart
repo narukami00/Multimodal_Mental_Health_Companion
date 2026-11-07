@@ -31,6 +31,7 @@ class UserProfile {
     this.emergencyContacts = const [],
     this.restDays = const [],
     this.welcomeBackShownAt,
+    this.recapSeenWeek,
     this.sleepStartMinutes,
     this.sleepEndMinutes,
     this.sleepHoursSkipped = false,
@@ -116,6 +117,9 @@ class UserProfile {
 
   /// When the welcome-back line was last shown, so a lapse surfaces it once.
   final DateTime? welcomeBackShownAt;
+
+  /// The Monday ('yyyy-MM-dd') of the newest week whose recap was opened or dismissed on Today, so it is offered once.
+  final String? recapSeenWeek;
 
   /// The user's usual sleep hours, as minutes past midnight. Null until chosen:
   /// any default is a guess about someone's sleep, so none is offered. The pair
@@ -218,6 +222,7 @@ class UserProfile {
     List<EmergencyContact>? emergencyContacts,
     List<String>? restDays,
     DateTime? welcomeBackShownAt,
+    String? recapSeenWeek,
     int? sleepStartMinutes,
     int? sleepEndMinutes,
     bool? sleepHoursSkipped,
@@ -256,6 +261,7 @@ class UserProfile {
       emergencyContacts: emergencyContacts ?? this.emergencyContacts,
       restDays: restDays ?? this.restDays,
       welcomeBackShownAt: welcomeBackShownAt ?? this.welcomeBackShownAt,
+      recapSeenWeek: recapSeenWeek ?? this.recapSeenWeek,
       sleepStartMinutes: sleepStartMinutes ?? this.sleepStartMinutes,
       sleepEndMinutes: sleepEndMinutes ?? this.sleepEndMinutes,
       sleepHoursSkipped: sleepHoursSkipped ?? this.sleepHoursSkipped,
@@ -300,6 +306,7 @@ class UserProfile {
           .toList(),
       'restDays': restDays,
       'welcomeBackShownAt': welcomeBackShownAt?.toIso8601String(),
+      'recapSeenWeek': recapSeenWeek,
       'sleepStartMinutes': sleepStartMinutes,
       'sleepEndMinutes': sleepEndMinutes,
       'sleepHoursSkipped': sleepHoursSkipped,
@@ -348,6 +355,7 @@ class UserProfile {
       welcomeBackShownAt: DateTime.tryParse(
         map['welcomeBackShownAt'] as String? ?? '',
       ),
+      recapSeenWeek: map['recapSeenWeek'] as String?,
       sleepStartMinutes: _minuteOfDay(map['sleepStartMinutes']),
       sleepEndMinutes: _minuteOfDay(map['sleepEndMinutes']),
       sleepHoursSkipped: map['sleepHoursSkipped'] as bool? ?? false,

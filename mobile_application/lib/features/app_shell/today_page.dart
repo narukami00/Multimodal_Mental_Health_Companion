@@ -46,6 +46,7 @@ class TodayPage extends StatelessWidget {
     this.ambientAudioEnabled = true,
     this.rhythmCard,
     this.welcomeBackNotice,
+    this.recapCard,
     this.onStartCheckIn,
     this.onOpenSupport,
     this.onOpenChat,
@@ -119,6 +120,9 @@ class TodayPage extends StatelessWidget {
 
   /// Optional one-off line for someone returning after a long gap.
   final Widget? welcomeBackNotice;
+
+  /// "Your week is ready", for the first few days after a week ends.
+  final Widget? recapCard;
 
   final VoidCallback? onStartCheckIn;
   final VoidCallback? onOpenSupport;
@@ -208,6 +212,7 @@ class TodayPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (welcomeBackNotice != null) welcomeBackNotice!,
+                  if (recapCard != null) recapCard!,
                   // Support resources keep their own card: when someone has
                   // raised a safety flag, a companion shape is not what they
                   // need on screen.
