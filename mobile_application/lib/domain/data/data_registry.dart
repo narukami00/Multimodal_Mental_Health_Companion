@@ -107,7 +107,12 @@ const dataRegistry = <DataEntry>[
     kind: DataKind.device,
     keys: ['companion_server_host', 'companion_server_port', 'tailscale_migrated_v1'],
   ),
-  DataEntry(id: 'widget_cache', label: 'Home-screen widget line', kind: DataKind.device, keys: ['checkin_prompt']),
+  DataEntry(
+    id: 'widget_cache',
+    label: 'Home-screen widget line and picture',
+    kind: DataKind.device,
+    keys: ['checkin_prompt', 'forest_scene_path'],
+  ),
 ];
 
 /// The entry that owns [key], or null for a key nobody declared.

@@ -1,5 +1,7 @@
 import 'features/forest/forest_controller.dart';
+import 'features/forest/forest_card_scene.dart' show ForestPalette;
 import 'features/goals/goals_controller.dart';
+import 'services/forest_widget_service.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -144,6 +146,21 @@ Future<void> main() async {
     goals: goalsController,
   );
   await forestController.load();
+  // The home-screen widget shows the same tree and sky; it is redrawn when the stage, the tree or the light changes.
+  void pushForestWidget() {
+    final garden = forestController.garden;
+    unawaited(
+      ForestWidgetService.instance.push(
+        palette: ForestPalette.forHour(forestController.now.hour),
+        species: garden.currentSpecies,
+        stage: garden.stage,
+        waterWaiting: forestController.waterWaiting,
+      ),
+    );
+  }
+
+  forestController.addListener(pushForestWidget);
+  pushForestWidget();
   // Loaded at startup so Home can ask whether a suggestion is due without
   // waiting on an asset read during a rebuild.
   await suggestionController.warmUp();
