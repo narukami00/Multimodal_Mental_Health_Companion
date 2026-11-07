@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:solace_mobile/core/models/daily_features.dart';
+import 'package:solace_mobile/core/models/session_input.dart';
+import 'package:solace_mobile/core/models/session_record.dart';
+import 'package:solace_mobile/domain/insights/weekly_recap.dart';
 import 'package:solace_mobile/data/repositories/in_memory_session_repository.dart';
 import 'package:solace_mobile/domain/forest/forest_garden.dart';
 import 'package:solace_mobile/domain/goals/goals.dart';
@@ -197,6 +200,45 @@ void main() {
       await c.load();
       final g = await c.add(GoalMeasure.pickups, 1);
       expect(g.target, GoalMeasure.pickups.minTarget);
+    });
+  });
+
+  group('weekly recaps', () {
+    SessionRecord entry(DateTime at) => SessionRecord(id: '${at.microsecondsSinceEpoch}', createdAt: at, mode: CaptureMode.text, text: 'ok', emotionResults: const []);
+
+    test('a week says how many days a goal was met, and stays as it was with no goals', () {
+      final sessions = [entry(DateTime(2026, 11, 3, 9))];
+      final now = DateTime(2026, 11, 12);
+      final plain = weeklyRecaps(sessions, const [], now).single;
+      expect(plain.lines.any((l) => l.contains('phone goal')), isFalse);
+
+      final days = judgeGoals(
+        goals: [_goal(GoalMeasure.screenTime, 150, created: '2026-11-02')],
+        rowsByDay: {
+          '2026-11-02': _row('2026-11-02', screen: 100),
+          '2026-11-03': _row('2026-11-03', screen: 300),
+          '2026-11-04': _row('2026-11-04', screen: 100),
+        },
+        restDays: const {},
+        lastDay: '2026-11-04',
+      );
+      final withGoals = weeklyRecaps(sessions, const [], now, goalDays: days).single;
+      expect(withGoals.goalDaysJudged, 3);
+      expect(withGoals.goalDaysMet, 2);
+      expect(withGoals.lines, contains('You met a phone goal on 2 of 3 days.'));
+      expect(overallSummary([withGoals])!.join(' '), contains('You met a phone goal on 2 of 3 days.'));
+    });
+
+    test('a week with goals but none met is told kindly', () {
+      final sessions = [entry(DateTime(2026, 11, 3, 9))];
+      final days = judgeGoals(
+        goals: [_goal(GoalMeasure.screenTime, 50, created: '2026-11-02')],
+        rowsByDay: {'2026-11-03': _row('2026-11-03', screen: 300)},
+        restDays: const {},
+        lastDay: '2026-11-03',
+      );
+      final recap = weeklyRecaps(sessions, const [], DateTime(2026, 11, 12), goalDays: days).single;
+      expect(recap.lines, contains('Your phone goals did not line up this week, and that is okay.'));
     });
   });
 

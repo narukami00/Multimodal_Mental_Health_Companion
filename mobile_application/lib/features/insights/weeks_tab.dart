@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/moods.dart';
 import '../../domain/insights/weekly_recap.dart';
+import '../goals/goals_controller.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
 import 'insight_widgets.dart';
@@ -30,12 +31,16 @@ class WeeksTab extends StatelessWidget {
   const WeeksTab({
     required this.sessionController,
     this.suggestionController,
+    this.goals,
     this.clock,
     super.key,
   });
 
   final SessionController sessionController;
   final SuggestionController? suggestionController;
+
+  /// The person's phone goals, so a week can say how they went. Null leaves the recaps as they were.
+  final GoalsController? goals;
   final DateTime Function()? clock;
 
   static String rangeLabel(WeekRecap week) {
@@ -51,12 +56,14 @@ class WeeksTab extends StatelessWidget {
       listenable: Listenable.merge([
         sessionController,
         if (suggestionController != null) suggestionController!,
+        if (goals != null) goals!,
       ]),
       builder: (context, _) {
         final recaps = weeklyRecaps(
           sessionController.sessions,
           suggestionController?.history ?? const [],
           (clock ?? DateTime.now)(),
+          goalDays: goals?.days ?? const [],
         );
         if (recaps.isEmpty) {
           return const InsightEmpty(

@@ -3,6 +3,7 @@ import '../../core/day_key.dart';
 import '../../core/models/session_input.dart';
 import '../../core/models/session_record.dart';
 import '../../core/models/suggestion_record.dart';
+import '../goals/goals.dart';
 
 /// One finished week (Monday to Sunday), described plainly from what the person did and shared.
 ///
@@ -18,7 +19,14 @@ class WeekRecap {
     required this.topMood,
     required this.dayHasEntry,
     required this.dayMoods,
+    this.goalDaysJudged = 0,
+    this.goalDaysMet = 0,
   });
+
+  /// Days of this week on which the person's phone goals were looked at, and on how many a goal was met.
+  /// Both are zero when there are no goals, which leaves the recap exactly as it was.
+  final int goalDaysJudged;
+  final int goalDaysMet;
 
   /// The Monday this week began (date only).
   final DateTime weekStart;
@@ -56,6 +64,13 @@ class WeekRecap {
     }
     if (topMood != null) out.add('${Moods.display(topMood)} came up most.');
     if (tasksDone > 0) out.add('You tried $tasksDone small ${tasksDone == 1 ? 'thing' : 'things'}.');
+    if (goalDaysJudged > 0) {
+      out.add(
+        goalDaysMet == 0
+            ? 'Your phone goals did not line up this week, and that is okay.'
+            : 'You met a phone goal on $goalDaysMet of $goalDaysJudged ${goalDaysJudged == 1 ? 'day' : 'days'}.',
+      );
+    }
     if (activeDays <= 1) out.add('A quieter week, and that is fine. One check-in is still a check-in.');
     return out;
   }
@@ -72,8 +87,9 @@ DateTime mondayOf(DateTime day) {
 List<WeekRecap> weeklyRecaps(
   List<SessionRecord> sessions,
   List<SuggestionRecord> history,
-  DateTime now,
-) {
+  DateTime now, {
+  List<GoalDay> goalDays = const [],
+}) {
   final thisMonday = mondayOf(now);
   final byWeek = <DateTime, List<SessionRecord>>{};
   for (final s in sessions) {
@@ -91,10 +107,16 @@ List<WeekRecap> weeklyRecaps(
   }
 
   final weeks = byWeek.keys.toList()..sort((a, b) => b.compareTo(a));
-  return [for (final monday in weeks) _recap(monday, byWeek[monday]!, tasksByWeek[monday] ?? 0)];
+  return [for (final monday in weeks) _recap(monday, byWeek[monday]!, tasksByWeek[monday] ?? 0, goalDays)];
 }
 
-WeekRecap _recap(DateTime monday, List<SessionRecord> entries, int tasks) {
+WeekRecap _recap(DateTime monday, List<SessionRecord> entries, int tasks, List<GoalDay> goalDays) {
+  final mondayKey = dayKey(monday);
+  final sundayKey = dayKey(DateTime(monday.year, monday.month, monday.day + 6));
+  final goalsThisWeek = [
+    for (final g in goalDays)
+      if (g.day.compareTo(mondayKey) >= 0 && g.day.compareTo(sundayKey) <= 0 && g.judged) g,
+  ];
   final perDay = List.generate(7, (_) => <SessionRecord>[]);
   for (final e in entries) {
     final index = dateOnly(e.createdAt).difference(monday).inDays;
@@ -121,6 +143,8 @@ WeekRecap _recap(DateTime monday, List<SessionRecord> entries, int tasks) {
     topMood: _top(moodCounts),
     dayHasEntry: [for (final d in perDay) d.isNotEmpty],
     dayMoods: dayMoods,
+    goalDaysJudged: goalsThisWeek.length,
+    goalDaysMet: goalsThisWeek.where((g) => g.anyMet).length,
   );
 }
 
@@ -155,6 +179,9 @@ List<String>? overallSummary(List<WeekRecap> recaps) {
   final topMood = _top(moodCounts);
   if (topMood != null) out.add('${Moods.display(topMood)} was the word that came up most.');
   if (tasks > 0) out.add('You tried $tasks small ${tasks == 1 ? 'thing' : 'things'} along the way.');
+  final goalJudged = recaps.fold<int>(0, (n, r) => n + r.goalDaysJudged);
+  final goalMet = recaps.fold<int>(0, (n, r) => n + r.goalDaysMet);
+  if (goalJudged > 0 && goalMet > 0) out.add('You met a phone goal on $goalMet of $goalJudged days.');
   final best = weekdayCounts.reduce((a, b) => a > b ? a : b);
   if (best >= 2 && weeks >= 3) {
     const names = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];

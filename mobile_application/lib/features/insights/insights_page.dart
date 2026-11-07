@@ -152,6 +152,7 @@ class _InsightsPageState extends State<InsightsPage> {
     'weeks' => WeeksTab(
       sessionController: widget.sessionController,
       suggestionController: widget.suggestionController,
+      goals: widget.phonePatterns?.goals,
       clock: widget.clock,
     ),
     'moments' => widget.momentsTab!,
