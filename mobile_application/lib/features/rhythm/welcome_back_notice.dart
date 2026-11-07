@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/rhythm/reminder_lapse_policy.dart';
+import '../../domain/rhythm/welcome_back_ladder.dart';
 import '../profile/profile_controller.dart';
 import '../sessions/session_controller.dart';
 
@@ -13,11 +14,15 @@ class WelcomeBackNotice extends StatefulWidget {
   const WelcomeBackNotice({
     required this.sessionController,
     required this.profileController,
+    this.onOneWord,
     super.key,
   });
 
   final SessionController sessionController;
   final ProfileController profileController;
+
+  /// Opens the smallest possible check-in. Offered under the welcome when given.
+  final VoidCallback? onOneWord;
 
   @override
   State<WelcomeBackNotice> createState() => _WelcomeBackNoticeState();
@@ -35,14 +40,18 @@ class _WelcomeBackNoticeState extends State<WelcomeBackNotice> {
     final lastCheckIn = widget.sessionController.lastCheckInAt;
     final daysSince = ReminderLapsePolicy.daysSince(lastCheckIn);
 
-    final shouldShow = ReminderLapsePolicy.shouldShowWelcomeBack(
+    final shouldShow = WelcomeBackLadder.shouldShow(
       daysSinceLastCheckIn: daysSince,
       lastCheckIn: lastCheckIn,
       lastShownAt: widget.profileController.profile.welcomeBackShownAt,
     );
     if (!shouldShow) return;
 
-    _message = ReminderLapsePolicy.lapseMessage(daysSince);
+    _message = WelcomeBackLadder.message(
+      WelcomeBackLadder.tierFor(daysSince),
+      name: widget.profileController.profile.displayName,
+      reminderPaused: ReminderLapsePolicy.shouldPauseReminder(daysSince),
+    );
     if (_message == null) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -73,14 +82,34 @@ class _WelcomeBackNoticeState extends State<WelcomeBackNotice> {
           ),
           const SizedBox(width: 11),
           Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                height: 1.45,
-                color: Color(0xFF7A5B1E),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.45,
+                    color: Color(0xFF7A5B1E),
+                  ),
+                ),
+                if (widget.onOneWord != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: TextButton(
+                      key: const ValueKey('welcome-back-one-word'),
+                      onPressed: widget.onOneWord,
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 32),
+                        foregroundColor: const Color(0xFFB57A12),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+                      ),
+                      child: const Text(WelcomeBackLadder.oneWordLabel),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],

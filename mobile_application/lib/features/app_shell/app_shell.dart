@@ -19,6 +19,7 @@ import '../call/call_page.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_page.dart';
 import '../checkin/check_in_mode_page.dart';
+import '../checkin/text_check_in_page.dart';
 import '../insights/helps_tab.dart' show IdeaActions;
 import '../insights/insights_page.dart';
 import '../journal/journal_page.dart';
@@ -393,6 +394,7 @@ class _AppShellState extends State<AppShell> {
                 welcomeBackNotice: WelcomeBackNotice(
                   sessionController: widget.sessionController,
                   profileController: widget.profileController,
+                  onOneWord: () => _openOneWord(context),
                 ),
                 primaryCard: HomeCardPriority.select(homeState),
                 // The task now lives inside the check-in card, so the separate
@@ -619,6 +621,19 @@ class _AppShellState extends State<AppShell> {
       unawaited(HapticFeedback.selectionClick());
     }
     setState(() => _selectedTab = tab);
+  }
+
+  /// The smallest way back in after time away: straight to the typed check-in.
+  void _openOneWord(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TextCheckInPage(
+          sessionController: widget.sessionController,
+          safetyController: widget.safetyController,
+          profileController: widget.profileController,
+        ),
+      ),
+    );
   }
 
   void _openCheckIn(BuildContext context) {
