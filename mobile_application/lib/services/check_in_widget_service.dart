@@ -22,9 +22,9 @@ class CheckInWidgetService {
   /// Must match the provider's `LAUNCH_URI`.
   static const launchUri = 'solace://checkin';
 
-  static const notCheckedInPrompt = 'How are you, in one word?';
-  static const checkedInPrompt = 'You checked in today.';
-  static const restingPrompt = 'Resting today. That counts.';
+  static const notCheckedInPrompt = 'How are you?';
+  static const checkedInPrompt = 'Checked in today';
+  static const restingPrompt = 'Resting today';
 
   /// The line the widget shows for today's state. Pure, so it can be verified.
   static String promptFor({
@@ -51,9 +51,12 @@ class CheckInWidgetService {
   ///
   /// Failures are contained: a widget that cannot refresh must never disturb
   /// the app.
-  Future<void> push(String prompt) async {
+  Future<void> push(String prompt, {required DateTime now}) async {
     try {
-      await HomeWidget.saveWidgetData<String>(promptKey, prompt);
+      await HomeWidget.saveWidgetData<String>(
+        promptKey,
+        '${dayKey(now)}|$prompt',
+      );
       await HomeWidget.updateWidget(androidName: androidWidgetName);
     } catch (error) {
       debugPrint('CheckInWidgetService warning: $error');

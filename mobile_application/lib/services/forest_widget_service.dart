@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -6,85 +7,100 @@ import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../features/forest/forest_card_scene.dart';
+import '../domain/forest/tree_geometry.dart';
+import '../features/forest/forest_card_scene.dart' show geometryFor;
+import '../features/forest/tree_painter.dart' show matureTreeOutline, paintTree;
+import 'check_in_widget_service.dart';
 
-/// The tiny forest on the home-screen widget: the same sky and growing tree as the check-in card, drawn once into a
-/// picture and handed to the widget, which lays its words and buttons on top.
-///
-/// A widget cannot run an animation of its own, so it is redrawn when something visible changes: the tree's stage,
-/// which tree it is, or the light of the hour (day, golden, dusk, night). Nothing here counts or rewards.
+/// Publishes the current tree as a transparent sprite. Android renders the
+/// landscape independently so the widget can resize and change light on its own.
 class ForestWidgetService {
   ForestWidgetService._();
 
   static final ForestWidgetService instance = ForestWidgetService._();
 
-  /// Must match the Kotlin provider's `KEY_SCENE`.
-  static const sceneKey = 'forest_scene_path';
-
-  /// The drawn size: what the card painter is laid out for, drawn at twice the density.
-  static const logicalSize = Size(340, 120);
-  static const density = 2.0;
+  // Matches CheckInWidgetProvider.KEY_TREE. Old scene files used a wide crop.
+  static const treeKey = 'forest_tree_path';
+  static const _size = 160.0;
+  static const _density = 2.0;
 
   String? _lastSignature;
+  Future<void> _pending = Future.value();
 
-  /// What the widget would show, as a string: pushing is skipped when it has not changed.
-  static String signature({required ForestPalette palette, required int species, required double stage, required bool waterWaiting}) =>
-      '${palette.name}|$species|${(stage * 2).round()}|$waterWaiting';
+  @visibleForTesting
+  static String signature({required int species, required double stage}) =>
+      '$species|${(stage * 4).round()}';
 
-  /// The scene as PNG bytes: the orange of the card melting into the sky of the hour, and the tree. The corners are
-  /// rounded to match the widget's card, so the widget needs no clipping of its own.
-  static Future<Uint8List> renderScene({
-    required ForestPalette palette,
+  @visibleForTesting
+  static Future<Uint8List> renderTree({
     required int species,
     required double stage,
-    required bool waterWaiting,
   }) async {
+    final tree = treeSpecies[species];
+    final geometry = geometryFor(species);
+    final crown = matureTreeOutline(geometry, revealAt(stage)).getBounds();
+    final early = 1 - smooth(3.45, 4.7, stage);
+    final halfWidth = math.max(32.0, math.max(-crown.left, crown.right) + 14);
+    final height = math.max(48 + 39 * smooth(1, 3.2, stage), -crown.top + 20);
+    final scale = math.min(70 / halfWidth, (114 + 26 * (1 - early)) / height);
+
     final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder, Offset.zero & Size(logicalSize.width * density, logicalSize.height * density));
-    canvas.scale(density);
-    final full = Offset.zero & logicalSize;
-    canvas.clipRRect(RRect.fromRectAndRadius(full, const Radius.circular(34)));
-    canvas.drawRect(
-      full,
-      Paint()..shader = ui.Gradient.linear(Offset.zero, Offset(logicalSize.width, logicalSize.height), palette.left, [0, .5, 1]),
+    final canvas = Canvas(recorder)
+      ..scale(_density)
+      ..translate(_size / 2, _size - 19);
+    final shadow = Rect.fromCenter(
+      center: const Offset(0, 3),
+      width: 44 + 38 * (1 - early),
+      height: 10 + 6 * (1 - early),
     );
-    ForestCardPainter(palette: palette, species: species, stage: stage, waterWaiting: waterWaiting).paint(canvas, logicalSize);
-    final image = await recorder.endRecording().toImage(
-      (logicalSize.width * density).round(),
-      (logicalSize.height * density).round(),
+    canvas.drawOval(
+      shadow,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: [Color(0x46213A29), Color(0x00213A29)],
+        ).createShader(shadow),
     );
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    image.dispose();
-    return data!.buffer.asUint8List();
+    canvas.scale(scale);
+    paintTree(canvas, geometry, tree, stage, soil: true);
+
+    final picture = recorder.endRecording();
+    final pixels = (_size * _density).round();
+    try {
+      final image = await picture.toImage(pixels, pixels);
+      try {
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        return data!.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+    } finally {
+      picture.dispose();
+    }
   }
 
-  /// Draws the scene and tells the widget. Contained: a widget that cannot refresh never disturbs the app.
-  Future<void> push({
-    required ForestPalette palette,
-    required int species,
-    required double stage,
-    required bool waterWaiting,
-  }) async {
-    final sig = signature(palette: palette, species: species, stage: stage, waterWaiting: waterWaiting);
-    if (sig == _lastSignature) return;
-    try {
-      final bytes = await renderScene(palette: palette, species: species, stage: stage, waterWaiting: waterWaiting);
-      final dir = await getApplicationSupportDirectory();
-      // A new file name each time the picture changes, so the widget never shows a cached older one.
-      final file = File('${dir.path}${Platform.pathSeparator}forest_widget_${sig.hashCode.toUnsigned(32)}.png');
-      await file.writeAsBytes(bytes, flush: true);
-      for (final old in dir.listSync().whereType<File>()) {
-        if (old.path != file.path && old.uri.pathSegments.last.startsWith('forest_widget_')) {
-          try {
-            old.deleteSync();
-          } catch (_) {}
-        }
+  /// Serialize writes so a slower render cannot replace a newer tree.
+  Future<void> push({required int species, required double stage}) {
+    return _pending = _pending.then((_) async {
+      final sig = signature(species: species, stage: stage);
+      if (sig == _lastSignature) return;
+      try {
+        final dir = await getApplicationSupportDirectory();
+        final path =
+            '${dir.path}${Platform.pathSeparator}forest_widget_tree.png';
+        final temporary = File('$path.tmp');
+        await temporary.writeAsBytes(
+          await renderTree(species: species, stage: stage),
+          flush: true,
+        );
+        await temporary.rename(path);
+        await HomeWidget.saveWidgetData<String>(treeKey, path);
+        await HomeWidget.updateWidget(
+          androidName: CheckInWidgetService.androidWidgetName,
+        );
+        _lastSignature = sig;
+      } catch (error) {
+        debugPrint('ForestWidgetService warning: $error');
       }
-      await HomeWidget.saveWidgetData<String>(sceneKey, file.path);
-      await HomeWidget.updateWidget(androidName: 'CheckInWidgetProvider');
-      _lastSignature = sig;
-    } catch (error) {
-      debugPrint('ForestWidgetService warning: $error');
-    }
+    });
   }
 }

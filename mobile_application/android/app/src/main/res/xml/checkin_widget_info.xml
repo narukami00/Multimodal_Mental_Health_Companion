@@ -1,19 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  updatePeriodMillis is 0 on purpose: the widget is refreshed from the app when
-  today's check-in state actually changes, instead of waking the device on a
-  timer to redraw something that has not moved.
--->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/checkin_widget_description"
     android:initialLayout="@layout/checkin_widget"
     android:minHeight="110dp"
-    android:minResizeHeight="60dp"
-    android:minResizeWidth="70dp"
-    android:minWidth="250dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minWidth="110dp"
+    android:maxResizeHeight="435dp"
+    android:maxResizeWidth="374dp"
     android:previewLayout="@layout/checkin_widget"
     android:resizeMode="horizontal|vertical"
     android:targetCellHeight="2"
-    android:targetCellWidth="4"
-    android:updatePeriodMillis="0"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen" />

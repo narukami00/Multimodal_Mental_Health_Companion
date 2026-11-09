@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Solace</string>
-    <string name="checkin_widget_description">A one-word check-in, one tap away</string>
+    <string name="checkin_widget_description">Your growing tree with writing and voice check-ins</string>
     <string name="checkin_widget_eyebrow">SOLACE</string>
     <!-- Shown before today's check-in. -->
     <string name="checkin_widget_prompt">How are you, in one word?</string>
+    <string name="widget_prompt_default">How are you?</string>
+    <string name="widget_light_morning">Morning light</string>
+    <string name="widget_light_day">Daylight</string>
+    <string name="widget_light_golden">Golden hour</string>
+    <string name="widget_light_dusk">Dusk</string>
+    <string name="widget_light_night">Moonlight</string>
     <string name="widget_write_description">Write a check-in</string>
     <string name="widget_voice_description">Talk a check-in</string>
     <string name="quick_write_hint">One word is enough</string>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal">
+
+    <ImageView
+        android:id="@+id/widget_write"
+        style="@style/ForestWidgetAction"
+        android:contentDescription="@string/widget_write_description"
+        android:src="@drawable/ic_widget_write" />
+
+    <ImageView
+        android:id="@+id/widget_voice"
+        style="@style/ForestWidgetAction"
+        android:layout_marginStart="6dp"
+        android:contentDescription="@string/widget_voice_description"
+        android:src="@drawable/ic_widget_mic" />
+</LinearLayout>

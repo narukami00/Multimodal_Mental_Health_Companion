@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:importantForAccessibility="no">
+
+    <ImageView
+        android:id="@+id/widget_scene"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_sky_day" />
+
+    <ImageView
+        android:id="@+id/widget_celestial"
+        android:layout_width="29dp"
+        android:layout_height="29dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="13dp"
+        android:layout_marginEnd="16dp"
+        android:importantForAccessibility="no"
+        android:src="@drawable/widget_orb" />
+</FrameLayout>

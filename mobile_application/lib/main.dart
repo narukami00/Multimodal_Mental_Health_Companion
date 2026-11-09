@@ -1,6 +1,6 @@
 import 'features/forest/forest_controller.dart';
-import 'features/forest/forest_card_scene.dart' show ForestPalette;
 import 'core/constants/moods.dart';
+import 'core/day_key.dart';
 import 'domain/forest/forest_weather.dart';
 import 'features/goals/goals_controller.dart';
 import 'services/forest_widget_service.dart';
@@ -148,15 +148,13 @@ Future<void> main() async {
     goals: goalsController,
   );
   await forestController.load();
-  // The home-screen widget shows the same tree and sky; it is redrawn when the stage, the tree or the light changes.
+  // Android composes the current tree over its own time-of-day landscape.
   void pushForestWidget() {
     final garden = forestController.garden;
     unawaited(
       ForestWidgetService.instance.push(
-        palette: ForestPalette.forHour(forestController.now.hour),
         species: garden.currentSpecies,
         stage: garden.stage,
-        waterWaiting: forestController.waterWaiting,
       ),
     );
   }
@@ -370,17 +368,21 @@ Future<void> main() async {
   String? lastWidgetPrompt;
 
   Future<void> refreshCheckInWidget() async {
+    final now = DateTime.now();
     final prompt = CheckInWidgetService.promptFor(
       checkedInToday: CheckInWidgetService.checkedInToday(
         sessionController.sessions,
+        now: now,
       ),
       restingToday: CheckInWidgetService.restingToday(
         profileController.restDays,
+        now: now,
       ),
     );
-    if (prompt == lastWidgetPrompt) return;
-    lastWidgetPrompt = prompt;
-    await CheckInWidgetService.instance.push(prompt);
+    final signature = '${dayKey(now)}|$prompt';
+    if (signature == lastWidgetPrompt) return;
+    lastWidgetPrompt = signature;
+    await CheckInWidgetService.instance.push(prompt, now: now);
   }
 
   sessionController.addListener(refreshCheckInWidget);
@@ -459,6 +461,7 @@ Future<void> main() async {
   });
   AppLifecycleListener(
     onResume: () {
+      unawaited(refreshCheckInWidget());
       unawaited(writeDownWaiting());
       unawaited(quickReplies.run());
       // A new morning: yesterday is now a finished day to look at.
