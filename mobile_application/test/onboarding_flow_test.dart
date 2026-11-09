@@ -27,22 +27,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Check in your way.'), findsOneWidget);
 
-    await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Camera & mic are'), findsOneWidget);
-
+    expect(find.text('Allow access'), findsOneWidget);
     await tester.tap(find.text("I'll use text"));
     await tester.pumpAndSettle();
-    expect(find.textContaining('When do you usually'), findsOneWidget);
+    expect(find.textContaining('Your own tiny'), findsOneWidget);
     expect(repository.usesMedia, isFalse);
-
-    await tester.tap(find.text('Skip for now'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Where are you'), findsOneWidget);
 
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('What should I'), findsOneWidget);
+    expect(find.textContaining('Talk it through'), findsOneWidget);
 
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
@@ -50,7 +43,19 @@ void main() {
 
     await tester.tap(find.text('Not now'));
     await tester.pumpAndSettle();
-    expect(find.text('Support is always nearby.'), findsOneWidget);
+    expect(find.textContaining('When do you usually'), findsOneWidget);
+
+    await tester.tap(find.text('Skip for now'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('A little about'), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Your data is'), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Help is always'), findsOneWidget);
 
     await tester.tap(find.text('Start checking in'));
     await tester.pumpAndSettle();
@@ -61,7 +66,7 @@ void main() {
 
   testWidgets('onboarding resumes from its saved page', (tester) async {
     final repository = InMemoryOnboardingRepository();
-    await repository.setCurrentPage(2);
+    await repository.setCurrentPage(1);
 
     await tester.pumpWidget(
       SolaceApp(
@@ -70,7 +75,7 @@ void main() {
       ),
     );
 
-    expect(find.textContaining('Camera & mic are'), findsOneWidget);
+    expect(find.text('Check in your way.'), findsOneWidget);
     expect(find.text('Allow access'), findsOneWidget);
     expect(find.text("I'll use text"), findsOneWidget);
   });
@@ -90,7 +95,7 @@ Future<ProfileController> _reachSleepPage(
     repository: InMemoryProfileRepository(),
   );
   await profileController.load();
-  await repository.setCurrentPage(5);
+  await repository.setCurrentPage(7);
 
   await tester.pumpWidget(
     SolaceApp(
@@ -118,7 +123,7 @@ void _sleepPageTests() {
 
     expect(profile.profile.sleepHoursSkipped, isTrue);
     expect(profile.profile.sleepHoursSet, isFalse);
-    expect(find.textContaining('Where are you'), findsOneWidget);
+    expect(find.textContaining('A little about'), findsOneWidget);
   });
 
   testWidgets('the top Skip on the sleep page is the same honest skip', (
@@ -131,7 +136,7 @@ void _sleepPageTests() {
     await tester.pumpAndSettle();
 
     expect(profile.profile.sleepHoursSkipped, isTrue);
-    expect(find.textContaining('Where are you'), findsOneWidget);
+    expect(find.textContaining('A little about'), findsOneWidget);
   });
 
   testWidgets('choosing hours saves them and moves on', (tester) async {
@@ -149,7 +154,7 @@ void _sleepPageTests() {
     expect(profile.profile.sleepStartMinutes, 23 * 60);
     expect(profile.profile.sleepEndMinutes, 7 * 60);
     expect(profile.profile.sleepHoursSkipped, isFalse);
-    expect(find.textContaining('Where are you'), findsOneWidget);
+    expect(find.textContaining('A little about'), findsOneWidget);
   });
 
   testWidgets('dismissing a picker saves nothing and stays on the page', (
@@ -168,6 +173,13 @@ void _sleepPageTests() {
   });
 }
 
+Future<void> _tapContinue(WidgetTester tester, [int times = 1]) async {
+  for (var i = 0; i < times; i++) {
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+  }
+}
+
 SessionController _testSessionController() {
   return SessionController(
     repository: InMemorySessionRepository(),
@@ -183,7 +195,7 @@ void _countryPageTests() {
     final repository = InMemoryOnboardingRepository();
     final profile = ProfileController(repository: InMemoryProfileRepository());
     await profile.load();
-    await repository.setCurrentPage(6);
+    await repository.setCurrentPage(8);
     await tester.pumpWidget(
       SolaceApp(
         onboardingRepository: repository,
@@ -193,7 +205,7 @@ void _countryPageTests() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Where are you'), findsOneWidget);
+    expect(find.textContaining('A little about'), findsOneWidget);
     expect(profile.profile.countryCode, 'BD');
     expect(find.text('Emergency number 999'), findsOneWidget);
 
@@ -214,7 +226,7 @@ void _namePageTests() {
     final repository = InMemoryOnboardingRepository();
     final profile = ProfileController(repository: InMemoryProfileRepository());
     await profile.load();
-    await repository.setCurrentPage(7);
+    await repository.setCurrentPage(8);
     await tester.pumpWidget(
       SolaceApp(
         onboardingRepository: repository,
@@ -226,14 +238,14 @@ void _namePageTests() {
     return profile;
   }
 
-  testWidgets('a name typed here is kept, and moves on to the safety page', (tester) async {
+  testWidgets('a name typed here is kept, and moves on to the data page', (tester) async {
     final profile = await reach(tester);
-    expect(find.textContaining('What should I'), findsOneWidget);
+    expect(find.textContaining('A little about'), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey('onboarding-name')), '  Rafsan ');
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
     expect(profile.profile.displayName, 'Rafsan');
-    expect(find.textContaining('Want a daily'), findsOneWidget);
+    expect(find.textContaining('Your data is'), findsOneWidget);
   });
 
   testWidgets('leaving the name blank, or skipping, keeps nothing and is fine', (tester) async {
@@ -241,7 +253,7 @@ void _namePageTests() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
     expect(profile.profile.displayName, anyOf(isNull, isEmpty));
-    expect(find.textContaining('Want a daily'), findsOneWidget);
+    expect(find.textContaining('Your data is'), findsOneWidget);
   });
 }
 
@@ -254,7 +266,7 @@ void _voiceAndVideoPageTests() {
       tester.view.resetDevicePixelRatio();
     });
     final repository = InMemoryOnboardingRepository();
-    await repository.setCurrentPage(2);
+    await repository.setCurrentPage(1);
     final consent = ConsentController(repository: InMemoryConsentRepository());
     await consent.load();
     await tester.pumpWidget(SolaceApp(
@@ -270,6 +282,7 @@ void _voiceAndVideoPageTests() {
     final (repository, consent) = await start(tester);
     await tester.tap(find.text('Allow access'));
     await tester.pumpAndSettle();
+    await _tapContinue(tester, 2); // the forest and the chat pages
 
     expect(find.textContaining('What may Solace'), findsOneWidget);
     expect(consent.isGranted(ConsentKey.emotionEstimate), isFalse);
@@ -294,8 +307,7 @@ void _voiceAndVideoPageTests() {
     final (_, consent) = await start(tester);
     await tester.tap(find.text('Allow access'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
+    await _tapContinue(tester, 3); // the forest, the chat and the reading pages
 
     Future<void> panelLoads() async {
       for (var i = 0; i < 20 && find.byKey(const ValueKey('models-panel')).evaluate().isEmpty; i++) {
@@ -318,14 +330,17 @@ void _voiceAndVideoPageTests() {
 
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('When do you usually'), findsOneWidget);
+    expect(find.textContaining('Want a daily'), findsOneWidget);
   });
 
   testWidgets('someone who chooses text never sees the voice and video pages', (tester) async {
     await start(tester);
     await tester.tap(find.text("I'll use text"));
     await tester.pumpAndSettle();
-    expect(find.textContaining('When do you usually'), findsOneWidget);
+    await _tapContinue(tester, 2); // the forest and the chat pages
+    expect(find.textContaining('What may Solace'), findsNothing);
+    expect(find.textContaining('Journal anywhere'), findsNothing);
+    expect(find.textContaining('Want a daily'), findsOneWidget);
   });
 }
 
@@ -334,7 +349,7 @@ void _reminderPageTests() {
     final repository = InMemoryOnboardingRepository();
     final profile = ProfileController(repository: InMemoryProfileRepository());
     await profile.load();
-    await repository.setCurrentPage(8);
+    await repository.setCurrentPage(6);
     await tester.pumpWidget(SolaceApp(
       onboardingRepository: repository,
       sessionController: _testSessionController(),
@@ -359,7 +374,7 @@ void _reminderPageTests() {
     expect(scheduledAt, isNotNull);
     expect(profile.profile.reminderEnabled, isTrue);
     expect(profile.profile.reminderMinutes, scheduledAt);
-    expect(find.text('Support is always nearby.'), findsOneWidget);
+    expect(find.textContaining('When do you usually'), findsOneWidget);
   });
 
   testWidgets('when notifications are off, no reminder is claimed, and the person is told', (tester) async {
@@ -384,6 +399,6 @@ void _reminderPageTests() {
     await tester.pumpAndSettle();
     expect(asked, isFalse);
     expect(profile.profile.reminderEnabled, isFalse);
-    expect(find.text('Support is always nearby.'), findsOneWidget);
+    expect(find.textContaining('When do you usually'), findsOneWidget);
   });
 }

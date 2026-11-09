@@ -15,6 +15,8 @@ import '../../data/contracts/onboarding_repository.dart';
 import '../profile/country_picker.dart';
 import '../profile/profile_controller.dart';
 import '../profile/sleep_hours_settings.dart';
+import '../footprint/phone_patterns_controller.dart';
+import 'onboarding_art.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({
@@ -22,9 +24,13 @@ class OnboardingFlow extends StatefulWidget {
     required this.profileController,
     required this.onComplete,
     this.consent,
+    this.phonePatterns,
     this.scheduleReminder,
     super.key,
   });
+
+  /// Lets the "what may Solace notice" page offer reading screen time. Without one, that switch is left out.
+  final PhonePatternsController? phonePatterns;
 
   /// Where the voice and face choices are recorded. Defaults to the app's own; without one the page is left out.
   final ConsentController? consent;
@@ -41,26 +47,33 @@ class OnboardingFlow extends StatefulWidget {
 }
 
 class _OnboardingFlowState extends State<OnboardingFlow> {
-  static const _pageCount = 10;
+  static const _pageCount = 11;
 
-  /// The two pages that only make sense for someone who chose to use voice or video.
-  static const _readingPage = 3;
-  static const _modelsPage = 4;
+  /// The ways to check in, where voice and video access is chosen or declined.
+  static const _mediaPage = 1;
+
+  /// "What may Solace notice": voice and face for someone who chose media, and phone patterns for anyone.
+  static const _readingPage = 4;
+
+  /// Offline models, only for someone who chose voice or video.
+  static const _modelsPage = 5;
+
+  /// The optional daily reminder.
+  static const _reminderPage = 6;
 
   /// Where the sleep question sits.
-  static const _sleepPage = 5;
+  static const _sleepPage = 7;
 
-  /// The optional "what should I call you" step.
-  static const _namePage = 7;
-
-  /// The optional daily reminder, just before the safety page.
-  static const _reminderPage = 8;
+  /// Name and country, both optional.
+  static const _aboutPage = 8;
 
   ConsentController? get _consent => widget.consent ?? CheckInModePage.consent;
 
   /// Whether [page] is part of this person's onboarding: the voice and video pages are skipped for someone who chose text.
   bool _shows(int page) {
-    if (page == _readingPage) return widget.repository.usesMedia == true && _consent != null;
+    if (page == _readingPage) {
+      return _consent != null && (widget.repository.usesMedia == true || widget.phonePatterns != null);
+    }
     if (page == _modelsPage) return widget.repository.usesMedia == true;
     return true;
   }
@@ -204,13 +217,18 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                       children: [
                         const _WelcomePage(),
                         const _WaysToCheckInPage(),
-                        const _PermissionPage(),
-                        _ReadingPage(consent: _consent),
+                        const _ForestPage(),
+                        const _ChatPage(),
+                        _ReadingPage(
+                          consent: _consent,
+                          phonePatterns: widget.phonePatterns,
+                          showMedia: widget.repository.usesMedia == true,
+                        ),
                         _ModelsPage(consent: _consent),
-                        _SleepPage(controller: widget.profileController),
-                        _CountryPage(controller: widget.profileController),
-                        _NamePage(field: _name, onDone: _saveName),
                         _ReminderPage(controller: widget.profileController),
+                        _SleepPage(controller: widget.profileController),
+                        _AboutPage(controller: widget.profileController, field: _name, onDone: _saveName),
+                        const _DataPage(),
                         const _SupportPage(),
                       ],
                     ),
@@ -220,8 +238,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                     dotCount: [for (var p = 0; p < _pageCount; p++) if (_shows(p)) p].length,
                     dotIndex: [for (var p = 0; p < _currentPage; p++) if (_shows(p)) p].length,
                     pageCount: _pageCount,
+                    mediaPage: _mediaPage,
                     sleepPage: _sleepPage,
-                    namePage: _namePage,
+                    namePage: _aboutPage,
                     reminderPage: _reminderPage,
                     onSetReminder: _setReminder,
                     onSaveName: _saveName,
@@ -353,6 +372,7 @@ class _BottomControls extends StatelessWidget {
     required this.dotCount,
     required this.dotIndex,
     required this.pageCount,
+    required this.mediaPage,
     required this.sleepPage,
     required this.namePage,
     required this.reminderPage,
@@ -368,6 +388,7 @@ class _BottomControls extends StatelessWidget {
   final int dotCount;
   final int dotIndex;
   final int pageCount;
+  final int mediaPage;
   final int sleepPage;
   final int namePage;
   final int reminderPage;
@@ -404,7 +425,7 @@ class _BottomControls extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          if (currentPage == 2)
+          if (currentPage == mediaPage)
             Row(
               children: [
                 Expanded(
@@ -613,13 +634,14 @@ class _WelcomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return const _OnboardingPage(
       illustration: _SunriseArtwork(),
-      eyebrow: 'A little room for you',
+      eyebrow: 'Welcome to Solace',
       title: 'A calm space to\ncheck in with yourself.',
-      body: 'No streaks, no pressure. Just a gentle moment that is always yours.',
+      body: 'Reflect on your day in your own words, at your own pace, with no streaks to keep up.',
     );
   }
 }
 
+/// The three ways to check in, and the promise that the camera and microphone are never required.
 class _WaysToCheckInPage extends StatelessWidget {
   const _WaysToCheckInPage();
 
@@ -627,33 +649,111 @@ class _WaysToCheckInPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return const _OnboardingPage(
       illustration: _ModeChoices(),
-      eyebrow: 'Three ways to check in',
+      eyebrow: 'Your pace',
       title: 'Check in your way.',
-      body: 'Share what feels right, and only as much as you choose.',
-    );
-  }
-}
-
-class _PermissionPage extends StatelessWidget {
-  const _PermissionPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _OnboardingPage(
-      illustration: _Scene(HeroScene.permissions),
-      eyebrow: 'Your choice, always',
-      title: 'Camera & mic are\nalways optional.',
-      body: 'Voice and video add another way to be heard. Text is always enough.',
+      body: 'Write, speak or record a short video. Text is always enough.',
       extra: Column(
         children: [
           _PromiseRow(
             icon: Icons.mic_none_rounded,
-            text: 'Never required. Pick text, voice or video each time.',
+            text: 'Camera and microphone are never required. Pick text, voice or video each time.',
           ),
           SizedBox(height: 10),
           _PromiseRow(
             icon: Icons.lock_outline_rounded,
-            text: 'Asked only when a mode needs it. Change it in Settings.',
+            text: 'Access is asked for only when a mode needs it, and you can change it in Settings.',
+            accent: AppColors.coral,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The forest: each check-in waters a tree, with no streaks to lose.
+class _ForestPage extends StatelessWidget {
+  const _ForestPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _OnboardingPage(
+      illustration: OnboardingForestScene(),
+      eyebrow: 'Something to grow',
+      title: 'Your own tiny\nforest.',
+      body: 'Each check-in waters a tree, so your progress becomes something you can see.',
+      extra: Column(
+        children: [
+          _PromiseRow(icon: Icons.eco_rounded, text: 'No streaks. Missing a day never sets you back.', accent: Color(0xFF4F8A52)),
+          SizedBox(height: 10),
+          _PromiseRow(icon: Icons.wb_twilight_rounded, text: 'Weather and light follow how you have been lately.', accent: Color(0xFF4F86B8)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The companion chat and the ideas library, with its guided exercises.
+class _ChatPage extends StatelessWidget {
+  const _ChatPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _OnboardingPage(
+      illustration: OnboardingChatScene(),
+      eyebrow: 'When you need it',
+      title: 'Talk it through,\ntry something small.',
+      body: 'Chat with the companion when you want to think out loud, or try a short idea that fits the moment.',
+      extra: Column(
+        children: [
+          _PromiseRow(
+            icon: Icons.chat_bubble_outline_rounded,
+            text: 'Every conversation comes with a gentle breakdown of the emotions in it.',
+            accent: AppColors.coral,
+          ),
+          SizedBox(height: 10),
+          _PromiseRow(
+            icon: Icons.air_rounded,
+            text: 'Guided exercises for breathing, grounding and reframing, with calm animation.',
+          ),
+          SizedBox(height: 10),
+          _PromiseRow(
+            icon: Icons.favorite_border_rounded,
+            text: 'Solace notices which ideas lift your mood over time.',
+            accent: Color(0xFF4F8A52),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Where the person's data lives and what they can do with it.
+class _DataPage extends StatelessWidget {
+  const _DataPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _OnboardingPage(
+      illustration: OnboardingDataScene(),
+      eyebrow: 'Yours to keep',
+      title: 'Your data is\nyours.',
+      body: 'Everything is stored on this phone, and you decide what happens to it.',
+      extra: Column(
+        children: [
+          _PromiseRow(
+            icon: Icons.ios_share_rounded,
+            text: 'Save a copy and restore it on another phone.',
+            accent: Color(0xFF4F8A52),
+          ),
+          SizedBox(height: 10),
+          _PromiseRow(
+            icon: Icons.description_outlined,
+            text: 'A one-page summary for a therapist. Your own words are included only if you choose.',
+          ),
+          SizedBox(height: 10),
+          _PromiseRow(
+            icon: Icons.delete_outline_rounded,
+            text: 'Erase everything whenever you like, from one place.',
             accent: AppColors.coral,
           ),
         ],
@@ -664,9 +764,11 @@ class _PermissionPage extends StatelessWidget {
 
 /// What Solace may read, asked once and kindly: same switches as Permissions & privacy.
 class _ReadingPage extends StatelessWidget {
-  const _ReadingPage({required this.consent});
+  const _ReadingPage({required this.consent, required this.phonePatterns, required this.showMedia});
 
   final ConsentController? consent;
+  final PhonePatternsController? phonePatterns;
+  final bool showMedia;
 
   @override
   Widget build(BuildContext context) {
@@ -675,8 +777,8 @@ class _ReadingPage extends StatelessWidget {
       illustration: const _Scene(HeroScene.privacy),
       eyebrow: 'Only if you want',
       title: 'What may Solace\nnotice?',
-      body: 'A weak guess about how an entry sounds can make your journal more useful. It is always your call.',
-      extra: consent == null ? null : ReadingChoices(consent: consent),
+      body: 'Optional signals that make your journal more useful. Every switch can be changed later.',
+      extra: consent == null ? null : ReadingChoices(consent: consent, phonePatterns: phonePatterns, showMedia: showMedia),
     );
   }
 }
@@ -694,8 +796,7 @@ class _ModelsPage extends StatelessWidget {
       illustration: const _Scene(HeroScene.settings),
       eyebrow: 'Works without the server',
       title: 'Journal anywhere,\neven offline.',
-      body: 'Keep a small model on this phone and your voice and video journals are written down even when your server is off. '
-          'They are read later, when it is back.',
+      body: 'Keep a small model on this phone so voice and video entries are written down even when your server is off.',
       extra: consent == null
           ? const OfflineModelChoices()
           : ListenableBuilder(
@@ -717,8 +818,17 @@ class _ReminderPage extends StatelessWidget {
       illustration: const _Scene(HeroScene.memory),
       eyebrow: 'A gentle nudge',
       title: 'Want a daily\nreminder?',
-      body: 'A quiet check-in reminder at a time that suits you. No streaks, and it fades away if you are busy.',
-      extra: ReminderChoice(controller: controller),
+      body: 'A quiet reminder at a time that suits you. It fades away on its own if you are busy.',
+      extra: Column(
+        children: [
+          ReminderChoice(controller: controller),
+          const SizedBox(height: 10),
+          const _PromiseRow(
+            icon: Icons.reply_rounded,
+            text: 'Reply without opening the app: type from the notification, or from the home-screen widget.',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -763,65 +873,54 @@ class _SleepPage extends StatelessWidget {
   }
 }
 
-class _CountryPage extends StatelessWidget {
-  const _CountryPage({required this.controller});
+/// An optional name, to say hello, and the country that decides which emergency number and support lines are shown.
+class _AboutPage extends StatelessWidget {
+  const _AboutPage({required this.controller, required this.field, required this.onDone});
 
   final ProfileController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return _OnboardingPage(
-      illustration: const _Scene(HeroScene.contacts),
-      eyebrow: 'So help is local',
-      title: 'Where are you\nbased?',
-      body: 'This only decides which emergency number and support line you see. It stays on this phone.',
-      extra: CountryPicker(controller: controller),
-    );
-  }
-}
-
-/// An optional name, only used to say hello. Nothing is required.
-class _NamePage extends StatelessWidget {
-  const _NamePage({required this.field, required this.onDone});
-
   final TextEditingController field;
   final VoidCallback onDone;
 
   @override
   Widget build(BuildContext context) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(22),
+      borderSide: const BorderSide(color: Color(0xFFEBDCC0)),
+    );
     return _OnboardingPage(
       illustration: const _Scene(HeroScene.about),
       eyebrow: 'Just between us',
-      title: 'What should I\ncall you?',
-      body: 'Only used to greet you. Stays on this phone, and you can leave it blank.',
-      extra: TextField(
-        key: const ValueKey('onboarding-name'),
-        controller: field,
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.done,
-        maxLength: 24,
-        onSubmitted: (_) => onDone(),
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
-        decoration: InputDecoration(
-          hintText: 'Your name or a nickname',
-          counterText: '',
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(22),
-            borderSide: const BorderSide(color: Color(0xFFEBDCC0)),
+      title: 'A little about\nyou.',
+      body: 'A name to greet you, and your country so the right support lines appear. '
+          'Both stay on this phone and both are optional.',
+      extra: Column(
+        children: [
+          TextField(
+            key: const ValueKey('onboarding-name'),
+            controller: field,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.done,
+            maxLength: 24,
+            onSubmitted: (_) => onDone(),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink),
+            decoration: InputDecoration(
+              hintText: 'Your name or a nickname',
+              counterText: '',
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              border: border,
+              enabledBorder: border,
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(22),
+                borderSide: const BorderSide(color: AppColors.amber, width: 1.8),
+              ),
+            ),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(22),
-            borderSide: const BorderSide(color: Color(0xFFEBDCC0)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(22),
-            borderSide: const BorderSide(color: AppColors.amber, width: 1.8),
-          ),
-        ),
+          const SizedBox(height: 14),
+          CountryPicker(controller: controller),
+        ],
       ),
     );
   }
@@ -834,9 +933,9 @@ class _SupportPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return const _OnboardingPage(
       illustration: _Scene(HeroScene.support),
-      eyebrow: 'A quiet safety net',
-      title: 'Support is always nearby.',
-      body: 'Private, calm, and there whenever you need it. Solace is a space for reflection, not medical care.',
+      eyebrow: 'Support, always',
+      title: 'Help is always\nwithin reach.',
+      body: 'Solace is a space for reflection, not medical care. Support lines and emergency numbers are one tap away.',
       extra: _SupportPreview(),
     );
   }

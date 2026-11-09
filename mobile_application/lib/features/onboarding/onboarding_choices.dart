@@ -7,22 +7,56 @@ import '../../services/phone_speech.dart';
 import '../../services/face_reading_choice.dart';
 import '../../services/stt_model_store.dart';
 import '../consent/consent_controller.dart';
+import '../footprint/phone_patterns_controller.dart';
 import '../models/on_device_model_widgets.dart';
 import '../profile/profile_controller.dart';
 
 /// The "what may Solace read" choices shown in onboarding. They are the same switches as in Permissions & privacy,
 /// so nothing is decided that can't be changed later, and leaving them off just means being asked at the moment it matters.
 class ReadingChoices extends StatelessWidget {
-  const ReadingChoices({required this.consent, super.key});
+  const ReadingChoices({required this.consent, this.phonePatterns, this.showMedia = true, super.key});
 
   final ConsentController consent;
 
+  /// When given, a switch for reading screen time and pickups on this phone is offered too.
+  final PhonePatternsController? phonePatterns;
+
+  /// Whether the voice and face switches are shown: only for someone who chose voice and video.
+  final bool showMedia;
+
   @override
   Widget build(BuildContext context) {
+    final phone = phonePatterns;
     return ListenableBuilder(
-      listenable: consent,
+      listenable: phone == null ? consent : Listenable.merge([consent, phone]),
       builder: (context, _) => Column(
         children: [
+          if (phone != null) ...[
+            _ChoiceTile(
+              key: const ValueKey('onboarding-phone-patterns'),
+              icon: Icons.phone_android_rounded,
+              color: const Color(0xFF4F8A52),
+              title: 'Phone patterns',
+              detail: 'Daily screen time and pickups, read on this phone, to show trends and set gentle goals. '
+                  'Android asks you to switch on usage access.',
+              value: phone.status != PhonePatternsStatus.off,
+              onChanged: (on) => on ? phone.turnOn() : phone.turnOff(),
+            ),
+            if (showMedia) const SizedBox(height: 10),
+          ],
+          if (showMedia) ..._mediaTiles(),
+          const SizedBox(height: 10),
+          const Text(
+            'Everything here is off until you say yes, and you can change it any time in Permissions & privacy.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, height: 1.4, color: AppColors.mutedInk, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _mediaTiles() => [
           _ChoiceTile(
             key: const ValueKey('onboarding-consent-voice'),
             icon: Icons.graphic_eq_rounded,
@@ -47,17 +81,7 @@ class ReadingChoices extends StatelessWidget {
             value: consent.isGranted(ConsentKey.faceFeatures),
             onChanged: (on) => on ? consent.grant(ConsentKey.faceFeatures) : consent.decline(ConsentKey.faceFeatures),
           ),
-          const SizedBox(height: 10),
-          const Text(
-            'Both are off until you say yes. Voice and video journals still work if you leave them off, and you can change this any '
-            'time in Permissions & privacy.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, height: 1.4, color: AppColors.mutedInk, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
+        ];
 }
 
 class _ChoiceTile extends StatelessWidget {

@@ -167,6 +167,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
       repository: widget.repository,
       profileController: widget.profileController,
       consent: widget.consent,
+      phonePatterns: widget.phonePatterns,
       scheduleReminder: widget.scheduleReminder,
       onComplete: () => setState(() => _isComplete = true),
     );

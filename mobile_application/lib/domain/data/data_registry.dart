@@ -111,7 +111,7 @@ const dataRegistry = <DataEntry>[
     id: 'widget_cache',
     label: 'Home-screen widget line and picture',
     kind: DataKind.device,
-    keys: ['checkin_prompt', 'forest_scene_path'],
+    keys: ['checkin_prompt', 'forest_scene_path', 'forest_tree_path'],
   ),
 ];
 
