@@ -5,6 +5,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// A source checkout remains usable in local-only mode without account config.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.sysmentalhealth.solace_mobile"
     compileSdk = flutter.compileSdkVersion
@@ -18,8 +23,10 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
     }
 
     // ONNX Runtime has ONE native runtime in this app: the speech library's (sherpa_onnx) libonnxruntime.so. The face reading's

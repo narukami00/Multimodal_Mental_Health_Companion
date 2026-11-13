@@ -122,6 +122,22 @@ void main() {
 
   Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 80));
 
+  test('insecure video endpoint never reads a token or opens the camera', () async {
+    build(); // initialize fake resources used by the shared teardown
+    service.dispose();
+    var tokenReads = 0;
+    service = VideoFrameService(
+      source: source,
+      uriProvider: () => Uri.parse('ws://192.168.1.5/ws/v1/video?session_id=issued'),
+      consentGranted: () => true,
+      tokenProvider: ({required forceRefresh}) async { tokenReads++; return 'secret'; },
+    );
+    expect(await service.start(), isFalse);
+    expect(tokenReads, 0);
+    expect(source.started, isFalse);
+    expect(service.refusedReason, contains('HTTPS'));
+  });
+
   tearDown(() async {
     await service.stop();
     unawaited(channel.toApp.close()); // never awaited: a controller nobody listened to only completes when someone does

@@ -3,6 +3,20 @@ import 'package:solace_mobile/services/companion_websocket_service.dart';
 
 void main() {
   group('CompanionWebSocketService Unit Tests', () {
+    test('insecure LAN is refused before reading identity credentials', () async {
+      var tokenReads = 0;
+      final service = CompanionWebSocketService(
+        host: '192.168.1.5',
+        userId: () => 'signed-in-user',
+        tokenProvider: ({required forceRefresh}) async { tokenReads++; return 'secret'; },
+      );
+      await service.connect();
+      expect(tokenReads, 0);
+      expect(service.status, CompanionConnectionStatus.error);
+      expect(service.lastErrorMessage, contains('HTTPS'));
+      service.dispose();
+    });
+
     test('initial state is disconnected with null latency', () {
       final service = CompanionWebSocketService();
       expect(service.status, CompanionConnectionStatus.disconnected);
@@ -22,11 +36,10 @@ void main() {
       final service = CompanionWebSocketService(
         host: '192.168.1.100',
         port: 8443,
-        token: 'custom-token',
+        tokenProvider: ({required forceRefresh}) async => 'custom-token',
       );
       expect(service.host, '192.168.1.100');
       expect(service.port, 8443);
-      expect(service.token, 'custom-token');
       service.dispose();
     });
 

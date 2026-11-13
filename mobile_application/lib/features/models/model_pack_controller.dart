@@ -23,6 +23,8 @@ class ModelPackController extends ChangeNotifier {
   /// What to tell the person when a download did not finish: the real reason, in one calm sentence.
   static String explainDownload(ModelDownload result, {int? megabytes}) => switch (result) {
         ModelDownload.installed => '',
+        ModelDownload.secureConnectionRequired => 'Use an HTTPS companion server or USB localhost before downloading. Your account details were not sent.',
+        ModelDownload.signInRequired => 'Sign in to download this pack from your companion server. Packs already on this device remain available.',
         ModelDownload.serverAway => "Couldn't reach your companion server. Check that it's on and connected, then try again.",
         ModelDownload.notOnServer => "Your companion server doesn't have this set up yet. Ask whoever runs it to add it, then try again.",
         ModelDownload.interrupted => 'The download was interrupted, so nothing was kept. Try again, ideally on Wi-Fi.',

@@ -4,10 +4,17 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'companion_auth.dart';
 
 /// How a model download ended.
 enum ModelDownload {
   installed,
+
+  /// Protected downloads need an online account; installed packs still work locally.
+  signInRequired,
+
+  /// A network route must protect account credentials before downloading.
+  secureConnectionRequired,
 
   /// The companion server could not be reached (or is in trouble).
   serverAway,
@@ -36,8 +43,12 @@ class ModelPackStore extends ChangeNotifier {
     this.sizeMegabytes,
     Future<Directory> Function()? directory,
     Future<Uri?> Function()? serverBase,
-  })  : _directory = directory ?? (() => _defaultDirectory(folderName)),
-        _serverBase = serverBase;
+    CompanionTokenProvider? tokenProvider,
+    CompanionTransportPolicy? transportPolicy,
+  }) : _directory = directory ?? (() => _defaultDirectory(folderName)),
+       _serverBase = serverBase,
+       _tokenProvider = tokenProvider ?? companionIdToken,
+       _transportPolicy = transportPolicy ?? CompanionTransportPolicy();
 
   /// About how much room the pack takes, for telling the person (null when not known).
   final int? sizeMegabytes;
@@ -51,6 +62,8 @@ class ModelPackStore extends ChangeNotifier {
   /// The folder inside the app's private storage.
   final String folderName;
 
+  final CompanionTokenProvider _tokenProvider;
+  final CompanionTransportPolicy _transportPolicy;
   final Future<Directory> Function() _directory;
   final Future<Uri?> Function()? _serverBase;
 
@@ -58,16 +71,24 @@ class ModelPackStore extends ChangeNotifier {
 
   static Future<Directory> _defaultDirectory(String folder) async {
     final base = await getApplicationSupportDirectory();
-    return Directory('${base.path}${Platform.pathSeparator}models${Platform.pathSeparator}$folder');
+    return Directory(
+      '${base.path}${Platform.pathSeparator}models${Platform.pathSeparator}$folder',
+    );
   }
 
   /// The folder holding the pack when it is fully installed, else null.
   Future<String?> installedDirectory() async {
     try {
       final dir = await _directory();
-      if (!await File('${dir.path}${Platform.pathSeparator}$_readyMarker').exists()) return null;
+      if (!await File(
+        '${dir.path}${Platform.pathSeparator}$_readyMarker',
+      ).exists()) {
+        return null;
+      }
       for (final name in files) {
-        if (!await File('${dir.path}${Platform.pathSeparator}$name').exists()) return null;
+        if (!await File('${dir.path}${Platform.pathSeparator}$name').exists()) {
+          return null;
+        }
       }
       return dir.path;
     } catch (_) {
@@ -94,23 +115,39 @@ class ModelPackStore extends ChangeNotifier {
       await downloadResult(onProgress: onProgress) == ModelDownload.installed;
 
   /// Like [download], but says how it ended, so the person can be told what is actually wrong.
-  Future<ModelDownload> downloadResult({void Function(double progress)? onProgress}) async {
+  Future<ModelDownload> downloadResult({
+    void Function(double progress)? onProgress,
+  }) async {
     final base = await _serverBase?.call();
     if (base == null) return ModelDownload.serverAway;
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
-    var gotManifest = false; // before it, a failure means the server could not be reached; after it, the download broke off
+    var gotManifest =
+        false; // before it, a failure means the server could not be reached; after it, the download broke off
     try {
       final dir = await _directory();
-      final manifestReply = await (await client.getUrl(base.replace(path: '/v1/models/$pack'))).close();
+      final manifestReply = await _get(
+        client,
+        base.replace(path: '/v1/models/$pack'),
+      );
       if (manifestReply.statusCode != 200) {
         await manifestReply.drain<void>();
-        return manifestReply.statusCode == 404 ? ModelDownload.notOnServer : ModelDownload.serverAway;
+        if (manifestReply.statusCode == 401 || manifestReply.statusCode == 403) {
+          return ModelDownload.signInRequired;
+        }
+        return manifestReply.statusCode == 404
+            ? ModelDownload.notOnServer
+            : ModelDownload.serverAway;
       }
-      final manifest = jsonDecode(await manifestReply.transform(utf8.decoder).join()) as Map<String, dynamic>;
+      final manifest =
+          jsonDecode(await manifestReply.transform(utf8.decoder).join())
+              as Map<String, dynamic>;
       final listed = [
-        for (final f in (manifest['files'] as List).whereType<Map>()) (name: f['name'] as String, size: (f['size'] as num).toInt()),
+        for (final f in (manifest['files'] as List).whereType<Map>())
+          (name: f['name'] as String, size: (f['size'] as num).toInt()),
       ];
-      if (!files.every((n) => listed.any((f) => f.name == n))) return ModelDownload.notOnServer;
+      if (!files.every((n) => listed.any((f) => f.name == n))) {
+        return ModelDownload.notOnServer;
+      }
       gotManifest = true;
 
       await remove();
@@ -120,11 +157,19 @@ class ModelPackStore extends ChangeNotifier {
       var done = 0;
       for (final f in wanted) {
         final part = File('${dir.path}${Platform.pathSeparator}${f.name}.part');
-        final reply = await (await client.getUrl(base.replace(path: '/v1/models/$pack/${f.name}'))).close();
+        final reply = await _get(
+          client,
+          base.replace(path: '/v1/models/$pack/${f.name}'),
+        );
         if (reply.statusCode != 200) {
           await reply.drain<void>();
           await remove();
-          return reply.statusCode == 404 ? ModelDownload.notOnServer : ModelDownload.interrupted;
+          if (reply.statusCode == 401 || reply.statusCode == 403) {
+            return ModelDownload.signInRequired;
+          }
+          return reply.statusCode == 404
+              ? ModelDownload.notOnServer
+              : ModelDownload.interrupted;
         }
         final sink = part.openWrite();
         try {
@@ -142,19 +187,44 @@ class ModelPackStore extends ChangeNotifier {
         }
         await part.rename('${dir.path}${Platform.pathSeparator}${f.name}');
       }
-      await File('${dir.path}${Platform.pathSeparator}$_readyMarker').writeAsString(jsonEncode(manifest));
+      await File(
+        '${dir.path}${Platform.pathSeparator}$_readyMarker',
+      ).writeAsString(jsonEncode(manifest));
       onProgress?.call(1);
       final ok = await isInstalled();
       notifyListeners();
       return ok ? ModelDownload.installed : ModelDownload.interrupted;
     } catch (e) {
       debugPrint('[ModelPack:$pack] download failed: ${e.runtimeType}');
-      await remove();
+      if (gotManifest) await remove();
+      if (e is CompanionSecureConnectionRequired) {
+        return ModelDownload.secureConnectionRequired;
+      }
+      if (e is CompanionSignInRequired) return ModelDownload.signInRequired;
       if (_isOutOfSpace(e)) return ModelDownload.noSpace;
       return gotManifest ? ModelDownload.interrupted : ModelDownload.serverAway;
     } finally {
       client.close(force: true);
     }
+  }
+
+  Future<HttpClientResponse> _get(HttpClient client, Uri uri) async {
+    _transportPolicy.requireSecure(uri);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final token = await _tokenProvider(forceRefresh: attempt == 1);
+      if (token == null || token.isEmpty) throw const CompanionSignInRequired();
+      final request = await client
+          .getUrl(uri)
+          .timeout(const Duration(seconds: 10));
+      request.followRedirects = false;
+      request.headers.set('Authorization', 'Bearer $token');
+      final response = await request.close().timeout(
+        const Duration(seconds: 20),
+      );
+      if (response.statusCode != 401 || attempt == 1) return response;
+      await response.drain<void>();
+    }
+    throw StateError('Unreachable authentication retry');
   }
 
   /// A full phone: "no space left on device" (28 on Android and Linux) or "disk full" (112 on Windows).

@@ -186,31 +186,21 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
       Platform.environment.containsKey('FLUTTER_TEST');
 
   /// The same saved address the chat settings screen writes; otherwise the
-  /// service defaults to Tailscale.
+  /// service uses USB localhost. A saved endpoint is never silently replaced.
   Future<void> _connectSavedServer() async {
     final ws = _wsService!;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final tailscaleMigrated =
-          prefs.getBool(CompanionServerConfig.prefKeyTailscaleMigrated) ?? false;
-      var host = prefs.getString(CompanionServerConfig.prefKeyHost);
+      final configuredHost = prefs.getString(CompanionServerConfig.prefKeyHost);
+      final host = configuredHost == null || configuredHost.trim().isEmpty
+          ? '127.0.0.1'
+          : configuredHost;
       final port = prefs.getInt(CompanionServerConfig.prefKeyPort);
-
-      // Auto-migrate from old local Wi-Fi / localhost IPs to Tailscale
-      if (!tailscaleMigrated ||
-          host == '192.168.0.38' ||
-          host == '127.0.0.1' ||
-          host == null ||
-          host.isEmpty) {
-        host = CompanionServerConfig.defaultTailscaleIp;
-        await prefs.setString(CompanionServerConfig.prefKeyHost, host);
-        await prefs.setBool(CompanionServerConfig.prefKeyTailscaleMigrated, true);
-      }
 
       ws.host = host;
       if (port != null && port > 0) ws.port = port;
     } catch (_) {
-      ws.host = CompanionServerConfig.defaultTailscaleIp;
+      ws.host = '127.0.0.1';
     }
     if (ws.status == CompanionConnectionStatus.connecting ||
         ws.status == CompanionConnectionStatus.connected) {

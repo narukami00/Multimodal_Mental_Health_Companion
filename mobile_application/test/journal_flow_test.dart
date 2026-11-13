@@ -1,3 +1,4 @@
+import 'package:solace_mobile/services/companion_auth.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -59,6 +60,11 @@ class _Server {
     required Duration timeout,
   }) async {
     if (!reachable) throw Exception('unreachable');
+    if (uri.path.startsWith('/v1/')) expect(headers['Authorization'], 'Bearer test-id-token');
+    if (uri.path == '/v1/sessions') {
+      expect(jsonDecode(utf8.decode(body))['purpose'], 'journal');
+      return (status: status, body: jsonEncode({'session_id': 'issued-journal', 'expires_at': DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000}));
+    }
     requests.add((path: uri.path, query: uri.queryParameters, bytes: body.length));
     if (uri.path == '/v1/journal/face_features') return (status: status, body: jsonEncode({'accepted': body.length == 5600}));
     // like the real server: words sent by a phone with its own speech model are used as they are
@@ -69,6 +75,9 @@ class _Server {
 
   JournalAnalysisClient client() => JournalAnalysisClient(
         transport: call,
+        tokenProvider: ({required forceRefresh}) async => 'test-id-token',
+        transportPolicy: CompanionTransportPolicy(trustedPrivateHosts: {'x'}),
+        userId: () => 'test-user',
         baseUri: () async => reachable ? Uri.parse('http://x:8000') : null,
       );
 }
@@ -170,7 +179,7 @@ void main() {
       expect(server.requests.last.path, '/v1/journal/text');
       await c.analyzeAudio('s1', Uint8List(64000), face: true);
       expect(server.requests.last.path, '/v1/journal/audio');
-      expect(server.requests.last.query, {'session_id': 's1', 'sample_rate': '16000', 'face': '1'});
+      expect(server.requests.last.query, {'session_id': 'issued-journal', 'sample_rate': '16000', 'face': '1'});
 
       server.reachable = false;
       expect(await server.client().analyzeText('s1', 'hello'), isNull);

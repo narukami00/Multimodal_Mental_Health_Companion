@@ -7,6 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/companion_server_config.dart';
 import '../core/models/emotion_result.dart';
+import 'account_service.dart';
+import 'companion_auth.dart';
+import 'companion_http.dart';
 
 /// What the companion server made of one journal entry: the words (typed, or
 /// transcribed from a recording) and, when its emotion model is available, a
@@ -35,7 +38,9 @@ class JournalAnalysis {
       safety: json['safety'] as String?,
       confidence: (json['confidence'] as num?)?.toDouble(),
       durationSeconds: (json['duration_s'] as num?)?.toDouble(),
-      emotion: json['emotion'] is Map ? Map<String, dynamic>.from(json['emotion'] as Map) : null,
+      emotion: json['emotion'] is Map
+          ? Map<String, dynamic>.from(json['emotion'] as Map)
+          : null,
     );
   }
 
@@ -49,19 +54,23 @@ class JournalAnalysis {
     final valenceProbs = _probs(estimate['lv']);
     final pattern = em['pattern'] as String? ?? '';
     final face = em['face'];
-    final top = classes.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final top = classes.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return [
       EmotionResult(
         sessionId: sessionId,
         modality: pattern.contains('A')
             ? EmotionModality.voice
             : pattern.contains('V')
-                ? EmotionModality.face
-                : EmotionModality.text,
+            ? EmotionModality.face
+            : EmotionModality.text,
         timestamp: at ?? DateTime.now(),
         valence: (em['valence'] as num?)?.toDouble(),
         arousal: (em['arousal'] as num?)?.toDouble(),
-        labels: [for (final e in top.take(3)) EmotionLabel(label: e.key, score: e.value)],
+        labels: [
+          for (final e in top.take(3))
+            EmotionLabel(label: e.key, score: e.value),
+        ],
         confidence: valenceProbs == null || valenceProbs.isEmpty
             ? null
             : valenceProbs.values.reduce((a, b) => a > b ? a : b),
@@ -88,13 +97,7 @@ class JournalAnalysis {
 }
 
 /// One HTTP exchange; replaceable so tests need no network.
-typedef JournalTransport = Future<({int status, String body})> Function({
-  required String method,
-  required Uri uri,
-  required Map<String, String> headers,
-  required List<int> body,
-  required Duration timeout,
-});
+typedef JournalTransport = CompanionHttpTransport;
 
 /// Talks to the companion server's journal endpoints (`/v1/journal/*`). Every
 /// method returns null on ANY problem (server unreachable, slow, refusing): the
@@ -103,10 +106,52 @@ class JournalAnalysisClient {
   JournalAnalysisClient({
     JournalTransport? transport,
     Future<Uri?> Function()? baseUri,
-  })  : _transport = transport ?? _httpTransport,
-        _baseUri = baseUri ?? _discoverBase;
+    CompanionTokenProvider? tokenProvider,
+    CompanionTransportPolicy? transportPolicy,
+    String? Function()? userId,
+  }) : _transport = transport ?? _httpTransport,
+       _baseUri = baseUri ?? _discoverBase,
+       _http = CompanionHttp(
+         transport: transport,
+         tokenProvider: tokenProvider,
+         transportPolicy: transportPolicy,
+       ),
+       _userId = userId ?? (() => AccountService.instance.identity?.uid);
 
   final JournalTransport _transport;
+  final CompanionHttp _http;
+  final String? Function() _userId;
+  final _sessions = <String, Future<({String id, DateTime expiresAt})>>{};
+  String? _sessionOwner;
+
+  Future<String> _serverSession(Uri base, String localId) async {
+    final uid = _userId();
+    if (uid == null) throw const CompanionSignInRequired();
+    if (_sessionOwner != uid) {
+      _sessions.clear();
+      _sessionOwner = uid;
+    }
+    final key = '$base|$localId';
+    try {
+      var session = await (_sessions[key] ??= _http.createSession(
+        base,
+        'journal',
+      ));
+      if (_userId() != uid) throw const CompanionSignInRequired();
+      if (session.expiresAt.isBefore(
+        DateTime.now().add(const Duration(seconds: 5)),
+      )) {
+        _sessions[key] = _http.createSession(base, 'journal');
+        session = await _sessions[key]!;
+      }
+      if (_userId() != uid) throw const CompanionSignInRequired();
+      return session.id;
+    } catch (_) {
+      _sessions.remove(key);
+      rethrow;
+    }
+  }
+
   final Future<Uri?> Function() _baseUri;
 
   /// The face numbers a phone read ITSELF for a recording (1,400 float32 values, never pictures). The server then uses
@@ -115,15 +160,23 @@ class JournalAnalysisClient {
     final base = await _baseUri();
     if (base == null || vector.length != 1400) return false;
     try {
-      final reply = await _transport(
+      final issuedSession = await _serverSession(base, sessionId);
+      final reply = await _http.request(
         method: 'POST',
-        uri: base.replace(path: '/v1/journal/face_features', queryParameters: {'session_id': sessionId}),
+        uri: base.replace(
+          path: '/v1/journal/face_features',
+          queryParameters: {'session_id': issuedSession},
+        ),
         headers: const {'Content-Type': 'application/octet-stream'},
-        body: vector.buffer.asUint8List(vector.offsetInBytes, vector.lengthInBytes),
+        body: vector.buffer.asUint8List(
+          vector.offsetInBytes,
+          vector.lengthInBytes,
+        ),
         timeout: const Duration(seconds: 8),
       );
       if (reply.status != 200) return false;
-      return (jsonDecode(reply.body) as Map<String, dynamic>)['accepted'] == true;
+      return (jsonDecode(reply.body) as Map<String, dynamic>)['accepted'] ==
+          true;
     } catch (_) {
       return false;
     }
@@ -144,8 +197,11 @@ class JournalAnalysisClient {
         timeout: const Duration(seconds: 3),
       );
       if (reply.status != 200) return null;
-      final emotion = (jsonDecode(reply.body) as Map<String, dynamic>)['emotion'];
-      return emotion is Map && emotion['state'] is String ? emotion['state'] as String : 'unknown';
+      final emotion =
+          (jsonDecode(reply.body) as Map<String, dynamic>)['emotion'];
+      return emotion is Map && emotion['state'] is String
+          ? emotion['state'] as String
+          : 'unknown';
     } catch (_) {
       return null;
     }
@@ -158,6 +214,7 @@ class JournalAnalysisClient {
   Future<JournalAnalysis?> analyzeText(String sessionId, String text) {
     return _send(
       '/v1/journal/text',
+      sessionId,
       const {},
       utf8.encode(jsonEncode({'session_id': sessionId, 'text': text})),
       contentType: 'application/json',
@@ -179,7 +236,13 @@ class JournalAnalysisClient {
     final given = words?.trim() ?? '';
     return _send(
       '/v1/journal/audio',
-      {'session_id': sessionId, 'sample_rate': '$sampleRate', 'face': face ? '1' : '0', if (given.isNotEmpty) 'words': given},
+      sessionId,
+      {
+        'session_id': sessionId,
+        'sample_rate': '$sampleRate',
+        'face': face ? '1' : '0',
+        if (given.isNotEmpty) 'words': given,
+      },
       pcm,
       contentType: 'application/octet-stream',
       timeout: const Duration(seconds: 120),
@@ -192,9 +255,13 @@ class JournalAnalysisClient {
     final base = await _baseUri();
     if (base == null) return null;
     try {
-      final reply = await _transport(
+      final issuedSession = await _serverSession(base, sessionId);
+      final reply = await _http.request(
         method: 'POST',
-        uri: base.replace(path: '/v1/journal/frame', queryParameters: {'session_id': sessionId}),
+        uri: base.replace(
+          path: '/v1/journal/frame',
+          queryParameters: {'session_id': issuedSession},
+        ),
         headers: const {'Content-Type': 'image/jpeg'},
         body: jpeg,
         timeout: const Duration(seconds: 4),
@@ -209,6 +276,7 @@ class JournalAnalysisClient {
 
   Future<JournalAnalysis?> _send(
     String path,
+    String localSessionId,
     Map<String, String> query,
     List<int> body, {
     required String contentType,
@@ -217,15 +285,33 @@ class JournalAnalysisClient {
     final base = await _baseUri();
     if (base == null) return null;
     try {
-      final reply = await _transport(
+      final issuedSession = await _serverSession(base, localSessionId);
+      final payload = contentType == 'application/json'
+          ? utf8.encode(
+              jsonEncode({
+                ...jsonDecode(utf8.decode(body)) as Map<String, dynamic>,
+                'session_id': issuedSession,
+              }),
+            )
+          : body;
+      final wireQuery = {
+        ...query,
+        if (contentType != 'application/json') 'session_id': issuedSession,
+      };
+      final reply = await _http.request(
         method: 'POST',
-        uri: base.replace(path: path, queryParameters: query.isEmpty ? null : query),
+        uri: base.replace(
+          path: path,
+          queryParameters: wireQuery.isEmpty ? null : wireQuery,
+        ),
         headers: {'Content-Type': contentType},
-        body: body,
+        body: payload,
         timeout: timeout,
       );
       if (reply.status != 200) return null;
-      return JournalAnalysis.fromJson(jsonDecode(reply.body) as Map<String, dynamic>);
+      return JournalAnalysis.fromJson(
+        jsonDecode(reply.body) as Map<String, dynamic>,
+      );
     } catch (e) {
       debugPrint('[Journal] analysis unavailable: ${e.runtimeType}');
       return null;
@@ -246,7 +332,10 @@ class JournalAnalysisClient {
       request.contentLength = body.length;
       request.add(body);
       final response = await request.close().timeout(timeout);
-      final text = await response.transform(utf8.decoder).join().timeout(timeout);
+      final text = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(timeout);
       return (status: response.statusCode, body: text);
     } finally {
       client.close(force: true);
@@ -256,11 +345,8 @@ class JournalAnalysisClient {
   static Uri? _cachedBase;
   static DateTime _cachedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// The first known companion address that answers `/healthz`: the saved one, then the usual candidates.
+  /// The configured companion endpoint, or USB/local loopback when none is saved.
   static Future<Uri?> _discoverBase() async {
-    if (_cachedBase != null && DateTime.now().difference(_cachedAt) < const Duration(minutes: 2)) {
-      return _cachedBase;
-    }
     var port = CompanionServerConfig.defaultPort;
     var saved = <String>[];
     try {
@@ -269,10 +355,18 @@ class JournalAnalysisClient {
       final host = prefs.getString(CompanionServerConfig.prefKeyHost);
       if (host != null && host.isNotEmpty) saved = [host];
     } catch (_) {}
-    final hosts = <String>{...saved, ...CompanionServerConfig.candidateHosts};
+    // A configured server must never silently downgrade or switch ownership.
+    final hosts = saved.isNotEmpty
+        ? saved
+        : [CompanionServerConfig.defaultLocalhost];
     for (final host in hosts) {
-      final uri = Uri(scheme: 'http', host: host, port: port);
       try {
+        final uri = companionHttpBase(host, port);
+        CompanionTransportPolicy().requireSecure(uri);
+        if (_cachedBase == uri &&
+            DateTime.now().difference(_cachedAt) < const Duration(minutes: 2)) {
+          return uri;
+        }
         final reply = await _httpTransport(
           method: 'GET',
           uri: uri.replace(path: '/healthz'),

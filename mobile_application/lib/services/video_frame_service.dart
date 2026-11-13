@@ -4,6 +4,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
+import 'companion_auth.dart';
+import 'account_service.dart';
 
 /// Where upright camera frames come from. The real source (the phone camera) is
 /// platform code; tests and previews use a fake. A frame is ONE upright JPEG,
@@ -35,10 +38,31 @@ class VideoFrameService extends ChangeNotifier {
     required this.uriProvider,
     required this.consentGranted,
     WebSocketChannel Function(Uri uri)? connect,
+    CompanionTokenProvider? tokenProvider,
+    CompanionTransportPolicy? transportPolicy,
     this.minGap = const Duration(milliseconds: 180),
     this.staleAfter = const Duration(milliseconds: 600),
     this.handshakeTimeout = const Duration(seconds: 3),
-  }) : _connect = connect ?? WebSocketChannel.connect;
+  }) : _connect = connect,
+       _tokenProvider = tokenProvider ?? companionIdToken,
+       _transportPolicy = transportPolicy ?? CompanionTransportPolicy() {
+    if (connect == null && tokenProvider == null) {
+      _account = AccountService.instance;
+      _account!.addListener(_onAccountChanged);
+    }
+  }
+
+  AccountService? _account;
+  String? _connectedUid;
+  bool get _hasSameAccount =>
+      _account == null ||
+      (_connectedUid != null && _account!.identity?.uid == _connectedUid);
+  void _onAccountChanged() {
+    if (_connectedUid != null && _account?.identity?.uid != _connectedUid) {
+      _connectedUid = null;
+      unawaited(stop());
+    }
+  }
 
   final FrameSource source;
 
@@ -53,7 +77,9 @@ class VideoFrameService extends ChangeNotifier {
   final Duration minGap;
   final Duration staleAfter;
   final Duration handshakeTimeout;
-  final WebSocketChannel Function(Uri uri) _connect;
+  final WebSocketChannel Function(Uri uri)? _connect;
+  final CompanionTokenProvider _tokenProvider;
+  final CompanionTransportPolicy _transportPolicy;
 
   /// The latest camera frame, for the on-screen self view (null while the camera is closed). Shown on
   /// the phone only; what is sent to the server is throttled separately.
@@ -84,7 +110,8 @@ class VideoFrameService extends ChangeNotifier {
   /// Opens the camera and the socket. Does nothing without consent. Returns
   /// whether frames are now flowing.
   Future<bool> start() async {
-    if (_state == VideoStreamState.streaming || _state == VideoStreamState.connecting) {
+    if (_state == VideoStreamState.streaming ||
+        _state == VideoStreamState.connecting) {
       return streaming;
     }
     if (!consentGranted()) return false;
@@ -96,7 +123,11 @@ class VideoFrameService extends ChangeNotifier {
     _refusedReason = null;
     _setState(VideoStreamState.connecting);
     try {
-      final channel = _connect(uri);
+      final channel = await _open(uri);
+      if (!consentGranted() || !_hasSameAccount) {
+        unawaited(channel.sink.close());
+        return false;
+      }
       _channel = channel;
       _ready = Completer<bool>();
       _channelSub = channel.stream.listen(
@@ -108,13 +139,14 @@ class VideoFrameService extends ChangeNotifier {
         },
       );
       await channel.ready;
-      channel.sink.add(jsonEncode({
-        'type': 'video.start',
-        'codec': 'jpeg',
-        'upright': true,
-      }));
-      final ok = await _ready!.future.timeout(handshakeTimeout, onTimeout: () => false);
-      if (!ok || !consentGranted()) {
+      channel.sink.add(
+        jsonEncode({'type': 'video.start', 'codec': 'jpeg', 'upright': true}),
+      );
+      final ok = await _ready!.future.timeout(
+        handshakeTimeout,
+        onTimeout: () => false,
+      );
+      if (!ok || !consentGranted() || !_hasSameAccount) {
         await stop(refused: _state == VideoStreamState.refused);
         if (_state == VideoStreamState.off) _setState(VideoStreamState.error);
         return false;
@@ -127,15 +159,50 @@ class VideoFrameService extends ChangeNotifier {
       _frameSub = source.frames.listen(_onFrame);
       _setState(VideoStreamState.streaming);
       return true;
-    } catch (_) {
+    } catch (error) {
+      if (error is CompanionSecureConnectionRequired) {
+        _refusedReason = error.toString();
+      }
       await stop();
       _setState(VideoStreamState.error);
       return false;
     }
   }
 
+  Future<WebSocketChannel> _open(Uri uri) async {
+    if (_connect != null) return _connect(uri);
+    _transportPolicy.requireSecure(uri);
+    _connectedUid = _account?.identity?.uid;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final token = await _tokenProvider(forceRefresh: attempt == 1);
+      if (token == null ||
+          token.isEmpty ||
+          !consentGranted() ||
+          !_hasSameAccount) {
+        throw const CompanionSignInRequired();
+      }
+      final channel = IOWebSocketChannel.connect(
+        uri,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      try {
+        await channel.ready.timeout(handshakeTimeout);
+        return channel;
+      } catch (error) {
+        unawaited(channel.sink.close());
+        if (attempt == 1 ||
+            !(error.toString().contains('401') ||
+                error.toString().contains('403'))) {
+          rethrow;
+        }
+      }
+    }
+    throw StateError('Unreachable authentication retry');
+  }
+
   /// Stops the camera and closes the socket. Safe to call at any time.
   Future<void> stop({bool refused = false}) async {
+    if (_ready != null && !_ready!.isCompleted) _ready!.complete(false);
     await _frameSub?.cancel();
     _frameSub = null;
     await source.stop();
@@ -160,7 +227,7 @@ class VideoFrameService extends ChangeNotifier {
     final channel = _channel;
     if (channel == null || _state != VideoStreamState.streaming) return;
     preview.value = jpeg;
-    if (!consentGranted()) {
+    if (!consentGranted() || !_hasSameAccount) {
       unawaited(stop());
       return;
     }
@@ -169,7 +236,9 @@ class VideoFrameService extends ChangeNotifier {
     final waiting = _awaitingAckSince;
     if (waiting != null && now.difference(waiting) < staleAfter) return;
     final frame = BytesBuilder(copy: false)
-      ..add((ByteData(4)..setUint32(0, _seq++, Endian.little)).buffer.asUint8List())
+      ..add(
+        (ByteData(4)..setUint32(0, _seq++, Endian.little)).buffer.asUint8List(),
+      )
       ..add(jpeg);
     channel.sink.add(frame.takeBytes());
     _lastSentAt = now;
@@ -192,7 +261,8 @@ class VideoFrameService extends ChangeNotifier {
         _awaitingAckSince = null;
         final usable = message['usable'];
         _lastUsable = usable is num ? usable != 0 : null;
-        _serverDropped = (message['dropped'] as num?)?.toInt() ?? _serverDropped;
+        _serverDropped =
+            (message['dropped'] as num?)?.toInt() ?? _serverDropped;
         notifyListeners();
       case 'video.refused':
         _refusedReason = message['reason'] as String? ?? 'refused';
@@ -216,6 +286,7 @@ class VideoFrameService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _account?.removeListener(_onAccountChanged);
     unawaited(stop());
     super.dispose();
   }

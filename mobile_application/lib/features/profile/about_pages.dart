@@ -16,7 +16,7 @@ import '../../core/widgets/visual_kit.dart';
 /// legal text. Nothing here has been reviewed by anyone.
 ///
 /// Deliberately restrained about claims. Every statement is something the code
-/// does today: local storage, no account, no clinical claims. No encryption
+/// does today: local storage, optional online identity, no clinical claims. No encryption
 /// claims and no compliance claims, because those are not settled and a
 /// settings page is the last place to overstate them.
 
@@ -351,7 +351,7 @@ class AboutSolacePage extends StatelessWidget {
           _Line(
             Icons.phone_android_rounded,
             _green,
-            'Reflections, check-ins and settings. No account, no password.',
+            'Reflections, check-ins and settings work without an account. Email or Google sign-in is optional for online features.',
             lead: 'On this phone',
           ),
           _Line(
@@ -611,7 +611,7 @@ class FaqPage extends StatelessWidget {
           color: _green,
           question: 'Where are my reflections stored?',
           answer:
-              'On this device. Solace has no account system. Conversations '
+              'On this device. An optional Firebase account identifies you to online features; signing in does not upload or restore your history. Conversations '
               'with Sol are sent to the companion service to be answered.',
         ),
         _Faq(

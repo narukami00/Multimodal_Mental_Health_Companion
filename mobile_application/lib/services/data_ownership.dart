@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/data/data_registry.dart';
 import '../domain/export/backup.dart';
+import 'account_service.dart';
 import 'check_in_reminder_service.dart';
 
 /// Where a backup file goes to and comes from. Android's own document picker, so the person chooses the place
@@ -79,11 +80,13 @@ class DataOwnership {
     BackupFiles? files,
     Future<Directory> Function()? recordingsDirectory,
     Future<void> Function()? stopReminders,
+    Future<void> Function()? signOut,
     DateTime Function()? now,
   }) : _preferences = preferences ?? SharedPreferences.getInstance,
        files = files ?? const PlatformBackupFiles(),
        _recordingsDirectory = recordingsDirectory ?? _defaultRecordings,
        _stopReminders = stopReminders ?? CheckInReminderService.instance.cancel,
+       _signOut = signOut ?? AccountService.instance.signOut,
        _now = now ?? DateTime.now;
 
   static final DataOwnership instance = DataOwnership();
@@ -92,6 +95,7 @@ class DataOwnership {
   final BackupFiles files;
   final Future<Directory> Function() _recordingsDirectory;
   final Future<void> Function() _stopReminders;
+  final Future<void> Function() _signOut;
   final DateTime Function() _now;
 
   static Future<Directory> _defaultRecordings() async {
@@ -172,6 +176,11 @@ class DataOwnership {
     await prefs.clear();
     await _deleteRecordings();
     await _stopReminders();
+    try {
+      await _signOut();
+    } catch (error) {
+      debugPrint('[Backup] could not sign out during erase: ${error.runtimeType}');
+    }
     await files.restart();
   }
 

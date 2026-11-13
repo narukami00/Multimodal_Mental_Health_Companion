@@ -4,6 +4,19 @@ import 'package:solace_mobile/features/profile/profile_controller.dart';
 
 void main() {
   group('ProfileController settings', () {
+    test('optional identity fields clear only when explicitly requested', () async {
+      final repository = InMemoryProfileRepository();
+      final controller = ProfileController(repository: repository);
+      await controller.load();
+      await controller.saveIdentity(displayName: 'Chosen name', avatarPath: '/private/photo.jpg');
+      await controller.saveIdentity(displayName: 'New name');
+      expect(controller.profile.avatarPath, '/private/photo.jpg');
+      await controller.saveIdentity(clearDisplayName: true);
+      expect(controller.profile.displayName, isNull);
+      expect(controller.profile.avatarPath, '/private/photo.jpg');
+      await controller.saveIdentity(clearAvatarPath: true);
+      expect((await repository.load()).avatarPath, isNull);
+    });
     test('ensureFirstRun records the first launch only once', () async {
       final controller = ProfileController(
         repository: InMemoryProfileRepository(),

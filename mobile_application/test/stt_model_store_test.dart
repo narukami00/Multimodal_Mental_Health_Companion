@@ -20,6 +20,7 @@ class _ModelServer {
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
+      expect(request.headers.value('Authorization'), 'Bearer test-token');
       final path = request.uri.path;
       if (!hasModel) {
         request.response.statusCode = 404;
@@ -52,12 +53,30 @@ void main() {
     dir = Directory.systemTemp.createTempSync('stt_store_');
     server = _ModelServer();
     await server.start();
-    store = SttModelStore(directory: () async => Directory('${dir.path}/model'), serverBase: () async => server.base);
+    store = SttModelStore(directory: () async => Directory('${dir.path}/model'), tokenProvider: ({required forceRefresh}) async => 'test-token', serverBase: () async => server.base);
   });
 
   tearDown(() async {
     await server.server.close(force: true);
     dir.deleteSync(recursive: true);
+  });
+
+  test('a signed-out download fails closed with an actionable reason', () async {
+    final signedOut = SttModelStore(
+      directory: () async => Directory('${dir.path}/signed-out'),
+      serverBase: () async => server.base,
+      tokenProvider: ({required forceRefresh}) async => null,
+    );
+    expect(await signedOut.downloadResult(), ModelDownload.signInRequired);
+    expect(await signedOut.installed(), isNull);
+    expect(await store.download(), isTrue);
+    final existing = SttModelStore(
+      directory: () async => Directory('${dir.path}/model'),
+      serverBase: () async => server.base,
+      tokenProvider: ({required forceRefresh}) async => null,
+    );
+    expect(await existing.downloadResult(), ModelDownload.signInRequired);
+    expect(await existing.installed(), isNotNull);
   });
 
   test('is not installed until it has been downloaded', () async {
@@ -99,7 +118,11 @@ void main() {
     test('no server at all is "server away"', () async {
       final away = SttModelStore(directory: () async => Directory('${dir.path}/model'), serverBase: () async => null);
       expect(await away.downloadResult(), ModelDownload.serverAway);
-      final unreachable = SttModelStore(directory: () async => Directory('${dir.path}/model'), serverBase: () async => Uri.parse('http://127.0.0.1:1'));
+      final unreachable = SttModelStore(
+        directory: () async => Directory('${dir.path}/model'),
+        tokenProvider: ({required forceRefresh}) async => 'test-token',
+        serverBase: () async => Uri.parse('http://127.0.0.1:1'),
+      );
       expect(await unreachable.downloadResult(), ModelDownload.serverAway); // nothing listens: could not connect
     });
 
@@ -118,7 +141,7 @@ void main() {
     test('a full phone is "no space", not a mystery', () async {
       final full = SttModelStore(
         directory: () async => throw FileSystemException('write failed', '/data', const OSError('No space left on device', 28)),
-        serverBase: () async => server.base,
+        tokenProvider: ({required forceRefresh}) async => 'test-token', serverBase: () async => server.base,
       );
       expect(await full.downloadResult(), ModelDownload.noSpace);
     });

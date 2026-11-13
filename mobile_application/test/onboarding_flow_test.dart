@@ -49,7 +49,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('A little about'), findsOneWidget);
 
-    await tester.tap(find.text('Continue'));
+    await tester.tap(find.text('Continue on this device'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Your data is'), findsOneWidget);
 
@@ -242,7 +242,7 @@ void _namePageTests() {
     final profile = await reach(tester);
     expect(find.textContaining('A little about'), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey('onboarding-name')), '  Rafsan ');
-    await tester.tap(find.text('Continue'));
+    await tester.tap(find.text('Continue on this device'));
     await tester.pumpAndSettle();
     expect(profile.profile.displayName, 'Rafsan');
     expect(find.textContaining('Your data is'), findsOneWidget);
@@ -250,7 +250,7 @@ void _namePageTests() {
 
   testWidgets('leaving the name blank, or skipping, keeps nothing and is fine', (tester) async {
     final profile = await reach(tester);
-    await tester.tap(find.text('Continue'));
+    await tester.tap(find.text('Continue on this device'));
     await tester.pumpAndSettle();
     expect(profile.profile.displayName, anyOf(isNull, isEmpty));
     expect(find.textContaining('Your data is'), findsOneWidget);

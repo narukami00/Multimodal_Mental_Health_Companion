@@ -5,7 +5,7 @@ import 'phone_transcriber.dart';
 
 /// The on-phone speech model (Whisper `base.en`, about 153 MB): a [ModelPackStore] for the server's "stt" pack.
 class SttModelStore extends ModelPackStore {
-  SttModelStore({super.directory, super.serverBase})
+  SttModelStore({super.directory, super.serverBase, super.tokenProvider, super.transportPolicy})
       : super(pack: 'stt', files: WhisperModelFiles.all, folderName: 'whisper-base.en', sizeMegabytes: approximateMegabytes);
 
   /// What the app tells the person the download costs.
@@ -20,7 +20,7 @@ class SttModelStore extends ModelPackStore {
 
 /// The on-phone camera models (about 19 MB), for reading the face on the phone itself: the server's "face" pack.
 class FaceModelStore extends ModelPackStore {
-  FaceModelStore({super.directory, super.serverBase})
+  FaceModelStore({super.directory, super.serverBase, super.tokenProvider, super.transportPolicy})
       : super(pack: 'face', files: faceFileNames, folderName: 'face-v1', sizeMegabytes: approximateMegabytes);
 
   static const encoderName = 'b0_fp32.onnx';

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:flutter/material.dart';
 
@@ -17,6 +18,7 @@ import '../profile/profile_controller.dart';
 import '../profile/sleep_hours_settings.dart';
 import '../footprint/phone_patterns_controller.dart';
 import 'onboarding_art.dart';
+import '../account/account_page.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({
@@ -464,7 +466,7 @@ class _BottomControls extends StatelessWidget {
             )
           else if (currentPage == namePage)
             _PrimaryCtaButton(
-              label: 'Continue',
+              label: 'Continue on this device',
               icon: Icons.arrow_forward_rounded,
               onPressed: onSaveName,
             )
@@ -895,6 +897,51 @@ class _AboutPage extends StatelessWidget {
           'Both stay on this phone and both are optional.',
       extra: Column(
         children: [
+          AccountEntryCard(
+            profile: controller,
+            onProfileSaved: () {
+              field.text = controller.profile.displayName ?? '';
+            },
+          ),
+          const SizedBox(height: 14),
+          ListenableBuilder(
+            listenable: controller,
+            builder: (context, _) {
+              final path = controller.profile.avatarPath;
+              final image = path != null && File(path).existsSync() ? FileImage(File(path)) : null;
+              return Column(children: [
+                CircleAvatar(
+                  radius: 30,
+                  foregroundImage: image,
+                  onForegroundImageError: image == null ? null : (_, _) {},
+                  child: const Icon(Icons.person_outline_rounded),
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    try {
+                      final picked = await ImagePicker().pickImage(
+                        source: ImageSource.gallery,
+                        maxWidth: 512,
+                        maxHeight: 512,
+                        imageQuality: 85,
+                      );
+                      if (picked == null) return;
+                      final path = await copyProfilePhoto(File(picked.path));
+                      await controller.saveIdentity(avatarPath: path);
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Could not save that photo. You can add one later.'),
+                        ));
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                  label: const Text('Add or change photo (optional)'),
+                ),
+              ]);
+            },
+          ),
           TextField(
             key: const ValueKey('onboarding-name'),
             controller: field,

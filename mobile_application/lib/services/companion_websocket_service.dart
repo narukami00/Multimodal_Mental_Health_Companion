@@ -3,14 +3,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
+import 'account_service.dart';
+import 'companion_auth.dart';
+import 'companion_http.dart';
 import '../core/constants/companion_server_config.dart';
 
-enum CompanionConnectionStatus {
-  disconnected,
-  connecting,
-  connected,
-  error,
-}
+enum CompanionConnectionStatus { disconnected, connecting, connected, error }
 
 /// Service managing real-time WebSocket connection to the Python Solace Companion server.
 /// Complies with CHAT_FEATURES.md Phase 1:
@@ -21,14 +20,46 @@ enum CompanionConnectionStatus {
 ///   - Exponential backoff auto-reconnect on network drop
 class CompanionWebSocketService {
   CompanionWebSocketService({
-    this.host = CompanionServerConfig.defaultTailscaleIp,
+    this.host = CompanionServerConfig.defaultLocalhost,
     this.port = CompanionServerConfig.defaultPort,
-    this.token = 'local-auth-token',
-  });
+    CompanionTokenProvider? tokenProvider,
+    CompanionTransportPolicy? transportPolicy,
+    CompanionHttpTransport? transport,
+    String? Function()? userId,
+  }) : _tokenProvider = tokenProvider ?? companionIdToken,
+       _http = CompanionHttp(
+         transport: transport,
+         tokenProvider: tokenProvider,
+         transportPolicy: transportPolicy,
+       ),
+       _transportPolicy = transportPolicy ?? CompanionTransportPolicy(),
+       _userId = userId ?? (() => AccountService.instance.identity?.uid) {
+    if (tokenProvider == null && userId == null) {
+      _account = AccountService.instance;
+      _account!.addListener(_onAccountChanged);
+    }
+  }
+
+  AccountService? _account;
+  void _onAccountChanged() {
+    if (_sessionOwner != null && _userId() != _sessionOwner) {
+      _sessionId = null;
+      _sessionOwner = null;
+      _sessionExpiry = null;
+      _lastEventId = null;
+      unawaited(disconnect());
+    }
+  }
 
   String host;
   int port;
-  String token;
+  final CompanionTokenProvider _tokenProvider;
+  final CompanionTransportPolicy _transportPolicy;
+  Uri? _connectedBase;
+  final CompanionHttp _http;
+  final String? Function() _userId;
+  String? _sessionOwner;
+  DateTime? _sessionExpiry;
 
   String? _sessionId;
   String? _connectedHost;
@@ -92,8 +123,7 @@ class CompanionWebSocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get llmChunkStream => _llmChunkController.stream;
 
-  final _llmDoneController =
-      StreamController<Map<String, dynamic>>.broadcast();
+  final _llmDoneController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get llmDoneStream => _llmDoneController.stream;
 
   final _audioAckController =
@@ -127,8 +157,7 @@ class CompanionWebSocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get ttsStartStream => _ttsStartController.stream;
 
-  final _ttsEndController =
-      StreamController<Map<String, dynamic>>.broadcast();
+  final _ttsEndController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get ttsEndStream => _ttsEndController.stream;
 
   final _ttsSegmentController =
@@ -138,7 +167,8 @@ class CompanionWebSocketService {
 
   final _callStateController =
       StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get callStateStream => _callStateController.stream;
+  Stream<Map<String, dynamic>> get callStateStream =>
+      _callStateController.stream;
 
   // --- duplex turn lifecycle (spec §7.2) -------------------------------------
   final _turnStartedController =
@@ -173,7 +203,8 @@ class CompanionWebSocketService {
 
   final _ttsResumeController =
       StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get ttsResumeStream => _ttsResumeController.stream;
+  Stream<Map<String, dynamic>> get ttsResumeStream =>
+      _ttsResumeController.stream;
 
   final _turnDiagnosticController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -209,14 +240,11 @@ class CompanionWebSocketService {
   /// Where the camera-frame socket lives: the same host and port this call actually connected to, same session.
   /// Null until connected.
   Uri? get videoUri {
-    final host = _connectedHost;
-    final port = _connectedPort;
+    final base = _connectedBase;
     final session = _sessionId;
-    if (host == null || port == null || session == null) return null;
-    return Uri(
-      scheme: 'ws',
-      host: host,
-      port: port,
+    if (base == null || session == null) return null;
+    return base.replace(
+      scheme: base.scheme == 'https' ? 'wss' : 'ws',
       path: '/ws/v1/video',
       queryParameters: {'session_id': session},
     );
@@ -250,14 +278,15 @@ class CompanionWebSocketService {
   }
 
   /// Connect to the companion backend.
-  /// If [customHost] is not provided and the primary [host] fails, attempts
-  /// candidate fallbacks from [CompanionServerConfig.candidateHosts] (Tailscale -> MagicDNS -> LAN -> USB).
+  /// Uses only the configured endpoint by default. Explicit optional fallback
+  /// considers only routes permitted by the credential transport policy; an
+  /// HTTPS endpoint never falls back to cleartext.
   Future<void> connect({
     String? customHost,
     int? customPort,
     String? sessionId,
     String? threadId,
-    bool allowFallback = true,
+    bool allowFallback = false,
   }) async {
     if (_isDisposed) return;
     final seq = ++_connectSequence;
@@ -269,25 +298,36 @@ class CompanionWebSocketService {
 
     if (customHost != null) host = customHost;
     if (customPort != null) port = customPort;
-    if (sessionId != null) _sessionId = sessionId;
+    // Caller IDs are local labels; only server-issued IDs are sent on the wire.
     if (threadId != null) _threadId = threadId;
 
     _manualDisconnect = false;
     _wasConnected = false;
     _lastErrorMessage = null;
-    _sessionId ??=
-        'sess_${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}';
     _threadId ??= 'thread_main';
 
     _updateStatus(CompanionConnectionStatus.connecting);
 
-    final shouldTryFallback = customHost == null &&
+    final shouldTryFallback =
+        customHost == null &&
         customPort == null &&
         allowFallback &&
+        !host.trim().toLowerCase().startsWith('https://') &&
         !CompanionServerConfig.isTestEnvironment;
 
     final hostsToTry = shouldTryFallback
-        ? [host, ...CompanionServerConfig.candidateHosts.where((h) => h != host)]
+        ? [
+            host,
+            ...CompanionServerConfig.candidateHosts.where((h) {
+              if (h == host) return false;
+              try {
+                _transportPolicy.requireSecure(companionHttpBase(h, port));
+                return true;
+              } catch (_) {
+                return false;
+              }
+            }),
+          ]
         : [host];
 
     for (var i = 0; i < hostsToTry.length; i++) {
@@ -328,30 +368,71 @@ class CompanionWebSocketService {
       await _cleanUpConnection(resetManual: false);
       if (seq != _connectSequence || _isDisposed) return false;
 
-      final uri = Uri.parse(
-        'ws://$candidateHost:$candidatePort/ws/v1/session?session_id=$_sessionId&token=$token',
+      final base = companionHttpBase(candidateHost, candidatePort);
+      _transportPolicy.requireSecure(base);
+      final uid = _userId();
+      if (uid == null) throw const CompanionSignInRequired();
+      if (_sessionId == null ||
+          _sessionOwner != uid ||
+          _connectedHost != candidateHost ||
+          _connectedPort != candidatePort ||
+          _sessionExpiry == null ||
+          _sessionExpiry!.isBefore(
+            DateTime.now().add(const Duration(seconds: 5)),
+          )) {
+        final lease = await _http.createSession(base, 'chat');
+        if (_userId() != uid) throw const CompanionSignInRequired();
+        _sessionId = lease.id;
+        _sessionOwner = uid;
+        _sessionExpiry = lease.expiresAt;
+      }
+      final token = await _tokenProvider(forceRefresh: false);
+      if (token == null || token.isEmpty || _userId() != uid) {
+        throw const CompanionSignInRequired();
+      }
+      final uri = base.replace(
+        scheme: base.scheme == 'https' ? 'wss' : 'ws',
+        path: '/ws/v1/session',
+        queryParameters: {'session_id': _sessionId!},
       );
-      final channel = WebSocketChannel.connect(uri);
+      _transportPolicy.requireSecure(uri);
+      var channel = IOWebSocketChannel.connect(
+        uri,
+        headers: {'Authorization': 'Bearer $token'},
+      );
       _channel = channel;
 
       final timeoutDuration = CompanionServerConfig.isTestEnvironment
           ? const Duration(milliseconds: 100)
           : const Duration(seconds: 4);
-      await channel.ready.timeout(
-        timeoutDuration,
-        onTimeout: () {
-          throw TimeoutException(
-            'Connection to $candidateHost:$candidatePort timed out (${timeoutDuration.inSeconds}s)',
-          );
-        },
-      );
+      try {
+        await channel.ready.timeout(timeoutDuration);
+      } catch (error) {
+        // A rejected expired ID token gets exactly one forced refresh.
+        if (!(error.toString().contains('401') ||
+            error.toString().contains('403'))) {
+          rethrow;
+        }
+        _safeClose(channel);
+        final fresh = await _tokenProvider(forceRefresh: true);
+        if (fresh == null || fresh.isEmpty || _userId() != uid) {
+          throw const CompanionSignInRequired();
+        }
+        channel = IOWebSocketChannel.connect(
+          uri,
+          headers: {'Authorization': 'Bearer $fresh'},
+        );
+        _channel = channel;
+        await channel.ready.timeout(timeoutDuration);
+      }
 
-      if (seq != _connectSequence || _isDisposed) {
+      if (seq != _connectSequence || _isDisposed || _userId() != uid) {
         _safeClose(channel);
         return false;
       }
 
       _reconnectAttempts = 0;
+      _connectedBase = base;
       _connectedHost = candidateHost;
       _connectedPort = candidatePort;
 
@@ -380,10 +461,15 @@ class CompanionWebSocketService {
       _sendHello();
       return true;
     } catch (e) {
-      debugPrint('[CompanionWS] Attempt failed on $candidateHost:$candidatePort: $e');
+      debugPrint(
+        '[CompanionWS] Attempt failed on $candidateHost:$candidatePort: ${e.runtimeType}',
+      );
       _lastErrorMessage = e is TimeoutException
           ? 'Timed out connecting to $candidateHost:$candidatePort'
-          : 'Failed: $e';
+          : e is CompanionSignInRequired ||
+                e is CompanionSecureConnectionRequired
+          ? e.toString()
+          : 'Companion server unavailable. Try again when connected.';
       return false;
     }
   }
@@ -750,11 +836,7 @@ class CompanionWebSocketService {
       'type': 'session.configure',
       'session_id': sessionId,
       'mode': mode,
-      'tts': {
-        'enabled': ttsEnabled,
-        'voice_id': voiceId,
-        'speed': speed,
-      },
+      'tts': {'enabled': ttsEnabled, 'voice_id': voiceId, 'speed': speed},
       'audio': {
         'mic_sample_rate': micSampleRate,
         'playback_sample_rate': playbackSampleRate,
@@ -766,7 +848,10 @@ class CompanionWebSocketService {
       if (country != null && country.isNotEmpty) 'country': country,
       // Sent whenever the app knows the answer, so withdrawing consent reaches the server on the very next configure.
       if (emotion != null)
-        'emotion': {'enabled': emotion, if (emotion && face) 'face_features': true},
+        'emotion': {
+          'enabled': emotion,
+          if (emotion && face) 'face_features': true,
+        },
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
   }
@@ -835,7 +920,8 @@ class CompanionWebSocketService {
     Duration timeout = const Duration(seconds: 12),
   }) async {
     if (_channel == null || text.trim().isEmpty) return null;
-    final requestId = 'mom_${DateTime.now().microsecondsSinceEpoch}_${_summarySequence++}';
+    final requestId =
+        'mom_${DateTime.now().microsecondsSinceEpoch}_${_summarySequence++}';
     final completer = Completer<String?>();
     _pendingMoments[requestId] = completer;
     _sendJson({
@@ -868,7 +954,8 @@ class CompanionWebSocketService {
     Duration timeout = const Duration(seconds: 45),
   }) async {
     if (_channel == null || messages.isEmpty) return null;
-    final requestId = 'sum_${DateTime.now().microsecondsSinceEpoch}_${_summarySequence++}';
+    final requestId =
+        'sum_${DateTime.now().microsecondsSinceEpoch}_${_summarySequence++}';
     final completer = Completer<String?>();
     _pendingSummaries[requestId] = completer;
     _sendJson({
@@ -1137,6 +1224,7 @@ class CompanionWebSocketService {
 
   /// Disconnect explicitly (disables auto-reconnect).
   Future<void> disconnect() async {
+    _connectSequence++;
     _manualDisconnect = true;
     _wasConnected = false;
     _lastErrorMessage = null;
@@ -1181,6 +1269,7 @@ class CompanionWebSocketService {
   }
 
   void dispose() {
+    _account?.removeListener(_onAccountChanged);
     _isDisposed = true;
     if (identical(_live, this)) _live = null;
     _manualDisconnect = true;

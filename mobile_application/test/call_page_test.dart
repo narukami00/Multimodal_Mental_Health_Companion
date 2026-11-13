@@ -261,7 +261,7 @@ void main() {
     ws.replyChunk('never finished');
     ws.endReply(cancelled: true);
     await tester.pump();
-    expect(solTexts(), hasLength(2), reason: 'greeting + the finished reply');
+    expect(solTexts(), ['Hello there.'], reason: 'only the finished reply is recorded');
 
     // Leaving the call mid-reply still keeps what Sol had said.
     ws.beginReply();

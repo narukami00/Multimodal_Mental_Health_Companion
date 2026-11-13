@@ -109,10 +109,17 @@ class ProfileController extends ChangeNotifier {
   }
 
   /// Stores the user's display name and/or chosen profile photo.
-  Future<void> saveIdentity({String? displayName, String? avatarPath}) async {
+  Future<void> saveIdentity({
+    String? displayName,
+    String? avatarPath,
+    bool clearDisplayName = false,
+    bool clearAvatarPath = false,
+  }) async {
     _profile = _profile.copyWith(
       displayName: displayName,
       avatarPath: avatarPath,
+      clearDisplayName: clearDisplayName,
+      clearAvatarPath: clearAvatarPath,
     );
     await _persist();
   }
