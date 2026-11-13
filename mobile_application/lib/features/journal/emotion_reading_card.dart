@@ -210,120 +210,286 @@ class _ReadingReviewSectionState extends State<_ReadingReviewSection> {
         matchesCurrent ||
         r?.status == MoodReviewStatus.corrected ||
         r?.status == MoodReviewStatus.noneFits;
+    final isConfirmedOrCorrected =
+        alreadyReviewed && r?.status != MoodReviewStatus.skipped;
 
-    return Container(
+    const sage = Color(0xFF3F9A7C);
+    const ink = Color(0xFF3A3125);
+    const soft = Color(0xFF7B6A55);
+
+    return AnimatedContainer(
       key: const ValueKey('reading-review-section'),
-      padding: const EdgeInsets.all(12),
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E8),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0x33C7A977)),
+        color: isConfirmedOrCorrected
+            ? const Color(0xFFF3FAF6)
+            : const Color(0xFFFFF8E8),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isConfirmedOrCorrected
+              ? sage.withValues(alpha: 0.28)
+              : const Color(0x45C7A977),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _provenanceLabel(),
-            key: const ValueKey('reading-provenance'),
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF5D4B34),
-            ),
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isConfirmedOrCorrected
+                      ? sage.withValues(alpha: 0.16)
+                      : const Color(0x28FFB534),
+                ),
+                child: Icon(
+                  isConfirmedOrCorrected
+                      ? Icons.check_rounded
+                      : Icons.tune_rounded,
+                  size: 16,
+                  color: isConfirmedOrCorrected ? sage : const Color(0xFF9C6615),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _provenanceLabel(),
+                  key: const ValueKey('reading-provenance'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: isConfirmedOrCorrected ? const Color(0xFF235342) : ink,
+                  ),
+                ),
+              ),
+              if (widget.onReview != null && alreadyReviewed && !_pickingCorrection)
+                TextButton(
+                  key: const ValueKey('reading-fit-change'),
+                  onPressed: () => setState(() => _pickingCorrection = true),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    backgroundColor: Colors.white.withValues(alpha: 0.85),
+                    foregroundColor: soft,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  child: const Text(
+                    'Change',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                  ),
+                ),
+            ],
           ),
           if (widget.onReview != null && (!alreadyReviewed || _pickingCorrection)) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             if (!_pickingCorrection) ...[
               const Text(
                 'Does this fit?',
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF3A3125),
+                  color: ink,
                 ),
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3EAD6),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        key: const ValueKey('reading-fit-yes'),
+                        borderRadius: BorderRadius.circular(11),
+                        onTap: () => widget.onReview!((
+                          status: MoodReviewStatus.accepted,
+                          correctedMood: null,
+                        )),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(11),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x1278501E),
+                                blurRadius: 4,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.check_rounded, size: 15, color: sage),
+                              SizedBox(width: 4),
+                              Text(
+                                'Yes',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF235342),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: InkWell(
+                        key: const ValueKey('reading-fit-not-quite'),
+                        borderRadius: BorderRadius.circular(11),
+                        onTap: () => setState(() => _pickingCorrection = true),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.72),
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: const Text(
+                            'Not quite',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: ink,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      key: const ValueKey('reading-fit-skip'),
+                      borderRadius: BorderRadius.circular(11),
+                      onTap: () => widget.onReview!((
+                        status: MoodReviewStatus.skipped,
+                        correctedMood: null,
+                      )),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                        child: Text(
+                          'Skip',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: soft,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              Row(
                 children: [
-                  OutlinedButton(
-                    key: const ValueKey('reading-fit-yes'),
-                    onPressed: () => widget.onReview!((
-                      status: MoodReviewStatus.accepted,
-                      correctedMood: null,
-                    )),
-                    child: const Text('Yes'),
-                  ),
-                  OutlinedButton(
-                    key: const ValueKey('reading-fit-not-quite'),
-                    onPressed: () => setState(() => _pickingCorrection = true),
-                    child: const Text('Not quite'),
+                  const Expanded(
+                    child: Text(
+                      'How did you feel then?',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: ink,
+                      ),
+                    ),
                   ),
                   TextButton(
-                    key: const ValueKey('reading-fit-skip'),
-                    onPressed: () => widget.onReview!((
-                      status: MoodReviewStatus.skipped,
-                      correctedMood: null,
-                    )),
-                    child: const Text('Skip'),
+                    onPressed: () => setState(() => _pickingCorrection = false),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: soft),
+                    ),
                   ),
                 ],
               ),
-            ] else ...[
-              const Text(
-                'How did you feel then?',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF3A3125),
-                ),
-              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                runSpacing: 6,
+                runSpacing: 8,
                 children: [
                   for (final word in Moods.values)
-                    ChoiceChip(
+                    InkWell(
                       key: ValueKey('reading-mood-${word.toLowerCase()}'),
-                      label: Text(Moods.display(word)),
-                      selected: false,
-                      onSelected: (_) {
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
                         setState(() => _pickingCorrection = false);
                         widget.onReview!((
                           status: MoodReviewStatus.corrected,
                           correctedMood: word,
                         ));
                       },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0x52C7A977)),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x0D78501E),
+                              blurRadius: 4,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          Moods.display(word),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: ink,
+                          ),
+                        ),
+                      ),
                     ),
-                  ChoiceChip(
+                  InkWell(
                     key: const ValueKey('reading-fit-none'),
-                    label: const Text('None fits'),
-                    selected: false,
-                    onSelected: (_) {
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
                       setState(() => _pickingCorrection = false);
                       widget.onReview!((
                         status: MoodReviewStatus.noneFits,
                         correctedMood: null,
                       ));
                     },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF6EFE0),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0x38C7A977)),
+                      ),
+                      child: const Text(
+                        'None fits',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: soft,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ],
-          ] else if (widget.onReview != null && alreadyReviewed) ...[
-            const SizedBox(height: 4),
-            TextButton(
-              key: const ValueKey('reading-fit-change'),
-              onPressed: () => setState(() => _pickingCorrection = true),
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 30),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text('Change'),
-            ),
           ],
         ],
       ),
