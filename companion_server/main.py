@@ -1,9 +1,11 @@
 import asyncio
+from contextlib import asynccontextmanager
 import logging
 import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from llm_service import LlmService
 from session import LIVE_SESSIONS, Session
@@ -28,21 +30,25 @@ stt = SttService(model_size=os.environ.get("SOLACE_WHISPER_MODEL", "base.en"))
 llm = LlmService(model_id=os.environ.get("SOLACE_LLM_MODEL", "Qwen/Qwen2.5-0.5B-Instruct"))
 tts = get_tts_engine(engine_type=os.environ.get("SOLACE_TTS", "auto"))
 
-app = FastAPI(
-    title="Solace Companion Backend",
-    version="0.2.0",
-    description="Local mental health companion server supporting STT, LLM, TTS, and real-time WebSocket communication."
-)
-
-
-@app.on_event("startup")
-async def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     # Refuse accidental unauthenticated or emulator-configured production deployments.
     AuthSettings.from_env()
     logger.info("Server startup: warming up STT, LLM & TTS services in background...")
     asyncio.create_task(asyncio.to_thread(stt.initialize))
     asyncio.create_task(asyncio.to_thread(llm.initialize))
     asyncio.create_task(asyncio.to_thread(tts.warmup))
+    yield
+    await default_client().aclose()
+    await llm.aclose()
+
+
+app = FastAPI(
+    title="Solace Companion Backend",
+    version="0.2.0",
+    description="Local mental health companion server supporting STT, LLM, TTS, and real-time WebSocket communication.",
+    lifespan=lifespan,
+)
 
 # Native clients do not need CORS. Browser origins must be configured explicitly.
 app.add_middleware(
@@ -83,6 +89,30 @@ async def healthz():
         "tts_sample_rate": tts.default_sample_rate,
         # Whether emotion readings can be made right now: "off" / "ready" / "unavailable" (switched on but not answering).
         # The app uses it to explain WHY there is no reading instead of guessing.
+        "emotion": await default_client().health(),
+    }
+
+
+@app.get("/readyz")
+async def readyz():
+    """Readiness probe: returns 503 until STT, LLM, and TTS backends are initialized."""
+    ready = bool(stt.is_ready and llm.is_ready and tts.is_ready)
+    payload = {
+        "ready": ready,
+        "stt_ready": stt.is_ready,
+        "llm_ready": llm.is_ready,
+        "tts_ready": tts.is_ready,
+    }
+    return JSONResponse(payload, status_code=200 if ready else 503)
+
+
+@app.get("/v1/metrics")
+async def metrics():
+    """Non-PII operational telemetry: LLM priority queue, prompt token savings, and session counts."""
+    return {
+        "live_sessions": len(LIVE_SESSIONS),
+        "stateless_leases": server_auth.registry.is_stateless,
+        "llm": llm.metrics(),
         "emotion": await default_client().health(),
     }
 

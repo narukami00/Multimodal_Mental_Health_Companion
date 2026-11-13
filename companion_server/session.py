@@ -301,6 +301,7 @@ class Session:
             "hello": self._h_hello,
             "session.configure": self._h_configure,
             "moment.extract": self._h_moment_extract,
+            "facts.extract": self._h_facts_extract,
             "summary.request": self._h_summary_request,
             "speech.cancel": self._h_speech_cancel,
             "call.barge_in": self._h_call_barge_in,
@@ -609,6 +610,28 @@ class Session:
             await self._send({"type": "moment.proposal", "request_id": request_id, "text": moment})
 
         self._spawn(_extract())
+
+    async def _h_facts_extract(self, data: Dict[str, Any]) -> None:
+        request_id = str(data.get("request_id", ""))[:64]
+        turns = sanitize_turns(data.get("messages"), max_turns=24)
+        existing_raw = data.get("existing_facts")
+        existing = (
+            [str(item)[:120].strip() for item in existing_raw[:32] if isinstance(item, str) and item.strip()]
+            if isinstance(existing_raw, list)
+            else []
+        )
+
+        async def _extract_facts() -> None:
+            result = await self.llm.extract_user_facts_async(turns, existing)
+            await self._send({
+                "type": "facts.result",
+                "request_id": request_id,
+                "facts": result.get("facts") or [],
+                "identity_summary": result.get("identity_summary") or "",
+                "method": result.get("method") or "fallback",
+            })
+
+        self._spawn(_extract_facts())
 
     async def _h_summary_request(self, data: Dict[str, Any]) -> None:
         request_id = str(data.get("request_id", ""))[:64]

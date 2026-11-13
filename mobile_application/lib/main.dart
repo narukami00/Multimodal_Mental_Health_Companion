@@ -286,6 +286,15 @@ Future<void> main() async {
     ),
   );
   await moments.load();
+  final userFacts = UserFactsController(
+    preferences: preferences,
+    secureStore: secureStore,
+    extractor: (turns, existing) {
+      final run = CompanionWebSocketService.liveUserFactExtractor;
+      return run == null ? Future.value(null) : run(turns, existing);
+    },
+  );
+  await userFacts.load();
   // Lets a journal entry or a chat message offer "keep as a moment".
   KeepMoment.controller = moments;
   void offerMoment(MomentCandidate candidate) {
@@ -340,6 +349,7 @@ Future<void> main() async {
     consent: consentController,
     profile: profileController,
     moments: moments,
+    userFacts: userFacts,
     sessions: () => sessionController.sessions,
     themes: () => {
       ...breakPrompts.activeThemes(),
@@ -372,6 +382,8 @@ Future<void> main() async {
   ).call;
   ChatPage.keptMoments = () => moments.confirmed;
   ChatPage.personalization = memory.personalization;
+  chatController.onConversationIdle = (convId, turns) =>
+      userFacts.extractFromConversation(conversationId: convId, turns: turns);
 
   final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -505,6 +517,9 @@ Future<void> main() async {
     unawaited(quickReplies.run());
   });
   AppLifecycleListener(
+    onInactive: () {
+      chatController.notifyConversationIdle();
+    },
     onResume: () {
       unawaited(refreshCheckInWidget());
       unawaited(writeDownWaiting());

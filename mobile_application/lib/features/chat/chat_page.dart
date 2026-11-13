@@ -540,6 +540,7 @@ class _ChatPageState extends State<ChatPage> {
             .then((_) => _maybeSummarize());
       }
       _scrollDown();
+      _chatController.notifyConversationIdle();
     });
 
     // The server reads each turn as it happens (with its running memory of the conversation) when the
@@ -734,6 +735,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _chatController.notifyConversationIdle();
     if (_ownsChatController) {
       _chatController.dispose();
     }

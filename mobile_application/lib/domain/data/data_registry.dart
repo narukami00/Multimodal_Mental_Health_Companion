@@ -67,6 +67,16 @@ const dataRegistry = <DataEntry>[
     keys: ['memory.moments', 'memory.momentTombstones'],
   ),
   DataEntry(
+    id: 'user_facts',
+    label: 'What Sol learned about you',
+    kind: DataKind.personal,
+    keys: [
+      'memory.userFacts',
+      'memory.identitySummary',
+      'memory.factScannedTurns',
+    ],
+  ),
+  DataEntry(
     id: 'ideas',
     label: 'Ideas you tried',
     kind: DataKind.personal,

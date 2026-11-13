@@ -8,6 +8,7 @@ import 'account_service.dart';
 import 'companion_auth.dart';
 import 'companion_http.dart';
 import '../core/constants/companion_server_config.dart';
+import '../core/models/user_fact.dart';
 
 enum CompanionConnectionStatus { disconnected, connecting, connected, error }
 
@@ -90,6 +91,44 @@ class CompanionWebSocketService {
       final data = jsonDecode(reply.body) as Map<String, dynamic>;
       final title = (data['title'] as String? ?? '').trim();
       return title.isEmpty ? null : title;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Ask the companion server's background lane (`priority=1`) to extract
+  /// durable non-clinical user facts from user turns and update the portrait.
+  Future<UserFactExtractionResult?> extractUserFacts(
+    List<Map<String, String>> turns,
+    List<String> existingFacts,
+  ) async {
+    if (turns.isEmpty || _status != CompanionConnectionStatus.connected) {
+      return null;
+    }
+    final base = _connectedBase ?? Uri(scheme: 'http', host: host, port: port);
+    try {
+      final reply = await _http.request(
+        method: 'POST',
+        uri: base.replace(path: '/v1/memory/extract_facts', query: ''),
+        headers: const {'Content-Type': 'application/json'},
+        body: utf8.encode(
+          jsonEncode({'turns': turns, 'existing_facts': existingFacts}),
+        ),
+        timeout: const Duration(seconds: 10),
+      );
+      if (reply.status < 200 || reply.status >= 300) return null;
+      final data = jsonDecode(reply.body) as Map<String, dynamic>;
+      final rawFacts = data['facts'];
+      final facts = rawFacts is List
+          ? [for (final f in rawFacts.whereType<String>()) if (f.trim().isNotEmpty) f.trim()]
+          : const <String>[];
+      final summary = (data['identity_summary'] as String? ?? '').trim();
+      final method = (data['method'] as String? ?? 'fallback').trim();
+      return UserFactExtractionResult(
+        facts: facts,
+        identitySummary: summary,
+        method: method,
+      );
     } catch (_) {
       return null;
     }
@@ -286,6 +325,18 @@ class CompanionWebSocketService {
     return live == null
         ? null
         : (text, context) => live.requestMoment(text, context: context);
+  }
+
+  /// Extracts durable user facts over the active connection, or null offline.
+  static Future<UserFactExtractionResult?> Function(
+    List<Map<String, String>> turns,
+    List<String> existingFacts,
+  )?
+  get liveUserFactExtractor {
+    final live = _live;
+    return live == null
+        ? null
+        : (turns, existingFacts) => live.extractUserFacts(turns, existingFacts);
   }
 
   void _updateStatus(CompanionConnectionStatus newStatus) {

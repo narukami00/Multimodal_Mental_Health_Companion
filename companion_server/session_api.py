@@ -28,6 +28,17 @@ class ConversationTitleResponse(BaseModel):
     title: str
 
 
+class ExtractFactsRequest(BaseModel):
+    turns: List[Dict[str, str]] = Field(default_factory=list)
+    existing_facts: List[str] = Field(default_factory=list)
+
+
+class ExtractFactsResponse(BaseModel):
+    facts: List[str] = Field(default_factory=list)
+    identity_summary: str = ""
+    method: str = "fallback"
+
+
 def build_router(auth, session_factory, live, video_handler, llm=None):
     router = APIRouter()
     connecting = set()
@@ -101,6 +112,22 @@ def build_router(auth, session_factory, live, video_handler, llm=None):
             raise HTTPException(exc.status, exc.detail) from None
         title = await llm.generate_title_async(req.turns) if llm is not None else ""
         return ConversationTitleResponse(title=title)
+
+    @router.post("/v1/memory/extract_facts", response_model=ExtractFactsResponse)
+    async def extract_user_facts(req: ExtractFactsRequest, request: Request):
+        """Extract durable non-clinical user facts strictly from user turns (priority=1 background lane)."""
+        try:
+            await auth.http_identity(request)
+        except AuthError as exc:
+            raise HTTPException(exc.status, exc.detail) from None
+        if llm is None:
+            return ExtractFactsResponse(facts=[], identity_summary="", method="fallback")
+        result = await llm.extract_user_facts_async(req.turns, req.existing_facts)
+        return ExtractFactsResponse(
+            facts=result.get("facts") or [],
+            identity_summary=result.get("identity_summary") or "",
+            method=result.get("method") or "fallback",
+        )
 
 
     return router

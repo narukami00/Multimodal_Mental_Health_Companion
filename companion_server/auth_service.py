@@ -4,7 +4,11 @@ No ML imports. The only development mode is the explicit Firebase Auth emulator;
 there is no anonymous or static-token authentication fallback.
 """
 from dataclasses import dataclass
+import base64
+import hashlib
+import hmac
 import ipaddress
+import json
 import os
 import secrets
 import threading
@@ -123,9 +127,56 @@ class Lease:
 
 
 class SessionRegistry:
-    def __init__(self, clock=time.time, ttl_s=3600, capacity=10000):
+    def __init__(self, clock=time.time, ttl_s=3600, capacity=10000, secret: Optional[str] = None):
         self.clock, self.ttl_s, self.capacity = clock, ttl_s, capacity
         self._leases = {}
+        self._secret = os.environ.get("SOLACE_LEASE_SECRET", "").strip() if secret is None else secret.strip()
+
+    @property
+    def is_stateless(self) -> bool:
+        return bool(self._secret)
+
+    def _sign_lease(self, lease: Lease) -> str:
+        payload = json.dumps(
+            {
+                "u": lease.owner_uid,
+                "p": lease.purpose,
+                "e": lease.expires_at,
+                "n": secrets.token_hex(8),
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+        body = base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+        sig = base64.urlsafe_b64encode(
+            hmac.new(self._secret.encode("utf-8"), body.encode("ascii"), hashlib.sha256).digest()
+        ).decode("ascii").rstrip("=")
+        return f"sess_tok_{body}.{sig}"
+
+    def _verify_signed_lease(self, session_id: str) -> Optional[Lease]:
+        if not self._secret or not session_id.startswith("sess_tok_") or "." not in session_id:
+            return None
+        try:
+            body, sig = session_id[len("sess_tok_"):].split(".", 1)
+            expected = base64.urlsafe_b64encode(
+                hmac.new(self._secret.encode("utf-8"), body.encode("ascii"), hashlib.sha256).digest()
+            ).decode("ascii").rstrip("=")
+            if not hmac.compare_digest(sig, expected):
+                return None
+            padded = body + "=" * (-len(body) % 4)
+            data = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+            uid = data.get("u")
+            purpose = data.get("p")
+            expires_at = data.get("e")
+            if (
+                not isinstance(uid, str)
+                or not isinstance(purpose, str)
+                or not isinstance(expires_at, int)
+                or expires_at <= self.clock()
+            ):
+                return None
+            return Lease(session_id, uid, purpose, expires_at)
+        except Exception:
+            return None
 
     def _prune(self):
         for sid in [sid for sid, lease in self._leases.items() if lease.expires_at <= self.clock()]:
@@ -137,18 +188,22 @@ class SessionRegistry:
             raise AuthError(400, "Unknown session purpose")
         if identity.expires_at <= self.clock():
             raise AuthError(401, "Identity token has expired")
+        expires_at = min(identity.expires_at, int(self.clock()) + self.ttl_s)
+        if self._secret:
+            tmp = Lease("", identity.uid, purpose, expires_at)
+            return Lease(self._sign_lease(tmp), identity.uid, purpose, expires_at)
         if len(self._leases) >= self.capacity:
             raise AuthError(503, "Session capacity reached; try again later")
         sid = "sess_" + secrets.token_urlsafe(24)
-        lease = Lease(sid, identity.uid, purpose, min(identity.expires_at, int(self.clock()) + self.ttl_s))
+        lease = Lease(sid, identity.uid, purpose, expires_at)
         self._leases[sid] = lease
         return lease
 
     def require(self, identity: Identity, session_id: str, purpose: str) -> Lease:
         self._prune()
-        lease = self._leases.get(session_id)
         if identity.expires_at <= self.clock():
             raise AuthError(401, "Identity token has expired")
+        lease = self._verify_signed_lease(session_id) if self._secret else self._leases.get(session_id)
         if lease is None or lease.owner_uid != identity.uid or lease.purpose != purpose:
             # Do not disclose whether another person's session exists.
             raise AuthError(403, "Session is unavailable or does not belong to this account")

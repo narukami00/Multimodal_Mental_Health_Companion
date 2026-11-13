@@ -9,6 +9,8 @@ import '../consent/consent_controller.dart';
 import '../profile/profile_controller.dart';
 import '../suggestions/suggestion_context.dart';
 import 'moments_controller.dart';
+import 'user_facts_controller.dart';
+export 'user_facts_controller.dart' show UserFact, UserFactsController;
 
 /// Exactly what the companion server is told about the person, and nothing else.
 ///
@@ -22,6 +24,7 @@ class CompanionMemoryContext {
     required this.moments,
     required this.sessions,
     required this.themes,
+    this.userFacts,
     this.personalization,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
@@ -29,6 +32,7 @@ class CompanionMemoryContext {
   final ConsentController consent;
   final ProfileController profile;
   final MomentsController moments;
+  final UserFactsController? userFacts;
 
   /// The person's check-ins, newest first.
   final List<SessionRecord> Function() sessions;
@@ -86,12 +90,31 @@ class CompanionMemoryContext {
   /// The moments that would be told if it were turned on. Never sent.
   List<String> previewMomentLines() => [for (final m in moments.forSol) m.text];
 
+  /// Learned identity portrait shown in "What Sol remembers".
+  String previewIdentitySummary() => userFacts?.identitySummary ?? '';
+
+  /// Learned atomic facts shown in "What Sol remembers".
+  List<String> previewUserFacts() =>
+      userFacts?.factLines(maxCount: 32) ?? const [];
+
   /// The block sent to the server, or null when there is nothing to send.
   Map<String, Object?>? payload() {
     final snippet = this.snippet();
     final forSolMoments = momentsOn ? moments.forSol : const [];
     final lines = [for (final m in forSolMoments) m.text];
-    if (snippet.isEmpty && lines.isEmpty) return null;
+    final identitySummary = snippetOn ? (userFacts?.identitySummary ?? '') : '';
+    final userFactLines = snippetOn
+        ? (userFacts?.factLines(maxCount: 32) ?? const <String>[])
+        : const <String>[];
+    final userFactRecency = snippetOn && userFactLines.isNotEmpty
+        ? (userFacts?.factRecencyScores(maxCount: 32) ?? const <double>[])
+        : const <double>[];
+    if (snippet.isEmpty &&
+        lines.isEmpty &&
+        identitySummary.isEmpty &&
+        userFactLines.isEmpty) {
+      return null;
+    }
 
     final pinnedCount = forSolMoments.where((m) => m.pinned).length;
     final styleNotes = snippetOn ? _styleDirective() : '';
@@ -104,6 +127,11 @@ class CompanionMemoryContext {
       if (!snippet.isEmpty) 'profile_snippet': snippet.text,
       if (lines.isNotEmpty) 'memory_facts': lines,
       if (pinnedCount > 0) 'pinned_count': pinnedCount,
+      if (identitySummary.isNotEmpty) 'identity_summary': identitySummary,
+      if (userFactLines.isNotEmpty) 'user_facts': userFactLines,
+      if (userFactRecency.length == userFactLines.length &&
+          userFactRecency.isNotEmpty)
+        'user_facts_recency': userFactRecency,
       if (styleNotes.isNotEmpty) 'style_notes': styleNotes,
       if (copingWorked.isNotEmpty) 'coping_worked': copingWorked,
     };

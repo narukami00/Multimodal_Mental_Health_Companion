@@ -1,13 +1,13 @@
 import asyncio
 import io
 import logging
+import os
 import threading
 import time
 from typing import Dict, List, Optional, Tuple
 import wave
 
 import numpy as np
-import torch
 
 from cuda_libs import cuda_usable, register_cuda_dll_dirs
 
@@ -15,8 +15,18 @@ from cuda_libs import cuda_usable, register_cuda_dll_dirs
 # and fall back to the CPU if the DLLs are not on the search path.
 register_cuda_dll_dirs()
 
-from faster_whisper import WhisperModel  # noqa: E402
-from silero_vad import load_silero_vad, get_speech_timestamps, get_speech_timestamps_from_probs  # noqa: E402
+try:
+    import torch  # noqa: E402
+    from faster_whisper import WhisperModel  # noqa: E402
+    from silero_vad import load_silero_vad, get_speech_timestamps, get_speech_timestamps_from_probs  # noqa: E402
+    _HAS_STT_RUNTIME = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    WhisperModel = None  # type: ignore[assignment,misc]
+    load_silero_vad = None  # type: ignore[assignment]
+    get_speech_timestamps = None  # type: ignore[assignment]
+    get_speech_timestamps_from_probs = None  # type: ignore[assignment]
+    _HAS_STT_RUNTIME = False
 
 logger = logging.getLogger("solace_companion.stt")
 
@@ -151,6 +161,11 @@ class SttService:
     def initialize(self):
         """Pre-load Silero VAD and Whisper model."""
         if self._is_ready:
+            return
+        if os.environ.get("SOLACE_STT", "").lower() == "mock" or not _HAS_STT_RUNTIME:
+            self._device = "mock"
+            self._is_ready = True
+            logger.info("STT initialized in lightweight mock mode")
             return
 
         logger.info("Initializing Silero VAD...")

@@ -34,6 +34,12 @@ class ChatController extends ChangeNotifier {
 
   /// Optional LLM callback that turns recent turns into a 2-5 word thread title.
   Future<String?> Function(List<Map<String, String>> turns)? titleGenerator;
+
+  /// Optional background callback invoked when a conversation becomes idle
+  /// (switching threads, starting a new thread, closing chat, or after turns).
+  Future<void> Function(String conversationId, List<Map<String, String>> turns)?
+      onConversationIdle;
+
   final Set<String> _llmTitledIds = <String>{};
   final Set<String> _titlingInFlight = <String>{};
 
@@ -132,6 +138,7 @@ class ChatController extends ChangeNotifier {
 
   /// Start a fresh, clean conversation session.
   ChatConversationRecord startNewConversation() {
+    notifyConversationIdle(_activeConversationId);
     _highlightQuery = null;
     // If the active conversation is already clean (no user messages), reuse it directly
     final current = activeConversation;
@@ -190,11 +197,39 @@ class ChatController extends ChangeNotifier {
   void switchConversation(String id) {
     if (_activeConversationId == id) return;
     if (_conversations.any((c) => c.id == id)) {
+      notifyConversationIdle(_activeConversationId);
       _activeConversationId = id;
       _prefs?.setString(_activeIdKey, id);
       notifyListeners();
     }
   }
+
+  /// Triggers [onConversationIdle] for [conversationId] (or the active thread)
+  /// when it holds at least two user turns suitable for fact extraction.
+  void notifyConversationIdle([String? conversationId]) {
+    final handler = onConversationIdle;
+    final targetId = conversationId ?? _activeConversationId;
+    if (handler == null || targetId == null || targetId.isEmpty) return;
+    final conv = conversationById(targetId);
+    if (conv == null) return;
+    final turns = _turnsForFactExtraction(conv);
+    final userCount = turns.where((t) => t['role'] == 'user').length;
+    if (userCount < 2) return;
+    handler(targetId, turns).catchError((_) {});
+  }
+
+  List<Map<String, String>> _turnsForFactExtraction(
+    ChatConversationRecord conv,
+  ) =>
+      [
+        for (final m in conv.messages)
+          if ((m.isUser ? m.spokenText : m.text).trim().isNotEmpty &&
+              m.spokenText != 'Audio reflection')
+            {
+              'role': m.isUser ? 'user' : 'assistant',
+              'text': m.isUser ? m.spokenText : m.text.trim(),
+            },
+      ];
 
   /// Called after the person sends a typed message, so other features can look
   /// at it. Voice messages are not passed on until they have a transcription.

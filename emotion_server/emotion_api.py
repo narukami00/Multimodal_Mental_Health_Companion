@@ -28,13 +28,11 @@ from contextlib import asynccontextmanager  # noqa: E402
 from math import gcd  # noqa: E402
 from typing import List, Optional  # noqa: E402
 
-import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 from fastapi import FastAPI, HTTPException, Request  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from cue import EmotionState, build_cue  # noqa: E402
-from emotion_engine import Engine, MIN_USABLE, pool_face  # noqa: E402
 from pipeline_utils import (  # noqa: E402
     UserBaselineTracker,
     allocate_words_by_weights,
@@ -43,6 +41,56 @@ from pipeline_utils import (  # noqa: E402
     pool_window_estimates,
 )
 
+EMOTION_MOCK = os.environ.get("EMOTION_MOCK", "0") == "1"
+
+if EMOTION_MOCK:
+    cv2 = None  # type: ignore[assignment]
+    MIN_USABLE = 3
+    pool_face = lambda *a, **kw: None  # noqa: E731
+else:
+    import cv2  # noqa: E402
+    from emotion_engine import Engine, MIN_USABLE, pool_face  # noqa: E402
+
+
+def _build_mock_engine():
+    class _MockAudio:
+        def features(self, pcm):
+            return np.zeros(8, dtype=np.float32)
+
+    class _MockText:
+        def features(self, text):
+            return np.zeros(8, dtype=np.float32)
+
+    class _MockNorm:
+        mu = {"A": np.zeros(8, dtype=np.float32), "T": np.zeros(8, dtype=np.float32), "V": np.zeros(8, dtype=np.float32)}
+
+        def set_user_mean(self, mod, val):
+            return None
+
+        def __call__(self, mod, vec):
+            return np.asarray(vec, dtype=np.float32)
+
+    class _MockHeads:
+        def predict(self, xa, xt, xv):
+            mods = [m for m, v in (("A", xa), ("T", xt), ("V", xv)) if v is not None]
+            return {
+                "valence": 0.0,
+                "arousal": 0.0,
+                "lv": {"negative": 0.15, "neutral": 0.70, "positive": 0.15},
+                "la": {"low": 0.25, "mid": 0.50, "high": 0.25},
+                "l7": {"neutral": 0.64, "happy": 0.10, "sad": 0.08, "angry": 0.04, "fear": 0.05, "disgust": 0.04, "surprise": 0.05},
+                "modalities": mods,
+            }
+
+    class _MockEng:
+        audio = _MockAudio()
+        text = _MockText()
+        norm = _MockNorm()
+        heads = _MockHeads()
+        face = None
+
+    return _MockEng()
+
 ENG = None
 POOL = ThreadPoolExecutor(max_workers=1)  # one engine, one worker: GPU jobs run strictly one after another
 STATES, LAST_USED, JOBS, BASELINES = {}, {}, {}, {}
@@ -50,10 +98,10 @@ FACES, TRACK = {}, {}  # session_id -> deque of (t, record, embedding) / (tracke
 PHONE_FACES = {}  # session_id -> the 1,400-number face vector a phone computed ITSELF (it never sent the pictures): numbers only
 FACE_DIM = 1400
 FACE_COMPARE = os.environ.get("EMOTION_FACE_COMPARE", "0") == "1"  # testing: when a session has both, log how close they are
-FACE_ON = os.environ.get("EMOTION_FACE", "0") == "1"
+FACE_ON = False if EMOTION_MOCK else (os.environ.get("EMOTION_FACE", "0") == "1")
 MAX_PENDING_FRAMES, FACE_BUFFER = 2, 400
 PENDING = {"frames": 0}
-MODEL_VERSION = "emotion-v0-audio-text" + ("-face" if FACE_ON else "")
+MODEL_VERSION = "emotion-v0-mock" if EMOTION_MOCK else ("emotion-v0-audio-text" + ("-face" if FACE_ON else ""))
 MIN_AUDIO_S, SESSION_TTL_S, JOB_TTL_S = 0.3, 7200, 60
 
 
@@ -61,12 +109,16 @@ MIN_AUDIO_S, SESSION_TTL_S, JOB_TTL_S = 0.3, 7200, 60
 async def lifespan(app):
     global ENG
     t0 = time.time()
-    ENG = Engine(load_face=FACE_ON, load_asr=False)  # the caller supplies the transcript; the camera branch only when asked for
-    if FACE_ON:  # the first frame pays for the CUDA kernels and the detector: do it now, not during a call
-        for _ in range(2):
-            ENG.face.process(np.zeros((640, 360, 3), np.uint8), 0.0)
-        ENG.face.reset()
-    print(f"emotion engine ready in {time.time() - t0:.0f} s", flush=True)
+    if EMOTION_MOCK:
+        ENG = _build_mock_engine()
+        print(f"emotion engine ready in {time.time() - t0:.2f} s (mock mode)", flush=True)
+    else:
+        ENG = Engine(load_face=FACE_ON, load_asr=False)  # the caller supplies the transcript; the camera branch only when asked for
+        if FACE_ON:  # the first frame pays for the CUDA kernels and the detector: do it now, not during a call
+            for _ in range(2):
+                ENG.face.process(np.zeros((640, 360, 3), np.uint8), 0.0)
+            ENG.face.reset()
+        print(f"emotion engine ready in {time.time() - t0:.0f} s", flush=True)
     yield
 
 
@@ -96,6 +148,8 @@ def state_of(session_id):
     for k in [k for k, t in LAST_USED.items() if now - t > SESSION_TTL_S]:
         STATES.pop(k, None)
         BASELINES.pop(k, None)
+        FACES.pop(k, None)
+        TRACK.pop(k, None)
         PHONE_FACES.pop(k, None)
         LAST_USED.pop(k, None)
     for k in [k for k, (t, _) in JOBS.items() if now - t > JOB_TTL_S]:
@@ -271,9 +325,22 @@ def pack(est, decision, windows=None, calibrated_turns=None, face_quality=None, 
 
 @app.get("/healthz")
 async def healthz():
-    import torch
-    return dict(ready=ENG is not None, model_version=MODEL_VERSION, face=FACE_ON, sessions=len(STATES), pending_audio=len(JOBS),
-                gpu_allocated_mb=int(torch.cuda.memory_allocated() / 1e6) if torch.cuda.is_available() else 0)
+    gpu_mb = 0
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_mb = int(torch.cuda.memory_allocated() / 1e6)
+    except Exception:
+        pass
+    return dict(
+        ready=ENG is not None,
+        mock=EMOTION_MOCK,
+        model_version=MODEL_VERSION,
+        face=FACE_ON,
+        sessions=len(STATES),
+        pending_audio=len(JOBS),
+        gpu_allocated_mb=gpu_mb,
+    )
 
 
 @app.post("/v1/emotion/audio")

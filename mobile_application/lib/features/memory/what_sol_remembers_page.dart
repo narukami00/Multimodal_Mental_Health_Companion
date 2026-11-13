@@ -96,6 +96,7 @@ class _WhatSolRemembersPageState extends State<WhatSolRemembersPage> {
           profileController,
           ?chat,
           ?lifePulse,
+          ?memory.userFacts,
         ]),
         builder: (context, _) => ListView(
           padding: EdgeInsets.zero,
@@ -113,6 +114,10 @@ class _WhatSolRemembersPageState extends State<WhatSolRemembersPage> {
                   _glance(),
                   const KitLabel('WHAT SOL IS TOLD'),
                   _snippetCard(context),
+                  if (memory.userFacts != null) ...[
+                    const SizedBox(height: 10),
+                    _userFactsCard(context, memory.userFacts!),
+                  ],
                   const SizedBox(height: 10),
                   _momentsToldCard(context),
                   const KitLabel('HOW YOU SOUND'),
@@ -256,6 +261,199 @@ class _WhatSolRemembersPageState extends State<WhatSolRemembersPage> {
             text: snippet.isEmpty ? 'Nothing yet. There is not enough to say.' : snippet.text,
             dim: !on,
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _userFactsCard(BuildContext context, UserFactsController uf) {
+    final on = memory.snippetOn;
+    final facts = [
+      for (final f in uf.facts)
+        if (_matchesText([f.text])) f,
+    ];
+    return KitCard(
+      key: const ValueKey('user-facts-card'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const IconTile(
+                icon: Icons.badge_outlined,
+                color: Color(0xFF6E73C8),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'What Sol has learned about you',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      on
+                          ? 'Only relevant details are injected into each chat to save space.'
+                          : 'Kept encrypted on this phone; shared only when your note above is on.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                        color: _soft,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                key: const ValueKey('add-user-fact'),
+                tooltip: 'Add detail',
+                onPressed: () async {
+                  final text = await _askText(
+                    context,
+                    initial: '',
+                    title: 'Add a detail about you',
+                  );
+                  if (text != null) await uf.addManual(text);
+                },
+                icon: const Icon(Icons.add_rounded, color: Color(0xFF6E73C8)),
+              ),
+            ],
+          ),
+          if (uf.identitySummary.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              key: const ValueKey('user-identity-summary'),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: on ? const Color(0xFFF6F6FC) : const Color(0xFFF7F3EA),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _line),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'IDENTITY PORTRAIT',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
+                            color: Color(0xFF5D62B5),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        HighlightedText(
+                          uf.identitySummary,
+                          query: _searchQuery,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            height: 1.45,
+                            color: _ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    key: const ValueKey('clear-identity-summary'),
+                    tooltip: 'Clear summary',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: uf.clearIdentitySummary,
+                    icon: const Icon(Icons.close_rounded, size: 17, color: _muted),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          if (facts.isEmpty)
+            Text(
+              uf.facts.isEmpty
+                  ? 'No personal details saved yet. As you chat, Sol can remember facts you explicitly mention—never clinical guesses.'
+                  : 'No learned details match your search.',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                height: 1.45,
+                color: _muted,
+              ),
+            )
+          else ...[
+            for (var i = 0; i < facts.length; i++) ...[
+              if (i > 0) const Divider(height: 1, color: _line),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: HighlightedText(
+                        facts[i].text,
+                        query: _searchQuery,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _ink,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      key: ValueKey('pin-user-fact-${facts[i].id}'),
+                      tooltip: facts[i].pinned ? 'Unpin' : 'Pin',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => uf.togglePin(facts[i].id),
+                      icon: Icon(
+                        facts[i].pinned
+                            ? Icons.push_pin_rounded
+                            : Icons.push_pin_outlined,
+                        size: 17,
+                        color: facts[i].pinned
+                            ? const Color(0xFFB57A12)
+                            : _muted,
+                      ),
+                    ),
+                    IconButton(
+                      key: ValueKey('delete-user-fact-${facts[i].id}'),
+                      tooltip: 'Remove detail',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => uf.deleteFact(facts[i].id),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 17,
+                        color: _muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                key: const ValueKey('clear-all-user-facts'),
+                onPressed: uf.forgetAll,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFB5503C),
+                ),
+                child: const Text(
+                  'Clear learned details',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

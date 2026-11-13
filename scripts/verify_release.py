@@ -115,6 +115,10 @@ def main() -> int:
         "test_journal_api.py",
         "test_auth_service.py",
         "test_auth_http.py",
+        "test_llm_service.py",
+        "test_emotion_health.py",
+        "test_moment_extraction.py",
+        "test_user_facts_and_scaling.py",
     ]
     results.append(
         _run(
