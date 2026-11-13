@@ -52,6 +52,26 @@ logger = logging.getLogger("solace_llm")
 MAX_SNIPPET_CHARS = 420
 MAX_FACTS = 5
 MAX_FACT_CHARS = 140
+MAX_STYLE_NOTES_CHARS = 160
+MAX_COPING_ITEMS = 3
+MAX_COPING_CHARS = 48
+
+# Lightweight semantic clusters so `rank_memory_facts` still matches related
+# moments when the user uses different words (e.g. "exhausted" <-> "rough night").
+_SEMANTIC_CLUSTERS = (
+    ("sleep", "sleeping", "slept", "insomnia", "tired", "exhausted", "drained", "fatigue", "rest", "nap", "night", "awake"),
+    ("work", "job", "office", "boss", "coworker", "deadline", "project", "meeting", "busy", "overworked"),
+    ("study", "studies", "exam", "exams", "finals", "midterm", "class", "classes", "assignment", "thesis", "grade", "grades"),
+    ("stress", "stressed", "anxious", "anxiety", "worried", "worry", "overwhelmed", "panic", "tense", "pressure", "nervous"),
+    ("sad", "low", "heavy", "down", "lonely", "alone", "cry", "crying", "empty", "hopeless", "hurt", "grief"),
+    ("people", "family", "mom", "mother", "dad", "father", "sister", "brother", "friend", "friends", "partner", "relationship"),
+    ("calm", "breathe", "breathing", "grounding", "walk", "walking", "outside", "outdoors", "journal", "quiet", "unwind"),
+)
+_CLUSTER_BY_WORD: Dict[str, int] = {
+    word: idx
+    for idx, cluster in enumerate(_SEMANTIC_CLUSTERS)
+    for word in cluster
+}
 
 
 def _clean_line(value: Any, limit: int) -> str:
@@ -61,6 +81,12 @@ def _clean_line(value: Any, limit: int) -> str:
     cleaned = "".join(ch if ch >= " " or ch == chr(9) else " " for ch in value)
     cleaned = " ".join(cleaned.split())
     return cleaned[:limit].strip()
+
+
+def _semantic_tokens(text: str) -> tuple[set[str], set[int]]:
+    words = {w for w in extraction_words(text) if w not in STOP_WORDS}
+    clusters = {_CLUSTER_BY_WORD[w] for w in words if w in _CLUSTER_BY_WORD}
+    return words, clusters
 
 
 def sanitize_memory(raw: Any) -> Optional[Dict[str, Any]]:
@@ -80,25 +106,68 @@ def sanitize_memory(raw: Any) -> Optional[Dict[str, Any]]:
             line = _clean_line(item, MAX_FACT_CHARS)
             if line:
                 facts.append(line)
-    if not snippet and not facts:
+
+    style_notes = _clean_line(raw.get("style_notes"), MAX_STYLE_NOTES_CHARS)
+
+    coping_raw = raw.get("coping_worked")
+    coping: List[str] = []
+    if isinstance(coping_raw, list):
+        for item in coping_raw[:MAX_COPING_ITEMS]:
+            line = _clean_line(item, MAX_COPING_CHARS)
+            if line:
+                coping.append(line)
+
+    pinned_raw = raw.get("pinned_count")
+    pinned_count = (
+        max(0, min(pinned_raw, len(facts)))
+        if isinstance(pinned_raw, int) and not isinstance(pinned_raw, bool)
+        else 0
+    )
+
+    if not snippet and not facts and not style_notes and not coping:
         return None
-    return {"profile_snippet": snippet, "memory_facts": facts}
+    out: Dict[str, Any] = {"profile_snippet": snippet, "memory_facts": facts}
+    if pinned_count > 0:
+        out["pinned_count"] = pinned_count
+    if style_notes:
+        out["style_notes"] = style_notes
+    if coping:
+        out["coping_worked"] = coping
+    return out
 
 
 def rank_memory_facts(memory: Optional[Dict[str, Any]], user_message: str) -> Optional[Dict[str, Any]]:
-    """The memory block with the kept moments that share words with what the
-    person just said listed first, so the model sees the relevant ones first and
-    the unrelated ones last. Nothing is added or dropped; ties keep their order
-    (newest first, as the app sends them)."""
+    """Rank kept moments so pinned moments stay protected first, followed by
+    moments matching the user's words or semantic emotion/topic clusters."""
     if not memory or not memory.get("memory_facts"):
         return memory
-    wanted = {w for w in extraction_words(user_message) if w not in STOP_WORDS}
-    if not wanted:
+    wanted_words, wanted_clusters = _semantic_tokens(user_message)
+    if not wanted_words and not wanted_clusters:
         return memory
+
     facts = list(memory["memory_facts"])
-    scored = [(-len(wanted & set(extraction_words(f))), i, f) for i, f in enumerate(facts)]
-    scored.sort()
-    return {**memory, "memory_facts": [f for _, _, f in scored]}
+    raw_pinned = memory.get("pinned_count")
+    pinned_count = (
+        max(0, min(raw_pinned, len(facts)))
+        if isinstance(raw_pinned, int) and not isinstance(raw_pinned, bool)
+        else 0
+    )
+
+    def _score_list(items: List[str]) -> List[str]:
+        scored = []
+        for idx, fact in enumerate(items):
+            f_words, f_clusters = _semantic_tokens(fact)
+            exact_hits = len(wanted_words & f_words)
+            cluster_hits = len(wanted_clusters & f_clusters)
+            # Exact word matches rank slightly higher than cluster-only matches.
+            total_score = exact_hits * 2 + cluster_hits
+            scored.append((-total_score, idx, fact))
+        scored.sort()
+        return [fact for _, _, fact in scored]
+
+    pinned_ranked = _score_list(facts[:pinned_count]) if pinned_count > 0 else []
+    rest_ranked = _score_list(facts[pinned_count:])
+    return {**memory, "memory_facts": pinned_ranked + rest_ranked}
 
 
 def memory_prompt_block(memory: Optional[Dict[str, Any]], summary: str = "") -> str:
@@ -122,6 +191,14 @@ def memory_prompt_block(memory: Optional[Dict[str, Any]], summary: str = "") -> 
     )
     if memory.get("profile_snippet"):
         lines.append(memory["profile_snippet"])
+    if memory.get("style_notes"):
+        lines.append(f"How they prefer you respond: {memory['style_notes']}")
+    coping = memory.get("coping_worked") or []
+    if coping:
+        lines.append(
+            f"What has helped them settle before: {', '.join(coping)} "
+            "(only offer one gently if they seem open to an idea)."
+        )
     facts = memory.get("memory_facts") or []
     if facts:
         lines.append("Good moments they asked you to remember:")
@@ -136,13 +213,15 @@ DEFAULT_SYSTEM_PROMPT = (
     "Your name is Sol. You are a warm, emotionally supportive companion for someone's mental wellbeing.\n"
     "You are talking with one person. Their name is not Sol or Solace; never call them by those names, "
     "and do not use any name for them unless they tell you theirs.\n"
-    "Your purpose is to offer a calm, grounding, and non-judgmental presence.\n"
+    "Your purpose is to offer a calm, grounded, and genuine presence that adapts to how they talk with you.\n"
     "Guidelines:\n"
     "- Never claim to see, hear or feel what you were not told. Only repeat feelings the person said themselves.\n"
-    "- Keep responses brief, warm, and conversational (usually 1 to 3 sentences).\n"
-    "- Empathize with and validate what the user is experiencing without diagnosing or lecturing.\n"
-    "- Offer gentle comfort or ask an open, thoughtful question to help them reflect.\n"
-    "- Speak naturally and tenderly like a trusted friend. Do not use bullet points or lists."
+    "- Keep responses brief, warm, and natural (usually 1 to 3 sentences).\n"
+    "- Empathize with and validate what they are experiencing without diagnosing or lecturing.\n"
+    "- Match what they need right now: if they ask a question or want your thought, answer directly and kindly; "
+    "if they are venting, simply be with them without turning every reply into an interrogation. "
+    "Only ask a gentle follow-up question when it genuinely fits, never out of habit.\n"
+    "- Speak naturally like a trusted friend who remembers their style. Do not use bullet points or lists."
 )
 
 

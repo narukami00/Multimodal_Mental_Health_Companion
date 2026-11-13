@@ -97,4 +97,40 @@ void main() {
     await consent.grant(ConsentKey.profileSnippet);
     expect(personal.payload()?['profile_snippet'], contains('Long lab day'));
   });
+
+  test('emits pinned_count, style_notes and coping_worked behind their own consents', () async {
+    final m1 = (await moments.addManual('Kept pinned note'))!;
+    await moments.addManual('Newer unpinned note');
+    await moments.togglePin(m1.id);
+
+    final personal = CompanionMemoryContext(
+      consent: consent,
+      profile: profile,
+      moments: moments,
+      sessions: () => const [],
+      themes: () => const [],
+      personalization: () => const PersonalPatternProfile(
+        totalReviewedMoods: 0,
+        acceptedMoods: 0,
+        correctedMoods: 0,
+        rulesByBucket: {},
+        correctionRankByBucket: {},
+        recurringShiftContexts: [],
+        helpfulTags: ['breathing exercises', 'short walks'],
+      ),
+    );
+
+    expect(personal.payload(), isNull);
+
+    await consent.grant(ConsentKey.memoryMoments);
+    final momentsOnly = personal.payload()!;
+    expect(momentsOnly['pinned_count'], 1);
+    expect(momentsOnly.containsKey('style_notes'), isFalse);
+    expect(momentsOnly.containsKey('coping_worked'), isFalse);
+
+    await consent.grant(ConsentKey.profileSnippet);
+    final both = personal.payload()!;
+    expect(both['style_notes'], contains('gentle, unhurried tone'));
+    expect(both['coping_worked'], ['breathing exercises', 'short walks']);
+  });
 }

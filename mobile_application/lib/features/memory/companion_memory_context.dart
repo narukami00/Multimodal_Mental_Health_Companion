@@ -89,12 +89,53 @@ class CompanionMemoryContext {
   /// The block sent to the server, or null when there is nothing to send.
   Map<String, Object?>? payload() {
     final snippet = this.snippet();
-    final lines = momentLines();
+    final forSolMoments = momentsOn ? moments.forSol : const [];
+    final lines = [for (final m in forSolMoments) m.text];
     if (snippet.isEmpty && lines.isEmpty) return null;
+
+    final pinnedCount = forSolMoments.where((m) => m.pinned).length;
+    final styleNotes = snippetOn ? _styleDirective() : '';
+    final copingWorked = snippetOn
+        ? (personalization?.call()?.helpfulTags.take(3).toList() ?? const [])
+        : const <String>[];
+
     return {
       'v': ProfileSnippet.version,
       if (!snippet.isEmpty) 'profile_snippet': snippet.text,
       if (lines.isNotEmpty) 'memory_facts': lines,
+      if (pinnedCount > 0) 'pinned_count': pinnedCount,
+      if (styleNotes.isNotEmpty) 'style_notes': styleNotes,
+      if (copingWorked.isNotEmpty) 'coping_worked': copingWorked,
     };
+  }
+
+  String _styleDirective() {
+    final p = profile.profile;
+    final parts = <String>[];
+    for (final pref in p.interactionPreferences) {
+      switch (pref) {
+        case 'Gentle tone':
+          parts.add('keep a gentle, unhurried tone');
+        case 'Direct tone':
+          parts.add('be warm but clear and direct without fluff');
+        case 'Quiet prompts':
+          parts.add('avoid ending every reply with a question');
+        case 'More context':
+          parts.add('give brief context when offering an idea');
+      }
+    }
+    for (final c in p.constraints) {
+      switch (c) {
+        case 'Short moments':
+          parts.add('keep any idea to 1-2 minutes');
+        case 'Low energy options':
+          parts.add('stick to low-energy ideas');
+        case 'Quiet at home':
+          parts.add('prefer quiet things doable at home');
+        case 'Limited mobility':
+          parts.add('avoid physical exertion ideas');
+      }
+    }
+    return parts.join('; ');
   }
 }
