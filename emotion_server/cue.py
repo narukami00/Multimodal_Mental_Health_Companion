@@ -25,7 +25,6 @@ MOODS = {  # (valence sign, arousal sign) -> (mood phrase, tone hint)
 }
 CLEAR, HINT = 0.65, 0.45  # calibrated max(P(neg), P(pos)) needed for a 'clear' / 'hint' cue
 TEXT_ONLY_MIN = 0.55  # text alone is the weakest single source for a hint
-NEUTRAL_MIN = 0.45  # P(neutral) needed to report 'even' instead of abstaining ('Unsure')
 SELF_HARM = re.compile(
     r"\b(kill(ing)? myself|end(ing)? my (own )?life|want(ed)? to die|wanna die|suicid\w*|hurt(ing)? myself|harm(ing)? myself|"
     r"take my own life|don'?t want to (live|be here|be alive)|no reason to live|better off (dead|without me))\b", re.I)
@@ -153,7 +152,7 @@ def build_cue(est: Dict, state: EmotionState, text: str = "", now: Optional[floa
     floor = TEXT_ONLY_MIN if est.get("pattern") == "T" else HINT
     if lv["neutral"] >= strength or strength < floor:
         out["suppressed"] = "neutral or uncertain"
-        if lv["neutral"] >= strength and lv["neutral"] >= NEUTRAL_MIN:
+        if lv["neutral"] >= strength:
             out["mood"] = "even"
         return out
     # the smoothed valence decides the sign so that one odd turn does not flip the tone; it must agree in sign with this turn
