@@ -371,6 +371,7 @@ Future<void> main() async {
     consentGranted: () => consentController.isGranted(ConsentKey.emotionEstimate),
   ).call;
   ChatPage.keptMoments = () => moments.confirmed;
+  ChatPage.personalization = memory.personalization;
 
   final navigatorKey = GlobalKey<NavigatorState>();
 

@@ -16,6 +16,7 @@ import '../../core/navigation/app_tab.dart';
 import '../../core/day_key.dart';
 import '../../domain/home/baseline_progress.dart';
 import '../../domain/home/home_card_priority.dart';
+import '../../domain/personalization/personal_calibration.dart';
 import '../../domain/suggestions/suggestion_schedule.dart';
 import '../call/call_page.dart';
 import '../chat/chat_controller.dart';
@@ -540,8 +541,44 @@ class _AppShellState extends State<AppShell> {
                               controller: pulse,
                               displayName:
                                   widget.profileController.profile.displayName,
-                              onStartChatWithContext: () =>
-                                  _openChat(context, startNew: true),
+                              onStartChatWithContext: () {
+                                final signal = pulse.latestFreshSignal;
+                                final pulseStarter = signal == null
+                                    ? null
+                                    : starterForLifePulse(signal);
+                                final note = signal?.note?.trim();
+                                final existing = ChatPage.personalization?.call();
+                                _openChat(
+                                  context,
+                                  startNew: true,
+                                  customStarters: pulseStarter == null
+                                      ? null
+                                      : personalChatStarters(
+                                          profile: PersonalPatternProfile(
+                                            totalReviewedMoods:
+                                                existing?.totalReviewedMoods ?? 0,
+                                            acceptedMoods:
+                                                existing?.acceptedMoods ?? 0,
+                                            correctedMoods:
+                                                existing?.correctedMoods ?? 0,
+                                            rulesByBucket:
+                                                existing?.rulesByBucket ?? const {},
+                                            correctionRankByBucket:
+                                                existing?.correctionRankByBucket ??
+                                                    const {},
+                                            recurringShiftContexts:
+                                                existing?.recurringShiftContexts ??
+                                                    const [],
+                                            helpfulTags:
+                                                existing?.helpfulTags ?? const [],
+                                            latestPulse: signal,
+                                          ),
+                                          fallback: defaultChatStarters,
+                                        ),
+                                  initialDraft:
+                                      (note != null && note.isNotEmpty) ? note : null,
+                                );
+                              },
                             );
                           }
                           return const SizedBox.shrink();
@@ -778,7 +815,12 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  void _openChat(BuildContext context, {bool startNew = false}) {
+  void _openChat(
+    BuildContext context, {
+    bool startNew = false,
+    List<String>? customStarters,
+    String? initialDraft,
+  }) {
     if (startNew) {
       _chatController.startNewConversation();
     }
@@ -789,6 +831,8 @@ class _AppShellState extends State<AppShell> {
           profileController: widget.profileController,
           chatController: _chatController,
           autoConnect: true,
+          customStarters: customStarters,
+          initialDraft: initialDraft,
         ),
       ),
     ).then((_) {

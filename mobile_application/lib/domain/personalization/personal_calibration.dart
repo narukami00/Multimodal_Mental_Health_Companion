@@ -327,5 +327,86 @@ class PersonalPatternProfile {
   }
 }
 
+/// Default welcome starter chips shown when no personalized signals apply.
+const List<String> defaultChatStarters = [
+  "I'm feeling a bit restless",
+  'Help me unwind tonight',
+  'Just want to vent',
+  'Reflect on my day',
+];
+
+/// Returns a gentle, non-clinical starter prompt tailored to a recent
+/// [LifePulseSignal], or null if no specific starter applies.
+String? starterForLifePulse(LifePulseSignal signal) {
+  final note = PersonalPatternProfile._sanitizeShortNote(signal.note);
+  if (note != null) {
+    final short =
+        note.length <= 36 ? note : '${note.substring(0, 35).trimRight()}…';
+    return 'Talk about "$short"';
+  }
+  return switch (signal.moodTag) {
+    'stressed' => "Let's unpack what's making things busy",
+    'tired' => 'Help me wind down — I feel tired',
+    'low' => 'Things feel a bit heavy right now',
+    'relationships' => 'Talk through what is happening with people',
+    'sleep' => 'Help me reset my sleep tonight',
+    'work' => 'Talk through work or study stress',
+    'all_good' => 'Check in on what is going well',
+    _ => null,
+  };
+}
+
+/// Builds up to 4 deduplicated chat welcome starter chips from on-device
+/// personalization signals, filling remaining slots from [fallback].
+List<String> personalChatStarters({
+  PersonalPatternProfile? profile,
+  List<String> fallback = defaultChatStarters,
+  DateTime? now,
+}) {
+  final clockNow = now ?? DateTime.now();
+  final starters = <String>[];
+
+  void addStarter(String text) {
+    final clean = text.trim();
+    if (clean.isEmpty) return;
+    final lower = clean.toLowerCase();
+    if (starters.any((s) => s.toLowerCase() == lower)) return;
+    starters.add(clean);
+  }
+
+  final pulse = profile?.latestPulse;
+  if (pulse != null &&
+      clockNow.difference(pulse.at) <= const Duration(hours: 48)) {
+    final pulseStarter = starterForLifePulse(pulse);
+    if (pulseStarter != null) addStarter(pulseStarter);
+  }
+
+  if (profile != null) {
+    for (final ctx in profile.recurringShiftContexts) {
+      if (ctx.count < 2) continue;
+      final cleanCtx = ctx.context.trim();
+      if (cleanCtx.isNotEmpty) {
+        addStarter(
+          "Let's unpack what's been happening with ${cleanCtx.toLowerCase()}",
+        );
+        break;
+      }
+    }
+    for (final tag in profile.helpfulTags) {
+      final cleanTag = tag.trim();
+      if (cleanTag.isNotEmpty) {
+        addStarter('Try $cleanTag together');
+        break;
+      }
+    }
+  }
+
+  for (final item in fallback) {
+    if (starters.length >= 4) break;
+    addStarter(item);
+  }
+  return starters.take(4).toList(growable: false);
+}
+
 /// Keeps linter happy on unused imports when referenced dynamically.
 typedef UnusedBreakdownRef = ConversationBreakdown;

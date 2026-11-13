@@ -26,6 +26,7 @@ import '../call/call_page.dart';
 import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
+import '../../domain/personalization/personal_calibration.dart';
 import 'chat_controller.dart';
 import 'chat_side_panel.dart';
 import 'conversation_breakdown_page.dart';
@@ -44,6 +45,8 @@ class ChatPage extends StatefulWidget {
     this.audioRecorderService,
     this.ttsPlaybackService,
     this.autoConnect = true,
+    this.customStarters,
+    this.initialDraft,
     super.key,
   });
 
@@ -56,8 +59,17 @@ class ChatPage extends StatefulWidget {
   final TtsPlaybackService? ttsPlaybackService;
   final bool autoConnect;
 
+  /// Optional explicit welcome starter chips (e.g. when launched from a home check-in).
+  final List<String>? customStarters;
+
+  /// Optional pre-filled composer text when opening the chat screen.
+  final String? initialDraft;
+
   /// The moments the person chose to keep, shown on the conversation breakdown. Set once in main.dart.
   static List<MemoryMoment> Function()? keptMoments;
+
+  /// Current on-device personalization summary used to tailor empty-state starter chips. Set once in main.dart.
+  static PersonalPatternProfile? Function()? personalization;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -145,14 +157,20 @@ const _coral = Color(0xFFFF7F50);
 const _surface = Color(0xFFFFFDF4);
 
 class _ChatPageState extends State<ChatPage> {
-  static const _initialChips = [
-    "I'm feeling a bit restless",
-    'Help me unwind tonight',
-    'Just want to vent',
-    'Reflect on my day',
-  ];
+  static const _initialChips = defaultChatStarters;
 
-  late List<String> _chips = List.of(_initialChips);
+  List<String> _welcomeStarters() {
+    final custom = widget.customStarters;
+    if (custom != null && custom.isNotEmpty) {
+      return custom;
+    }
+    return personalChatStarters(
+      profile: ChatPage.personalization?.call(),
+      fallback: _initialChips,
+    );
+  }
+
+  late List<String> _chips = _welcomeStarters();
 
   static const _replies = [
     "I hear you. You don't have to have it figured out to say it out loud — what part feels loudest right now?",
@@ -529,6 +547,12 @@ class _ChatPageState extends State<ChatPage> {
       if (reading != null) _chatController.attachToLatestUserMessage(reading);
     });
 
+    final draft = widget.initialDraft?.trim();
+    if (draft != null && draft.isNotEmpty) {
+      _input.text = draft;
+      _input.selection = TextSelection.collapsed(offset: draft.length);
+    }
+
     _input.addListener(() => setState(() {}));
 
     _loadSavedServerConfig();
@@ -630,7 +654,7 @@ class _ChatPageState extends State<ChatPage> {
     final newConv = _chatController.startNewConversation();
     setState(() {
       _messages = newConv.messages.map(_Msg.fromRecord).toList();
-      _chips = List.of(_initialChips);
+      _chips = _welcomeStarters();
     });
     if (widget.autoConnect && !CompanionServerConfig.isTestEnvironment) {
       _wsService.connect(sessionId: newConv.id);
@@ -646,7 +670,7 @@ class _ChatPageState extends State<ChatPage> {
         if (_messages.isNotEmpty && !_messages.last.isUser) {
           _chips = _generateLocalSuggestions(_messages.last.text);
         } else {
-          _chips = List.of(_initialChips);
+          _chips = _welcomeStarters();
         }
       });
       if (widget.autoConnect && !CompanionServerConfig.isTestEnvironment) {
@@ -1156,7 +1180,7 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                         Expanded(
                           child: _messages.isEmpty
-                              ? _ChatWelcome(starters: _initialChips, onSelect: _send)
+                              ? _ChatWelcome(starters: _welcomeStarters(), onSelect: _send)
                               : AnimatedBuilder(
                                   animation: _chatController,
                                   builder: (context, _) {
