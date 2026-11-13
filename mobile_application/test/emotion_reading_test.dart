@@ -70,12 +70,57 @@ void main() {
     });
   });
 
-  group('mood derived from the model', () {
-    test('a reading decides the mood; the word picked in the past is only a fallback', () {
-      expect(entry(results: [reading(mood: 'tense or upset')], mood: 'bright').effectiveMood, 'Wobbly');
-      expect(entry(results: [reading(mood: null, tier: null)], mood: 'bright').effectiveMood, 'Quiet');
+  group('mood derived from user report and model', () {
+    test('explicit user report takes precedence; unsure model reading preserves abstention', () {
+      expect(entry(results: [reading(mood: 'tense or upset')], mood: 'bright').effectiveMood, 'Bright');
+      expect(entry(results: [reading(mood: null, tier: null)], mood: 'bright').effectiveMood, 'Bright');
+      expect(entry(results: [reading(mood: null, tier: null)]).effectiveMood, isNull);
+      expect(entry(results: [reading(mood: 'low or tired')]).effectiveMood, 'Tender');
       expect(entry(mood: 'tender').effectiveMood, 'Tender'); // older entry: unchanged, still counted by insights
       expect(entry().effectiveMood, isNull);
+    });
+
+    test('correction and none-fits override model and survive reanalysis; old acceptance does not transfer', () {
+      final firstReading = reading(mood: 'low or tired');
+      final newerReading = EmotionResult(
+        sessionId: 's',
+        modality: EmotionModality.text,
+        origin: EmotionOrigin.journal,
+        timestamp: DateTime(2026, 4, 21, 10),
+        modelVersion: 'demo-v1',
+        confidence: 0.72,
+        classes: const {'happy': 0.7, 'neutral': 0.3},
+        mood: 'upbeat',
+        tier: 'clear',
+        pattern: 'T',
+      );
+      final corrected = entry(results: [firstReading], mood: 'quiet').copyWith(
+        moodReview: MoodReview.fromReading(
+          firstReading,
+          status: MoodReviewStatus.corrected,
+          correctedMood: 'Bright',
+        ),
+      );
+      expect(corrected.effectiveMood, 'Bright');
+      expect(corrected.moodProvenance, MoodProvenance.userCorrected);
+      final reanalyzedCorrected = corrected.copyWith(emotionResults: [newerReading]);
+      expect(reanalyzedCorrected.effectiveMood, 'Bright');
+      expect(reanalyzedCorrected.moodProvenance, MoodProvenance.userCorrected);
+
+      final noneFits = entry(results: [firstReading]).copyWith(
+        moodReview: MoodReview.fromReading(firstReading, status: MoodReviewStatus.noneFits),
+      );
+      expect(noneFits.effectiveMood, isNull);
+      expect(noneFits.moodProvenance, MoodProvenance.noneFits);
+
+      final accepted = entry(results: [firstReading]).copyWith(
+        moodReview: MoodReview.fromReading(firstReading, status: MoodReviewStatus.accepted),
+      );
+      expect(accepted.isCurrentReadingReviewed, isTrue);
+      expect(accepted.moodProvenance, MoodProvenance.userConfirmedModel);
+      final reanalyzedAccepted = accepted.copyWith(emotionResults: [newerReading]);
+      expect(reanalyzedAccepted.isCurrentReadingReviewed, isFalse);
+      expect(reanalyzedAccepted.moodProvenance, MoodProvenance.modelEstimate);
     });
 
     test('an entry whose result has no full reading (the old mock) counts as unread', () {
@@ -88,12 +133,52 @@ void main() {
     });
 
     test('an old entry is stored and read back unchanged, a new one keeps its full reading', () {
-      final round = SessionRecord.fromMap(entry(results: [reading()], mood: 'quiet').toMap());
+      final round = SessionRecord.fromMap(
+        entry(results: [reading()], mood: 'quiet')
+            .copyWith(
+              moodReview: MoodReview.fromReading(
+                reading(),
+                status: MoodReviewStatus.corrected,
+                correctedMood: 'Bright',
+              ),
+            )
+            .toMap(),
+      );
       expect(round.reading?.classes?['sad'], 0.45);
       expect(round.reading?.mood, 'low or tired');
       expect(round.mood, 'quiet');
+      expect(round.moodReview?.status, MoodReviewStatus.corrected);
+      expect(round.moodReview?.mood, 'Bright');
+      expect(round.effectiveMood, 'Bright');
       final old = SessionRecord.fromMap({'id': 'x', 'createdAt': '2026-01-01T00:00:00', 'mode': 'text', 'text': 'hi', 'mood': 'steady', 'emotionResults': []});
       expect(old.effectiveMood, 'Steady');
+    });
+    testWidgets('reading card offers Does this fit? Yes / Not quite / Skip and None fits', (tester) async {
+      ({MoodReviewStatus status, String? correctedMood})? picked;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: EmotionReadingCard(
+                reading: reading(),
+                provenance: MoodProvenance.modelEstimate,
+                onReview: (choice) => picked = choice,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Does this fit?'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('reading-fit-not-quite')));
+      await tester.tap(find.byKey(const ValueKey('reading-fit-not-quite')));
+      await tester.pump();
+      expect(find.text('How did you feel then?'), findsOneWidget);
+      expect(find.byKey(const ValueKey('reading-fit-none')), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('reading-mood-steady')));
+      await tester.tap(find.byKey(const ValueKey('reading-mood-steady')));
+      await tester.pump();
+      expect(picked?.status, MoodReviewStatus.corrected);
+      expect(picked?.correctedMood, 'Steady');
     });
   });
 

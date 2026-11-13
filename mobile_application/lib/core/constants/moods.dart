@@ -19,14 +19,25 @@ abstract final class Moods {
         _ => mood ?? '',
       };
 
+  /// Normalizes a stored or entered mood word to its canonical value in [values],
+  /// or null when empty or unrecognized.
+  static String? normalize(String? mood) {
+    final trimmed = mood?.trim().toLowerCase();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    for (final word in values) {
+      if (word.toLowerCase() == trimmed) return word;
+    }
+    return null;
+  }
+
   /// The internal mood for a model reading's own mood word ('upbeat', 'calm or content', 'low or tired',
-  /// 'tense or upset'); an unsure reading (null) is 'Quiet' (Even).
-  static String fromReadingMood(String? readingMood) => switch (readingMood) {
+  /// 'tense or upset'); returns null when the reading abstained or is unrecognized.
+  static String? fromReadingMood(String? readingMood) => switch (readingMood) {
         'upbeat' => 'Bright',
         'calm or content' => 'Steady',
         'low or tired' => 'Tender',
         'tense or upset' => 'Wobbly',
-        _ => 'Quiet',
+        _ => null,
       };
 
   /// A coarse ordering of the mood words, from -1 (lowest) to 1 (brightest).

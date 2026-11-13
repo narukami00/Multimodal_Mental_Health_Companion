@@ -19,10 +19,11 @@ class ReadMessage {
   /// -1 (low energy) .. 1 (high energy).
   final double energy;
 
-  /// The internal mood word (Bright/Steady/Quiet/Tender/Wobbly); shown through [Moods.display].
-  final String mood;
+  /// The internal mood word (Bright/Steady/Quiet/Tender/Wobbly), or null when unsure;
+  /// shown through [Moods.display].
+  final String? mood;
 
-  String get word => Moods.display(mood);
+  String get word => mood == null ? 'Unsure' : Moods.display(mood);
 
   static double scoreOf(EmotionResult r) {
     final p = r.valenceProbs;

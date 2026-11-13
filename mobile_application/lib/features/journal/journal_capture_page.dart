@@ -695,6 +695,7 @@ class _JournalCapturePageState extends State<JournalCapturePage> {
                     session: saved,
                     onDelete: (s) => widget.sessionController.deleteSession(s.id),
                     onReanalyze: widget.sessionController.reanalyze,
+                    onReview: widget.sessionController.reviewReading,
                   ),
                 ),
               );

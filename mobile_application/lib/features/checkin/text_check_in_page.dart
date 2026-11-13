@@ -122,6 +122,7 @@ class _TextCheckInPageState extends State<TextCheckInPage> {
           session: session,
           onDelete: (s) => widget.sessionController.deleteSession(s.id),
           onReanalyze: widget.sessionController.reanalyze,
+          onReview: widget.sessionController.reviewReading,
         ),
       ),
     );

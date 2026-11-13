@@ -198,6 +198,7 @@ class _JournalPageState extends State<JournalPage> {
           session: session,
           onDelete: (s) => sessionController.deleteSession(s.id),
           onReanalyze: sessionController.reanalyze,
+          onReview: sessionController.reviewReading,
         ),
       ),
     );

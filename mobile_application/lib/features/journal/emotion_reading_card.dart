@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/moods.dart';
 import '../../core/models/emotion_result.dart';
+import '../../core/models/session_record.dart';
 
 /// The emotional breakdown of one journal entry, drawn from what the model
 /// actually returned: how heavy or light it read, how much energy, which
@@ -8,9 +10,20 @@ import '../../core/models/emotion_result.dart';
 /// (never "valence"), always hedged: it is a weak guess, and only the person
 /// knows how they felt.
 class EmotionReadingCard extends StatelessWidget {
-  const EmotionReadingCard({required this.reading, super.key});
+  const EmotionReadingCard({
+    required this.reading,
+    this.review,
+    this.provenance,
+    this.userPickedMood,
+    this.onReview,
+    super.key,
+  });
 
   final EmotionResult reading;
+  final MoodReview? review;
+  final MoodProvenance? provenance;
+  final String? userPickedMood;
+  final ValueChanged<({MoodReviewStatus status, String? correctedMood})>? onReview;
 
   static const _ink = Color(0xFF3A3125);
   static const _soft = Color(0xFF8A7A61);
@@ -117,6 +130,200 @@ class EmotionReadingCard extends StatelessWidget {
           if (classes.isNotEmpty) ...[
             const SizedBox(height: 14),
             FeelingsSection(classes: r.classes!, fromVoice: (r.pattern ?? '').contains('A'), startOpen: true),
+          ],
+          if (provenance != null || onReview != null) ...[
+            const SizedBox(height: 14),
+            _ReadingReviewSection(
+              reading: r,
+              review: review,
+              provenance: provenance,
+              userPickedMood: userPickedMood,
+              onReview: onReview,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadingReviewSection extends StatefulWidget {
+  const _ReadingReviewSection({
+    required this.reading,
+    this.review,
+    this.provenance,
+    this.userPickedMood,
+    this.onReview,
+  });
+
+  final EmotionResult reading;
+  final MoodReview? review;
+  final MoodProvenance? provenance;
+  final String? userPickedMood;
+  final ValueChanged<({MoodReviewStatus status, String? correctedMood})>? onReview;
+
+  @override
+  State<_ReadingReviewSection> createState() => _ReadingReviewSectionState();
+}
+
+class _ReadingReviewSectionState extends State<_ReadingReviewSection> {
+  bool _pickingCorrection = false;
+
+  String _provenanceLabel() {
+    final r = widget.review;
+    final matchesCurrent = r != null && r.matchesReading(widget.reading);
+    if (r != null && r.status == MoodReviewStatus.corrected) {
+      final word = Moods.display(r.mood);
+      return 'You corrected this to ${word.isEmpty ? 'your own word' : word}';
+    }
+    if (r != null && r.status == MoodReviewStatus.noneFits) {
+      return 'You marked that none of these fit';
+    }
+    if (r != null && r.status == MoodReviewStatus.accepted && matchesCurrent) {
+      return 'You confirmed this reading';
+    }
+    if (r != null && r.status == MoodReviewStatus.accepted && !matchesCurrent) {
+      return 'Newer model estimate (previous confirmation was for an earlier reading)';
+    }
+    if (r != null && r.status == MoodReviewStatus.skipped && matchesCurrent) {
+      return 'Review skipped — model estimate';
+    }
+    final picked = Moods.normalize(widget.userPickedMood);
+    if (picked != null) {
+      return 'Your check-in mood: ${Moods.display(picked)}';
+    }
+    return switch (widget.provenance) {
+      MoodProvenance.userCorrected => 'Your correction',
+      MoodProvenance.userReported => 'Your check-in mood',
+      MoodProvenance.userConfirmedModel => 'You confirmed this reading',
+      MoodProvenance.noneFits => 'None of the mood words fit',
+      MoodProvenance.modelEstimate => 'Model estimate (not yet reviewed)',
+      _ => 'Model estimate',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.review;
+    final matchesCurrent = r != null && r.matchesReading(widget.reading);
+    final alreadyReviewed =
+        matchesCurrent ||
+        r?.status == MoodReviewStatus.corrected ||
+        r?.status == MoodReviewStatus.noneFits;
+
+    return Container(
+      key: const ValueKey('reading-review-section'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0x33C7A977)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _provenanceLabel(),
+            key: const ValueKey('reading-provenance'),
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF5D4B34),
+            ),
+          ),
+          if (widget.onReview != null && (!alreadyReviewed || _pickingCorrection)) ...[
+            const SizedBox(height: 10),
+            if (!_pickingCorrection) ...[
+              const Text(
+                'Does this fit?',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF3A3125),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  OutlinedButton(
+                    key: const ValueKey('reading-fit-yes'),
+                    onPressed: () => widget.onReview!((
+                      status: MoodReviewStatus.accepted,
+                      correctedMood: null,
+                    )),
+                    child: const Text('Yes'),
+                  ),
+                  OutlinedButton(
+                    key: const ValueKey('reading-fit-not-quite'),
+                    onPressed: () => setState(() => _pickingCorrection = true),
+                    child: const Text('Not quite'),
+                  ),
+                  TextButton(
+                    key: const ValueKey('reading-fit-skip'),
+                    onPressed: () => widget.onReview!((
+                      status: MoodReviewStatus.skipped,
+                      correctedMood: null,
+                    )),
+                    child: const Text('Skip'),
+                  ),
+                ],
+              ),
+            ] else ...[
+              const Text(
+                'How did you feel then?',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF3A3125),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  for (final word in Moods.values)
+                    ChoiceChip(
+                      key: ValueKey('reading-mood-${word.toLowerCase()}'),
+                      label: Text(Moods.display(word)),
+                      selected: false,
+                      onSelected: (_) {
+                        setState(() => _pickingCorrection = false);
+                        widget.onReview!((
+                          status: MoodReviewStatus.corrected,
+                          correctedMood: word,
+                        ));
+                      },
+                    ),
+                  ChoiceChip(
+                    key: const ValueKey('reading-fit-none'),
+                    label: const Text('None fits'),
+                    selected: false,
+                    onSelected: (_) {
+                      setState(() => _pickingCorrection = false);
+                      widget.onReview!((
+                        status: MoodReviewStatus.noneFits,
+                        correctedMood: null,
+                      ));
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ] else if (widget.onReview != null && alreadyReviewed) ...[
+            const SizedBox(height: 4),
+            TextButton(
+              key: const ValueKey('reading-fit-change'),
+              onPressed: () => setState(() => _pickingCorrection = true),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 30),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Change'),
+            ),
           ],
         ],
       ),

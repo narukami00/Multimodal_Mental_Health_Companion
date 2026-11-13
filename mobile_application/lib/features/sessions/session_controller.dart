@@ -232,13 +232,34 @@ class SessionController extends ChangeNotifier {
       SessionInput(sessionId: session.id, mode: session.mode, text: text),
     );
     if (results.isEmpty) return null;
-    final updated = SessionRecord(
-      id: session.id,
-      createdAt: session.createdAt,
-      mode: session.mode,
-      text: session.text,
-      mood: session.mood,
+    final updated = session.copyWith(
       emotionResults: results,
+    );
+    await _repository.save(updated);
+    _sessions = [for (final s in _sessions) s.id == updated.id ? updated : s];
+    notifyListeners();
+    return updated;
+  }
+
+  /// Records the person's optional confirmation or correction for the current
+  /// model reading on [sessionId]. Returns the updated entry, or null if the
+  /// entry or its model reading is missing.
+  Future<SessionRecord?> reviewReading(
+    String sessionId, {
+    required MoodReviewStatus status,
+    String? correctedMood,
+  }) async {
+    final index = _sessions.indexWhere((s) => s.id == sessionId);
+    if (index < 0) return null;
+    final session = _sessions[index];
+    final reading = session.reading;
+    if (reading == null) return null;
+    final updated = session.copyWith(
+      moodReview: MoodReview.fromReading(
+        reading,
+        status: status,
+        correctedMood: correctedMood,
+      ),
     );
     await _repository.save(updated);
     _sessions = [for (final s in _sessions) s.id == updated.id ? updated : s];

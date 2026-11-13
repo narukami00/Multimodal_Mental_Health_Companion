@@ -14,6 +14,7 @@ class SessionDetailPage extends StatefulWidget {
     required this.session,
     this.onDelete,
     this.onReanalyze,
+    this.onReview,
     super.key,
   });
 
@@ -26,6 +27,13 @@ class SessionDetailPage extends StatefulWidget {
   /// When given, an entry with no model reading (an older entry, or one made without the server) can be
   /// read now. Returns the updated entry, or null when no reading could be made.
   final Future<SessionRecord?> Function(SessionRecord session)? onReanalyze;
+
+  /// When given, the person can confirm, correct, or skip the entry's mood reading.
+  final Future<SessionRecord?> Function(
+    String sessionId, {
+    required MoodReviewStatus status,
+    String? correctedMood,
+  })? onReview;
 
   @override
   State<SessionDetailPage> createState() => _SessionDetailPageState();
@@ -60,7 +68,26 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
       );
     }
     final r = session.reading;
-    if (r != null) return EmotionReadingCard(reading: r);
+    if (r != null) {
+      return EmotionReadingCard(
+        reading: r,
+        review: session.moodReview,
+        provenance: session.moodProvenance,
+        userPickedMood: session.mood,
+        onReview: widget.onReview == null
+            ? null
+            : (choice) async {
+                final updated = await widget.onReview!(
+                  session.id,
+                  status: choice.status,
+                  correctedMood: choice.correctedMood,
+                );
+                if (mounted && updated != null) {
+                  setState(() => session = updated);
+                }
+              },
+      );
+    }
     final canRead =
         widget.onReanalyze != null &&
         (session.text?.trim().isNotEmpty ?? false);

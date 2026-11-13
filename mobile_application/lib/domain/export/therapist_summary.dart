@@ -21,6 +21,9 @@ class TherapistSummary {
     required this.activeDays,
     required this.voiceOrVideo,
     required this.moods,
+    this.selfReportedMoods = 0,
+    this.confirmedModelMoods = 0,
+    this.modelEstimatedMoods = 0,
     required this.ideasTried,
     required this.ideasLifted,
     required this.phone,
@@ -41,6 +44,9 @@ class TherapistSummary {
 
   /// How often each mood word came up, in the person's plain words (Upbeat, Calm, Even, Low, Tense), most first.
   final List<MapEntry<String, int>> moods;
+  final int selfReportedMoods;
+  final int confirmedModelMoods;
+  final int modelEstimatedMoods;
 
   final int ideasTried;
 
@@ -111,11 +117,26 @@ TherapistSummary buildTherapistSummary({
   final mine = [for (final s in sessions) if (inRange(s.createdAt)) s]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   final moodCounts = <String, int>{};
+  var selfReportedMoods = 0;
+  var confirmedModelMoods = 0;
+  var modelEstimatedMoods = 0;
   for (final s in mine) {
     final mood = s.effectiveMood;
     if (mood == null || Moods.score(mood) == null) continue;
     final word = Moods.display(mood);
     moodCounts[word] = (moodCounts[word] ?? 0) + 1;
+    switch (s.moodProvenance) {
+      case MoodProvenance.userReported:
+      case MoodProvenance.userCorrected:
+        selfReportedMoods++;
+      case MoodProvenance.userConfirmedModel:
+        confirmedModelMoods++;
+      case MoodProvenance.modelEstimate:
+        modelEstimatedMoods++;
+      case MoodProvenance.noneFits:
+      case MoodProvenance.unknown:
+        break;
+    }
   }
   final moods = moodCounts.entries.toList()
     ..sort((a, b) {
@@ -139,6 +160,9 @@ TherapistSummary buildTherapistSummary({
     activeDays: {for (final s in mine) dayKey(s.createdAt)}.length,
     voiceOrVideo: mine.where((s) => s.mode != CaptureMode.text).length,
     moods: moods,
+    selfReportedMoods: selfReportedMoods,
+    confirmedModelMoods: confirmedModelMoods,
+    modelEstimatedMoods: modelEstimatedMoods,
     ideasTried: tried.length,
     ideasLifted: lifted,
     phone: _phone(phoneRows, from, to),
