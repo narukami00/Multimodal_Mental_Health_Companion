@@ -1,6 +1,90 @@
 import 'dart:convert';
 import 'chat_message_record.dart';
 
+enum ShiftAgreement { agrees, disagrees, unsure, skipped }
+
+/// Optional user review of one inferred emotional shift in a chat conversation,
+/// keeping agreement with the shift itself separate from agreement with any
+/// proposed contextual hypothesis.
+class TrajectoryShiftReview {
+  const TrajectoryShiftReview({
+    required this.shiftId,
+    required this.fromMessageId,
+    required this.toMessageId,
+    required this.evidenceVersion,
+    required this.shiftFit,
+    required this.reviewedAt,
+    this.reasonFit,
+    this.proposedContext,
+    this.userCorrection,
+  });
+
+  final String shiftId;
+  final String fromMessageId;
+  final String toMessageId;
+  final String evidenceVersion;
+  final ShiftAgreement shiftFit;
+  final ShiftAgreement? reasonFit;
+  final String? proposedContext;
+  final String? userCorrection;
+  final DateTime reviewedAt;
+
+  TrajectoryShiftReview copyWith({
+    ShiftAgreement? shiftFit,
+    ShiftAgreement? reasonFit,
+    bool clearReasonFit = false,
+    String? proposedContext,
+    String? userCorrection,
+    DateTime? reviewedAt,
+  }) =>
+      TrajectoryShiftReview(
+        shiftId: shiftId,
+        fromMessageId: fromMessageId,
+        toMessageId: toMessageId,
+        evidenceVersion: evidenceVersion,
+        shiftFit: shiftFit ?? this.shiftFit,
+        reasonFit: clearReasonFit ? null : (reasonFit ?? this.reasonFit),
+        proposedContext: proposedContext ?? this.proposedContext,
+        userCorrection: userCorrection ?? this.userCorrection,
+        reviewedAt: reviewedAt ?? this.reviewedAt,
+      );
+
+  Map<String, Object?> toMap() => {
+        'shiftId': shiftId,
+        'fromMessageId': fromMessageId,
+        'toMessageId': toMessageId,
+        'evidenceVersion': evidenceVersion,
+        'shiftFit': shiftFit.name,
+        if (reasonFit != null) 'reasonFit': reasonFit!.name,
+        if (proposedContext != null) 'proposedContext': proposedContext,
+        if (userCorrection != null) 'userCorrection': userCorrection,
+        'reviewedAt': reviewedAt.toIso8601String(),
+      };
+
+  static ShiftAgreement _parseAgreement(String? name) =>
+      ShiftAgreement.values.firstWhere(
+        (v) => v.name == name,
+        orElse: () => ShiftAgreement.skipped,
+      );
+
+  factory TrajectoryShiftReview.fromMap(Map<String, dynamic> map) =>
+      TrajectoryShiftReview(
+        shiftId: map['shiftId'] as String? ?? '',
+        fromMessageId: map['fromMessageId'] as String? ?? '',
+        toMessageId: map['toMessageId'] as String? ?? '',
+        evidenceVersion: map['evidenceVersion'] as String? ?? 'unknown',
+        shiftFit: _parseAgreement(map['shiftFit'] as String?),
+        reasonFit: map['reasonFit'] is String
+            ? _parseAgreement(map['reasonFit'] as String)
+            : null,
+        proposedContext: map['proposedContext'] as String?,
+        userCorrection: map['userCorrection'] as String?,
+        reviewedAt:
+            DateTime.tryParse(map['reviewedAt'] as String? ?? '') ??
+            DateTime.now(),
+      );
+}
+
 /// Represents a persistent chat conversation session with Solace.
 class ChatConversationRecord {
   const ChatConversationRecord({
@@ -12,6 +96,7 @@ class ChatConversationRecord {
     this.summary,
     this.summarizedThroughId,
     this.summaryUpdatedAt,
+    this.shiftReviews = const [],
   });
 
   final String id;
@@ -28,6 +113,7 @@ class ChatConversationRecord {
   /// The last message the summary covers. Messages after it are still verbatim.
   final String? summarizedThroughId;
   final DateTime? summaryUpdatedAt;
+  final List<TrajectoryShiftReview> shiftReviews;
 
   bool get hasSummary => summary != null && summary!.trim().isNotEmpty;
 
@@ -100,6 +186,7 @@ class ChatConversationRecord {
     String? summary,
     String? summarizedThroughId,
     DateTime? summaryUpdatedAt,
+    List<TrajectoryShiftReview>? shiftReviews,
     bool clearSummary = false,
   }) {
     return ChatConversationRecord(
@@ -115,6 +202,7 @@ class ChatConversationRecord {
       summaryUpdatedAt: clearSummary
           ? null
           : (summaryUpdatedAt ?? this.summaryUpdatedAt),
+      shiftReviews: shiftReviews ?? this.shiftReviews,
     );
   }
 
@@ -130,6 +218,8 @@ class ChatConversationRecord {
         'summarizedThroughId': summarizedThroughId,
       if (summaryUpdatedAt != null)
         'summaryUpdatedAt': summaryUpdatedAt!.toIso8601String(),
+      if (shiftReviews.isNotEmpty)
+        'shiftReviews': shiftReviews.map((r) => r.toMap()).toList(),
     };
   }
 
@@ -149,6 +239,10 @@ class ChatConversationRecord {
       summarizedThroughId: map['summarizedThroughId'] as String?,
       summaryUpdatedAt:
           DateTime.tryParse(map['summaryUpdatedAt'] as String? ?? ''),
+      shiftReviews: ((map['shiftReviews'] as List<dynamic>?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(TrajectoryShiftReview.fromMap)
+          .toList(),
     );
   }
 

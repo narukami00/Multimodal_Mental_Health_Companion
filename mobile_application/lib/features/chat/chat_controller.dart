@@ -23,10 +23,6 @@ class ChatController extends ChangeNotifier {
   final String _storageKey;
   final String _activeIdKey;
 
-  static const defaultGreeting =
-      "Hello. Take your time here. Whatever you're holding today, "
-      "you don't have to carry it all by yourself. What feels present right now?";
-
   List<ChatConversationRecord> _conversations = [];
   String? _activeConversationId;
   bool _isLoaded = false;
@@ -100,18 +96,12 @@ class ChatController extends ChangeNotifier {
   void _seedFirstConversation() {
     final now = DateTime.now();
     final firstId = generateId('conv');
-    final initialMessage = ChatMessageRecord(
-      id: generateId('msg'),
-      isUser: false,
-      text: defaultGreeting,
-      timestamp: now,
-    );
     final initialConv = ChatConversationRecord(
       id: firstId,
       title: 'Holding space today',
       createdAt: now,
       updatedAt: now,
-      messages: [initialMessage],
+      messages: const [],
     );
     _conversations = [initialConv];
     _activeConversationId = firstId;
@@ -130,19 +120,13 @@ class ChatController extends ChangeNotifier {
 
     final now = DateTime.now();
     final newId = generateId('conv');
-    final greetingMsg = ChatMessageRecord(
-      id: generateId('msg'),
-      isUser: false,
-      text: defaultGreeting,
-      timestamp: now,
-    );
 
     final newConv = ChatConversationRecord(
       id: newId,
       title: 'New reflection',
       createdAt: now,
       updatedAt: now,
-      messages: [greetingMsg],
+      messages: const [],
     );
 
     _conversations.insert(0, newConv);
@@ -420,6 +404,25 @@ class ChatController extends ChangeNotifier {
     final index = _conversations.indexWhere((c) => c.id == conversationId);
     if (index < 0 || !_conversations[index].hasSummary) return;
     _conversations[index] = _conversations[index].copyWith(clearSummary: true);
+    await _saveToPrefs();
+    notifyListeners();
+  }
+
+  /// Stores or updates a user review for one inferred shift in [conversationId],
+  /// keyed by shiftId without double-counting or altering the underlying messages.
+  Future<void> saveShiftReview(
+    String conversationId,
+    TrajectoryShiftReview review,
+  ) async {
+    final index = _conversations.indexWhere((c) => c.id == conversationId);
+    if (index < 0) return;
+    final conv = _conversations[index];
+    final nextReviews = [
+      for (final existing in conv.shiftReviews)
+        if (existing.shiftId != review.shiftId) existing,
+      review,
+    ];
+    _conversations[index] = conv.copyWith(shiftReviews: nextReviews);
     await _saveToPrefs();
     notifyListeners();
   }

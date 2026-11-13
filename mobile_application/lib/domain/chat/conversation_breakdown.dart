@@ -2,6 +2,7 @@ import '../../core/constants/moods.dart';
 import '../../core/models/chat_conversation_record.dart';
 import '../../core/models/chat_message_record.dart';
 import '../../core/models/emotion_result.dart';
+import '../recommendations/event_tagging.dart';
 
 /// One of the person's messages that the model has read.
 class ReadMessage {
@@ -41,10 +42,18 @@ class ReadMessage {
 /// A message that read clearly heavier or lighter than the one before it. It points at what was being
 /// said at that moment; it does not claim the words caused the feeling.
 class MoodShift {
-  const MoodShift({required this.from, required this.to});
+  const MoodShift({required this.from, required this.to, this.proposedContext});
 
   final ReadMessage from;
   final ReadMessage to;
+
+  /// Optional contextual hypothesis derived from what was mentioned around the shift.
+  /// Null when no known context is detected; never invented.
+  final String? proposedContext;
+
+  String get shiftId => '${from.message.id}->${to.message.id}';
+  String get evidenceVersion =>
+      '${to.reading.modelVersion}@${to.reading.timestamp.toIso8601String()}';
 
   double get change => to.score - from.score;
   bool get lighter => change > 0;
@@ -121,9 +130,18 @@ class ConversationBreakdown {
       counts[p.word] = (counts[p.word] ?? 0) + 1;
     }
 
+    const tagger = EventTaggingService();
     final shifts = <MoodShift>[
       for (var i = 1; i < points.length; i++)
-        if ((points[i].score - points[i - 1].score).abs() >= shiftThreshold) MoodShift(from: points[i - 1], to: points[i]),
+        if ((points[i].score - points[i - 1].score).abs() >= shiftThreshold)
+          () {
+            final tags = tagger.extractKnownTags(points[i].message.spokenText);
+            return MoodShift(
+              from: points[i - 1],
+              to: points[i],
+              proposedContext: tags.isEmpty ? null : tags.first.canonicalLabel,
+            );
+          }(),
     ]..sort((a, b) => b.change.abs().compareTo(a.change.abs()));
 
     return ConversationBreakdown._(

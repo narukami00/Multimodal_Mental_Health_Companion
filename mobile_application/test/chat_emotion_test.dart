@@ -1,3 +1,4 @@
+import 'package:solace_mobile/services/companion_auth.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -173,8 +174,12 @@ void main() {
 
   group('the message reader', () {
     JournalAnalysisClient client(List<Map<String, dynamic>> sent, {bool reachable = true}) => JournalAnalysisClient(
+          tokenProvider: ({required forceRefresh}) async => 'test-token',
+          transportPolicy: CompanionTransportPolicy(trustedPrivateHosts: {'x'}),
+          userId: () => 'test-user',
           baseUri: () async => reachable ? Uri.parse('http://x:8000') : null,
           transport: ({required method, required uri, required headers, required body, required timeout}) async {
+            if (uri.path == '/v1/sessions') return (status: 200, body: jsonEncode({'session_id': 'issued-journal', 'expires_at': DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000}));
             sent.add({'path': uri.path, 'body': body.length < 4000 ? utf8.decode(body) : ''});
             return (
               status: 200,
@@ -284,13 +289,13 @@ void main() {
       expect(b.shifts, isEmpty);
     });
 
-    test('an unsure reading counts as Even, and the placeholder voice text is ignored', () {
+    test('an unsure reading preserves Unsure, and the placeholder voice text is ignored', () {
       final b = ConversationBreakdown.from(conversation([
         userMsg('1', 'hmm', r: reading(mood: null, neg: 0.3, pos: 0.3)),
         ChatMessageRecord(id: 'v', isUser: true, text: 'Audio reflection', timestamp: DateTime.now(), isVoice: true),
       ]));
       expect(b.userMessages, 1);
-      expect(b.dominantWord, 'Even');
+      expect(b.dominantWord, 'Unsure');
     });
   });
 
@@ -368,8 +373,24 @@ void main() {
       expect(find.byType(ConversationBreakdownPage), findsOneWidget);
       expect(find.byKey(const ValueKey('breakdown-dominant')), findsOneWidget);
       expect(find.byKey(const ValueKey('breakdown-chart')), findsOneWidget);
-      expect(find.text('They talked about work stress and poor sleep.'), findsOneWidget);
       expect(find.byKey(const ValueKey('breakdown-support')), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('They talked about work stress and poor sleep.'),
+        200,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('breakdown-list')),
+          matching: find.byType(Scrollable),
+        ).first,
+      );
+      expect(find.text('They talked about work stress and poor sleep.'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('breakdown-chart')),
+        -200,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('breakdown-list')),
+          matching: find.byType(Scrollable),
+        ).first,
+      );
 
       // tapping the chart selects an earlier message
       final chart = tester.getTopLeft(find.byKey(const ValueKey('breakdown-chart')));

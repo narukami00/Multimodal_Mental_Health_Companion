@@ -6,6 +6,7 @@ import '../../core/models/memory_moment.dart';
 import '../../core/models/safety_assessment.dart';
 import '../../core/widgets/page_back_button.dart';
 import '../../domain/chat/conversation_breakdown.dart';
+import '../../domain/insights/review_statistics.dart';
 import '../checkin/check_in_mode_page.dart';
 import '../consent/emotion_consent_sheets.dart';
 import '../insights/mood_tab.dart' show moodColors;
@@ -132,8 +133,15 @@ class ConversationBreakdownPage extends StatelessWidget {
                 else ...[
                   _Overview(breakdown: breakdown),
                   _TrendCard(breakdown: breakdown),
-                  if (breakdown.shifts.isNotEmpty)
-                    _ShiftsCard(shifts: breakdown.shifts),
+                  if (breakdown.shifts.isNotEmpty) ...[
+                    _ShiftsCard(
+                      shifts: breakdown.shifts,
+                      reviews: conv.shiftReviews,
+                      onSaveReview: (review) =>
+                          chatController.saveShiftReview(conv.id, review),
+                    ),
+                    _TrajectoryAgreementCard(conversation: conv),
+                  ],
                   _TalkedAboutCard(conversation: conv, breakdown: breakdown),
                   _NoticingCard(notes: breakdown.notes),
                   if (breakdown.points.any((p) => p.reading.faceClasses != null))
@@ -628,9 +636,58 @@ class _TrendPainter extends CustomPainter {
 }
 
 class _ShiftsCard extends StatelessWidget {
-  const _ShiftsCard({required this.shifts});
+  const _ShiftsCard({
+    required this.shifts,
+    required this.reviews,
+    required this.onSaveReview,
+  });
 
   final List<MoodShift> shifts;
+  final List<TrajectoryShiftReview> reviews;
+  final ValueChanged<TrajectoryShiftReview> onSaveReview;
+
+  TrajectoryShiftReview? _reviewFor(MoodShift s) {
+    for (final r in reviews) {
+      if (r.shiftId == s.shiftId && r.evidenceVersion == s.evidenceVersion) {
+        return r;
+      }
+    }
+    return null;
+  }
+
+  String _agreementLabel(ShiftAgreement agreement) => switch (agreement) {
+        ShiftAgreement.agrees => 'Fits',
+        ShiftAgreement.disagrees => 'Not quite',
+        ShiftAgreement.unsure => 'Unsure',
+        ShiftAgreement.skipped => 'Skipped',
+      };
+
+  Widget _agreementChips({
+    required String prefix,
+    required ShiftAgreement? selected,
+    required ValueChanged<ShiftAgreement> onPick,
+  }) {
+    const choices = [
+      (ShiftAgreement.agrees, 'Yes'),
+      (ShiftAgreement.disagrees, 'Not quite'),
+      (ShiftAgreement.unsure, 'Unsure'),
+      (ShiftAgreement.skipped, 'Skip'),
+    ];
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      children: [
+        for (final (value, label) in choices)
+          ChoiceChip(
+            key: ValueKey('$prefix-${value.name}'),
+            label: Text(label, style: const TextStyle(fontSize: 11.5)),
+            selected: selected == value,
+            visualDensity: VisualDensity.compact,
+            onSelected: (_) => onPick(value),
+          ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -641,51 +698,177 @@ class _ShiftsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (final s in shifts)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    s.lighter
-                        ? Icons.arrow_upward_rounded
-                        : Icons.arrow_downward_rounded,
-                    size: 18,
-                    color: s.lighter
-                        ? const Color(0xFF6E9560)
-                        : const Color(0xFFC96F48),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${s.lighter ? 'Lighter' : 'Heavier'}: ${s.from.word} → ${s.to.word}',
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF3A3125),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'at “${_snippet(s.to.message.spokenText, 90)}”',
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            height: 1.35,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF6E6252),
-                          ),
-                        ),
-                      ],
+            () {
+              final existing = _reviewFor(s);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      s.lighter
+                          ? Icons.arrow_upward_rounded
+                          : Icons.arrow_downward_rounded,
+                      size: 18,
+                      color: s.lighter
+                          ? const Color(0xFF6E9560)
+                          : const Color(0xFFC96F48),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${s.lighter ? 'Lighter' : 'Heavier'}: ${s.from.word} → ${s.to.word}',
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF3A3125),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'at “${_snippet(s.to.message.spokenText, 90)}”',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF6E6252),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            existing == null
+                                ? 'Did this shift feel accurate?'
+                                : 'Shift review: ${_agreementLabel(existing.shiftFit)}',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF5D4B34),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          _agreementChips(
+                            prefix: 'shift-fit-${s.shiftId}',
+                            selected: existing?.shiftFit,
+                            onPick: (choice) {
+                              final next = existing == null
+                                  ? TrajectoryShiftReview(
+                                      shiftId: s.shiftId,
+                                      fromMessageId: s.from.message.id,
+                                      toMessageId: s.to.message.id,
+                                      evidenceVersion: s.evidenceVersion,
+                                      shiftFit: choice,
+                                      proposedContext: s.proposedContext,
+                                      reviewedAt: DateTime.now(),
+                                    )
+                                  : existing.copyWith(
+                                      shiftFit: choice,
+                                      reviewedAt: DateTime.now(),
+                                    );
+                              onSaveReview(next);
+                            },
+                          ),
+                          if (s.proposedContext != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Possible context: ${s.proposedContext} (a guess, not a cause)'
+                              '${existing?.reasonFit != null ? ' · ${_agreementLabel(existing!.reasonFit!)}' : ''}',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF5D4B34),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            _agreementChips(
+                              prefix: 'reason-fit-${s.shiftId}',
+                              selected: existing?.reasonFit,
+                              onPick: (choice) {
+                                final next = existing == null
+                                    ? TrajectoryShiftReview(
+                                        shiftId: s.shiftId,
+                                        fromMessageId: s.from.message.id,
+                                        toMessageId: s.to.message.id,
+                                        evidenceVersion: s.evidenceVersion,
+                                        shiftFit: ShiftAgreement.skipped,
+                                        reasonFit: choice,
+                                        proposedContext: s.proposedContext,
+                                        reviewedAt: DateTime.now(),
+                                      )
+                                    : existing.copyWith(
+                                        reasonFit: choice,
+                                        proposedContext: s.proposedContext,
+                                        reviewedAt: DateTime.now(),
+                                      );
+                                onSaveReview(next);
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }(),
+          const Text(
+            'This points at what you were saying when the reading changed. Suggested context is a guess, not a cause.',
+            style: TextStyle(
+              fontSize: 11.5,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF8A7A61),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrajectoryAgreementCard extends StatelessWidget {
+  const _TrajectoryAgreementCard({required this.conversation});
+
+  final ChatConversationRecord conversation;
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = ReviewStatistics.compute(
+      sessions: const [],
+      conversations: [conversation],
+    ).trajectory;
+    return _Card(
+      key: const ValueKey('breakdown-agreement-stats'),
+      title: 'Your review coverage',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Shifts: ${stats.shiftAgreed} of ${stats.shiftReviewed} reviewed fit '
+            '(${stats.shiftsTotal} detected · ${stats.shiftSkipped} skipped · ${stats.shiftUnanswered} unanswered)',
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF3A3125),
+            ),
+          ),
+          if (stats.reasonProposedTotal > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Context guesses: ${stats.reasonAgreed} of ${stats.reasonReviewed} reviewed fit '
+              '(${stats.reasonProposedTotal} proposed · ${stats.reasonSkipped} skipped · ${stats.reasonUnanswered} unanswered)',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF3A3125),
               ),
             ),
+          ],
+          const SizedBox(height: 6),
           const Text(
-            'This points at what you were saying when the reading changed. It does not mean those words caused the feeling.',
+            'User-reported agreement only — not clinical accuracy or classifier accuracy.',
             style: TextStyle(
               fontSize: 11.5,
               height: 1.35,
