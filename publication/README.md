@@ -11,6 +11,8 @@ not a statement that authentication, encryption or user correction already exist
 - **Phase 2 (Journal mood confirmation & provenance)**: Implemented and committed (`992f62f`). Model abstention is preserved (no fallback to neutral), reading cards offer *Does this fit?* (*Yes* / *Not quite* / *Skip*) and *How did you feel then?*, user corrections take precedence over model estimates, reanalysis preserves user corrections, and exports/therapist summaries distinguish source provenance.
 - **Phase 3 (Chat trajectory review & agreement statistics)**: Implemented and committed (`61d1352`). Conversation breakdowns record independent shift-fit and proposed-context agreement without mutating model scores, and display explicit counts/denominators without claiming clinical or classifier accuracy.
 - **Phase 4 (Encryption, consent & data lifecycle)**: Implemented and committed (`3b4f7e5`). Added `AndroidKeystoreCipher` (`AES/GCM/NoPadding` over `MethodChannel`) + atomic `.tmp` write-readback-rename for sensitive repositories and pending recordings, Android Auto Backup / device-transfer exclusion, send-time emotion/face consent recheck + server-side `X-Solace-Consent-*` enforcement, orphan/retention cleanup, avatar cleanup, all-notification cancellation on erase, and explicit `local_only` TTS mode.
+- **Phase 5 (Account UX, search, review flow, on-device personalization & periodic check-ins)**: Implemented and committed (`d7949c4`, `98309fd`, `8a1fa2b`, `d03faf7`). Redesigned account management UI using shared visual primitives, added conversation keyword search with highlighted message excerpts, collapsed chat shift reviews into single-expansion progressive rows and segmented journal review pills, introduced an on-device calibration profile (`PersonalPatternProfile`, activating hints/ordering only at `>= 5` reviewed entries without mutating `EmotionResult`), and added periodic (~36h) consented life-context check-ins (`LifePulseController`) surfaced into *What Sol remembers* and companion snippets.
+- **Documentation & SoftwareX packaging**: Added root `LICENSE` (MIT for repository source code), `CITATION.cff`, rewritten root `README.md`, and unified model-free verification script `scripts/verify_release.py`.
 - **Verification observed**:
   - `dart scripts/verify_emotion_consent.dart`: PASS
   - `python -m unittest discover -s emotion_server -p test_cue.py`: PASS (20/20)
@@ -153,6 +155,17 @@ Backend acceptance:
 4. Complete encrypted local storage, deletion/revocation and transport checks.
 5. Freeze a study build; execute engineering checks and target-user evaluation.
 6. Write the software paper using the actual release and measured results.
+
+## SoftwareX submission readiness checklist
+
+| SoftwareX Criterion | Repository Status | Notes / Remaining External Requirements |
+|---|---|---|
+| Clear software architecture & modular design | Ready | Three decoupled subsystems (`mobile_application/`, `companion_server/`, `emotion_server/`) with documented REST/WebSocket/method-channel boundaries and local-first fallback. |
+| Originality & adaptive personalization | Ready | Source-aware mood provenance + `>= 5`-review empirical calibration without raw estimate mutation + periodic consented life check-ins mirrored in *What Sol remembers*. |
+| OSI license & citation metadata | Ready | Root `LICENSE` (MIT for repository source) and `CITATION.cff` (`v0.1.0`) present. Externally sourced model weights require upstream license attribution/redistribution check if ever bundled. |
+| Reproducible build & automated tests | Ready (offline/model-free) | Run `python scripts/verify_release.py` (`dart scripts/verify_emotion_consent.dart`, `emotion_server` cue tests, `companion_server` pytest suite, `flutter analyze`, `flutter test`). Live Firebase Auth, GPU model loading, and latency benchmarks are separated from offline checks. |
+| Persistent archival release & DOI | Pending before submission | Create a clean git release tag / Zenodo archive of the exact evaluated commit prior to manuscript submission. |
+| Ethically approved user evaluation | Pending before submission | Engineering checks pass, but target-user study (usability, retention, and qualitative personalization feedback under IRB/ethics approval) has not yet been executed. |
 
 References: [Firebase Flutter authentication](https://firebase.google.com/docs/auth/flutter/start),
 [backend token verification](https://firebase.google.com/docs/auth/admin/verify-id-tokens),

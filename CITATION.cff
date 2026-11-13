@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use Solace or its reference companion/emotion modules in your research, please cite this software using the metadata below."
+title: "Solace: Local-First Multimodal Reflective Journaling and Adaptive Self-Care Companion"
+type: software
+version: 0.1.0
+date-released: 2026-11-13
+license: MIT
+authors:
+  - family-names: Riasat
+    given-names: Rafsan
+    email: riasat1011@gmail.com
+keywords:
+  - self-care
+  - reflective journaling
+  - multimodal emotion recognition
+  - voice companion
+  - local-first privacy
+  - personalization
+  - flutter
