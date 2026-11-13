@@ -12,10 +12,11 @@ def est(neg=0.1, neu=0.2, pos=0.7, low=0.2, high=0.6, pattern='AT'):
 def test_neutral_turn_has_no_cue():
     out = build_cue(est(neg=0.1, neu=0.8, pos=0.1), EmotionState())
     assert out['cue'] is None and out['suppressed']
+    assert out['mood'] == 'even'
 
 def test_uncertain_turn_has_no_cue():
     out = build_cue(est(neg=0.4, neu=0.3, pos=0.3), EmotionState())
-    assert out['cue'] is None
+    assert out['cue'] is None and out['mood'] is None
 
 def test_clear_negative_low_arousal_gives_hedged_cue_without_class_names():
     out = build_cue(est(neg=0.8, neu=0.1, pos=0.1, low=0.7, high=0.1), EmotionState())
@@ -38,6 +39,7 @@ def test_one_positive_turn_does_not_flip_a_negative_run():
         build_cue(est(neg=0.85, neu=0.1, pos=0.05, low=0.7, high=0.1), s)
     out = build_cue(est(neg=0.1, neu=0.2, pos=0.7, low=0.1, high=0.7), s)
     assert out['cue'] is None and 'disagrees' in out['suppressed']
+    assert out['mood'] == 'upbeat'
 
 def test_negative_high_arousal_and_positive_moods():
     assert 'tense or upset' in build_cue(est(neg=0.8, neu=0.1, pos=0.1, low=0.1, high=0.7), EmotionState())['cue']

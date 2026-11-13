@@ -1,10 +1,29 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:solace_mobile/core/constants/moods.dart';
+import 'package:solace_mobile/core/models/emotion_result.dart';
 import 'package:solace_mobile/core/models/session_input.dart';
 import 'package:solace_mobile/core/models/session_record.dart';
 import 'package:solace_mobile/domain/insights/mood_insights.dart';
 
 SessionRecord _unread(DateTime at, {CaptureMode mode = CaptureMode.voice}) =>
     SessionRecord(id: '${at.microsecondsSinceEpoch}', createdAt: at, mode: mode, text: 'waiting', emotionResults: const []);
+
+SessionRecord _readUnsure(DateTime at) => SessionRecord(
+  id: '${at.microsecondsSinceEpoch}_u',
+  createdAt: at,
+  mode: CaptureMode.voice,
+  text: 'already read',
+  emotionResults: [
+    EmotionResult(
+      sessionId: 's',
+      modality: EmotionModality.voice,
+      timestamp: at,
+      modelVersion: 'test',
+      mood: null,
+      classes: const {'neutral': 1.0},
+    ),
+  ],
+);
 
 SessionRecord _read(DateTime at) => SessionRecord(
   id: '${at.microsecondsSinceEpoch}',
@@ -32,5 +51,13 @@ void main() {
     expect(strip[0].entries, hasLength(1));
     expect(strip[0].unread, hasLength(1));
     expect(strip[0].mood, 'Steady');
+  });
+
+  test('a read entry whose model reading was unsure is not marked unread', () {
+    final strip = moodStrip([_readUnsure(DateTime(2026, 11, 19, 15))], now, days: 2);
+    expect(strip[0].unread, isEmpty);
+    expect(strip[0].unsure, hasLength(1));
+    expect(Moods.fromReadingMood('even'), 'Quiet');
+    expect(Moods.display('Quiet'), 'Even');
   });
 }

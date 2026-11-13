@@ -255,10 +255,18 @@ class _MoodGrid extends StatelessWidget {
     final words = day.entries.isEmpty ? <String>[] : day.moods;
     final names = {for (final w in words) Moods.display(w)}.join(', ');
     final unread = day.unread.length;
-    final tappable = words.isNotEmpty || unread > 0;
+    final unsure = day.unsure.length;
+    final tappable = words.isNotEmpty || unread > 0 || unsure > 0;
+    final statusText = words.isNotEmpty
+        ? '${words.length} ${words.length == 1 ? 'entry' : 'entries'}: $names'
+        : unread > 0
+            ? '$unread ${unread == 1 ? 'entry' : 'entries'}, not read yet'
+            : unsure > 0
+                ? '$unsure ${unsure == 1 ? 'entry' : 'entries'}, unsure'
+                : 'no check-in';
     final label =
         '${_weekdays[day.day.weekday - 1]} ${day.day.day} ${_months[day.day.month - 1]}'
-        ' · ${words.isEmpty ? (unread > 0 ? '$unread ${unread == 1 ? 'entry' : 'entries'}, not read yet' : 'no check-in') : '${words.length} ${words.length == 1 ? 'entry' : 'entries'}: $names'}';
+        ' · $statusText';
     return Semantics(
       label: label,
       button: tappable,
@@ -281,6 +289,7 @@ class _MoodGrid extends StatelessWidget {
                   colors: [for (final w in words) moodColors[w] ?? const Color(0xFFB4ADD6)],
                   isToday: isToday,
                   unread: unread > 0,
+                  unsure: unsure > 0,
                 ),
               ),
             ),
@@ -294,13 +303,16 @@ class _MoodGrid extends StatelessWidget {
 /// One circle per day, cut into a slice per entry in the order they were made (clockwise from the top),
 /// so a day with a low, an even and a calm entry shows all three colours instead of only the last.
 class _DayDotPainter extends CustomPainter {
-  const _DayDotPainter({required this.colors, required this.isToday, this.unread = false});
+  const _DayDotPainter({required this.colors, required this.isToday, this.unread = false, this.unsure = false});
 
   final List<Color> colors;
   final bool isToday;
 
-  /// The day has an entry that has not been read yet (no mood word to colour it with).
+  /// The day has an entry that has not been read yet (waiting for the server).
   final bool unread;
+
+  /// The day has an entry that was read without a clear mood word.
+  final bool unsure;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -318,6 +330,14 @@ class _DayDotPainter extends CustomPainter {
           ..color = isToday ? insightInk : unreadDotColor,
       );
       canvas.drawCircle(c, r * 0.42, Paint()..color = unreadDotColor);
+      return;
+    }
+    if (colors.isEmpty && unsure) {
+      // Read, but unsure / none fits: a solid muted lavender-grey circle (distinct from unread ring).
+      canvas.drawCircle(c, r, Paint()..color = const Color(0xFFB4ADD6));
+      if (isToday) {
+        canvas.drawCircle(c, r - 0.8, Paint()..style = PaintingStyle.stroke..strokeWidth = 2..color = insightInk);
+      }
       return;
     }
     if (colors.isEmpty) {
@@ -545,7 +565,7 @@ class _DaySheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = '${_weekdays[day.day.weekday - 1]} ${day.day.day} ${_months[day.day.month - 1]}';
-    final all = [...day.entries, ...day.unread]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final all = [...day.entries, ...day.unsure, ...day.unread]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -610,7 +630,14 @@ class _DayEntryRow extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                         decoration: BoxDecoration(color: color.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(99)),
                         child: Text(
-                          mood == null ? 'Not read yet' : Moods.display(mood),
+                          mood != null
+                              ? Moods.display(mood)
+                              : (entry.reading == null
+                                  ? 'Not read yet'
+                                  : (entry.moodReview?.status == MoodReviewStatus.noneFits &&
+                                          entry.isCurrentReadingReviewed
+                                      ? 'None fits'
+                                      : 'Unsure')),
                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: insightInk),
                         ),
                       ),

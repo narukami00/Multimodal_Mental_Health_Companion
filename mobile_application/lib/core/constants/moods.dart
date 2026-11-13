@@ -31,12 +31,13 @@ abstract final class Moods {
   }
 
   /// The internal mood for a model reading's own mood word ('upbeat', 'calm or content', 'low or tired',
-  /// 'tense or upset'); returns null when the reading abstained or is unrecognized.
+  /// 'tense or upset', 'even'); returns null when the reading abstained or is unrecognized.
   static String? fromReadingMood(String? readingMood) => switch (readingMood) {
         'upbeat' => 'Bright',
         'calm or content' => 'Steady',
         'low or tired' => 'Tender',
         'tense or upset' => 'Wobbly',
+        'even' || 'neutral' => 'Quiet',
         _ => null,
       };
 

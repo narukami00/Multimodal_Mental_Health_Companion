@@ -6,13 +6,22 @@ import '../footprint/personal_baseline.dart';
 
 /// One calendar day in the mood strip.
 class MoodDay {
-  const MoodDay({required this.day, this.mood, this.checkIns = 0, this.entries = const [], this.unread = const []});
+  const MoodDay({
+    required this.day,
+    this.mood,
+    this.checkIns = 0,
+    this.entries = const [],
+    this.unsure = const [],
+    this.unread = const [],
+  });
 
   final DateTime day;
 
-  /// Entries made that day that have no mood word yet (a recording waiting for the server to read it, or a note that
-  /// was not read). They are real entries, so the day is not empty, but they are not given a colour they do not have.
+  /// Entries made that day that have not been read yet (waiting for the server).
   final List<SessionRecord> unread;
+
+  /// Entries made that day that were read (or marked "None fits") without a clear mood word.
+  final List<SessionRecord> unsure;
 
   /// Every entry that day that has a mood, oldest first (the dot shows all of them, not only the top word).
   final List<SessionRecord> entries;
@@ -29,10 +38,15 @@ class MoodDay {
 /// The last [days] days, oldest first, ending today. Always exactly [days] long.
 List<MoodDay> moodStrip(List<SessionRecord> sessions, DateTime now, {int days = 30}) {
   final byDay = <String, List<SessionRecord>>{};
+  final unsureByDay = <String, List<SessionRecord>>{};
   final unreadByDay = <String, List<SessionRecord>>{};
   for (final session in sessions) {
     if (Moods.score(session.effectiveMood) == null) {
-      unreadByDay.putIfAbsent(dayKey(session.createdAt), () => []).add(session);
+      final isRead = session.reading != null ||
+          (session.moodReview?.status == MoodReviewStatus.noneFits &&
+              session.isCurrentReadingReviewed);
+      final target = isRead ? unsureByDay : unreadByDay;
+      target.putIfAbsent(dayKey(session.createdAt), () => []).add(session);
       continue;
     }
     byDay.putIfAbsent(dayKey(session.createdAt), () => []).add(session);
@@ -42,9 +56,16 @@ List<MoodDay> moodStrip(List<SessionRecord> sessions, DateTime now, {int days = 
     for (var back = days - 1; back >= 0; back--)
       () {
         final day = DateTime(today.year, today.month, today.day - back);
+        final unsure = [...?unsureByDay[dayKey(day)]]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
         final unread = [...?unreadByDay[dayKey(day)]]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
         final entries = byDay[dayKey(day)];
-        if (entries == null) return MoodDay(day: day, unread: List.unmodifiable(unread));
+        if (entries == null) {
+          return MoodDay(
+            day: day,
+            unsure: List.unmodifiable(unsure),
+            unread: List.unmodifiable(unread),
+          );
+        }
         entries.sort((a, b) => a.createdAt.compareTo(b.createdAt));
         final counts = <String, int>{};
         for (final e in entries) {
@@ -64,6 +85,7 @@ List<MoodDay> moodStrip(List<SessionRecord> sessions, DateTime now, {int days = 
           mood: word,
           checkIns: entries.length,
           entries: List.unmodifiable(entries),
+          unsure: List.unmodifiable(unsure),
           unread: List.unmodifiable(unread),
         );
       }(),
