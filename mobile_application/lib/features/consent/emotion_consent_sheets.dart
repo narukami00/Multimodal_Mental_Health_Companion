@@ -16,10 +16,12 @@ Future<bool> askEmotionConsent(BuildContext context, ConsentController consent) 
     builder: (sheetContext) => ConsentSheet(
       key: const ValueKey('emotion-consent-sheet'),
       title: 'Read how this entry sounds?',
-      body: 'Your words (and your voice, for a recording) are sent to the companion '
-          'server and read once to guess whether the entry sounds low, tense or '
-          'upbeat. Your voice is never kept, and it is only a weak guess, never '
-          'a diagnosis. You can turn this off any time in What Sol remembers.',
+      body: 'Your words and recorded voice are sent to the companion server to '
+          'estimate emotion. Recordings can wait privately on your phone while '
+          'the server is unavailable, then are deleted after successful processing '
+          'or entry deletion. This uncertain estimate may inform suggestions, '
+          'summaries and Sol\'s replies. It is not a diagnosis. Turn this off '
+          'in What Sol remembers.',
       allowLabel: 'Allow reading',
       onAllow: () => Navigator.of(sheetContext).pop(true),
       onDecline: () => Navigator.of(sheetContext).pop(false),
@@ -39,10 +41,12 @@ Future<bool> askFaceConsent(BuildContext context, ConsentController consent) asy
     builder: (sheetContext) => ConsentSheet(
       key: const ValueKey('face-consent-sheet'),
       title: 'Let Sol read your face?',
-      body: 'While the camera is on, frames are sent live to the companion server '
-          'and read in memory to help judge whether you look tense or low. '
-          'They are never saved, and it only softens how Sol talks. Your words '
-          'still matter most. You can turn this off any time in What Sol remembers.',
+      body: 'Face measurements or live camera frames are sent to the companion '
+          'server to estimate emotion. Live frames are processed in memory, '
+          'not saved as pictures. Queued measurements can wait on your phone '
+          'until processing or entry deletion. The estimate may inform '
+          'suggestions, summaries and Sol\'s replies; it can be wrong. '
+          'Turn this off in What Sol remembers.',
       allowLabel: 'Allow camera reading',
       allowKey: const ValueKey('face-allow'),
       declineKey: const ValueKey('face-decline'),
