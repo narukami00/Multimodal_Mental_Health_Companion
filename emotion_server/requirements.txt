@@ -1,0 +1,12 @@
+# Runtime bounds, not a reproducibility lock; see environment-observed.txt.
+fastapi>=0.115
+uvicorn>=0.30
+pydantic>=2.8
+numpy>=2.0
+scipy>=1.14
+torch>=2.4
+transformers>=5.19.0
+sentence-transformers>=6.1.0
+opencv-contrib-python>=5.0
+mediapipe>=1.1.0
+timm>=1.0.30

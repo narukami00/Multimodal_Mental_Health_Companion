@@ -1,0 +1,41 @@
+{
+  "format_version": 1,
+  "note": "Only identifiers/checksums; weights and private datasets are not included. Availability records source workstation inspection, not publication permission.",
+  "artifacts": [
+    {
+      "path": "heads_s0.pt",
+      "size_bytes": 16420917,
+      "sha256": "e14778d5c158ffa3efdf77f228c078a19b536da92373861cd8bbd7100c0d5c03"
+    },
+    {
+      "path": "heads_s1.pt",
+      "size_bytes": 16420917,
+      "sha256": "44e817d6622f1ad071dff093509f73c16af99fa780078bed77fcd39afd41cb3e"
+    },
+    {
+      "path": "heads_s2.pt",
+      "size_bytes": 16420917,
+      "sha256": "0d60e711e600d57e3b9ea1f83953f7c9b0442dfebb39b7bc0f3d3c7447055530"
+    },
+    {
+      "path": "heads_s3.pt",
+      "size_bytes": 16420917,
+      "sha256": "50b38b6ba36362ccf98feae257b92dee4abfdecc865964c6ca3148ec5dff2192"
+    },
+    {
+      "path": "heads_s4.pt",
+      "size_bytes": 16420917,
+      "sha256": "34778a97a286f74cbc82be8ac68fa8a58e9cf7a0eb6fe6ab482b9aa8dc308041"
+    },
+    {
+      "path": "temps.json",
+      "size_bytes": 698,
+      "sha256": "d7edafa5a1d1e8932646c669dc903c34bcbb38448fd244bdfb0c0c08b54da882"
+    },
+    {
+      "path": "ref_stats.npz",
+      "size_bytes": 445394,
+      "sha256": "543e7493ed2adb103840d9e6f12d98bf11f6e690dad2f2cbfb76f2deba85176b"
+    }
+  ]
+}
