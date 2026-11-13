@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:solace_mobile/core/models/memory_moment.dart';
+import 'package:solace_mobile/data/repositories/in_memory_moment_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_safety_event_repository.dart';
 import 'package:solace_mobile/domain/personalization/personal_calibration.dart';
 import 'package:solace_mobile/features/chat/chat_page.dart';
+import 'package:solace_mobile/features/memory/moments_controller.dart';
 import 'package:solace_mobile/features/safety/safety_controller.dart';
 import 'package:solace_mobile/providers/safety/keyword_safety_screener.dart';
+import 'package:solace_mobile/services/companion_websocket_service.dart';
 
 PersonalPatternProfile _profile({
   LifePulseSignal? latestPulse,
@@ -160,6 +164,44 @@ void main() {
       expect(find.text('What’s on your mind?'), findsOneWidget);
       final field = tester.widget<TextField>(find.byType(TextField));
       expect(field.controller?.text, 'Overwhelmed with exams');
+    });
+  });
+
+  group('Track C3 seed_context & waiting cross-session proposals', () {
+    test('buildSessionConfigurePayload sends trimmed seed_context only when non-empty', () {
+      final withSeed = CompanionWebSocketService.buildSessionConfigurePayload(
+        sessionId: 's1',
+        mode: 'chat_voice_playback',
+        seedContext: '  Opened from home check-in (tired)  ',
+      );
+      expect(withSeed['seed_context'], 'Opened from home check-in (tired)');
+
+      final blankSeed = CompanionWebSocketService.buildSessionConfigurePayload(
+        sessionId: 's1',
+        mode: 'chat_voice_playback',
+        seedContext: '   ',
+      );
+      expect(blankSeed.containsKey('seed_context'), isFalse);
+    });
+
+    test('proposePatternTheme stages once in waiting, never in forSol until kept', () async {
+      final moments = MomentsController(
+        repository: InMemoryMomentRepository(),
+        clock: () => DateTime(2026, 11, 13, 15),
+      );
+      await moments.load();
+
+      final profile = _profile(helpfulTags: const ['short walks']);
+      final proposed = await moments.proposePatternTheme(profile);
+      expect(proposed, isNotNull);
+      expect(proposed!.state, MomentState.pending);
+      expect(moments.pending.length, 1);
+      expect(moments.forSol, isEmpty);
+
+      // Deduplicates even when called again while waiting or after set aside.
+      expect(await moments.proposePatternTheme(profile), isNull);
+      await moments.hide(proposed.id);
+      expect(await moments.proposePatternTheme(profile), isNull);
     });
   });
 }

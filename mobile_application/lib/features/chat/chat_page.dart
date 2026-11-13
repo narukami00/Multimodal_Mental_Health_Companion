@@ -47,6 +47,7 @@ class ChatPage extends StatefulWidget {
     this.autoConnect = true,
     this.customStarters,
     this.initialDraft,
+    this.seedContext,
     super.key,
   });
 
@@ -64,6 +65,9 @@ class ChatPage extends StatefulWidget {
 
   /// Optional pre-filled composer text when opening the chat screen.
   final String? initialDraft;
+
+  /// Optional one-turn handoff context sent on `session.configure` (e.g. from Home check-in or Insights).
+  final String? seedContext;
 
   /// The moments the person chose to keep, shown on the conversation breakdown. Set once in main.dart.
   static List<MemoryMoment> Function()? keptMoments;
@@ -406,6 +410,7 @@ class _ChatPageState extends State<ChatPage> {
           // A resumed conversation brings its summary and last few turns, so
           // Sol remembers what was said even on a fresh connection.
           resume: resumeBlock(_chatController.activeConversation),
+          seedContext: widget.seedContext,
         );
       }
     });

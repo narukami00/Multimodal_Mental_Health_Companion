@@ -5,6 +5,7 @@ import '../../core/models/emotion_result.dart';
 import '../../core/models/memory_moment.dart';
 import '../../data/contracts/moment_repository.dart';
 import '../../domain/memory/moment_extractor.dart';
+import '../../domain/personalization/personal_calibration.dart';
 
 /// The person's moments: proposed by an extractor, kept only on their yes, and
 /// always theirs to edit, hide, or delete.
@@ -123,6 +124,57 @@ class MomentsController extends ChangeNotifier {
       emotionClass: proposal.emotionClass,
       emotionConfidence: proposal.emotionConfidence,
       sourceRef: proposal.sourceRef,
+    );
+    await _save(moment);
+    return moment;
+  }
+
+  /// Stages one gentle cross-session pattern candidate in [pending] ("waiting")
+  /// for the user to confirm or set aside, never entering Sol's prompt unless kept.
+  Future<MemoryMoment?> proposePatternTheme(PersonalPatternProfile profile) async {
+    if (pending.length >= maxPending) return null;
+
+    String? candidateText;
+    String? candidateRef;
+
+    if (profile.helpfulTags.isNotEmpty) {
+      final tag = profile.helpfulTags.first.trim();
+      if (tag.isNotEmpty) {
+        final slug = tag.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+        candidateRef = 'pattern_theme:helpful:$slug';
+        final label = tag[0].toUpperCase() + tag.substring(1);
+        candidateText = '$label have often helped me settle lately.';
+      }
+    }
+
+    if (candidateText == null) {
+      for (final ctx in profile.recurringShiftContexts) {
+        if (ctx.count < 2) continue;
+        final clean = ctx.context.trim();
+        if (clean.isEmpty) continue;
+        final slug = clean.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+        candidateRef = 'pattern_theme:context:$slug';
+        candidateText =
+            'Lately, ${clean.toLowerCase()} has come up repeatedly around emotional shifts.';
+        break;
+      }
+    }
+
+    if (candidateText == null || candidateRef == null) return null;
+    if (momentIsSensitive(candidateText)) return null;
+    if (_moments.any((m) => m.sourceRef == candidateRef || _sameThing(m.text, candidateText!))) {
+      return null;
+    }
+
+    final now = _clock();
+    final moment = MemoryMoment(
+      id: _newId(now),
+      text: _cap(candidateText),
+      createdAt: now,
+      occurredOn: dayKey(now),
+      source: MomentSource.journal,
+      tone: MomentTone.warm,
+      sourceRef: candidateRef,
     );
     await _save(moment);
     return moment;

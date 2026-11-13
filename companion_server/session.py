@@ -40,7 +40,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 import safety_gate
 from conversation_memory import clean_summary, sanitize_resume, sanitize_turns
-from llm_service import LlmService, sanitize_memory
+from llm_service import LlmService, _clean_line, sanitize_memory
 from moment_extraction import clean_context
 from stt_service import VAD_WINDOW, SttService, StreamingVad
 from text_chunker import TextChunker
@@ -530,6 +530,7 @@ class Session:
         # configure: absent means none, so withdrawing consent takes effect on
         # the next configure. Held for this connection only, never logged.
         self.config["memory"] = sanitize_memory(data.get("memory"))
+        self.config["seed_context"] = _clean_line(data.get("seed_context"), 220)
         # Resuming a conversation: a summary of older turns plus the last few
         # verbatim. History is seeded only when this connection has none.
         resume = sanitize_resume(data.get("resume"))
@@ -1342,6 +1343,9 @@ class Session:
             reply.audio_stream_id = self._next_stream_id()
 
         extra = {"emotion_cue": reply.emotion_cue} if reply.emotion_cue else {}  # only when there is a cue: older LLM stand-ins keep working
+        seed_context = cfg.pop("seed_context", "")
+        if seed_context:
+            extra["seed_context"] = seed_context
         if reply.emotion_cue:
             logger.info(f"Emotion cue attached to reply {reply.turn_id} ({len(reply.emotion_cue)} chars)")  # never log the cue text
         messages = [] if reply.fixed_text else self.llm.build_messages(  # a fixed safety reply never reaches the language model

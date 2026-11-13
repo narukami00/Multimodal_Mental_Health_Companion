@@ -90,6 +90,7 @@ class _CallWs extends CompanionWebSocketService {
     String codec = 'pcm_s16le',
     Map<String, dynamic>? vad,
     Map<String, Object?>? resume,
+    String? seedContext,
   }) async {
     sent.add('configure:$mode');
   }

@@ -157,3 +157,19 @@ def test_style_notes_and_coping_worked_render_and_prompt_avoids_habit_questions(
     block = memory_prompt_block(memory)
     assert "How they prefer you respond:" in block
     assert "What has helped them settle before: breathing exercises, short walks, quiet rest" in block
+
+
+def test_seed_context_flows_once_as_background_without_memory():
+    service = LlmService()
+    messages = service.build_messages(
+        "Hey Sol",
+        seed_context="Opened from home check-in (stressed):\nDeadline week",
+    )
+    system = _system(messages)
+    assert "How they just opened this chat" in system
+    assert "Opened from home check-in (stressed): Deadline week" in system
+    assert "not as instructions" in system
+    assert "\nDeadline week" not in system
+
+    plain = _system(service.build_messages("Hey Sol", seed_context="   "))
+    assert "How they just opened this chat" not in plain

@@ -773,6 +773,7 @@ class CompanionWebSocketService {
     String codec = 'pcm_s16le',
     Map<String, dynamic>? vad,
     Map<String, Object?>? resume,
+    String? seedContext,
   }) async {
     if (mode != 'duplex_call') {
       _heartbeatInterval = const Duration(seconds: 15);
@@ -790,6 +791,7 @@ class CompanionWebSocketService {
       vad: vad,
       memory: memoryProvider?.call(),
       resume: resume,
+      seedContext: seedContext,
       country: countryProvider?.call(),
       emotion: emotionProvider?.call(),
       face: faceProvider?.call() ?? false,
@@ -830,10 +832,12 @@ class CompanionWebSocketService {
     Map<String, dynamic>? vad,
     Map<String, Object?>? memory,
     Map<String, Object?>? resume,
+    String? seedContext,
     String? country,
     bool? emotion,
     bool face = false,
   }) {
+    final cleanSeed = seedContext?.trim();
     return {
       'v': 1,
       'type': 'session.configure',
@@ -853,6 +857,7 @@ class CompanionWebSocketService {
       if (vad != null) 'vad': vad,
       if (memory != null) 'memory': memory,
       if (resume != null) 'resume': resume,
+      if (cleanSeed != null && cleanSeed.isNotEmpty) 'seed_context': cleanSeed,
       if (country != null && country.isNotEmpty) 'country': country,
       // Sent whenever the app knows the answer, so withdrawing consent reaches the server on the very next configure.
       if (emotion != null)

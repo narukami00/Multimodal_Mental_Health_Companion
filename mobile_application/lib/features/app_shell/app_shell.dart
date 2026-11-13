@@ -577,6 +577,11 @@ class _AppShellState extends State<AppShell> {
                                         ),
                                   initialDraft:
                                       (note != null && note.isNotEmpty) ? note : null,
+                                  seedContext: signal == null
+                                      ? null
+                                      : (note != null && note.isNotEmpty)
+                                          ? 'Opened from home check-in (${signal.moodTag}): $note'
+                                          : 'Opened from home check-in (${signal.moodTag})',
                                 );
                               },
                             );
@@ -669,7 +674,12 @@ class _AppShellState extends State<AppShell> {
                     ? null
                     : MomentsInsightsTab(
                         moments: widget.moments!,
-                        onTalk: () => _openChat(context, startNew: true),
+                        onTalk: () => _openChat(
+                          context,
+                          startNew: true,
+                          seedContext:
+                              'Opened from Insights while looking at kept warm moments.',
+                        ),
                         onManage: widget.memory == null
                             ? null
                             : () => Navigator.of(context).push(
@@ -820,6 +830,7 @@ class _AppShellState extends State<AppShell> {
     bool startNew = false,
     List<String>? customStarters,
     String? initialDraft,
+    String? seedContext,
   }) {
     if (startNew) {
       _chatController.startNewConversation();
@@ -833,6 +844,7 @@ class _AppShellState extends State<AppShell> {
           autoConnect: true,
           customStarters: customStarters,
           initialDraft: initialDraft,
+          seedContext: seedContext,
         ),
       ),
     ).then((_) {

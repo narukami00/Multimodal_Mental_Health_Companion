@@ -372,6 +372,17 @@ Future<void> main() async {
   ).call;
   ChatPage.keptMoments = () => moments.confirmed;
   ChatPage.personalization = memory.personalization;
+  if (!profileController.profile.momentPromptsMuted &&
+      !safetyController.hasActiveFlag) {
+    final personalProfile = memory.personalization?.call();
+    if (personalProfile != null) {
+      unawaited(
+        moments
+            .proposePatternTheme(personalProfile)
+            .catchError((Object _) => null),
+      );
+    }
+  }
 
   final navigatorKey = GlobalKey<NavigatorState>();
 
