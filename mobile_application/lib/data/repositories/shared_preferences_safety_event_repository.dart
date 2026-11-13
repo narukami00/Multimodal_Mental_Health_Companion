@@ -3,18 +3,23 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/models/safety_event.dart';
+import '../../services/secure_storage.dart';
 import '../contracts/safety_repository.dart';
 
 class SharedPreferencesSafetyEventRepository implements SafetyEventRepository {
-  SharedPreferencesSafetyEventRepository(this._preferences);
+  SharedPreferencesSafetyEventRepository(this._preferences, {SecureKeyValueStore? secureStore})
+      : _secureStore = secureStore;
 
   static const _eventsKey = 'safety.events';
 
   final SharedPreferences _preferences;
+  final SecureKeyValueStore? _secureStore;
 
   @override
   Future<List<SafetyEvent>> listEvents() async {
-    final encodedEvents = _preferences.getStringList(_eventsKey) ?? const [];
+    final encodedEvents = _secureStore != null
+        ? await _secureStore.readStringList(_eventsKey, legacyPreferences: _preferences)
+        : (_preferences.getStringList(_eventsKey) ?? const []);
     final events = <SafetyEvent>[];
     for (final encoded in encodedEvents) {
       try {
@@ -38,9 +43,11 @@ class SharedPreferencesSafetyEventRepository implements SafetyEventRepository {
       ..add(event);
     events.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    await _preferences.setStringList(
-      _eventsKey,
-      events.map((item) => jsonEncode(item.toMap())).toList(),
-    );
+    final encoded = events.map((item) => jsonEncode(item.toMap())).toList();
+    if (_secureStore != null) {
+      await _secureStore.writeStringList(_eventsKey, encoded);
+    } else {
+      await _preferences.setStringList(_eventsKey, encoded);
+    }
   }
 }

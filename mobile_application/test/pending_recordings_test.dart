@@ -10,6 +10,9 @@ import 'package:solace_mobile/data/repositories/in_memory_session_repository.dar
 import 'package:solace_mobile/features/sessions/session_controller.dart';
 import 'package:solace_mobile/services/journal_analysis_client.dart';
 import 'package:solace_mobile/services/pending_recordings.dart';
+import 'package:solace_mobile/services/secure_storage.dart';
+
+import 'support/in_memory_test_cipher.dart';
 
 class _NoAnalyzer implements EmotionAnalyzer {
   @override
@@ -135,6 +138,92 @@ void main() {
       final c = SessionController(repository: repo, emotionAnalyzer: _NoAnalyzer(), pendingRecordings: broken);
       expect(await c.savePendingRecording(mode: CaptureMode.voice, pcm: _pcm()), isNull);
       expect(c.sessions, isEmpty);
+    });
+
+    test('encrypted PendingRecordings migrates legacy plaintext, detects tampering, and prunes orphans', () async {
+      final sample7 = Uint8List.fromList(List<int>.filled(32000, 7));
+      await store.save('legacy1', sample7);
+      await store.saveFace('legacy1', Float32List.fromList([1.0, 2.0, 3.0]));
+      expect(await File('${dir.path}/legacy1.pcm').exists(), isTrue);
+
+      final encrypted = PendingRecordings(
+        directory: () async => dir,
+        cipher: InMemoryTestCipher(),
+      );
+      final migrated = await encrypted.read('legacy1');
+      expect(migrated, sample7);
+      expect(await File('${dir.path}/legacy1.pcm').exists(), isFalse);
+      expect(await File('${dir.path}/legacy1.pcm.enc').exists(), isTrue);
+
+      final encFace = await encrypted.readFace('legacy1');
+      expect(encFace, [1.0, 2.0, 3.0]);
+      expect(await File('${dir.path}/legacy1.face').exists(), isFalse);
+
+      // Orphan reconciliation keeps active IDs and deletes others.
+      await encrypted.save('orphan1', _pcm());
+      final removed = await encrypted.reconcileOrphans({'legacy1'});
+      expect(removed, 1);
+      expect(await encrypted.read('orphan1'), isNull);
+      expect(await encrypted.read('legacy1'), sample7);
+
+      // Tampering encrypted bytes propagates SecureStorageException.
+      final encFile = File('${dir.path}/legacy1.pcm.enc');
+      final bytes = await encFile.readAsBytes();
+      bytes[bytes.length - 1] ^= 0xFF;
+      await encFile.writeAsBytes(bytes, flush: true);
+      await expectLater(encrypted.read('legacy1'), throwsA(isA<SecureStorageException>()));
+    });
+
+    test('processPending rechecks emotion and face consent and deletes revoked face vectors', () async {
+      final enc = PendingRecordings(
+        directory: () async => dir,
+        cipher: InMemoryTestCipher(),
+      );
+      final c = SessionController(
+        repository: repo,
+        emotionAnalyzer: _NoAnalyzer(),
+        pendingRecordings: enc,
+      );
+      final faceVec = Float32List.fromList(List<double>.filled(1400, 0.25));
+      final entry = (await c.savePendingRecording(
+        mode: CaptureMode.video,
+        pcm: _pcm(),
+        faceVector: faceVec,
+      ))!;
+
+      var emotionAllowed = false;
+      var faceAllowed = false;
+      Float32List? sentFace;
+      var analyzeCalls = 0;
+
+      // When emotion consent is revoked, nothing is sent.
+      final skipped = await c.processPending(
+        isEmotionConsentGranted: () => emotionAllowed,
+        isFaceConsentGranted: () => faceAllowed,
+        analyze: (id, pcm, words, face) async {
+          analyzeCalls++;
+          sentFace = face;
+          return const JournalAnalysis(transcript: 'ok');
+        },
+      );
+      expect(skipped, 0);
+      expect(analyzeCalls, 0);
+
+      // When emotion consent is restored but face consent is revoked, face vector is deleted and omitted.
+      emotionAllowed = true;
+      final done = await c.processPending(
+        isEmotionConsentGranted: () => emotionAllowed,
+        isFaceConsentGranted: () => faceAllowed,
+        analyze: (id, pcm, words, face) async {
+          analyzeCalls++;
+          sentFace = face;
+          return const JournalAnalysis(transcript: 'words without face');
+        },
+      );
+      expect(done, 1);
+      expect(analyzeCalls, 1);
+      expect(sentFace, isNull);
+      expect(await enc.readFace(entry.id), isNull);
     });
   });
 }

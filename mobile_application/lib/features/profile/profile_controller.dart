@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../../core/day_key.dart';
@@ -108,13 +110,15 @@ class ProfileController extends ChangeNotifier {
     await _persist();
   }
 
-  /// Stores the user's display name and/or chosen profile photo.
+  /// Stores the user's display name and/or chosen profile photo, deleting any
+  /// superseded or cleared app-owned avatar file afterwards.
   Future<void> saveIdentity({
     String? displayName,
     String? avatarPath,
     bool clearDisplayName = false,
     bool clearAvatarPath = false,
   }) async {
+    final previousPath = _profile.avatarPath;
     _profile = _profile.copyWith(
       displayName: displayName,
       avatarPath: avatarPath,
@@ -122,6 +126,16 @@ class ProfileController extends ChangeNotifier {
       clearAvatarPath: clearAvatarPath,
     );
     await _persist();
+    if (previousPath != null &&
+        previousPath != _profile.avatarPath &&
+        previousPath.split(RegExp(r'[/\\]')).last.startsWith('avatar_')) {
+      try {
+        final oldFile = File(previousPath);
+        if (await oldFile.exists()) await oldFile.delete();
+      } catch (e) {
+        debugPrint('[ProfileController] Could not delete old avatar: $e');
+      }
+    }
   }
 
   /// Enables or disables gentle haptic feedback across the app.

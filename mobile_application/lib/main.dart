@@ -39,6 +39,7 @@ import 'features/call/call_page.dart';
 import 'providers/server/server_emotion_analyzer.dart';
 import 'services/journal_analysis_client.dart';
 import 'services/pending_recordings.dart';
+import 'services/secure_storage.dart';
 import 'services/face_reading_choice.dart';
 import 'services/phone_speech.dart';
 import 'services/stt_model_store.dart';
@@ -69,38 +70,51 @@ import 'features/memory/keep_moment.dart';
 import 'features/memory/moments_controller.dart';
 import 'services/companion_websocket_service.dart';
 import 'services/usage_collector_service.dart';
+import 'services/account_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences = await SharedPreferences.getInstance();
-  final journalClient = JournalAnalysisClient();
+  final secureCipher = AndroidKeystoreCipher();
+  final hasKeystore = await secureCipher.isAvailable();
+  final secureStore = hasKeystore
+      ? await SecureKeyValueStore.createDefault(cipher: secureCipher)
+      : null;
+  ConsentController? emotionConsent;
+  final journalClient = JournalAnalysisClient(
+    emotionConsentGranted: () => emotionConsent?.isGranted(ConsentKey.emotionEstimate) ?? false,
+    faceConsentGranted: () => emotionConsent?.isGranted(ConsentKey.faceFeatures) ?? false,
+  );
   PhoneSpeech.store = SttModelStore(serverBase: journalClient.serverBase);
   PhoneFace.store = FaceModelStore(serverBase: journalClient.serverBase);
   PhoneFace.choice = FaceReadingChoice(preferences: preferences);
   // Typed entries are read by the companion server's real emotion model (only with the person's consent;
   // never an invented answer). The consent controller is created further down.
-  ConsentController? emotionConsent;
   final sessionController = SessionController(
-    repository: SharedPreferencesSessionRepository(preferences),
+    repository: SharedPreferencesSessionRepository(preferences, secureStore: secureStore),
     emotionAnalyzer: ServerEmotionAnalyzer(
       client: journalClient,
       consentGranted: () => emotionConsent?.isGranted(ConsentKey.emotionEstimate) ?? false,
     ),
-    pendingRecordings: PendingRecordings(),
+    pendingRecordings: PendingRecordings(cipher: hasKeystore ? secureCipher : null),
   );
   await sessionController.load();
+  unawaited(sessionController.reconcilePendingRecordings());
   final safetyController = SafetyController(
     screener: const KeywordSafetyScreener(),
-    repository: SharedPreferencesSafetyEventRepository(preferences),
+    repository: SharedPreferencesSafetyEventRepository(preferences, secureStore: secureStore),
   );
   await safetyController.load();
   final profileController = ProfileController(
-    repository: SharedPreferencesProfileRepository(preferences),
+    repository: SharedPreferencesProfileRepository(preferences, secureStore: secureStore),
   );
   await profileController.load();
   await profileController.ensureFirstRun();
 
-  final therapistController = TherapistController(preferences: preferences);
+  final therapistController = TherapistController(
+    preferences: preferences,
+    secureStore: secureStore,
+  );
   await therapistController.load();
 
   final habitController = HabitController(preferences: preferences);
@@ -150,11 +164,12 @@ Future<void> main() async {
   await forestController.load();
   // Android composes the current tree over its own time-of-day landscape.
   void pushForestWidget() {
-    final garden = forestController.garden;
+    final tree = forestController.visibleTree;
     unawaited(
       ForestWidgetService.instance.push(
-        species: garden.currentSpecies,
-        stage: garden.stage,
+        species: tree.species,
+        stage: tree.stage,
+        waterWaiting: forestController.waterWaiting,
       ),
     );
   }
@@ -177,7 +192,10 @@ Future<void> main() async {
 
   // Owned here so the daily-features recorder and the shell read one chat
   // history. The shell leaves a controller it was handed alone.
-  final chatController = ChatController(preferences: preferences);
+  final chatController = ChatController(
+    preferences: preferences,
+    secureStore: secureStore,
+  );
   await chatController.load();
 
   // Keeps the in-app part of each day's behavior row current, and drops rows
@@ -198,7 +216,7 @@ Future<void> main() async {
   // Phone patterns: off until the person turns it on, and reading anything
   // requires both their consent and Android's usage access.
   final consentController = ConsentController(
-    repository: SharedPreferencesConsentRepository(preferences),
+    repository: SharedPreferencesConsentRepository(preferences, secureStore: secureStore),
   );
   await consentController.load();
   emotionConsent = consentController;
@@ -248,7 +266,7 @@ Future<void> main() async {
   // only on a yes. Looked at when an entry is saved or a message is sent, never
   // while safety support is active or when the person turned asking off.
   final moments = MomentsController(
-    repository: SharedPreferencesMomentRepository(preferences),
+    repository: SharedPreferencesMomentRepository(preferences, secureStore: secureStore),
     // Chat messages are read by the companion's model when it is connected;
     // everything else, and any miss, falls back to the offline reader.
     extractor: ServerMomentExtractor(
@@ -405,9 +423,13 @@ Future<void> main() async {
     if (sessionController.awaitingRecordings.isEmpty) return;
     if (!consentController.isGranted(ConsentKey.emotionEstimate)) return;
     await sessionController.processPending(
+      isEmotionConsentGranted: () => consentController.isGranted(ConsentKey.emotionEstimate),
+      isFaceConsentGranted: () => consentController.isGranted(ConsentKey.faceFeatures),
       analyze: (id, pcm, words, faceVector) async {
         // A phone that read the face itself sends only the numbers, first, so the server reads voice, words and face together.
-        if (faceVector != null) await journalClient.sendFaceFeatures(id, faceVector);
+        if (faceVector != null && consentController.isGranted(ConsentKey.faceFeatures)) {
+          await journalClient.sendFaceFeatures(id, faceVector);
+        }
         return journalClient.analyzeAudio(id, pcm, words: words);
       },
       onSafety: (session, level) async {
@@ -488,6 +510,8 @@ Future<void> main() async {
       navigatorKey: navigatorKey,
     ),
   );
+  // Native auth configuration or a network outage never delays local startup.
+  unawaited(AccountService.instance.initialize());
 }
 
 class SolaceApp extends StatelessWidget {

@@ -3,14 +3,17 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/models/session_record.dart';
+import '../../services/secure_storage.dart';
 import '../contracts/repository_contracts.dart';
 
 class SharedPreferencesSessionRepository implements SessionRepository {
-  SharedPreferencesSessionRepository(this._preferences);
+  SharedPreferencesSessionRepository(this._preferences, {SecureKeyValueStore? secureStore})
+      : _secureStore = secureStore;
 
   static const _sessionsKey = 'sessions.records';
 
   final SharedPreferences _preferences;
+  final SecureKeyValueStore? _secureStore;
 
   @override
   Future<SessionRecord?> findById(String id) async {
@@ -23,7 +26,9 @@ class SharedPreferencesSessionRepository implements SessionRepository {
 
   @override
   Future<List<SessionRecord>> listSessions() async {
-    final encodedSessions = _preferences.getStringList(_sessionsKey) ?? const [];
+    final encodedSessions = _secureStore != null
+        ? await _secureStore.readStringList(_sessionsKey, legacyPreferences: _preferences)
+        : (_preferences.getStringList(_sessionsKey) ?? const []);
     final sessions = <SessionRecord>[];
 
     for (final encoded in encodedSessions) {
@@ -44,10 +49,12 @@ class SharedPreferencesSessionRepository implements SessionRepository {
   @override
   Future<void> delete(String id) async {
     final sessions = (await listSessions()).where((item) => item.id != id);
-    await _preferences.setStringList(
-      _sessionsKey,
-      sessions.map((item) => jsonEncode(item.toMap())).toList(),
-    );
+    final encoded = sessions.map((item) => jsonEncode(item.toMap())).toList();
+    if (_secureStore != null) {
+      await _secureStore.writeStringList(_sessionsKey, encoded);
+    } else {
+      await _preferences.setStringList(_sessionsKey, encoded);
+    }
   }
 
   @override
@@ -58,9 +65,11 @@ class SharedPreferencesSessionRepository implements SessionRepository {
       ..add(session);
     sessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    await _preferences.setStringList(
-      _sessionsKey,
-      sessions.map((item) => jsonEncode(item.toMap())).toList(),
-    );
+    final encoded = sessions.map((item) => jsonEncode(item.toMap())).toList();
+    if (_secureStore != null) {
+      await _secureStore.writeStringList(_sessionsKey, encoded);
+    } else {
+      await _preferences.setStringList(_sessionsKey, encoded);
+    }
   }
 }

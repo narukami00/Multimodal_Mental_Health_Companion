@@ -99,7 +99,18 @@ const dataRegistry = <DataEntry>[
     id: 'voice',
     label: 'How Sol speaks',
     kind: DataKind.choice,
-    keys: ['companion_tts_enabled', 'companion_tts_voice_id', 'companion_tts_speed'],
+    keys: [
+      'companion_tts_enabled',
+      'companion_tts_local_only',
+      'companion_tts_voice_id',
+      'companion_tts_speed',
+    ],
+  ),
+  DataEntry(
+    id: 'account_binding',
+    label: 'Online account for this installation',
+    kind: DataKind.device,
+    keys: ['account.device_owner_uid'],
   ),
   DataEntry(
     id: 'server',
@@ -111,7 +122,12 @@ const dataRegistry = <DataEntry>[
     id: 'widget_cache',
     label: 'Home-screen widget line and picture',
     kind: DataKind.device,
-    keys: ['checkin_prompt', 'forest_scene_path', 'forest_tree_path'],
+    keys: [
+      'checkin_prompt',
+      'forest_scene_path',
+      'forest_tree_path',
+      'forest_water_waiting',
+    ],
   ),
 ];
 

@@ -37,6 +37,8 @@ class TtsAudioResult:
 class BaseTtsEngine(ABC):
     """Abstract base class for companion TTS engines."""
 
+    is_cloud: bool = False
+
     @property
     @abstractmethod
     def name(self) -> str:
@@ -178,6 +180,8 @@ class EdgeTtsEngine(BaseTtsEngine):
     Produces natural, studio-quality human speech with warm, soothing empathy.
     Supports multiple voice personas (Ava, Jenny, Emma, Andrew, Guy, Ana).
     """
+
+    is_cloud: bool = True
 
     def __init__(self, sample_rate: int = DEFAULT_SAMPLE_RATE) -> None:
         self._sample_rate = sample_rate
@@ -486,11 +490,12 @@ def get_tts_engine(
     `piper` and `kokoro` force the local engine; if its files are incomplete the
     factory says what is missing rather than silently using the cloud voice.
     """
+    local_only = os.environ.get("SOLACE_TTS_LOCAL_ONLY") == "1" or engine_type == "local"
     if engine_type == "mock":
         return MockTtsEngine()
 
-    # `edge` skips local weights entirely: the cloud voice, chosen explicitly.
-    if engine_type == "edge":
+    # `edge` skips local weights entirely: the cloud voice, chosen explicitly (refused when local_only is set).
+    if engine_type == "edge" and not local_only:
         return EdgeTtsEngine()
 
     base_dir = Path(models_dir) if models_dir else Path(__file__).resolve().parent / "models" / "tts"
@@ -553,8 +558,8 @@ def get_tts_engine(
         if engine.initialize():
             return engine
 
-    # High-fidelity Neural Edge-TTS (cloud)
-    if engine_type in ("auto", "neural", "edge"):
+    # High-fidelity Neural Edge-TTS (cloud) — never used when SOLACE_TTS_LOCAL_ONLY=1 or SOLACE_TTS=local.
+    if engine_type in ("auto", "neural", "edge") and not local_only:
         try:
             import edge_tts
             import av

@@ -5,18 +5,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/models/chat_conversation_record.dart';
 import '../../core/models/chat_message_record.dart';
 import '../../core/models/emotion_result.dart';
+import '../../services/secure_storage.dart';
 
 /// Manages persistent chat conversation sessions, message history, and active session state.
 class ChatController extends ChangeNotifier {
   ChatController({
     SharedPreferences? preferences,
+    SecureKeyValueStore? secureStore,
     String storageKey = _defaultStorageKey,
     String activeIdKey = _defaultActiveIdKey,
   })  : _prefs = preferences,
+        _secureStore = secureStore,
         _storageKey = storageKey,
         _activeIdKey = activeIdKey;
 
   SharedPreferences? _prefs;
+  final SecureKeyValueStore? _secureStore;
   static const _defaultStorageKey = 'solace_chat_conversations_v2';
   static const _defaultActiveIdKey = 'solace_active_chat_id_v2';
 
@@ -52,7 +56,9 @@ class ChatController extends ChangeNotifier {
   Future<void> load() async {
     _prefs ??= await SharedPreferences.getInstance();
 
-    final rawJson = _prefs?.getString(_storageKey);
+    final rawJson = _secureStore != null
+        ? await _secureStore.readString(_storageKey, legacyPreferences: _prefs)
+        : _prefs?.getString(_storageKey);
     final savedActiveId = _prefs?.getString(_activeIdKey);
 
     if (rawJson != null && rawJson.isNotEmpty) {
@@ -470,7 +476,12 @@ class ChatController extends ChangeNotifier {
       final persistentConvs =
           _conversations.where((c) => c.hasUserMessage).toList();
       final jsonList = persistentConvs.map((c) => c.toMap()).toList();
-      await _prefs?.setString(_storageKey, jsonEncode(jsonList));
+      final encoded = jsonEncode(jsonList);
+      if (_secureStore != null) {
+        await _secureStore.writeString(_storageKey, encoded);
+      } else {
+        await _prefs?.setString(_storageKey, encoded);
+      }
       if (_activeConversationId != null &&
           persistentConvs.any((c) => c.id == _activeConversationId)) {
         await _prefs?.setString(_activeIdKey, _activeConversationId!);

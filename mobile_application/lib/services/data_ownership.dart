@@ -10,6 +10,7 @@ import '../domain/data/data_registry.dart';
 import '../domain/export/backup.dart';
 import 'account_service.dart';
 import 'check_in_reminder_service.dart';
+import 'secure_storage.dart';
 
 /// Where a backup file goes to and comes from. Android's own document picker, so the person chooses the place
 /// (their files, Drive, a USB stick) and Solace never needs storage permission or an internet connection.
@@ -79,21 +80,37 @@ class DataOwnership {
     Future<SharedPreferences> Function()? preferences,
     BackupFiles? files,
     Future<Directory> Function()? recordingsDirectory,
+    Future<Directory> Function()? documentsDirectory,
+    SecureKeyValueStore? secureStore,
     Future<void> Function()? stopReminders,
     Future<void> Function()? signOut,
     DateTime Function()? now,
   }) : _preferences = preferences ?? SharedPreferences.getInstance,
        files = files ?? const PlatformBackupFiles(),
        _recordingsDirectory = recordingsDirectory ?? _defaultRecordings,
-       _stopReminders = stopReminders ?? CheckInReminderService.instance.cancel,
+       _documentsDirectory = documentsDirectory ?? getApplicationDocumentsDirectory,
+       _secureStore = secureStore,
+       _stopReminders = stopReminders ?? CheckInReminderService.instance.cancelAllNotifications,
        _signOut = signOut ?? AccountService.instance.signOut,
        _now = now ?? DateTime.now;
 
   static final DataOwnership instance = DataOwnership();
 
+  static const _secureListKeys = <String>{'sessions.records', 'safety.events'};
+  static const _secureStringKeys = <String>{
+    'solace_chat_conversations_v2',
+    'memory.moments',
+    'memory.momentTombstones',
+    'profile.baseline',
+    'profile.therapist_contact',
+    'consent.ledger',
+  };
+
   final Future<SharedPreferences> Function() _preferences;
   final BackupFiles files;
   final Future<Directory> Function() _recordingsDirectory;
+  final Future<Directory> Function() _documentsDirectory;
+  final SecureKeyValueStore? _secureStore;
   final Future<void> Function() _stopReminders;
   final Future<void> Function() _signOut;
   final DateTime Function() _now;
@@ -110,12 +127,42 @@ class DataOwnership {
     return 'solace-backup-${d.year}-${two(d.month)}-${two(d.day)}.json';
   }
 
+  Future<SecureKeyValueStore?> _resolveSecureStore() async {
+    if (_secureStore != null) return _secureStore;
+    final cipher = AndroidKeystoreCipher();
+    if (!await cipher.isAvailable()) return null;
+    return SecureKeyValueStore(
+      directoryProvider: () async {
+        final docs = await _documentsDirectory();
+        return Directory('${docs.path}${Platform.pathSeparator}secure_stores');
+      },
+      cipher: cipher,
+    );
+  }
+
   Future<String> backupText() async {
     final prefs = await _preferences();
     await prefs.reload();
+    final map = <String, Object>{
+      for (final key in prefs.getKeys())
+        if (keyInBackup(key)) key: prefs.get(key)!,
+    };
+    final store = await _resolveSecureStore();
+    if (store != null) {
+      for (final key in _secureListKeys) {
+        if (!keyInBackup(key) || map.containsKey(key)) continue;
+        final list = await store.readStringList(key);
+        if (list.isNotEmpty) map[key] = list;
+      }
+      for (final key in _secureStringKeys) {
+        if (!keyInBackup(key) || map.containsKey(key)) continue;
+        final value = await store.readString(key);
+        if (value != null) map[key] = value;
+      }
+    }
     return buildBackup(
       // What the registry calls tied to this phone (the server address, the widget's line) is not part of a copy.
-      preferences: {for (final key in prefs.getKeys()) if (keyInBackup(key)) key: prefs.get(key)!},
+      preferences: map,
       createdAt: _now(),
     );
   }
@@ -164,6 +211,7 @@ class DataOwnership {
           await prefs.setStringList(entry.key, value);
       }
     }
+    await _deleteSecureStores();
     await _deleteRecordings();
     await _stopReminders();
     await files.restart();
@@ -174,6 +222,8 @@ class DataOwnership {
   Future<void> eraseEverything() async {
     final prefs = await _preferences();
     await prefs.clear();
+    await _deleteSecureStores();
+    await _deleteAvatars();
     await _deleteRecordings();
     await _stopReminders();
     try {
@@ -182,6 +232,30 @@ class DataOwnership {
       debugPrint('[Backup] could not sign out during erase: ${error.runtimeType}');
     }
     await files.restart();
+  }
+
+  Future<void> _deleteSecureStores() async {
+    try {
+      final docs = await _documentsDirectory();
+      final dir = Directory('${docs.path}${Platform.pathSeparator}secure_stores');
+      if (await dir.exists()) await dir.delete(recursive: true);
+    } catch (error) {
+      debugPrint('[Backup] could not clear encrypted stores: ${error.runtimeType}');
+    }
+  }
+
+  Future<void> _deleteAvatars() async {
+    try {
+      final docs = await _documentsDirectory();
+      if (!await docs.exists()) return;
+      await for (final entity in docs.list()) {
+        if (entity is File && entity.uri.pathSegments.last.startsWith('avatar_')) {
+          await entity.delete();
+        }
+      }
+    } catch (error) {
+      debugPrint('[Backup] could not clear avatars: ${error.runtimeType}');
+    }
   }
 
   Future<void> _deleteRecordings() async {

@@ -287,6 +287,17 @@ class CheckInReminderService {
     }
   }
 
+  /// Cancels every scheduled or active notification from Solace (daily reminder,
+  /// idea pushes, and habit reminders).
+  Future<void> cancelAllNotifications() async {
+    if (!await initialize()) return;
+    try {
+      await _plugin.cancelAll();
+    } catch (error) {
+      debugPrint('CheckInReminderService cancelAll warning: $error');
+    }
+  }
+
   /// Shows the reminder immediately, so delivery can be confirmed on the spot.
   ///
   /// Returns false when notifications are switched off or posting failed.

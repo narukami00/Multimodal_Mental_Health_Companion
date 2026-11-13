@@ -17,6 +17,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -24,6 +26,11 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 import kotlin.concurrent.thread
 
 class MainActivity : FlutterActivity() {
@@ -36,6 +43,8 @@ class MainActivity : FlutterActivity() {
     private val FACE_CHANNEL = "com.sysmentalhealth.solace_mobile/face_models"
     private val FILE_CHANNEL = "com.sysmentalhealth.solace_mobile/file_transfer"
     private val QUICK_INBOX_CHANNEL = "com.sysmentalhealth.solace_mobile/quick_inbox"
+    private val SECURE_CRYPTO_CHANNEL = "com.sysmentalhealth.solace_mobile/secure_crypto"
+    private val KEYSTORE_ALIAS = "solace_local_data_v1"
     private val SAVE_FILE_REQUEST_CODE = 1010
     private val PICK_FILE_REQUEST_CODE = 1011
     private val NOT_IMPLEMENTED = Any()
@@ -280,6 +289,48 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, QUICK_INBOX_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "drain" -> result.success(QuickInbox.drain(applicationContext))
+                else -> result.notImplemented()
+            }
+        }
+
+        // Hardware/platform-backed authenticated encryption (AES-256-GCM via AndroidKeyStore) for local sensitive data.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SECURE_CRYPTO_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isAvailable" -> {
+                    try {
+                        getOrCreateSecretKey()
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Keystore availability check failed: $e")
+                        result.success(false)
+                    }
+                }
+                "encrypt" -> {
+                    val plaintext = call.argument<ByteArray>("plaintext")
+                    val aad = call.argument<ByteArray>("aad")
+                    if (plaintext == null) {
+                        result.error("bad_args", "plaintext is required", null)
+                    } else {
+                        try {
+                            result.success(encryptBytes(plaintext, aad))
+                        } catch (e: Exception) {
+                            result.error("encrypt_failed", e.message ?: e.javaClass.simpleName, null)
+                        }
+                    }
+                }
+                "decrypt" -> {
+                    val ciphertext = call.argument<ByteArray>("ciphertext")
+                    val aad = call.argument<ByteArray>("aad")
+                    if (ciphertext == null) {
+                        result.error("bad_args", "ciphertext is required", null)
+                    } else {
+                        try {
+                            result.success(decryptBytes(ciphertext, aad))
+                        } catch (e: Exception) {
+                            result.error("decrypt_failed", e.message ?: e.javaClass.simpleName, null)
+                        }
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -680,6 +731,68 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             Log.w(TAG, "could not restore audio mode: $e")
         }
+    }
+
+    private fun getOrCreateSecretKey(): SecretKey {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val existing = keyStore.getKey(KEYSTORE_ALIAS, null) as? SecretKey
+        if (existing != null) return existing
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        val spec = KeyGenParameterSpec.Builder(
+            KEYSTORE_ALIAS,
+            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        )
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .setRandomizedEncryptionRequired(true)
+            .build()
+        generator.init(spec)
+        return generator.generateKey()
+    }
+
+    private fun encryptBytes(plaintext: ByteArray, aad: ByteArray?): ByteArray {
+        val key = getOrCreateSecretKey()
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key)
+        if (aad != null && aad.isNotEmpty()) {
+            cipher.updateAAD(aad)
+        }
+        val iv = cipher.iv
+        val ciphertextWithTag = cipher.doFinal(plaintext)
+        val out = ByteArray(5 + iv.size + ciphertextWithTag.size)
+        out[0] = 'S'.code.toByte()
+        out[1] = 'E'.code.toByte()
+        out[2] = 'C'.code.toByte()
+        out[3] = 1
+        out[4] = iv.size.toByte()
+        System.arraycopy(iv, 0, out, 5, iv.size)
+        System.arraycopy(ciphertextWithTag, 0, out, 5 + iv.size, ciphertextWithTag.size)
+        return out
+    }
+
+    private fun decryptBytes(envelope: ByteArray, aad: ByteArray?): ByteArray {
+        if (envelope.size < 6 ||
+            envelope[0] != 'S'.code.toByte() ||
+            envelope[1] != 'E'.code.toByte() ||
+            envelope[2] != 'C'.code.toByte() ||
+            envelope[3] != 1.toByte()
+        ) {
+            throw IllegalArgumentException("Invalid encrypted envelope header")
+        }
+        val ivLen = envelope[4].toInt() and 0xFF
+        if (ivLen < 12 || envelope.size <= 5 + ivLen) {
+            throw IllegalArgumentException("Invalid encrypted envelope IV length")
+        }
+        val iv = envelope.copyOfRange(5, 5 + ivLen)
+        val ciphertextWithTag = envelope.copyOfRange(5 + ivLen, envelope.size)
+        val key = getOrCreateSecretKey()
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+        if (aad != null && aad.isNotEmpty()) {
+            cipher.updateAAD(aad)
+        }
+        return cipher.doFinal(ciphertextWithTag)
     }
 
     override fun onDestroy() {

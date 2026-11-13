@@ -155,25 +155,38 @@ class SessionController extends ChangeNotifier {
 
   /// Sends each waiting recording to the server, oldest first, and fills the entry in with the words and the
   /// reading it gets back. Stops at the first one the server cannot take (it is down: do not hammer it).
+  /// Rechecks [isEmotionConsentGranted] and [isFaceConsentGranted] at send time; if face consent was revoked
+  /// after capture, the pending face vector is deleted before sending.
   /// [onSafety] hears of any entry whose words the server's safety check flagged. Returns how many were done.
   Future<int> processPending({
     required Future<JournalAnalysis?> Function(String id, Uint8List pcm, String? words, Float32List? faceVector) analyze,
     void Function(SessionRecord session, String safety)? onSafety,
+    bool Function()? isEmotionConsentGranted,
+    bool Function()? isFaceConsentGranted,
   }) async {
     final store = _pending;
     if (store == null || _processing) return 0;
+    if (isEmotionConsentGranted != null && !isEmotionConsentGranted()) return 0;
     _processing = true;
     var done = 0;
     try {
       final waiting = awaitingRecordings..sort((a, b) => a.createdAt.compareTo(b.createdAt));
       for (final entry in waiting) {
+        if (isEmotionConsentGranted != null && !isEmotionConsentGranted()) break;
         final pcm = await store.read(entry.id);
         if (pcm == null) {
           // The recording is gone (cleared by the phone). Nothing can be written down; stop waiting for it.
           await _replace(SessionRecord(id: entry.id, createdAt: entry.createdAt, mode: entry.mode));
           continue;
         }
-        final face = entry.awaitingFace ? await store.readFace(entry.id) : null;
+        Float32List? face;
+        if (entry.awaitingFace) {
+          if (isFaceConsentGranted != null && !isFaceConsentGranted()) {
+            await store.deleteFace(entry.id);
+          } else {
+            face = await store.readFace(entry.id);
+          }
+        }
         final analysis = await analyze(entry.id, pcm, entry.text, face);
         if (analysis == null) break;
         // When the phone wrote the words down, those are the words (the server only reads the recording for
@@ -197,6 +210,19 @@ class SessionController extends ChangeNotifier {
       _processing = false;
     }
     return done;
+  }
+
+  /// Cleans up orphaned pending recording files not tied to any awaiting session,
+  /// and prunes files older than [maxAge].
+  Future<int> reconcilePendingRecordings({
+    Duration maxAge = const Duration(days: 14),
+  }) async {
+    final store = _pending;
+    if (store == null) return 0;
+    final activeIds = awaitingRecordings.map((s) => s.id).toSet();
+    final orphans = await store.reconcileOrphans(activeIds);
+    final expired = await store.pruneExpired(maxAge);
+    return orphans + expired;
   }
 
   Future<void> _replace(SessionRecord updated) async {

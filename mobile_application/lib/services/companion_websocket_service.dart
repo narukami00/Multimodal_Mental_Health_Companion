@@ -765,6 +765,7 @@ class CompanionWebSocketService {
   Future<void> sendSessionConfigure({
     required String mode,
     bool ttsEnabled = true,
+    bool localOnlyTts = true,
     String voiceId = 'af_bella',
     double speed = 0.96,
     int micSampleRate = 16000,
@@ -780,6 +781,7 @@ class CompanionWebSocketService {
       sessionId: _sessionId,
       mode: mode,
       ttsEnabled: ttsEnabled,
+      localOnlyTts: localOnlyTts,
       voiceId: voiceId,
       speed: speed,
       micSampleRate: micSampleRate,
@@ -819,6 +821,7 @@ class CompanionWebSocketService {
     required String? sessionId,
     required String mode,
     bool ttsEnabled = true,
+    bool localOnlyTts = true,
     String voiceId = 'af_bella',
     double speed = 0.96,
     int micSampleRate = 16000,
@@ -836,7 +839,12 @@ class CompanionWebSocketService {
       'type': 'session.configure',
       'session_id': sessionId,
       'mode': mode,
-      'tts': {'enabled': ttsEnabled, 'voice_id': voiceId, 'speed': speed},
+      'tts': {
+        'enabled': ttsEnabled,
+        'local_only': localOnlyTts,
+        'voice_id': voiceId,
+        'speed': speed,
+      },
       'audio': {
         'mic_sample_rate': micSampleRate,
         'playback_sample_rate': playbackSampleRate,

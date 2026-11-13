@@ -37,6 +37,13 @@ class TextEntry(BaseModel):
     text: str
 
 
+def _consent_flag(request: Request, header_name: str, *, default: bool = False) -> bool:
+    raw = request.headers.get(header_name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _emotion_view(res: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """What the app needs from the emotion service's answer (the chat cue is dropped: there is no chat here)."""
     if not res or not res.get("decision"):
@@ -60,15 +67,18 @@ def build_router(stt: Any, emotion: Any, *, authorize=None) -> APIRouter:
         text = entry.text.strip()
         if not text or len(text) > MAX_TEXT_CHARS:
             raise HTTPException(400, "text is empty or too long")
-        res = await emotion.text(entry.session_id, text) if emotion.usable else None
-        if emotion.usable:
+        consent_emotion = _consent_flag(request, "X-Solace-Consent-Emotion")
+        res = await emotion.text(entry.session_id, text) if (consent_emotion and emotion.usable) else None
+        if consent_emotion and emotion.usable:
             await emotion.reset(entry.session_id)
         return {"transcript": text, "safety": safety_gate.assess(text), "emotion": _emotion_view(res)}
 
     @router.post("/frame")
     async def journal_frame(request: Request, session_id: str) -> Dict[str, Any]:
         await authorize(request, session_id)
-        if not (FACE_SERVER_ENABLED and emotion.usable):
+        consent_emotion = _consent_flag(request, "X-Solace-Consent-Emotion")
+        consent_face = _consent_flag(request, "X-Solace-Consent-Face")
+        if not (consent_emotion and consent_face and FACE_SERVER_ENABLED and emotion.usable):
             return {"usable": None, "accepted": False}
         jpeg = await request.body()
         if not 100 <= len(jpeg) <= 2_000_000:
@@ -83,10 +93,12 @@ def build_router(stt: Any, emotion: Any, *, authorize=None) -> APIRouter:
         """A phone that read the face ITSELF sends only the 1,400 resulting numbers (float32), never pictures. They are
         used for this session's emotion reading instead of camera frames."""
         await authorize(request, session_id)
+        consent_emotion = _consent_flag(request, "X-Solace-Consent-Emotion")
+        consent_face = _consent_flag(request, "X-Solace-Consent-Face")
         raw = await request.body()
         if len(raw) != FACE_VECTOR_BYTES:
             raise HTTPException(400, f"expected {FACE_VECTOR_BYTES} bytes (1,400 float32 values)")
-        accepted = bool(emotion.usable and await emotion.face_vector(session_id, raw))
+        accepted = bool(consent_emotion and consent_face and emotion.usable and await emotion.face_vector(session_id, raw))
         return {"accepted": accepted}
 
     @router.post("/audio")
@@ -106,9 +118,11 @@ def build_router(stt: Any, emotion: Any, *, authorize=None) -> APIRouter:
             raise HTTPException(400, "recording too short")
         if seconds > MAX_AUDIO_S:
             raise HTTPException(413, f"recording longer than {MAX_AUDIO_S} s")
+        consent_emotion = _consent_flag(request, "X-Solace-Consent-Emotion")
+        consent_face = _consent_flag(request, "X-Solace-Consent-Face")
         turn_id = f"journal_{session_id}"
         upload = None
-        if emotion.usable:
+        if consent_emotion and emotion.usable:
             upload = asyncio.ensure_future(emotion.start_audio(session_id, turn_id, pcm, sample_rate, chunk_s=WINDOW_S))  # runs beside the transcription
         if supplied:
             text, confidence, language = supplied, 1.0, "en"  # the phone already wrote it down: do not transcribe again
@@ -117,17 +131,19 @@ def build_router(stt: Any, emotion: Any, *, authorize=None) -> APIRouter:
                 text, confidence, language = await asyncio.to_thread(stt.transcribe, pcm, sample_rate)
         text = (text or "").strip()
         res = None
-        if emotion.usable:
+        if consent_emotion and emotion.usable:
             accepted = bool(await upload) if upload is not None else False
             window = None
             start = first_frame_at.pop(session_id, None)
-            if face and FACE_SERVER_ENABLED and start is not None:
+            if face and consent_face and FACE_SERVER_ENABLED and start is not None:
                 window = [start - 0.5, time.monotonic()]
             res = await emotion.finalize(session_id, turn_id, text, use_audio=accepted, max_audio_wait_ms=15000, face_window=window,
                                          timeout_s=30.0)  # a long recording is read window by window
             await emotion.reset(session_id)
-        elif upload is not None:
-            upload.cancel()
+        else:
+            first_frame_at.pop(session_id, None)
+            if upload is not None:
+                upload.cancel()
         return {"transcript": text, "confidence": round(float(confidence), 2), "language": language, "duration_s": round(seconds, 1),
                 "safety": safety_gate.assess(text), "emotion": _emotion_view(res)}
 

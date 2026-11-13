@@ -63,12 +63,28 @@ class FakeEmotion:
         self.resets.append(session_id)
 
 
-def client(stt=None, emotion=None) -> TestClient:
+class _ConsentedTestClient:
+    """TestClient wrapper that supplies explicit emotion/face consent headers unless overridden."""
+
+    def __init__(self, inner: TestClient):
+        self._inner = inner
+
+    def post(self, url, *, headers=None, **kwargs):
+        merged = {
+            "X-Solace-Consent-Emotion": "1",
+            "X-Solace-Consent-Face": "1",
+        }
+        if headers:
+            merged.update(headers)
+        return self._inner.post(url, headers=merged, **kwargs)
+
+
+def client(stt=None, emotion=None) -> _ConsentedTestClient:
     app = FastAPI()
     async def test_authorize(request, session_id):
         pass  # These tests cover inference only; auth denial/cross-user tests live in test_auth_http.py.
     app.include_router(build_router(stt or FakeStt(), emotion or FakeEmotion(), authorize=test_authorize))
-    return TestClient(app)
+    return _ConsentedTestClient(TestClient(app))
 
 
 def test_text_entry_returns_the_words_and_a_real_estimate_without_the_chat_cue():
@@ -180,3 +196,45 @@ def test_bad_recordings_are_refused(path, payload, code):
 
 def test_empty_text_is_refused():
     assert client().post("/v1/journal/text", json={"session_id": "x", "text": "   "}).status_code == 400
+
+
+def test_server_enforces_explicit_emotion_and_face_consent(monkeypatch):
+    monkeypatch.setattr(journal_api, "FACE_SERVER_ENABLED", True)
+    emo = FakeEmotion()
+    c = client(emotion=emo)
+
+    # Missing or denied emotion consent skips emotion inference on /text and /audio.
+    r_text = c.post(
+        "/v1/journal/text",
+        headers={"X-Solace-Consent-Emotion": "0"},
+        json={"session_id": "c1", "text": "feeling overwhelmed"},
+    )
+    assert r_text.status_code == 200
+    assert r_text.json()["emotion"] is None
+    assert emo.resets == []
+
+    r_audio = c.post(
+        "/v1/journal/audio?session_id=c2&face=1",
+        headers={"X-Solace-Consent-Emotion": "0", "X-Solace-Consent-Face": "0"},
+        content=PCM_2S,
+    )
+    assert r_audio.status_code == 200
+    assert r_audio.json()["emotion"] is None
+    assert emo.audio == []
+    assert emo.finalized == []
+
+    # Denied face consent blocks /frame and /face_features even when emotion consent is granted.
+    r_frame = c.post(
+        "/v1/journal/frame?session_id=c3",
+        headers={"X-Solace-Consent-Face": "0"},
+        content=b"x" * 500,
+    )
+    assert r_frame.json() == {"usable": None, "accepted": False}
+
+    r_vec = c.post(
+        "/v1/journal/face_features?session_id=c3",
+        headers={"X-Solace-Consent-Face": "0"},
+        content=b"\x00" * 5600,
+    )
+    assert r_vec.json() == {"accepted": False}
+    assert getattr(emo, "vectors", []) == []

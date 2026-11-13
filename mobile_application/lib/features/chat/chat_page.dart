@@ -144,15 +144,11 @@ const _coral = Color(0xFFFF7F50);
 const _surface = Color(0xFFFFFDF4);
 
 class _ChatPageState extends State<ChatPage> {
-  static const _greeting =
-      "Hello. Take your time here. Whatever you're holding today, "
-      "you don't have to carry it all by yourself. What feels present right now?";
-
   static const _initialChips = [
     "I'm feeling a bit restless",
     'Help me unwind tonight',
     'Just want to vent',
-    'Notice where I am',
+    'Reflect on my day',
   ];
 
   late List<String> _chips = List.of(_initialChips);
@@ -205,6 +201,7 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription<Map<String, String>>? _ttsAudioReadySub;
 
   bool _ttsEnabled = true;
+  bool _localOnlyTts = true;
   String _selectedVoiceId = 'af_bella';
   double _ttsSpeed = 0.96;
 
@@ -271,8 +268,6 @@ class _ChatPageState extends State<ChatPage> {
 
     if (widget.initialMessages != null) {
       _messages = widget.initialMessages!.map(_Msg.fromRecord).toList();
-    } else {
-      _messages = [_Msg(false, _greeting, _now())];
     }
 
     if (widget.chatController != null) {
@@ -385,6 +380,7 @@ class _ChatPageState extends State<ChatPage> {
         _wsService.sendSessionConfigure(
           mode: 'chat_voice_playback',
           ttsEnabled: _ttsEnabled,
+          localOnlyTts: _localOnlyTts,
           voiceId: _selectedVoiceId,
           speed: _ttsSpeed,
           // A resumed conversation brings its summary and last few turns, so
@@ -670,25 +666,16 @@ class _ChatPageState extends State<ChatPage> {
 
   void _loadSavedServerConfig() {
     SharedPreferences.getInstance().then((prefs) {
-      final tailscaleMigrated =
-          prefs.getBool(CompanionServerConfig.prefKeyTailscaleMigrated) ?? false;
-      var savedHost = prefs.getString(CompanionServerConfig.prefKeyHost);
+      final configuredHost = prefs.getString(CompanionServerConfig.prefKeyHost);
+      final savedHost = configuredHost == null || configuredHost.trim().isEmpty
+          ? '127.0.0.1'
+          : configuredHost;
       final savedPort = prefs.getInt(CompanionServerConfig.prefKeyPort);
       _ttsEnabled = prefs.getBool('companion_tts_enabled') ?? true;
+      _localOnlyTts = prefs.getBool('companion_tts_local_only') ?? true;
       _selectedVoiceId =
           prefs.getString('companion_tts_voice_id') ?? 'af_bella';
       _ttsSpeed = prefs.getDouble('companion_tts_speed') ?? 0.96;
-
-      // Auto-migrate from old local Wi-Fi / localhost IPs to Tailscale
-      if (!tailscaleMigrated ||
-          savedHost == '192.168.0.38' ||
-          savedHost == '127.0.0.1' ||
-          savedHost == null ||
-          savedHost.isEmpty) {
-        savedHost = CompanionServerConfig.defaultTailscaleIp;
-        prefs.setString(CompanionServerConfig.prefKeyHost, savedHost);
-        prefs.setBool(CompanionServerConfig.prefKeyTailscaleMigrated, true);
-      }
 
       _wsService.host = savedHost;
       if (savedPort != null && savedPort > 0) {
@@ -1088,7 +1075,9 @@ class _ChatPageState extends State<ChatPage> {
                       children: [
                         _buildHeader(),
                         Expanded(
-                          child: ListView.builder(
+                          child: _messages.isEmpty
+                              ? _ChatWelcome(starters: _initialChips, onSelect: _send)
+                              : ListView.builder(
                             controller: _scroll,
                             padding:
                                 const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -1126,7 +1115,7 @@ class _ChatPageState extends State<ChatPage> {
                             },
                           ),
                         ),
-                        _buildChips(),
+                        if (_messages.isNotEmpty) _buildChips(),
                         _buildInputBar(),
                       ],
                     ),
@@ -1281,6 +1270,7 @@ class _ChatPageState extends State<ChatPage> {
               _wsService.sendSessionConfigure(
                 mode: 'chat_voice_playback',
                 ttsEnabled: _ttsEnabled,
+                localOnlyTts: _localOnlyTts,
                 voiceId: _selectedVoiceId,
                 speed: _ttsSpeed,
               );
@@ -1655,6 +1645,129 @@ class _ChatPageState extends State<ChatPage> {
   }
 }
 
+
+class _ChatWelcome extends StatelessWidget {
+  const _ChatWelcome({required this.starters, required this.onSelect});
+
+  final List<String> starters;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ExcludeSemantics(
+                  child: RepaintBoundary(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: reduceMotion ? Duration.zero : const Duration(seconds: 5),
+                      builder: (_, t, _) => CustomPaint(
+                        size: const Size(168, 116),
+                        painter: _WelcomeIllustration(t),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                const Text(
+                  'A MOMENT WITH SOL',
+                  style: TextStyle(fontSize: 11, letterSpacing: 1.6, fontWeight: FontWeight.w800, color: Color(0xFF89612D)),
+                ),
+                const SizedBox(height: 7),
+                const Text(
+                  'What’s on your mind?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 29, height: 1.14, fontWeight: FontWeight.w800, letterSpacing: -0.7, color: Color(0xFF3E3024)),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Start wherever you are. A few words are enough.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, height: 1.45, color: Color(0xFF695A49)),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    for (var i = 0; i < starters.length; i++)
+                      ActionChip(
+                        avatar: Icon(
+                          const [Icons.air_rounded, Icons.nights_stay_outlined, Icons.chat_bubble_outline_rounded, Icons.edit_note_rounded][i],
+                          size: 17,
+                          color: const Color(0xFF557251),
+                        ),
+                        label: Text(starters[i]),
+                        onPressed: () => onSelect(starters[i]),
+                        backgroundColor: _surface,
+                        side: const BorderSide(color: Color(0xFFD6DCCC)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WelcomeIllustration extends CustomPainter {
+  _WelcomeIllustration(this.progress);
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final breath = math.sin(progress * math.pi);
+    final center = Offset(size.width / 2, size.height / 2);
+    canvas.translate(center.dx, center.dy);
+    final halo = Rect.fromCircle(center: const Offset(0, -7), radius: 51 + 6 * breath);
+    canvas.drawOval(
+      halo,
+      Paint()..shader = const RadialGradient(colors: [Color(0xFFFFDC92), Color(0x00FFDA91)]).createShader(halo),
+    );
+    final arc = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1
+      ..color = const Color(0xFFDABB84).withValues(alpha: 0.45 + 0.3 * breath);
+    for (final inset in [0.0, 8.0]) {
+      canvas.drawOval(Rect.fromCenter(center: const Offset(0, 31), width: 118 - inset * 3 + 4 * breath, height: 29 - inset), arc);
+    }
+    canvas.drawCircle(const Offset(15, -21), 16, Paint()..color = const Color(0xFFF6BD65));
+    canvas.translate(-4, 32);
+    canvas.rotate(-0.065 * breath);
+    final stem = Path()..moveTo(0, 0)..quadraticBezierTo(-4, -25, 1, -40);
+    canvas.drawPath(stem, Paint()
+      ..color = const Color(0xFF45654C)
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 2.5);
+    canvas.drawPath(
+      Path()..moveTo(-1, -16)..cubicTo(-16, -15, -26, -26, -28, -38)..cubicTo(-13, -37, -4, -28, -1, -16)..close(),
+      Paint()..color = const Color(0xFF64875C),
+    );
+    canvas.drawPath(
+      Path()..moveTo(0, -26)..cubicTo(3, -41, 14, -49, 29, -49)..cubicTo(25, -35, 14, -26, 0, -26)..close(),
+      Paint()..color = const Color(0xFF83A16B),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _WelcomeIllustration old) => old.progress != progress;
+}
 
 class _RecordingDot extends StatefulWidget {
   const _RecordingDot();

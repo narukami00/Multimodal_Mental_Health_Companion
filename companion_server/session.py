@@ -265,6 +265,7 @@ class Session:
         self.config: Dict[str, Any] = {
             "mode": "chat_voice_playback",
             "tts_enabled": True,
+            "local_only_tts": False,
             "voice_id": DEFAULT_VOICE_ID,
             "speed": DEFAULT_VOICE_SPEED,
             "mic_sample_rate": 16000,
@@ -541,6 +542,8 @@ class Session:
         if isinstance(tts_opts, dict):
             if "enabled" in tts_opts:
                 self.config["tts_enabled"] = bool(tts_opts["enabled"])
+            if "local_only" in tts_opts:
+                self.config["local_only_tts"] = bool(tts_opts["local_only"])
             if "voice_id" in tts_opts:
                 self.config["voice_id"] = str(tts_opts["voice_id"])
             if "speed" in tts_opts:
@@ -1326,9 +1329,11 @@ class Session:
         cfg = self.config
         call_mode = cfg.get("mode") == "duplex_call"
         engine = self.tts
+        cloud_blocked = bool(cfg.get("local_only_tts", False) and getattr(engine, "is_cloud", False))
         synthesize = bool(
             (cfg.get("tts_enabled", True) or call_mode or reply.voice_turn)
             and engine is not None and engine.is_ready
+            and not cloud_blocked
         )
         voice_id = cfg.get("voice_id", DEFAULT_VOICE_ID)
         speed = float(cfg.get("speed", DEFAULT_VOICE_SPEED))

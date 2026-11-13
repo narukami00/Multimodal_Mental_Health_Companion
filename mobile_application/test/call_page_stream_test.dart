@@ -82,6 +82,7 @@ class _CallWs extends CompanionWebSocketService {
   Future<void> sendSessionConfigure({
     required String mode,
     bool ttsEnabled = true,
+    bool localOnlyTts = true,
     String voiceId = 'af_heart',
     double speed = 0.96,
     int micSampleRate = 16000,

@@ -109,6 +109,8 @@ class JournalAnalysisClient {
     CompanionTokenProvider? tokenProvider,
     CompanionTransportPolicy? transportPolicy,
     String? Function()? userId,
+    bool Function()? emotionConsentGranted,
+    bool Function()? faceConsentGranted,
   }) : _transport = transport ?? _httpTransport,
        _baseUri = baseUri ?? _discoverBase,
        _http = CompanionHttp(
@@ -116,11 +118,15 @@ class JournalAnalysisClient {
          tokenProvider: tokenProvider,
          transportPolicy: transportPolicy,
        ),
-       _userId = userId ?? (() => AccountService.instance.identity?.uid);
+       _userId = userId ?? (() => AccountService.instance.identity?.uid),
+       _emotionConsentGranted = emotionConsentGranted,
+       _faceConsentGranted = faceConsentGranted;
 
   final JournalTransport _transport;
   final CompanionHttp _http;
   final String? Function() _userId;
+  final bool Function()? _emotionConsentGranted;
+  final bool Function()? _faceConsentGranted;
   final _sessions = <String, Future<({String id, DateTime expiresAt})>>{};
   String? _sessionOwner;
 
@@ -157,6 +163,7 @@ class JournalAnalysisClient {
   /// The face numbers a phone read ITSELF for a recording (1,400 float32 values, never pictures). The server then uses
   /// them for this recording's emotion reading instead of camera frames. True when the server accepted them.
   Future<bool> sendFaceFeatures(String sessionId, Float32List vector) async {
+    if (_faceConsentGranted != null && !_faceConsentGranted()) return false;
     final base = await _baseUri();
     if (base == null || vector.length != 1400) return false;
     try {
@@ -167,7 +174,7 @@ class JournalAnalysisClient {
           path: '/v1/journal/face_features',
           queryParameters: {'session_id': issuedSession},
         ),
-        headers: const {'Content-Type': 'application/octet-stream'},
+        headers: _consentHeaders(face: true),
         body: vector.buffer.asUint8List(
           vector.offsetInBytes,
           vector.lengthInBytes,
@@ -252,6 +259,7 @@ class JournalAnalysisClient {
   /// One upright JPEG taken while recording a video journal. True/false: a usable face was
   /// (not) found; null: unknown or not accepted.
   Future<bool?> sendFrame(String sessionId, Uint8List jpeg) async {
+    if (_faceConsentGranted != null && !_faceConsentGranted()) return null;
     final base = await _baseUri();
     if (base == null) return null;
     try {
@@ -262,7 +270,7 @@ class JournalAnalysisClient {
           path: '/v1/journal/frame',
           queryParameters: {'session_id': issuedSession},
         ),
-        headers: const {'Content-Type': 'image/jpeg'},
+        headers: _consentHeaders(contentType: 'image/jpeg', face: true),
         body: jpeg,
         timeout: const Duration(seconds: 4),
       );
@@ -272,6 +280,19 @@ class JournalAnalysisClient {
     } catch (_) {
       return null;
     }
+  }
+
+  Map<String, String> _consentHeaders({
+    String contentType = 'application/octet-stream',
+    bool face = false,
+  }) {
+    final emotionAllowed = _emotionConsentGranted?.call() ?? true;
+    final faceAllowed = face && (_faceConsentGranted?.call() ?? true);
+    return {
+      'Content-Type': contentType,
+      'X-Solace-Consent-Emotion': emotionAllowed ? '1' : '0',
+      'X-Solace-Consent-Face': faceAllowed ? '1' : '0',
+    };
   }
 
   Future<JournalAnalysis?> _send(
@@ -298,13 +319,14 @@ class JournalAnalysisClient {
         ...query,
         if (contentType != 'application/json') 'session_id': issuedSession,
       };
+      final faceRequested = query['face'] == '1';
       final reply = await _http.request(
         method: 'POST',
         uri: base.replace(
           path: path,
           queryParameters: wireQuery.isEmpty ? null : wireQuery,
         ),
-        headers: {'Content-Type': contentType},
+        headers: _consentHeaders(contentType: contentType, face: faceRequested),
         body: payload,
         timeout: timeout,
       );

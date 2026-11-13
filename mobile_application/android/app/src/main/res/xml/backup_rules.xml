@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="sharedpref" path="."/>
+    <exclude domain="file" path="pending_recordings/"/>
+    <exclude domain="file" path="secure_stores/"/>
+    <exclude domain="file" path="avatars/"/>
+    <exclude domain="database" path="."/>
+</full-backup-content>
