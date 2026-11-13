@@ -92,6 +92,23 @@ class AuthServiceTests(unittest.TestCase):
             self.assertEqual(FirebaseVerifier(AuthSettings("project-test"))("opaque").uid, "alice")
         self.assertEqual(calls, {"project": "project-test", "revoked": True})
 
+    def test_disable_revocation_check_uses_anonymous_credential(self):
+        calls = {}
+        def initialize(credential, options, name):
+            calls["has_credential"] = credential is not None
+            calls["project"] = options["projectId"]
+            return object()
+        def verify(token, app, check_revoked):
+            calls["revoked"] = check_revoked
+            return {"uid": "alice", "exp": 9999999999}
+        sdk = types.ModuleType("firebase_admin")
+        sdk.initialize_app = initialize
+        sdk.auth = types.SimpleNamespace(verify_id_token=verify)
+        sdk.credentials = types.SimpleNamespace(Base=type("Base", (), {}))
+        with patch.dict(sys.modules, {"firebase_admin": sdk}), patch.dict(os.environ, {"SOLACE_FIREBASE_CHECK_REVOKED": "0"}, clear=True):
+            self.assertEqual(FirebaseVerifier(AuthSettings("project-test"))("opaque").uid, "alice")
+        self.assertEqual(calls, {"has_credential": True, "project": "project-test", "revoked": False})
+
     def test_environment_cannot_switch_existing_verifier_to_emulator(self):
         verifier = FirebaseVerifier(AuthSettings("project-test"))
         with patch.dict(os.environ, {"FIREBASE_AUTH_EMULATOR_HOST": "127.0.0.1:9099"}):

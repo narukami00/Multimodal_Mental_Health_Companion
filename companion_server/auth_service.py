@@ -68,27 +68,27 @@ class FirebaseVerifier:
                 raise AuthError(503, "Authentication environment changed; restart the server")
             import firebase_admin
             from firebase_admin import auth
-            with self._lock:
-                if self._app is None:
-                    # ADC for production; emulator also uses the SDK's explicit emulator path.
-                    credential = None
-                    if self.settings.mode == "emulator":
-                        from firebase_admin import credentials
-                        from google.auth.credentials import AnonymousCredentials
-
-                        class EmulatorCredential(credentials.Base):
-                            def get_credential(self):
-                                return AnonymousCredentials()
-
-                        credential = EmulatorCredential()
-                    self._app = firebase_admin.initialize_app(credential, options={"projectId": self.settings.project_id},
-                                                              name="solace-" + secrets.token_hex(8))
             raw_revoked = os.environ.get("SOLACE_FIREBASE_CHECK_REVOKED", "").strip().lower()
             check_revoked = (
                 self.settings.mode == "firebase"
                 if raw_revoked == ""
                 else raw_revoked in {"1", "true", "yes", "on"}
             )
+            with self._lock:
+                if self._app is None:
+                    # ADC for production with revocation checks; emulator and local signature-only verification use AnonymousCredentials.
+                    credential = None
+                    if self.settings.mode == "emulator" or not check_revoked:
+                        from firebase_admin import credentials
+                        from google.auth.credentials import AnonymousCredentials
+
+                        class _AnonymousFirebaseCredential(credentials.Base):
+                            def get_credential(self):
+                                return AnonymousCredentials()
+
+                        credential = _AnonymousFirebaseCredential()
+                    self._app = firebase_admin.initialize_app(credential, options={"projectId": self.settings.project_id},
+                                                              name="solace-" + secrets.token_hex(8))
             claims = auth.verify_id_token(token, app=self._app, check_revoked=check_revoked)
             uid, expiry = claims.get("uid"), claims.get("exp")
             if not isinstance(uid, str) or not uid or not isinstance(expiry, (int, float)) or expiry <= time.time():
