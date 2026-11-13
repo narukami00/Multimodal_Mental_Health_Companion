@@ -1,0 +1,31 @@
+# Copy to docker-compose.override.yml to mount local weights, enable GPU emotion
+# inference, or point the companion server to a host-side llama.cpp server.
+services:
+  emotion:
+    build:
+      args:
+        INSTALL_MODE: full
+    environment:
+      EMOTION_MOCK: "0"
+      EMOTION_FACE: "1"
+      SOLACE_EMOTION_MODELS_DIR: /models
+      SOLACE_EMOTION_ARTIFACTS_DIR: /artifacts
+    volumes:
+      - ./local_models:/models:ro
+      - ./local_artifacts:/artifacts:ro
+
+  companion:
+    build:
+      args:
+        INSTALL_MODE: full
+    environment:
+      SOLACE_LLM_BACKEND: llamacpp
+      SOLACE_LLAMACPP_URL: http://host.docker.internal:8081
+      SOLACE_LLM_MAX_CONCURRENT: "1"
+      SOLACE_STT: auto
+      SOLACE_TTS: auto
+      SOLACE_EMOTION_FACE: "1"
+      # Share one secret across horizontal companion replicas so session leases validate anywhere:
+      # SOLACE_LEASE_SECRET: "replace-with-32-byte-random-secret"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

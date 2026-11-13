@@ -1,0 +1,113 @@
+name: Solace CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  companion-server:
+    name: Companion Server (pytest + benchmark)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: companion_server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install lightweight CI dependencies
+        run: pip install -r requirements-ci.txt
+      - name: Run companion unit, prompt, auth & scaling tests
+        run: |
+          python -m pytest \
+            test_memory_prompt.py \
+            test_turn_detector.py \
+            test_session_logic.py \
+            test_conversation_memory.py \
+            test_tts_chunker.py \
+            test_journal_api.py \
+            test_auth_service.py \
+            test_auth_http.py \
+            test_llm_service.py \
+            test_emotion_health.py \
+            test_moment_extraction.py \
+            test_user_facts_and_scaling.py
+      - name: Run selective memory & priority-gate benchmark smoke
+        run: python benchmark_memory.py --step-ms 15
+
+  emotion-server:
+    name: Emotion Server (unit tests + EMOTION_MOCK app boot)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: emotion_server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install lightweight CI dependencies
+        run: pip install -r requirements-ci.txt
+      - name: Run emotion server unit tests
+        run: python -m unittest discover -s . -p "test_*.py"
+      - name: Verify EMOTION_MOCK FastAPI endpoints
+        env:
+          EMOTION_MOCK: "1"
+        run: |
+          python -c "
+          from fastapi.testclient import TestClient
+          import emotion_api
+          with TestClient(emotion_api.app) as client:
+              h = client.get('/healthz')
+              assert h.status_code == 200 and h.json()['mock'] is True, h.text
+              r = client.post('/v1/emotion/text', json={'session_id': 'ci', 'text': 'Feeling calmer today'})
+              assert r.status_code == 200, r.text
+          print('emotion_api mock smoke OK')
+          "
+
+  flutter-mobile:
+    name: Flutter Mobile (analyze + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile_application
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install Dart/Flutter packages
+        run: flutter pub get
+      - name: Run static analysis
+        run: flutter analyze
+      - name: Run Flutter test suite
+        run: flutter test
+
+  docker-compose-smoke:
+    name: Docker Compose Mock Stack Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & start mock containers
+        run: |
+          docker compose config -q
+          docker compose up -d --build
+      - name: Wait for health and readiness checks
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8000/healthz && curl -fsS http://127.0.0.1:8000/readyz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+      - name: Tear down containers
+        if: always()
+        run: docker compose down --volumes --remove-orphans

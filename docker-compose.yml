@@ -1,0 +1,69 @@
+services:
+  emotion:
+    build:
+      context: ./emotion_server
+      args:
+        INSTALL_MODE: ${SOLACE_DOCKER_INSTALL_MODE:-ci}
+    environment:
+      EMOTION_MOCK: ${EMOTION_MOCK:-1}
+      EMOTION_FACE: ${EMOTION_FACE:-0}
+      PORT: "8766"
+    expose:
+      - "8766"
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - solace_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8766/healthz', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  companion:
+    build:
+      context: ./companion_server
+      args:
+        INSTALL_MODE: ${SOLACE_DOCKER_INSTALL_MODE:-ci}
+    depends_on:
+      emotion:
+        condition: service_healthy
+    environment:
+      SOLACE_AUTH_MODE: ${SOLACE_AUTH_MODE:-firebase}
+      SOLACE_FIREBASE_PROJECT_ID: ${SOLACE_FIREBASE_PROJECT_ID:-solace-self-care-ada87}
+      SOLACE_FIREBASE_CHECK_REVOKED: ${SOLACE_FIREBASE_CHECK_REVOKED:-0}
+      SOLACE_LEASE_SECRET: ${SOLACE_LEASE_SECRET:-}
+      SOLACE_LLM_BACKEND: ${SOLACE_LLM_BACKEND:-mock}
+      SOLACE_LLAMACPP_URL: ${SOLACE_LLAMACPP_URL:-}
+      SOLACE_LLM_MAX_CONCURRENT: ${SOLACE_LLM_MAX_CONCURRENT:-1}
+      SOLACE_STT: ${SOLACE_STT:-mock}
+      SOLACE_TTS: ${SOLACE_TTS:-mock}
+      SOLACE_EMOTION: ${SOLACE_EMOTION:-1}
+      SOLACE_EMOTION_FACE: ${SOLACE_EMOTION_FACE:-0}
+      SOLACE_EMOTION_URL: http://emotion:8766
+      PORT: "8000"
+    ports:
+      - "${COMPANION_HOST_PORT:-8000}:8000"
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - solace_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  solace_net:
+    driver: bridge

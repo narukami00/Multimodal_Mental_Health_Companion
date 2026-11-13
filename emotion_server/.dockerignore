@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+models/
+probe_cache/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.gguf
+evaluation/*.wav
+evaluation/*.mp4

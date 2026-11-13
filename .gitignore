@@ -61,6 +61,9 @@ docs/design/companion_blob_overhaul.md
 .*
 !.gitignore
 !.env.example
+!.dockerignore
+!.github/
+!.github/**
 
 # Design scratch, research notes, generated reports (root and mobile_application)
 docs/
