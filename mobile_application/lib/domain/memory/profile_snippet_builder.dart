@@ -65,18 +65,46 @@ ProfileSnippet buildProfileSnippet({
   if (lately.isNotEmpty) lines.add('Lately: ${_join(lately)}.');
 
   // Right now: only when the reading is firm enough to mean something.
+  String? rightNowLine;
   if (capacity != null && capacity.isLow && capacity.confidence >= 0.5) {
-    lines.add('Right now: may have limited energy, keep it gentle.');
+    rightNowLine = 'Right now: may have limited energy, keep it gentle.';
+    lines.add(rightNowLine);
   }
 
+  final personal = <String>[];
   for (final raw in personalContextLines) {
     final trimmed = raw.trim();
     if (trimmed.isNotEmpty) {
-      lines.add(trimmed);
+      personal.add(trimmed);
     }
   }
+  if (personal.isEmpty) {
+    return _capped(lines);
+  }
 
-  return _capped(lines);
+  final latelyText = lately.isEmpty ? null : 'Lately: ${_join(lately)}.';
+  return _cappedWithPersonalPriority(
+    baseLines: lines,
+    personalLines: personal,
+    lowPriorityLine: latelyText,
+  );
+}
+
+ProfileSnippet _cappedWithPersonalPriority({
+  required List<String> baseLines,
+  required List<String> personalLines,
+  String? lowPriorityLine,
+}) {
+  final kept = [...baseLines, ...personalLines];
+  if (kept.join(' ').length <= ProfileSnippet.maxCharacters) {
+    return ProfileSnippet(lines: kept);
+  }
+  // Protect the freshest personal check-in line ahead of older generic
+  // summary lines when space is tight.
+  if (lowPriorityLine != null && kept.length > 2) {
+    kept.remove(lowPriorityLine);
+  }
+  return _capped(kept);
 }
 
 ProfileSnippet _capped(List<String> lines) {

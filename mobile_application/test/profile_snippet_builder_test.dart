@@ -102,4 +102,21 @@ void main() {
       isTrue,
     );
   });
+
+  test('protects fresh personal check-in ahead of generic summary lines at length cap', () {
+    const pulseLine = 'Checked in recently: carrying something heavy ("Exam stress").';
+    final snippet = buildProfileSnippet(
+      consented: true,
+      profile: const UserProfile(
+        interactionPreferences: ['Gentle tone', 'Direct tone', 'Quiet prompts', 'More context'],
+        constraints: ['Short moments', 'Low energy options', 'Quiet at home', 'Limited mobility'],
+      ),
+      recentMoodScores: const [-1, -1, -1],
+      recentThemes: const ['work', 'relationships', 'sleep', 'health', 'home', 'money'],
+      capacity: _capacity(CapacityLevel.low, 0.9),
+      personalContextLines: const [pulseLine],
+    );
+    expect(snippet.text.length, lessThanOrEqualTo(ProfileSnippet.maxCharacters));
+    expect(snippet.text, contains(pulseLine));
+  });
 }

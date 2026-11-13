@@ -348,6 +348,7 @@ Future<void> main() async {
     personalization: () => PersonalPatternProfile.from(
       sessions: sessionController.sessions,
       conversations: chatController.conversations,
+      breakAnnotations: breakPrompts.answered,
       suggestions: suggestionController.history,
       latestPulse: lifePulse.latestFreshSignal,
     ),

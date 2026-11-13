@@ -65,6 +65,7 @@ class WhatSolRemembersPage extends StatelessWidget {
           consent,
           profileController,
           ?chat,
+          ?lifePulse,
         ]),
         builder: (context, _) => ListView(
           padding: EdgeInsets.zero,
