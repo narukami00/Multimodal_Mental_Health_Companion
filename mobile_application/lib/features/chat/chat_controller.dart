@@ -30,6 +30,18 @@ class ChatController extends ChangeNotifier {
   List<ChatConversationRecord> _conversations = [];
   String? _activeConversationId;
   bool _isLoaded = false;
+  String? _highlightQuery;
+
+  /// Transient UI filter/highlight query when jumping to a searched conversation.
+  String? get highlightQuery => _highlightQuery;
+
+  void setHighlightQuery(String? query) {
+    final trimmed = query?.trim();
+    final next = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    if (next == _highlightQuery) return;
+    _highlightQuery = next;
+    notifyListeners();
+  }
 
   /// Returns persistent conversations that contain at least one user message.
   List<ChatConversationRecord> get conversations =>
@@ -115,6 +127,7 @@ class ChatController extends ChangeNotifier {
 
   /// Start a fresh, clean conversation session.
   ChatConversationRecord startNewConversation() {
+    _highlightQuery = null;
     // If the active conversation is already clean (no user messages), reuse it directly
     final current = activeConversation;
     if (current != null && !current.hasUserMessage) {

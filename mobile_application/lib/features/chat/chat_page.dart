@@ -28,8 +28,10 @@ import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'chat_controller.dart';
 import 'conversation_breakdown_page.dart';
+import '../../domain/chat/conversation_search.dart';
 import 'connection_sheet.dart';
 import 'conversation_history.dart';
+import 'highlighted_text.dart';
 import 'message_reading_popover.dart';
 
 class ChatPage extends StatefulWidget {
@@ -1074,46 +1076,137 @@ class _ChatPageState extends State<ChatPage> {
                     child: Column(
                       children: [
                         _buildHeader(),
+                        AnimatedBuilder(
+                          animation: _chatController,
+                          builder: (context, _) {
+                            final q = _chatController.highlightQuery;
+                            if (q == null || q.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFFF3D1),
+                                border: Border(
+                                  bottom: BorderSide(color: Color(0x33B48228)),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.search_rounded,
+                                    size: 16,
+                                    color: Color(0xFF8A5A10),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Highlighting "$q"',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF5A3D10),
+                                      ),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        _chatController.setHighlightQuery(null),
+                                    style: TextButton.styleFrom(
+                                      minimumSize: Size.zero,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text(
+                                      'Clear',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF8A5A10),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                         Expanded(
                           child: _messages.isEmpty
                               ? _ChatWelcome(starters: _initialChips, onSelect: _send)
-                              : ListView.builder(
-                            controller: _scroll,
-                            padding:
-                                const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                            itemCount: _messages.length,
-                            itemBuilder: (_, i) {
-                              final msg = _messages[i];
-                              final isSpeaking = !msg.isUser &&
-                                  (_ttsPlayback.isPlaying ||
-                                      _ttsPlayback.isReceivingStream) &&
-                                  ((_ttsPlayback.activeUtteranceId != null &&
-                                          _ttsPlayback.activeUtteranceId ==
-                                              msg.utteranceId) ||
-                                      (_ttsPlayback.activePlayingPath != null &&
-                                          _ttsPlayback.activePlayingPath ==
-                                              msg.audioPath) ||
-                                      (_ttsPlayback.activeUtteranceId == null &&
-                                          i == _messages.length - 1));
+                              : AnimatedBuilder(
+                                  animation: _chatController,
+                                  builder: (context, _) {
+                                    final query =
+                                        _chatController.highlightQuery ?? '';
+                                    return ListView.builder(
+                                      controller: _scroll,
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        8,
+                                        16,
+                                        12,
+                                      ),
+                                      itemCount: _messages.length,
+                                      itemBuilder: (_, i) {
+                                        final msg = _messages[i];
+                                        final isSpeaking = !msg.isUser &&
+                                            (_ttsPlayback.isPlaying ||
+                                                _ttsPlayback
+                                                    .isReceivingStream) &&
+                                            ((_ttsPlayback.activeUtteranceId !=
+                                                        null &&
+                                                    _ttsPlayback
+                                                            .activeUtteranceId ==
+                                                        msg.utteranceId) ||
+                                                (_ttsPlayback
+                                                            .activePlayingPath !=
+                                                        null &&
+                                                    _ttsPlayback
+                                                            .activePlayingPath ==
+                                                        msg.audioPath) ||
+                                                (_ttsPlayback
+                                                            .activeUtteranceId ==
+                                                        null &&
+                                                    i ==
+                                                        _messages.length - 1));
 
-                              return _Bubble(
-                                msg: msg,
-                                isSpeaking: isSpeaking,
-                                onLongPress: msg.isUser && msg.id != null && !msg.isStreaming
-                                    ? (anchor) => _showReading(msg.id!, anchor)
-                                    : null,
-                                onCancelVoice: () => _ttsPlayback.cancelVoice(
-                                  utteranceId: msg.utteranceId,
+                                        return _Bubble(
+                                          msg: msg,
+                                          highlightQuery: query,
+                                          isSpeaking: isSpeaking,
+                                          onLongPress: msg.isUser &&
+                                                  msg.id != null &&
+                                                  !msg.isStreaming
+                                              ? (anchor) =>
+                                                  _showReading(msg.id!, anchor)
+                                              : null,
+                                          onCancelVoice: () =>
+                                              _ttsPlayback.cancelVoice(
+                                            utteranceId: msg.utteranceId,
+                                          ),
+                                          onReplayVoice: msg.audioPath != null
+                                              ? () => _ttsPlayback.playAudioFile(
+                                                    msg.audioPath!,
+                                                    utteranceId:
+                                                        msg.utteranceId,
+                                                  )
+                                              : null,
+                                        );
+                                      },
+                                    );
+                                  },
                                 ),
-                                onReplayVoice: msg.audioPath != null
-                                    ? () => _ttsPlayback.playAudioFile(
-                                          msg.audioPath!,
-                                          utteranceId: msg.utteranceId,
-                                        )
-                                    : null,
-                              );
-                            },
-                          ),
                         ),
                         if (_messages.isNotEmpty) _buildChips(),
                         _buildInputBar(),
@@ -1143,6 +1236,26 @@ class _ChatPageState extends State<ChatPage> {
         children: [
           const PageBackButton(),
           const Spacer(),
+          IconButton(
+            key: const ValueKey('chat-search'),
+            onPressed: () {
+              ConversationHistorySheet.show(
+                context,
+                chatController: _chatController,
+                activeThreadId: _chatController.activeConversation?.id,
+                onSelectThread: (thread) => _switchConversation(thread.id),
+                onNewConversation: _startNewConversation,
+                onDeleteThread: _deleteConversation,
+                startSearching: true,
+              );
+            },
+            tooltip: 'Search conversations',
+            icon: const Icon(Icons.search_rounded, size: 22),
+            style: IconButton.styleFrom(
+              foregroundColor: const Color(0xFF6C5E50),
+              minimumSize: const Size(38, 44),
+            ),
+          ),
           IconButton(
             onPressed: () {
               ConversationHistorySheet.show(
@@ -2157,6 +2270,7 @@ class _VoiceBubbleContentState extends State<_VoiceBubbleContent> {
 class _Bubble extends StatelessWidget {
   const _Bubble({
     required this.msg,
+    this.highlightQuery = '',
     this.isSpeaking = false,
     this.onCancelVoice,
     this.onReplayVoice,
@@ -2164,6 +2278,7 @@ class _Bubble extends StatelessWidget {
   });
 
   final _Msg msg;
+  final String highlightQuery;
   final bool isSpeaking;
   final VoidCallback? onCancelVoice;
   final VoidCallback? onReplayVoice;
@@ -2209,7 +2324,13 @@ Container(
             decoration: BoxDecoration(
               color: isUser ? const Color(0xFFFFE2D4) : const Color(0xFFFFF8E8),
               borderRadius: radius,
-              border: isUser
+              border: highlightQuery.trim().isNotEmpty &&
+                      splitHighlightSegments(
+                        '${msg.text} ${msg.transcription ?? ''}',
+                        highlightQuery,
+                      ).any((s) => s.highlighted)
+                  ? Border.all(color: const Color(0xFFFFB534), width: 1.6)
+                  : isUser
                   ? null
                   : Border.all(color: const Color(0x24FFB534)),
               boxShadow: const [
@@ -2238,8 +2359,9 @@ Container(
                         const SizedBox(height: 7),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 2),
-                          child: Text(
+                          child: HighlightedText(
                             msg.transcription!,
+                            query: highlightQuery,
                             style: TextStyle(
                               fontSize: 12.5,
                               fontStyle: FontStyle.italic,
@@ -2257,7 +2379,20 @@ Container(
                 : Text.rich(
                     TextSpan(
                       children: [
-                        TextSpan(text: msg.text),
+                        for (final seg in splitHighlightSegments(
+                          msg.text,
+                          highlightQuery,
+                        ))
+                          TextSpan(
+                            text: seg.text,
+                            style: seg.highlighted
+                                ? const TextStyle(
+                                    backgroundColor: Color(0xFFFFD978),
+                                    color: Color(0xFF3A3125),
+                                    fontWeight: FontWeight.w800,
+                                  )
+                                : null,
+                          ),
                         if (msg.isStreaming)
                           const WidgetSpan(
                             alignment: PlaceholderAlignment.middle,
