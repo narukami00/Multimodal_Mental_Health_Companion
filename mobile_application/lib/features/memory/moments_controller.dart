@@ -78,8 +78,17 @@ class MomentsController extends ChangeNotifier {
       if (m.tone == MomentTone.warm) m,
   ];
 
-  /// What may be told to Sol: confirmed, most recent first, few and short.
-  List<MemoryMoment> get forSol => confirmed.take(maxForSol).toList();
+  /// What may be told to Sol: pinned confirmed moments first, then most recent
+  /// unpinned confirmed moments, capped at [maxForSol].
+  List<MemoryMoment> get forSol {
+    final list = confirmed;
+    return [
+      for (final m in list)
+        if (m.pinned) m,
+      for (final m in list)
+        if (!m.pinned) m,
+    ].take(maxForSol).toList();
+  }
 
   List<MemoryMoment> _of(MomentState state) => [
     for (final m in _moments.reversed)
@@ -214,7 +223,16 @@ class MomentsController extends ChangeNotifier {
 
   Future<void> hide(String id) => _change(
     id,
-    (m) => m.copyWith(state: MomentState.hidden, updatedAt: _clock()),
+    (m) => m.copyWith(
+      state: MomentState.hidden,
+      pinned: false,
+      updatedAt: _clock(),
+    ),
+  );
+
+  Future<void> togglePin(String id) => _change(
+    id,
+    (m) => m.copyWith(pinned: !m.pinned, updatedAt: _clock()),
   );
 
   Future<void> unhide(String id) => _change(

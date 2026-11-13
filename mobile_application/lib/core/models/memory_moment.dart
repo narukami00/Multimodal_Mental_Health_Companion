@@ -39,6 +39,7 @@ class MemoryMoment {
     this.updatedAt,
     this.signals,
     this.lookedClass,
+    this.pinned = false,
     this.schemaVersion = currentSchemaVersion,
   });
 
@@ -78,6 +79,7 @@ class MemoryMoment {
   /// The face on its own, as the model's top guess when the person kept it, when the camera was on. Hedged:
   /// the weakest signal, kept apart from [emotionClass].
   final String? lookedClass;
+  final bool pinned;
   final int schemaVersion;
 
   bool get isConfirmed => state == MomentState.confirmed;
@@ -87,6 +89,7 @@ class MemoryMoment {
     MomentState? state,
     MomentTone? tone,
     bool? editedByUser,
+    bool? pinned,
     DateTime? updatedAt,
   }) {
     return MemoryMoment(
@@ -105,6 +108,7 @@ class MemoryMoment {
       updatedAt: updatedAt ?? this.updatedAt,
       signals: signals,
       lookedClass: lookedClass,
+      pinned: pinned ?? this.pinned,
       schemaVersion: schemaVersion,
     );
   }
@@ -125,6 +129,7 @@ class MemoryMoment {
     'updatedAt': updatedAt?.toIso8601String(),
     if (signals != null) 'signals': signals,
     if (lookedClass != null) 'lookedClass': lookedClass,
+    if (pinned) 'pinned': true,
     'schemaVersion': schemaVersion,
   };
 
@@ -157,6 +162,7 @@ class MemoryMoment {
       updatedAt: DateTime.tryParse(raw['updatedAt'] as String? ?? ''),
       signals: raw['signals'] as String?,
       lookedClass: raw['lookedClass'] as String?,
+      pinned: raw['pinned'] == true,
       schemaVersion: (raw['schemaVersion'] as num?)?.toInt() ?? currentSchemaVersion,
     );
   }

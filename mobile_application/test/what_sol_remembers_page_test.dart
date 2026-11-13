@@ -12,6 +12,7 @@ import 'package:solace_mobile/features/consent/consent_controller.dart';
 import 'package:solace_mobile/features/memory/companion_memory_context.dart';
 import 'package:solace_mobile/features/memory/moments_controller.dart';
 import 'package:solace_mobile/core/widgets/visual_kit.dart';
+import 'package:solace_mobile/features/chat/highlighted_text.dart';
 import 'package:solace_mobile/features/memory/what_sol_remembers_page.dart';
 import 'package:solace_mobile/features/profile/profile_controller.dart';
 
@@ -279,5 +280,58 @@ void main() {
     for (final h in heights) {
       expect(h, equals(heights.first));
     }
+  });
+
+  testWidgets('pinning an older moment keeps it in Sols top 5 and shows pin badge', (tester) async {
+    late String oldestId;
+    await tester.runAsync(() async {
+      final oldest = await moments.addManual('Core anchor: morning walk helps me reset.');
+      oldestId = oldest!.id;
+      for (var i = 0; i < 5; i++) {
+        await moments.addManual('Newer reflection number $i');
+      }
+    });
+    expect(moments.forSol.any((m) => m.id == oldestId), isFalse);
+
+    await pump(tester);
+    await tester.ensureVisible(find.byKey(ValueKey('moment-menu-$oldestId')));
+    await tester.tap(find.byKey(ValueKey('moment-menu-$oldestId')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pin for Sol'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(ValueKey('moment-pin-badge-$oldestId')), findsOneWidget);
+    expect(moments.forSol.first.id, equals(oldestId));
+    expect(moments.forSol.length, equals(5));
+  });
+
+  testWidgets('search bar filters moments and highlights matched keywords', (tester) async {
+    await tester.runAsync(() async {
+      await moments.addManual('Evening tea with my sister');
+      await moments.addManual('Calm stretch after work');
+    });
+    await pump(tester);
+
+    expect(find.byKey(const ValueKey('memory-search-field')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('memory-search-field')),
+      'sister',
+    );
+    await tester.pump();
+
+    expect(find.text('Calm stretch after work'), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is HighlightedText &&
+            w.query == 'sister' &&
+            w.text.contains('Evening tea with my sister'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('memory-search-clear')));
+    await tester.pump();
+    expect(find.text('Calm stretch after work'), findsOneWidget);
   });
 }

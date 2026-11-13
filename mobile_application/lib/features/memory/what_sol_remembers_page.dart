@@ -4,7 +4,9 @@ import '../../core/models/consent.dart';
 import '../../core/models/memory_moment.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../core/widgets/visual_kit.dart';
+import '../../domain/chat/conversation_search.dart';
 import '../chat/chat_controller.dart';
+import '../chat/highlighted_text.dart';
 import '../consent/consent_controller.dart';
 import '../footprint/life_pulse_controller.dart';
 import '../profile/profile_controller.dart';
@@ -34,7 +36,7 @@ const _months = [
 /// Everything Sol remembers about the person and everything it is told, in one
 /// place: what is shared and exactly how it reads, every moment with edit, set
 /// aside and delete, and the switch for being asked at all.
-class WhatSolRemembersPage extends StatelessWidget {
+class WhatSolRemembersPage extends StatefulWidget {
   const WhatSolRemembersPage({
     required this.moments,
     required this.memory,
@@ -53,6 +55,34 @@ class WhatSolRemembersPage extends StatelessWidget {
   final CompanionMemoryContext memory;
   final ConsentController consent;
   final ProfileController profileController;
+
+  @override
+  State<WhatSolRemembersPage> createState() => _WhatSolRemembersPageState();
+}
+
+class _WhatSolRemembersPageState extends State<WhatSolRemembersPage> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  LifePulseController? get lifePulse => widget.lifePulse;
+  ChatController? get chat => widget.chat;
+  MomentsController get moments => widget.moments;
+  CompanionMemoryContext get memory => widget.memory;
+  ConsentController get consent => widget.consent;
+  ProfileController get profileController => widget.profileController;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool _matchesText(List<String> fields) {
+    final terms = searchQueryTerms(_searchQuery);
+    if (terms.isEmpty) return true;
+    final haystack = fields.join(' ').toLowerCase();
+    return terms.every(haystack.contains);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +120,10 @@ class WhatSolRemembersPage extends StatelessWidget {
                   const SizedBox(height: 10),
                   _faceCard(context),
                   const KitLabel('YOUR MOMENTS'),
+                  if (moments.all.isNotEmpty || (chat?.conversations.any((c) => c.hasSummary) ?? false)) ...[
+                    _searchBar(),
+                    const SizedBox(height: 10),
+                  ],
                   _momentList(context),
                   const SizedBox(height: 10),
                   _addButton(context),
@@ -147,7 +181,7 @@ class WhatSolRemembersPage extends StatelessWidget {
   List<Widget> _notes(BuildContext context) {
     final noted = [
       for (final c in chat!.conversations)
-        if (c.hasSummary) c,
+        if (c.hasSummary && _matchesText([c.title, c.summary!])) c,
     ];
     if (noted.isEmpty) return const [];
     return [
@@ -170,9 +204,9 @@ class WhatSolRemembersPage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(noted[i].title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _muted)),
+                          HighlightedText(noted[i].title, query: _searchQuery, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _muted)),
                           const SizedBox(height: 4),
-                          Text(noted[i].summary!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.45, color: _ink)),
+                          HighlightedText(noted[i].summary!, query: _searchQuery, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.45, color: _ink)),
                         ],
                       ),
                     ),
@@ -373,6 +407,39 @@ class WhatSolRemembersPage extends StatelessWidget {
     trailing: Switch(key: key, value: value, onChanged: onChanged),
   );
 
+  Widget _searchBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFDF6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _line),
+      ),
+      child: TextField(
+        key: const ValueKey('memory-search-field'),
+        controller: _searchController,
+        onChanged: (v) => setState(() => _searchQuery = v),
+        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: _ink),
+        decoration: InputDecoration(
+          hintText: 'Search moments & notes...',
+          hintStyle: const TextStyle(fontSize: 13, color: _muted),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _muted),
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  key: const ValueKey('memory-search-clear'),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                  icon: const Icon(Icons.close_rounded, size: 18, color: _muted),
+                ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        ),
+      ),
+    );
+  }
+
   Widget _momentList(BuildContext context) {
     final all = moments.all;
     if (all.isEmpty) {
@@ -393,8 +460,24 @@ class WhatSolRemembersPage extends StatelessWidget {
         ),
       );
     }
+    final visible = [
+      for (final m in all)
+        if (_matchesText([m.text, m.moodWord ?? '', m.state.name])) m,
+    ]..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return 0;
+      });
+    if (visible.isEmpty) {
+      return const KitCard(
+        child: Text(
+          'No kept moments match your search.',
+          key: ValueKey('moments-search-empty'),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _soft),
+        ),
+      );
+    }
     return Column(
-      children: [for (final m in all) Padding(padding: const EdgeInsets.only(bottom: 10), child: _momentRow(context, m))],
+      children: [for (final m in visible) Padding(padding: const EdgeInsets.only(bottom: 10), child: _momentRow(context, m))],
     );
   }
 
@@ -429,12 +512,43 @@ class WhatSolRemembersPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(m.text, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, height: 1.45, color: _ink)),
+                    HighlightedText(
+                      m.text,
+                      query: _searchQuery,
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, height: 1.45, color: _ink),
+                    ),
                     const SizedBox(height: 6),
-                    Text(
-                      '$label${date == null ? '' : '  ·  ${date.day} ${_months[date.month - 1]}'}'
-                      '${m.editedByUser ? '  ·  edited' : ''}',
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: color),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (m.pinned)
+                          Container(
+                            key: ValueKey('moment-pin-badge-${m.id}'),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFE5B4),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.push_pin_rounded, size: 11, color: Color(0xFF7D5007)),
+                                SizedBox(width: 3),
+                                Text(
+                                  'Pinned',
+                                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF7D5007)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Text(
+                          '$label${date == null ? '' : '  ·  ${date.day} ${_months[date.month - 1]}'}'
+                          '${m.editedByUser ? '  ·  edited' : ''}',
+                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: color),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -446,6 +560,11 @@ class WhatSolRemembersPage extends StatelessWidget {
               onSelected: (action) => _act(context, m, action),
               itemBuilder: (_) => [
                 if (m.state == MomentState.pending) const PopupMenuItem(value: 'keep', child: Text('Keep it')),
+                if (m.state == MomentState.confirmed)
+                  PopupMenuItem(
+                    value: 'pin',
+                    child: Text(m.pinned ? 'Unpin from Sol' : 'Pin for Sol'),
+                  ),
                 const PopupMenuItem(value: 'edit', child: Text('Change the words')),
                 if (m.state == MomentState.confirmed) const PopupMenuItem(value: 'hide', child: Text('Set aside')),
                 if (m.state == MomentState.hidden) const PopupMenuItem(value: 'unhide', child: Text('Bring it back')),
@@ -462,6 +581,8 @@ class WhatSolRemembersPage extends StatelessWidget {
     switch (action) {
       case 'keep':
         await moments.confirm(m.id);
+      case 'pin':
+        await moments.togglePin(m.id);
       case 'hide':
         await moments.hide(m.id);
       case 'unhide':
