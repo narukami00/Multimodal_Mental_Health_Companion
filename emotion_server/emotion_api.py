@@ -34,11 +34,18 @@ from fastapi import FastAPI, HTTPException, Request  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from cue import EmotionState, build_cue  # noqa: E402
-from emotion_engine import Engine, pool_face  # noqa: E402
+from emotion_engine import Engine, MIN_USABLE, pool_face  # noqa: E402
+from pipeline_utils import (  # noqa: E402
+    UserBaselineTracker,
+    allocate_words_by_weights,
+    compute_speech_activity_ratios,
+    pool_face_with_quality,
+    pool_window_estimates,
+)
 
 ENG = None
 POOL = ThreadPoolExecutor(max_workers=1)  # one engine, one worker: GPU jobs run strictly one after another
-STATES, LAST_USED, JOBS = {}, {}, {}
+STATES, LAST_USED, JOBS, BASELINES = {}, {}, {}, {}
 FACES, TRACK = {}, {}  # session_id -> deque of (t, record, embedding) / (tracker state): numbers only, never images
 PHONE_FACES = {}  # session_id -> the 1,400-number face vector a phone computed ITSELF (it never sent the pictures): numbers only
 FACE_DIM = 1400
@@ -88,12 +95,17 @@ def state_of(session_id):
     now = time.time()
     for k in [k for k, t in LAST_USED.items() if now - t > SESSION_TTL_S]:
         STATES.pop(k, None)
+        BASELINES.pop(k, None)
         PHONE_FACES.pop(k, None)
         LAST_USED.pop(k, None)
     for k in [k for k, (t, _) in JOBS.items() if now - t > JOB_TTL_S]:
         JOBS.pop(k, None)
     LAST_USED[session_id] = now
     return STATES.setdefault(session_id, EmotionState())
+
+
+def baseline_of(session_id) -> UserBaselineTracker:
+    return BASELINES.setdefault(session_id, UserBaselineTracker(k=8.0))
 
 
 def clean(o):
@@ -107,8 +119,8 @@ def clean(o):
 
 
 def audio_job(pcm: bytes, sr: int, chunk_s: float = 0.0):
-    """Raw audio features: ONE vector, or (chunk_s > 0 and a long recording) one per ~chunk_s window, because the models were trained on
-    clips of a few seconds and a feature average over a whole minute drifts out of range."""
+    """Raw audio features: ONE vector, or (chunk_s > 0 and a long recording) one per ~chunk_s window,
+    along with per-window speech-activity ratios so silent stretches don't wash out peaks."""
     x = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
     if sr != 16000:
         from scipy.signal import resample_poly
@@ -120,26 +132,43 @@ def audio_job(pcm: bytes, sr: int, chunk_s: float = 0.0):
         n = int(len(x) // (chunk_s * 16000))
         size = len(x) // n
         parts = [x[i * size:(i + 1) * size] if i < n - 1 else x[i * size:] for i in range(n)]
+    speech_ratios = compute_speech_activity_ratios(parts, sr=16000)
     raws = [ENG.audio.features(p) for p in parts]
-    return raws, int(1000 * (time.time() - t))
+    return {"raws": raws, "speech_ratios": speech_ratios}, int(1000 * (time.time() - t))
 
 
-def face_vector(session_id, window):
-    """Normalised face vector for this session, or None. Two sources: the numbers a PHONE computed itself (they win: the
-    person chose to keep the pictures on the phone), else the pooled camera frames inside [window] (camera off, or fewer
-    than 3 usable frames: None)."""
+def face_vector(session_id, window, baseline: Optional[UserBaselineTracker] = None):
+    """Normalised face vector and structured quality report. Two sources: phone-computed
+    1,400-d vector (wins), or quality-weighted pooled camera frames inside [window]."""
     phone = PHONE_FACES.get(session_id)
     if phone is not None:
         if FACE_COMPARE and FACE_ON and window and len(window) == 2 and FACES.get(session_id):
             _log_face_comparison(session_id, phone, window)
-        return ENG.norm("V", phone)
+        if baseline is not None:
+            ENG.norm.set_user_mean("V", baseline.effective_mean("V", ENG.norm.mu["V"]))
+        xv = ENG.norm("V", phone)
+        if baseline is not None:
+            baseline.update("V", phone)
+            ENG.norm.set_user_mean("V", None)
+        return xv, {"total_frames": 1, "usable_frames": 1, "reason": None, "source": "phone"}
     if not (FACE_ON and window and len(window) == 2):
-        return None
+        return None, None
     buf = FACES.get(session_id)
     if not buf:
-        return None
-    raw = pool_face([(r, e) for t, r, e in list(buf) if window[0] <= t <= window[1]])
-    return None if raw is None else ENG.norm("V", raw)
+        return None, {"total_frames": 0, "usable_frames": 0, "reason": "no_frames"}
+    raw, quality = pool_face_with_quality(
+        [(r, e) for t, r, e in list(buf) if window[0] <= t <= window[1]],
+        min_usable=MIN_USABLE,
+    )
+    if raw is None:
+        return None, quality
+    if baseline is not None:
+        ENG.norm.set_user_mean("V", baseline.effective_mean("V", ENG.norm.mu["V"]))
+    xv = ENG.norm("V", raw)
+    if baseline is not None:
+        baseline.update("V", raw)
+        ENG.norm.set_user_mean("V", None)
+    return xv, quality
 
 
 def _log_face_comparison(session_id, phone, window):
@@ -159,35 +188,85 @@ def _log_face_comparison(session_id, phone, window):
           flush=True)
 
 
-def estimate_job(raw_a, text, state, xv=None):
-    """[raw_a] is None, one raw vector, or a LIST of them (a long recording in windows): then the transcript is shared out by duration,
-    every window is estimated on its own and the probabilities are averaged."""
-    raws = raw_a if isinstance(raw_a, list) else [raw_a]
+def estimate_job(audio_data, text, state, xv=None, baseline: Optional[UserBaselineTracker] = None):
+    """[audio_data] is None, one raw vector, a list of vectors, or {'raws': [...], 'speech_ratios': [...]}.
+    Uses empirical-Bayes user baseline shrinkage, speech-weighted transcript slicing/pooling,
+    and cross-modal incongruence detection."""
+    if isinstance(audio_data, dict):
+        raws = audio_data.get("raws") or [None]
+        speech_ratios = audio_data.get("speech_ratios") or [1.0] * len(raws)
+    elif isinstance(audio_data, list):
+        raws = audio_data
+        speech_ratios = [1.0] * len(raws)
+    else:
+        raws = [audio_data]
+        speech_ratios = [1.0]
+
     words = text.split()
-    n = len(raws)
+    segments = allocate_words_by_weights(words, speech_ratios) if len(raws) > 1 else [text]
     t = time.time()
     ests = []
-    for i, raw in enumerate(raws):
-        seg = text if n == 1 else " ".join(words[i * len(words) // n:(i + 1) * len(words) // n])
-        xt = ENG.text.features(seg) if seg.strip() else None
-        xa = ENG.norm("A", raw) if raw is not None else None
-        xt = ENG.norm("T", xt) if xt is not None else None
-        est = ENG.heads.predict(xa, xt, xv)
-        if est is not None:
-            ests.append(est)
-    ms_text = int(1000 * (time.time() - t))
-    if not ests:
-        return None, None, ms_text
-    est = ests[0] if len(ests) == 1 else {"pattern": max((e["pattern"] for e in ests), key=len),
-                                          **{h: {k: float(np.mean([e[h][k] for e in ests])) for k in ests[0][h]} for h in ("l7", "lv", "la")}}
-    return est, build_cue(est, state, text), ms_text
+    raw_a_seen = []
+    raw_t_seen = []
+    last_xa = None
+    last_xt = None
+
+    if baseline is not None:
+        ENG.norm.set_user_mean("A", baseline.effective_mean("A", ENG.norm.mu["A"]))
+        ENG.norm.set_user_mean("T", baseline.effective_mean("T", ENG.norm.mu["T"]))
+    try:
+        for i, raw in enumerate(raws):
+            seg = segments[i] if i < len(segments) else ""
+            raw_t = ENG.text.features(seg) if seg.strip() else None
+            xa = ENG.norm("A", raw) if raw is not None else None
+            xt = ENG.norm("T", raw_t) if raw_t is not None else None
+            if raw is not None:
+                raw_a_seen.append(raw)
+            if raw_t is not None:
+                raw_t_seen.append(raw_t)
+            last_xa, last_xt = xa, xt
+            est = ENG.heads.predict(xa, xt, xv)
+            if est is not None:
+                ests.append(est)
+
+        ms_text = int(1000 * (time.time() - t))
+        if not ests:
+            return None, None, ms_text, []
+
+        est, window_summaries = pool_window_estimates(ests, speech_ratios)
+        if est is not None and len(ests) == 1 and last_xa is not None and last_xt is not None:
+            est_a = ENG.heads.predict(last_xa, None, None)
+            est_t = ENG.heads.predict(None, last_xt, None)
+            if est_a is not None and est_t is not None:
+                est = {**est, "modalities": {"A": est_a["lv"], "T": est_t["lv"]}}
+    finally:
+        if baseline is not None:
+            ENG.norm.set_user_mean("A", None)
+            ENG.norm.set_user_mean("T", None)
+
+    if baseline is not None:
+        if raw_a_seen:
+            baseline.update("A", np.mean(np.stack(raw_a_seen), axis=0))
+        if raw_t_seen:
+            baseline.update("T", np.mean(np.stack(raw_t_seen), axis=0))
+
+    return est, build_cue(est, state, text), ms_text, (window_summaries if len(ests) > 1 else [])
 
 
-def pack(est, decision, **timings):
+def pack(est, decision, windows=None, calibrated_turns=None, face_quality=None, **timings):
     if est is None:
-        return dict(estimate=None, decision=None, cue=None, model_version=MODEL_VERSION, timings_ms=timings)
-    dv = {k: decision[k] for k in ("mood", "tier", "valence", "arousal", "suppressed", "safety", "pattern")}
-    return clean(dict(estimate=est, decision=dv, cue=decision["cue"], model_version=MODEL_VERSION, timings_ms=timings))
+        out = dict(estimate=None, decision=None, cue=None, model_version=MODEL_VERSION, timings_ms=timings)
+    else:
+        dv = {k: decision[k] for k in ("mood", "tier", "valence", "arousal", "suppressed", "safety", "pattern", "incongruent") if k in decision}
+        clean_est = {k: v for k, v in est.items() if k != "modalities"}
+        out = dict(estimate=clean_est, decision=dv, cue=decision["cue"], model_version=MODEL_VERSION, timings_ms=timings)
+    if windows:
+        out["windows"] = windows
+    if calibrated_turns:
+        out["calibrated_turns"] = calibrated_turns
+    if face_quality is not None:
+        out["face_quality"] = face_quality
+    return clean(out)
 
 
 @app.get("/healthz")
@@ -212,6 +291,7 @@ async def audio(request: Request, session_id: str, turn_id: str, sample_rate: in
 @app.post("/v1/emotion/finalize")
 async def finalize(req: Finalize):
     state = state_of(req.session_id)
+    baseline = baseline_of(req.session_id)
     raw_a, ms_audio = None, None
     job = JOBS.pop((req.session_id, req.turn_id), None) if req.use_audio else None
     if job:
@@ -220,9 +300,19 @@ async def finalize(req: Finalize):
         except Exception:
             raw_a = None  # audio not ready in time (or failed): continue with text only; the late result is simply dropped
     loop = asyncio.get_running_loop()
-    xv = face_vector(req.session_id, req.face_window)
-    est, decision, ms_text = await loop.run_in_executor(POOL, estimate_job, raw_a, req.text, state, xv)
-    out = pack(est, decision, audio=ms_audio, text=ms_text)
+    xv, face_quality = await loop.run_in_executor(POOL, face_vector, req.session_id, req.face_window, baseline)
+    est, decision, ms_text, windows = await loop.run_in_executor(
+        POOL, estimate_job, raw_a, req.text, state, xv, baseline
+    )
+    out = pack(
+        est,
+        decision,
+        windows=windows,
+        calibrated_turns=baseline.counts(),
+        face_quality=face_quality,
+        audio=ms_audio,
+        text=ms_text,
+    )
     if xv is not None:
         # The face on its own, for the person's optional "how you looked" view. Never used for the cue or the decision:
         # the face is the weakest signal, so it is reported separately and labelled as a rough guess by the app.
@@ -280,14 +370,18 @@ async def face_vector_in(request: Request, session_id: str):
 @app.post("/v1/emotion/text")
 async def text_only(req: TextReq):
     state = state_of(req.session_id)
+    baseline = baseline_of(req.session_id)
     loop = asyncio.get_running_loop()
-    est, decision, ms_text = await loop.run_in_executor(POOL, estimate_job, None, req.text, state)
-    return pack(est, decision, text=ms_text)
+    est, decision, ms_text, _ = await loop.run_in_executor(
+        POOL, estimate_job, None, req.text, state, None, baseline
+    )
+    return pack(est, decision, calibrated_turns=baseline.counts(), text=ms_text)
 
 
 @app.post("/v1/emotion/reset")
 async def reset(req: ResetReq):
     STATES.pop(req.session_id, None)
+    BASELINES.pop(req.session_id, None)
     FACES.pop(req.session_id, None)
     TRACK.pop(req.session_id, None)
     PHONE_FACES.pop(req.session_id, None)

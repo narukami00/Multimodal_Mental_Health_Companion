@@ -99,6 +99,32 @@ def test_reset_clears_state():
     s.reset()
     assert s.v is None and s.turns == 0
 
+
+def test_turn_gap_decay_prevents_stale_run_from_blocking_fresh_turn():
+    s = EmotionState(half_life_s=300.0)
+    for i in range(3):
+        build_cue(est(neg=0.85, neu=0.1, pos=0.05, low=0.7, high=0.1), s, now=100.0 + i)
+    # One hour later, prior negative EMA has decayed so a clear positive turn comes through.
+    out = build_cue(est(neg=0.05, neu=0.15, pos=0.8, low=0.2, high=0.6), s, now=3700.0)
+    assert out['cue'] is not None and out['mood'] == 'upbeat'
+
+
+def test_cross_modal_incongruence_emits_hedged_mixed_note():
+    e = est(neg=0.45, neu=0.25, pos=0.30, pattern='AT')
+    e['modalities'] = {
+        'A': {'negative': 0.72, 'neutral': 0.18, 'positive': 0.10},
+        'T': {'negative': 0.10, 'neutral': 0.20, 'positive': 0.70},
+    }
+    out = build_cue(e, EmotionState(), text="I am doing totally fine today")
+    assert out['incongruent'] is True
+    assert out['mood'] == 'mixed signals'
+    assert out['cue'] and 'quiet tension' in out['cue']
+
+
+def test_shared_safety_phrases_floor():
+    out = build_cue(est(neg=0.8, neu=0.1, pos=0.1), EmotionState(), text='I feel like self harm tonight')
+    assert out['cue'] is None and out['safety'] == 'self_harm_language'
+
 def test_face_only_never_gives_a_cue_and_never_moves_the_state():
     state = EmotionState()
     est = dict(pattern='V', lv=dict(negative=0.9, neutral=0.05, positive=0.05), la=dict(low=0.1, mid=0.1, high=0.8))

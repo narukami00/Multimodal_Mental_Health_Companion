@@ -212,15 +212,13 @@ class FaceStream:
         return rec, emb
 
 
+from pipeline_utils import pool_face_with_quality
+
+
 def pool_face(frames):
-    """frames: list of (record, embedding). Returns the 1,400-d RAW face vector or None (< 3 usable frames)."""
-    us = [(r, e) for r, e in frames if r["usable"] == 1 and e is not None]
-    if len(us) < MIN_USABLE:
-        return None
-    L = np.stack([r["logits"] for r, _ in us])
-    B = np.stack([r["bs"] for r, _ in us])
-    E = np.stack([e for _, e in us]).astype(np.float16).astype(np.float32)  # the cache stored fp16
-    return np.concatenate([L.mean(0), L.std(0), B.mean(0), B.std(0), E.mean(0)]).astype(np.float32)
+    """frames: list of (record, embedding). Quality-weighted 1,400-d RAW face vector or None (< 3 usable frames)."""
+    vec, _ = pool_face_with_quality(frames, min_usable=MIN_USABLE)
+    return vec
 
 
 # ---------------------------------------------------------------------------------------------------------------- normalise / heads
