@@ -6,6 +6,7 @@ import '../../core/theme/solace_palette.dart';
 import '../../core/widgets/visual_kit.dart';
 import '../chat/chat_controller.dart';
 import '../consent/consent_controller.dart';
+import '../footprint/life_pulse_controller.dart';
 import '../profile/profile_controller.dart';
 import 'companion_memory_context.dart';
 import 'moments_controller.dart';
@@ -40,8 +41,11 @@ class WhatSolRemembersPage extends StatelessWidget {
     required this.consent,
     required this.profileController,
     this.chat,
+    this.lifePulse,
     super.key,
   });
+
+  final LifePulseController? lifePulse;
 
   /// With it, the notes Sol keeps on long conversations are listed here too.
   final ChatController? chat;
@@ -91,6 +95,7 @@ class WhatSolRemembersPage extends StatelessWidget {
                   if (chat != null) ..._notes(context),
                   const KitLabel('ASKING'),
                   _askingCard(),
+                  ..._personalizationSection(context),
                   const SizedBox(height: 18),
                   if (moments.all.isNotEmpty)
                     Center(
@@ -497,6 +502,139 @@ class WhatSolRemembersPage extends StatelessWidget {
       onChanged: (asking) => profileController.setMomentPromptsMuted(!asking),
     ),
   );
+
+  List<Widget> _personalizationSection(BuildContext context) {
+    final profile = memory.personalization?.call();
+    final pulse = lifePulse;
+    final lines = <String>[];
+    if (profile != null) {
+      if (profile.isCalibrated && profile.rulesByBucket.isNotEmpty) {
+        final rules = profile.rulesByBucket.values
+            .map((r) => '${r.predictedBucket} -> ${r.preferredMood}')
+            .join(', ');
+        lines.add('Personal mood hints active ($rules).');
+      } else {
+        lines.add(
+          'Reviews learned: ${profile.totalReviewedMoods} of 5 needed before personal reading hints turn on.',
+        );
+      }
+      if (profile.recurringShiftContexts.isNotEmpty) {
+        final top = profile.recurringShiftContexts
+            .take(2)
+            .map((e) => e.context.toLowerCase())
+            .join(' & ');
+        lines.add('Recurring shift contexts: $top.');
+      }
+      if (profile.helpfulTags.isNotEmpty) {
+        lines.add('Often helpful: ${profile.helpfulTags.take(2).join(', ')}.');
+      }
+    } else {
+      lines.add('Review mood readings and trajectory shifts to teach Sol your personal patterns.');
+    }
+
+    return [
+      const SizedBox(height: 18),
+      const KitLabel('HOW SOL ADAPTS TO YOU'),
+      const SizedBox(height: 8),
+      KitCard(
+        key: const ValueKey('personalization-summary-card'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < lines.length; i++) ...[
+              if (i > 0) const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 3),
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 14,
+                      color: Color(0xFF9C6615),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      lines[i],
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        height: 1.45,
+                        color: _ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (pulse != null) ...[
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Divider(height: 1, color: _line),
+              ),
+              ListenableBuilder(
+                listenable: pulse,
+                builder: (context, _) {
+                  final fresh = pulse.latestFreshSignal;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _switchRow(
+                        key: const ValueKey('life-pulse-switch'),
+                        icon: Icons.favorite_border_rounded,
+                        color: const Color(0xFF3F9A7C),
+                        title: 'Gentle check-ins',
+                        subtitle: 'Ask every ~36h if everything is alright or on your mind.',
+                        value: pulse.enabled,
+                        onChanged: pulse.setEnabled,
+                      ),
+                      if (fresh != null) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF6FAF7),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0x283F9A7C)),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  fresh.note == null || fresh.note!.isEmpty
+                                      ? 'Recent check-in: ${fresh.moodTag}'
+                                      : 'Recent note: "${fresh.note}"',
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: _soft,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                key: const ValueKey('life-pulse-clear-btn'),
+                                onPressed: pulse.clearAll,
+                                child: const Text('Clear note'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
 
   Future<String?> _askText(
     BuildContext context, {

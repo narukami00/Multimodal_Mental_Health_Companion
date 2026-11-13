@@ -13,6 +13,7 @@ import '../checkin/check_in_mode_page.dart';
 import '../checkin/text_check_in_page.dart';
 import '../journal/session_detail_page.dart';
 import '../footprint/break_prompt_controller.dart';
+import '../footprint/life_pulse_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../profile/baseline_quiz_page.dart';
 import '../profile/profile_controller.dart';
@@ -38,6 +39,7 @@ class OnboardingGate extends StatefulWidget {
     this.habitController,
     this.phonePatterns,
     this.breakPrompts,
+    this.lifePulse,
     this.moments,
     this.memory,
     this.forest,
@@ -56,6 +58,7 @@ class OnboardingGate extends StatefulWidget {
   final HabitController? habitController;
   final PhonePatternsController? phonePatterns;
   final BreakPromptController? breakPrompts;
+  final LifePulseController? lifePulse;
   final MomentsController? moments;
   final CompanionMemoryContext? memory;
   final ForestController? forest;
@@ -157,6 +160,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
         habitController: widget.habitController,
         phonePatterns: widget.phonePatterns,
         breakPrompts: widget.breakPrompts,
+        lifePulse: widget.lifePulse,
         moments: widget.moments,
         memory: widget.memory,
         forest: widget.forest,

@@ -46,8 +46,10 @@ import 'services/stt_model_store.dart';
 import 'core/models/safety_assessment.dart';
 import 'features/safety/support_resources_page.dart';
 import 'features/consent/consent_controller.dart';
+import 'domain/personalization/personal_calibration.dart';
 import 'features/footprint/in_app_feature_recorder.dart';
 import 'features/footprint/break_prompt_controller.dart';
+import 'features/footprint/life_pulse_controller.dart';
 import 'features/footprint/phone_patterns_controller.dart';
 import 'features/footprint/usage_collection_runner.dart';
 import 'features/footprint/usage_recorder.dart';
@@ -262,6 +264,16 @@ Future<void> main() async {
   profileController.addListener(() => unawaited(breakPrompts.refresh()));
   unawaited(breakPrompts.refresh());
 
+  final lifePulse = LifePulseController(
+    preferences: preferences,
+    safetyActive: () => safetyController.hasActiveFlag,
+    breakPromptActive: () => breakPrompts.current != null,
+  );
+  breakPrompts.addListener(() => unawaited(lifePulse.refresh()));
+  safetyController.addListener(() => unawaited(lifePulse.refresh()));
+  sessionController.addListener(() => unawaited(lifePulse.refresh()));
+  unawaited(lifePulse.refresh());
+
   // Moments: good things the person wrote about, offered for keeping and kept
   // only on a yes. Looked at when an entry is saved or a message is sent, never
   // while safety support is active or when the person turned asking off.
@@ -329,7 +341,16 @@ Future<void> main() async {
     profile: profileController,
     moments: moments,
     sessions: () => sessionController.sessions,
-    themes: breakPrompts.activeThemes,
+    themes: () => {
+      ...breakPrompts.activeThemes(),
+      ...lifePulse.activeThemes(),
+    }.toList(),
+    personalization: () => PersonalPatternProfile.from(
+      sessions: sessionController.sessions,
+      conversations: chatController.conversations,
+      suggestions: suggestionController.history,
+      latestPulse: lifePulse.latestFreshSignal,
+    ),
   );
 
   // Every connection to the companion carries exactly what the person agreed to
@@ -486,6 +507,7 @@ Future<void> main() async {
       unawaited(refreshCheckInWidget());
       unawaited(writeDownWaiting());
       unawaited(quickReplies.run());
+      unawaited(lifePulse.refresh());
       // A new morning: yesterday is now a finished day to look at.
       unawaited(usageRunner.run().then((_) => goalsController.refresh()));
     },
@@ -503,6 +525,7 @@ Future<void> main() async {
       chatController: chatController,
       phonePatterns: phonePatterns,
       breakPrompts: breakPrompts,
+      lifePulse: lifePulse,
       moments: moments,
       memory: memory,
       consentController: consentController,
@@ -526,6 +549,7 @@ class SolaceApp extends StatelessWidget {
     this.habitController,
     this.phonePatterns,
     this.breakPrompts,
+    this.lifePulse,
     this.moments,
     this.memory,
     this.consentController,
@@ -569,6 +593,7 @@ class SolaceApp extends StatelessWidget {
 
   /// The "anything going on?" question. Null in tests that do not need it.
   final BreakPromptController? breakPrompts;
+  final LifePulseController? lifePulse;
   final MomentsController? moments;
   final CompanionMemoryContext? memory;
 
@@ -609,6 +634,7 @@ class SolaceApp extends StatelessWidget {
             habitController: habitController,
             phonePatterns: phonePatterns,
             breakPrompts: breakPrompts,
+            lifePulse: lifePulse,
             moments: moments,
             memory: memory,
             consent: consentController,

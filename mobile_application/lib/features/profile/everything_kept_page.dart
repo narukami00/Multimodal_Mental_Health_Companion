@@ -4,6 +4,7 @@ import '../../core/models/daily_features.dart';
 import '../../core/theme/solace_palette.dart';
 import '../../core/widgets/visual_kit.dart';
 import '../chat/chat_controller.dart';
+import '../footprint/life_pulse_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../memory/companion_memory_context.dart';
 import '../memory/moments_controller.dart';
@@ -29,6 +30,7 @@ class EverythingKeptPage extends StatelessWidget {
     this.moments,
     this.memory,
     this.phonePatterns,
+    this.lifePulse,
     super.key,
   });
 
@@ -38,6 +40,7 @@ class EverythingKeptPage extends StatelessWidget {
   final MomentsController? moments;
   final CompanionMemoryContext? memory;
   final PhonePatternsController? phonePatterns;
+  final LifePulseController? lifePulse;
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +168,7 @@ class EverythingKeptPage extends StatelessWidget {
                         consent: memory!.consent,
                         profileController: profileController,
                         chat: chatController,
+                        lifePulse: lifePulse,
                       ),
                     ),
                   ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/personalization/personal_calibration.dart';
+
 import '../../core/models/memory_moment.dart';
 import '../../core/models/session_input.dart';
 import '../../domain/memory/moment_entry.dart';
@@ -15,8 +17,11 @@ class SessionDetailPage extends StatefulWidget {
     this.onDelete,
     this.onReanalyze,
     this.onReview,
+    this.personalization,
     super.key,
   });
+
+  final PersonalPatternProfile? personalization;
 
   final SessionRecord session;
 
@@ -74,6 +79,7 @@ class _SessionDetailPageState extends State<SessionDetailPage> {
         review: session.moodReview,
         provenance: session.moodProvenance,
         userPickedMood: session.mood,
+        personalization: widget.personalization,
         onReview: widget.onReview == null
             ? null
             : (choice) async {

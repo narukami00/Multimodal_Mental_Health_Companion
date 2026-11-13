@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/personalization/personal_calibration.dart';
+
 import '../../core/constants/moods.dart';
 import '../../core/models/emotion_result.dart';
 import '../../core/models/session_record.dart';
@@ -15,9 +17,12 @@ class EmotionReadingCard extends StatelessWidget {
     this.review,
     this.provenance,
     this.userPickedMood,
+    this.personalization,
     this.onReview,
     super.key,
   });
+
+  final PersonalPatternProfile? personalization;
 
   final EmotionResult reading;
   final MoodReview? review;
@@ -138,6 +143,7 @@ class EmotionReadingCard extends StatelessWidget {
               review: review,
               provenance: provenance,
               userPickedMood: userPickedMood,
+              personalization: personalization,
               onReview: onReview,
             ),
           ],
@@ -153,6 +159,7 @@ class _ReadingReviewSection extends StatefulWidget {
     this.review,
     this.provenance,
     this.userPickedMood,
+    this.personalization,
     this.onReview,
   });
 
@@ -160,6 +167,7 @@ class _ReadingReviewSection extends StatefulWidget {
   final MoodReview? review;
   final MoodProvenance? provenance;
   final String? userPickedMood;
+  final PersonalPatternProfile? personalization;
   final ValueChanged<({MoodReviewStatus status, String? correctedMood})>? onReview;
 
   @override
@@ -212,6 +220,9 @@ class _ReadingReviewSectionState extends State<_ReadingReviewSection> {
         r?.status == MoodReviewStatus.noneFits;
     final isConfirmedOrCorrected =
         alreadyReviewed && r?.status != MoodReviewStatus.skipped;
+    final calibration = widget.personalization?.calibrationFor(widget.reading);
+    final orderedMoods =
+        widget.personalization?.rankedMoodChoices(widget.reading) ?? Moods.values;
 
     const sage = Color(0xFF3F9A7C);
     const ink = Color(0xFF3A3125);
@@ -290,6 +301,38 @@ class _ReadingReviewSectionState extends State<_ReadingReviewSection> {
           if (widget.onReview != null && (!alreadyReviewed || _pickingCorrection)) ...[
             const SizedBox(height: 12),
             if (!_pickingCorrection) ...[
+              if (calibration != null)
+                Container(
+                  key: const ValueKey('reading-personal-hint'),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.78),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0x45C7A977)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 15,
+                        color: Color(0xFF9C6615),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Based on your ${calibration.correctedCount} past reviews, you usually call this ${Moods.display(calibration.preferredMood).toLowerCase()}.',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            height: 1.35,
+                            color: ink,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const Text(
                 'Does this fit?',
                 style: TextStyle(
@@ -425,7 +468,7 @@ class _ReadingReviewSectionState extends State<_ReadingReviewSection> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final word in Moods.values)
+                  for (final word in orderedMoods)
                     InkWell(
                       key: ValueKey('reading-mood-${word.toLowerCase()}'),
                       borderRadius: BorderRadius.circular(12),
@@ -439,9 +482,15 @@ class _ReadingReviewSectionState extends State<_ReadingReviewSection> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: calibration?.preferredMood == word
+                              ? const Color(0xFFEDF7F2)
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0x52C7A977)),
+                          border: Border.all(
+                            color: calibration?.preferredMood == word
+                                ? const Color(0x663F9A7C)
+                                : const Color(0x52C7A977),
+                          ),
                           boxShadow: const [
                             BoxShadow(
                               color: Color(0x0D78501E),

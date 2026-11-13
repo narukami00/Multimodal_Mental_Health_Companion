@@ -31,6 +31,7 @@ import '../safety/support_resources_page.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_context.dart';
 import '../suggestions/suggestion_controller.dart';
+import '../footprint/life_pulse_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import 'about_pages.dart';
 import 'baseline_quiz_page.dart';
@@ -43,6 +44,7 @@ import 'country_picker.dart';
 import 'sleep_hours_settings.dart';
 import 'therapist_controller.dart';
 import 'habit_controller.dart';
+import '../account/account_page.dart';
 
 /// The baseline reflections entry, which carries its own progress and button.
 ///
@@ -179,8 +181,11 @@ class ProfilePage extends StatelessWidget {
     this.therapistController,
     this.habitController,
     this.extraEventTags,
+    this.lifePulse,
     super.key,
   });
+
+  final LifePulseController? lifePulse;
 
   final ProfileController profileController;
   final SafetyController safetyController;
@@ -238,6 +243,8 @@ class ProfilePage extends StatelessWidget {
                   avatarPath: profile.avatarPath,
                   firstRunAt: profile.firstRunAt,
                 ),
+                AccountEntryCard(profile: profileController),
+                const SizedBox(height: 18),
 
                 // SECTION: SUPPORT.
                 //
@@ -447,6 +454,7 @@ class ProfilePage extends StatelessWidget {
                             moments: moments,
                             memory: memory,
                             phonePatterns: phonePatterns,
+                            lifePulse: lifePulse,
                           ),
                         ),
                       ),
@@ -465,6 +473,7 @@ class ProfilePage extends StatelessWidget {
                               consent: memory!.consent,
                               profileController: profileController,
                               chat: chatController,
+                              lifePulse: lifePulse,
                             ),
                           ),
                         ),
@@ -1279,6 +1288,7 @@ class _EditProfileFormState extends State<_EditProfileForm> {
     final name = _name.text.trim();
     await widget.controller.saveIdentity(
       displayName: name.isEmpty ? null : name,
+      clearDisplayName: name.isEmpty,
     );
 
     if (!mounted) return;

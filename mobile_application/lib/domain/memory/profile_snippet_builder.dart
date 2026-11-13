@@ -39,6 +39,7 @@ ProfileSnippet buildProfileSnippet({
   Capacity? capacity,
   List<double> recentMoodScores = const [],
   List<String> recentThemes = const [],
+  List<String> personalContextLines = const [],
 }) {
   if (!consented) return ProfileSnippet.empty;
   final lines = <String>[];
@@ -66,6 +67,13 @@ ProfileSnippet buildProfileSnippet({
   // Right now: only when the reading is firm enough to mean something.
   if (capacity != null && capacity.isLow && capacity.confidence >= 0.5) {
     lines.add('Right now: may have limited energy, keep it gentle.');
+  }
+
+  for (final raw in personalContextLines) {
+    final trimmed = raw.trim();
+    if (trimmed.isNotEmpty) {
+      lines.add(trimmed);
+    }
   }
 
   return _capped(lines);

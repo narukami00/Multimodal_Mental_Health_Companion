@@ -4,6 +4,7 @@ import '../../core/research/ablations.dart';
 import '../../domain/capacity/capacity_estimator.dart';
 import '../../domain/capacity/mood_trend.dart';
 import '../../domain/memory/profile_snippet_builder.dart';
+import '../../domain/personalization/personal_calibration.dart';
 import '../consent/consent_controller.dart';
 import '../profile/profile_controller.dart';
 import '../suggestions/suggestion_context.dart';
@@ -21,6 +22,7 @@ class CompanionMemoryContext {
     required this.moments,
     required this.sessions,
     required this.themes,
+    this.personalization,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
@@ -33,6 +35,9 @@ class CompanionMemoryContext {
 
   /// Themes they chose recently, in their own words.
   final List<String> Function() themes;
+
+  /// Learned on-device personalization patterns and recent life check-ins.
+  final PersonalPatternProfile? Function()? personalization;
   final DateTime Function() _clock;
 
   bool get snippetOn =>
@@ -62,12 +67,16 @@ class CompanionMemoryContext {
     } on Object {
       capacity = null;
     }
+    final personalLines =
+        personalization?.call()?.safePersonalizationPhrases(now: now) ??
+            const <String>[];
     return buildProfileSnippet(
       consented: consented,
       profile: profile.profile,
       capacity: capacity,
       recentMoodScores: dailyMoodScores(sessions: all, now: now, days: 7),
       recentThemes: themes(),
+      personalContextLines: personalLines,
     );
   }
 

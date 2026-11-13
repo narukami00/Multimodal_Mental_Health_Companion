@@ -32,6 +32,8 @@ import '../journal/journal_page.dart';
 import '../footprint/break_prompt_card.dart';
 import '../footprint/day_rhythm_card.dart';
 import '../footprint/break_prompt_controller.dart';
+import '../footprint/life_pulse_card.dart';
+import '../footprint/life_pulse_controller.dart';
 import '../footprint/phone_patterns_controller.dart';
 import '../profile/profile_controller.dart';
 import '../profile/profile_page.dart';
@@ -70,6 +72,7 @@ class AppShell extends StatefulWidget {
     this.habitController,
     this.phonePatterns,
     this.breakPrompts,
+    this.lifePulse,
     this.moments,
     this.memory,
     this.initialTab,
@@ -86,6 +89,7 @@ class AppShell extends StatefulWidget {
   final HabitController? habitController;
   final PhonePatternsController? phonePatterns;
   final BreakPromptController? breakPrompts;
+  final LifePulseController? lifePulse;
   final MomentsController? moments;
   final CompanionMemoryContext? memory;
   final AppTab? initialTab;
@@ -102,6 +106,11 @@ class _AppShellState extends State<AppShell> {
   late final ChatController _chatController;
   late final bool _ownsChatController;
   final _ideaPushSync = IdeaPushSync();
+
+  List<String> _extraThemes() => {
+    ...?widget.breakPrompts?.activeThemes(),
+    ...?widget.lifePulse?.activeThemes(),
+  }.toList();
 
   @override
   void initState() {
@@ -173,7 +182,7 @@ class _AppShellState extends State<AppShell> {
           profile: profile,
           sessions: widget.sessionController.sessions,
           now: now,
-          extraTags: widget.breakPrompts?.activeThemes() ?? const [],
+          extraTags: _extraThemes(),
         ),
       );
     }
@@ -191,7 +200,7 @@ class _AppShellState extends State<AppShell> {
       profile: profile,
       sessions: widget.sessionController.sessions,
       now: now,
-      extraTags: widget.breakPrompts?.activeThemes() ?? const [],
+      extraTags: _extraThemes(),
     );
     final recommendation = widget.suggestionController.peek(
       profile: profile,
@@ -244,7 +253,7 @@ class _AppShellState extends State<AppShell> {
     final context = buildRecommendationContext(
       profile: widget.profileController.profile,
       sessions: widget.sessionController.sessions,
-      extraTags: widget.breakPrompts?.activeThemes() ?? const [],
+      extraTags: _extraThemes(),
     );
     final record = await widget.suggestionController.commit(
       Recommendation.restored(activity, null),
@@ -266,7 +275,7 @@ class _AppShellState extends State<AppShell> {
           safetyController: widget.safetyController,
           sessionController: widget.sessionController,
           onDemand: true,
-          extraEventTags: widget.breakPrompts?.activeThemes() ?? const [],
+          extraEventTags: _extraThemes(),
         ),
       ),
     );
@@ -283,7 +292,7 @@ class _AppShellState extends State<AppShell> {
           sessionController: widget.sessionController,
           resumeRecordId: resumeRecordId,
           resumeFinished: finished,
-          extraEventTags: widget.breakPrompts?.activeThemes() ?? const [],
+          extraEventTags: _extraThemes(),
         ),
       ),
     );
@@ -329,7 +338,7 @@ class _AppShellState extends State<AppShell> {
           safetyController: widget.safetyController,
           sessionController: widget.sessionController,
           seededChoice: choice,
-          extraEventTags: widget.breakPrompts?.activeThemes() ?? const [],
+          extraEventTags: _extraThemes(),
         ),
       ),
     );
@@ -510,12 +519,33 @@ class _AppShellState extends State<AppShell> {
                         phonePatterns: widget.phonePatterns!,
                         profileController: widget.profileController,
                       ),
-                patternPrompt: widget.breakPrompts == null
+                patternPrompt:
+                    (widget.breakPrompts == null && widget.lifePulse == null)
                     ? null
                     : ListenableBuilder(
-                        listenable: widget.breakPrompts!,
-                        builder: (context, _) =>
-                            BreakPromptCard(controller: widget.breakPrompts!),
+                        listenable: Listenable.merge([
+                          ?widget.breakPrompts,
+                          ?widget.lifePulse,
+                        ]),
+                        builder: (context, _) {
+                          final breakCurrent = widget.breakPrompts?.current;
+                          if (breakCurrent != null) {
+                            return BreakPromptCard(
+                              controller: widget.breakPrompts!,
+                            );
+                          }
+                          final pulse = widget.lifePulse;
+                          if (pulse != null) {
+                            return LifePulseCard(
+                              controller: pulse,
+                              displayName:
+                                  widget.profileController.profile.displayName,
+                              onStartChatWithContext: () =>
+                                  _openChat(context, startNew: true),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
                       ),
                 momentPrompt: widget.moments == null
                     ? null
@@ -613,6 +643,7 @@ class _AppShellState extends State<AppShell> {
                                     consent: widget.memory!.consent,
                                     profileController: widget.profileController,
                                     chat: _chatController,
+                                    lifePulse: widget.lifePulse,
                                   ),
                                 ),
                               ),
@@ -629,8 +660,9 @@ class _AppShellState extends State<AppShell> {
                 moments: widget.moments,
                 memory: widget.memory,
                 chatController: _chatController,
+                lifePulse: widget.lifePulse,
                 extraEventTags: () =>
-                    widget.breakPrompts?.activeThemes() ?? const [],
+                    _extraThemes(),
               ),
             ],
           ),
@@ -665,11 +697,11 @@ class _AppShellState extends State<AppShell> {
   ForestCardData? _forestCardData() {
     final forest = widget.forest;
     if (forest == null || !forest.isLoaded) return null;
-    final garden = forest.garden;
+    final tree = forest.visibleTree;
     return ForestCardData(
       palette: ForestPalette.forHour(forest.now.hour),
-      species: garden.currentSpecies,
-      stage: garden.stage,
+      species: tree.species,
+      stage: tree.stage,
       waterWaiting: forest.waterWaiting,
       onOpen: _openForest,
     );

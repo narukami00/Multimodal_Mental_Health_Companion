@@ -105,3 +105,18 @@ def test_only_a_snippet_or_only_facts_both_work():
     only_facts = sanitize_memory({"memory_facts": ["A good day."]})
     system = _system(service.build_messages("hi", memory=only_facts))
     assert "- A good day." in system
+
+
+def test_personal_check_in_cues_flow_into_background_block():
+    service = LlmService()
+    memory = sanitize_memory(
+        {
+            "profile_snippet": "Checked in recently: carrying something heavy (\"Thesis crunch\").",
+            "memory_facts": [],
+        }
+    )
+    block = memory_prompt_block(memory)
+    assert "Thesis crunch" in block
+    assert "adapt your tone and warmth gently" in block
+    system = _system(service.build_messages("hi", memory=memory))
+    assert "Thesis crunch" in system

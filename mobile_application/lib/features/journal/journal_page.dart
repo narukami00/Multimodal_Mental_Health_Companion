@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/widgets/visual_kit.dart';
+import '../../domain/personalization/personal_calibration.dart';
 
 import '../../core/constants/moods.dart';
 
@@ -192,10 +193,14 @@ class _JournalPageState extends State<JournalPage> {
   }
 
   void _openSession(BuildContext context, SessionRecord session) {
+    final profile = PersonalPatternProfile.from(
+      sessions: sessionController.sessions,
+    );
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SessionDetailPage(
           session: session,
+          personalization: profile,
           onDelete: (s) => sessionController.deleteSession(s.id),
           onReanalyze: sessionController.reanalyze,
           onReview: sessionController.reviewReading,

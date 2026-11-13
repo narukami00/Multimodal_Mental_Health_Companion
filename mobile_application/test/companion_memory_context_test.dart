@@ -4,6 +4,7 @@ import 'package:solace_mobile/core/models/user_profile.dart';
 import 'package:solace_mobile/data/repositories/in_memory_consent_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_moment_repository.dart';
 import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dart';
+import 'package:solace_mobile/domain/personalization/personal_calibration.dart';
 import 'package:solace_mobile/features/consent/consent_controller.dart';
 import 'package:solace_mobile/features/memory/companion_memory_context.dart';
 import 'package:solace_mobile/features/memory/moments_controller.dart';
@@ -70,5 +71,30 @@ void main() {
 
     await consent.revoke(ConsentKey.memoryMoments);
     expect(context.payload(), isNull);
+  });
+
+  test('includes personalization and life pulse only when snippet consent is granted', () async {
+    final personal = CompanionMemoryContext(
+      consent: consent,
+      profile: profile,
+      moments: moments,
+      sessions: () => const [],
+      themes: () => const [],
+      clock: () => DateTime(2026, 10, 20, 15),
+      personalization: () => PersonalPatternProfile.from(
+        sessions: const [],
+        latestPulse: LifePulseSignal(
+          moodTag: 'tired',
+          at: DateTime(2026, 10, 20, 12),
+          note: 'Long lab day',
+        ),
+      ),
+    );
+
+    expect(personal.snippet().isEmpty, isTrue);
+    expect(personal.previewSnippet().text, contains('Long lab day'));
+
+    await consent.grant(ConsentKey.profileSnippet);
+    expect(personal.payload()?['profile_snippet'], contains('Long lab day'));
   });
 }
