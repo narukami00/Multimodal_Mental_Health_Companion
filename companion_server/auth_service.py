@@ -83,8 +83,13 @@ class FirebaseVerifier:
                         credential = EmulatorCredential()
                     self._app = firebase_admin.initialize_app(credential, options={"projectId": self.settings.project_id},
                                                               name="solace-" + secrets.token_hex(8))
-            claims = auth.verify_id_token(token, app=self._app,
-                                          check_revoked=self.settings.mode == "firebase")
+            raw_revoked = os.environ.get("SOLACE_FIREBASE_CHECK_REVOKED", "").strip().lower()
+            check_revoked = (
+                self.settings.mode == "firebase"
+                if raw_revoked == ""
+                else raw_revoked in {"1", "true", "yes", "on"}
+            )
+            claims = auth.verify_id_token(token, app=self._app, check_revoked=check_revoked)
             uid, expiry = claims.get("uid"), claims.get("exp")
             if not isinstance(uid, str) or not uid or not isinstance(expiry, (int, float)) or expiry <= time.time():
                 raise AuthError(401, "Invalid or expired identity token")
