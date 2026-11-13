@@ -367,6 +367,8 @@ void main() {
         userMsg('3', 'Sleep has been the worst part of it', r: reading(neg: 0.75)),
       ], summary: 'They talked about work stress and poor sleep.');
       await pump(tester, c);
+      await tester.tap(find.byKey(const ValueKey('chat-side-panel-btn')));
+      for (var i = 0; i < 8; i++) { await tester.pump(const Duration(milliseconds: 60)); }
       await tester.tap(find.byKey(const ValueKey('chat-breakdown')));
       await tester.pumpAndSettle();
 
@@ -407,6 +409,8 @@ void main() {
     testWidgets('how you looked is not offered when the camera was never on', (tester) async {
       final without = await controllerWith([userMsg('1', 'No camera in this one', r: reading())]);
       await pump(tester, without);
+      await tester.tap(find.byKey(const ValueKey('chat-side-panel-btn')));
+      for (var i = 0; i < 8; i++) { await tester.pump(const Duration(milliseconds: 60)); }
       await tester.tap(find.byKey(const ValueKey('chat-breakdown')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('breakdown-looks')), findsNothing);
@@ -419,6 +423,8 @@ void main() {
         userMsg('3', 'Typed with no camera', r: reading()),
       ]);
       await pump(tester, c);
+      await tester.tap(find.byKey(const ValueKey('chat-side-panel-btn')));
+      for (var i = 0; i < 8; i++) { await tester.pump(const Duration(milliseconds: 60)); }
       await tester.tap(find.byKey(const ValueKey('chat-breakdown')));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.byKey(const ValueKey('breakdown-looks')), 300, scrollable: find.byType(Scrollable).last);
@@ -438,6 +444,8 @@ void main() {
       final c = await controllerWith([userMsg('1', 'an older message of mine here')]);
       c.messageReader = (m, before) async => reading();
       await pump(tester, c);
+      await tester.tap(find.byKey(const ValueKey('chat-side-panel-btn')));
+      for (var i = 0; i < 8; i++) { await tester.pump(const Duration(milliseconds: 60)); }
       await tester.tap(find.byKey(const ValueKey('chat-breakdown')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('breakdown-unread')), findsOneWidget);

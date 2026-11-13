@@ -122,19 +122,22 @@ class WhatSolRemembersPage extends StatelessWidget {
     final waiting = all.where((m) => m.state == MomentState.pending).length;
     final aside = all.where((m) => m.state == MomentState.hidden).length;
     final notes = chat == null ? 0 : chat!.conversations.where((c) => c.hasSummary).length;
-    return Row(
+    return IntrinsicHeight(
       key: const ValueKey('memory-glance'),
-      children: [
-        StatTile(value: '$kept', label: 'kept', color: const Color(0xFF4F8A52), icon: Icons.bookmark_rounded),
-        const SizedBox(width: 8),
-        StatTile(value: '$waiting', label: 'waiting for you', color: const Color(0xFFD98A12), icon: Icons.hourglass_empty_rounded),
-        const SizedBox(width: 8),
-        StatTile(value: '$aside', label: 'set aside', color: const Color(0xFF8A7B67), icon: Icons.visibility_off_outlined),
-        if (chat != null) ...[
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          StatTile(value: '$kept', label: 'kept', color: const Color(0xFF4F8A52), icon: Icons.bookmark_rounded),
           const SizedBox(width: 8),
-          StatTile(value: '$notes', label: 'chat notes', color: const Color(0xFF6E73C8), icon: Icons.sticky_note_2_outlined),
+          StatTile(value: '$waiting', label: 'waiting', color: const Color(0xFFD98A12), icon: Icons.hourglass_empty_rounded),
+          const SizedBox(width: 8),
+          StatTile(value: '$aside', label: 'set aside', color: const Color(0xFF8A7B67), icon: Icons.visibility_off_outlined),
+          if (chat != null) ...[
+            const SizedBox(width: 8),
+            StatTile(value: '$notes', label: 'chat notes', color: const Color(0xFF6E73C8), icon: Icons.sticky_note_2_outlined),
+          ],
         ],
-      ],
+      ),
     );
   }
 

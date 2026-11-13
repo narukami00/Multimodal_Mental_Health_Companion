@@ -30,15 +30,19 @@ void main() {
     await pumpChat(tester);
 
     expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.history_rounded), findsOneWidget);
-    expect(find.textContaining("you don't have to carry it"), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-side-panel-btn')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-call')), findsOneWidget);
+    expect(find.byIcon(Icons.history_rounded), findsNothing);
+    expect(find.text('What’s on your mind?'), findsOneWidget);
+    expect(find.textContaining("you don't have to carry it"), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'Feeling a bit anxious');
     await tester.pump();
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await pumpSettle(tester);
 
-    expect(find.text('Feeling a bit anxious'), findsOneWidget);
+    expect(find.text('Feeling a bit anxious'), findsNWidgets(2));
+    expect(find.text('What’s on your mind?'), findsNothing);
     expect(find.textContaining('I hear you'), findsOneWidget);
     expect(find.byType(SupportResourcesPage), findsNothing);
   });

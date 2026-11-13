@@ -27,10 +27,10 @@ import '../profile/profile_controller.dart';
 import '../safety/safety_controller.dart';
 import '../safety/support_resources_page.dart';
 import 'chat_controller.dart';
+import 'chat_side_panel.dart';
 import 'conversation_breakdown_page.dart';
 import '../../domain/chat/conversation_search.dart';
 import 'connection_sheet.dart';
-import 'conversation_history.dart';
 import 'highlighted_text.dart';
 import 'message_reading_popover.dart';
 
@@ -139,7 +139,6 @@ class _Msg {
 
 
 const _bubbleInk = Color(0xFF46382A);
-const _softInk = Color(0xFF6E6252);
 const _faint = Color(0xFFB7A98F);
 const _amber = Color(0xFFFFB534);
 const _coral = Color(0xFFFF7F50);
@@ -162,6 +161,7 @@ class _ChatPageState extends State<ChatPage> {
     'I\u2019m glad you said it. We can stay with this as long as you need.',
   ];
 
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _input = TextEditingController();
   final _scroll = ScrollController();
   var _messages = <_Msg>[];
@@ -1039,7 +1039,20 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFFFEFCE8),
+      endDrawer: ChatSidePanel(
+        chatController: _chatController,
+        activeThreadId: _chatController.activeConversation?.id,
+        isServerConnected: _wsStatus == CompanionConnectionStatus.connected,
+        isServerConnecting: _wsStatus == CompanionConnectionStatus.connecting,
+        lastLatencyMs: _lastLatencyMs,
+        onSelectThread: (thread) => _switchConversation(thread.id),
+        onNewConversation: _startNewConversation,
+        onDeleteThread: _deleteConversation,
+        onOpenBreakdown: _openBreakdown,
+        onOpenServerSettings: _showConnectionSettingsDialog,
+      ),
       body: ClipRect(
         child: Stack(
           clipBehavior: Clip.hardEdge,
@@ -1223,8 +1236,17 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildHeader() {
+    final conv = _chatController.activeConversation;
+    final headerTitle =
+        conv != null && conv.hasUserMessage ? conv.title : 'Sol';
+    final statusColor = _wsStatus == CompanionConnectionStatus.connected
+        ? const Color(0xFF10B981)
+        : _wsStatus == CompanionConnectionStatus.connecting
+            ? const Color(0xFFF59E0B)
+            : const Color(0xFFD6CBBB);
+
     return Container(
-      height: 64,
+      height: 62,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: const BoxDecoration(
         color: Color(0xEBFEFCE8),
@@ -1235,124 +1257,111 @@ class _ChatPageState extends State<ChatPage> {
       child: Row(
         children: [
           const PageBackButton(),
-          const Spacer(),
-          IconButton(
-            key: const ValueKey('chat-search'),
-            onPressed: () {
-              ConversationHistorySheet.show(
-                context,
-                chatController: _chatController,
-                activeThreadId: _chatController.activeConversation?.id,
-                onSelectThread: (thread) => _switchConversation(thread.id),
-                onNewConversation: _startNewConversation,
-                onDeleteThread: _deleteConversation,
-                startSearching: true,
-              );
-            },
-            tooltip: 'Search conversations',
-            icon: const Icon(Icons.search_rounded, size: 22),
-            style: IconButton.styleFrom(
-              foregroundColor: const Color(0xFF6C5E50),
-              minimumSize: const Size(38, 44),
-            ),
-          ),
-          IconButton(
-            onPressed: () {
-              ConversationHistorySheet.show(
-                context,
-                chatController: _chatController,
-                activeThreadId: _chatController.activeConversation?.id,
-                onSelectThread: (thread) => _switchConversation(thread.id),
-                onNewConversation: _startNewConversation,
-                onDeleteThread: _deleteConversation,
-              );
-            },
-            tooltip: 'Past conversations',
-            icon: const Icon(Icons.history_rounded, size: 22),
-            style: IconButton.styleFrom(
-              foregroundColor: const Color(0xFF6C5E50),
-              minimumSize: const Size(40, 44),
-            ),
-          ),
-          IconButton(
-            onPressed: () {
-              setState(() => _callActive = true);
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => CallPage(
-                    safetyController: widget.safetyController,
-                    profileController: widget.profileController,
-                    webSocketService: _wsService,
-                    audioRecorderService: _audioRecorder,
-                    ttsPlaybackService: _ttsPlayback,
-                    chatController: _chatController,
+          const SizedBox(width: 6),
+          Expanded(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    headerTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2A221B),
+                      letterSpacing: -0.2,
+                    ),
                   ),
                 ),
-              ).then((_) {
-                if (!mounted) return;
-                setState(() => _callActive = false);
-                final conv = _chatController.activeConversation;
-                if (conv != null) {
-                  setState(() {
-                    _messages = conv.messages.map(_Msg.fromRecord).toList();
-                  });
-                  _scrollDown();
-                }
-              });
-            },
-            tooltip: 'Call Sol',
-            icon: const Icon(Icons.phone_in_talk_rounded, size: 21),
-            style: IconButton.styleFrom(
-              foregroundColor: const Color(0xFF6C5E50),
-              minimumSize: const Size(40, 44),
-            ),
-          ),
-          IconButton(
-            onPressed: _showConnectionSettingsDialog,
-            tooltip: _wsStatus == CompanionConnectionStatus.connected
-                ? 'Companion Server Live · ${_lastLatencyMs ?? 0}ms'
-                : 'Configure Companion Backend',
-            icon: Stack(
-              alignment: Alignment.topRight,
-              children: [
-                Icon(
-                  _wsStatus == CompanionConnectionStatus.connected
-                      ? Icons.sensors_rounded
-                      : Icons.dns_outlined,
-                  size: 21,
-                  color: _wsStatus == CompanionConnectionStatus.connected
-                      ? const Color(0xFF059669)
-                      : _wsStatus == CompanionConnectionStatus.connecting
-                          ? const Color(0xFFD97706)
-                          : _softInk,
-                ),
+                const SizedBox(width: 7),
                 Container(
-                  width: 8,
-                  height: 8,
+                  width: 7,
+                  height: 7,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _wsStatus == CompanionConnectionStatus.connected
-                        ? const Color(0xFF10B981)
-                        : _wsStatus == CompanionConnectionStatus.connecting
-                            ? const Color(0xFFF59E0B)
-                            : const Color(0xFFCBD5E0),
-                    border: Border.all(color: Colors.white, width: 1.5),
+                    color: statusColor,
                   ),
                 ),
               ],
             ),
-            style: IconButton.styleFrom(
-              minimumSize: const Size(38, 44),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: const Color(0x16B4965A),
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              key: const ValueKey('chat-call'),
+              borderRadius: BorderRadius.circular(999),
+              onTap: () {
+                setState(() => _callActive = true);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CallPage(
+                      safetyController: widget.safetyController,
+                      profileController: widget.profileController,
+                      webSocketService: _wsService,
+                      audioRecorderService: _audioRecorder,
+                      ttsPlaybackService: _ttsPlayback,
+                      chatController: _chatController,
+                    ),
+                  ),
+                ).then((_) {
+                  if (!mounted) return;
+                  setState(() => _callActive = false);
+                  final conv = _chatController.activeConversation;
+                  if (conv != null) {
+                    setState(() {
+                      _messages = conv.messages.map(_Msg.fromRecord).toList();
+                    });
+                    _scrollDown();
+                  }
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0x2EB4965A)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.graphic_eq_rounded,
+                      size: 17,
+                      color: Color(0xFF5A4E41),
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Call',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF4A3F35),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
+          const SizedBox(width: 4),
           IconButton(
-            key: const ValueKey('chat-breakdown'),
-            onPressed: _openBreakdown,
-            tooltip: 'How this conversation felt',
-            icon: const Icon(Icons.mood_rounded, size: 23),
+            key: const ValueKey('chat-side-panel-btn'),
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              _scaffoldKey.currentState?.openEndDrawer();
+            },
+            tooltip: 'Conversations & tools',
+            icon: const Icon(Icons.menu_rounded, size: 23),
             style: IconButton.styleFrom(
-              foregroundColor: const Color(0xFF6C5E50),
-              minimumSize: const Size(40, 44),
+              foregroundColor: const Color(0xFF4A3F35),
+              minimumSize: const Size(42, 42),
             ),
           ),
         ],

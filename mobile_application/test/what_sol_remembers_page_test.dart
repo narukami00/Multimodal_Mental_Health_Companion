@@ -11,6 +11,7 @@ import 'package:solace_mobile/data/repositories/in_memory_profile_repository.dar
 import 'package:solace_mobile/features/consent/consent_controller.dart';
 import 'package:solace_mobile/features/memory/companion_memory_context.dart';
 import 'package:solace_mobile/features/memory/moments_controller.dart';
+import 'package:solace_mobile/core/widgets/visual_kit.dart';
 import 'package:solace_mobile/features/memory/what_sol_remembers_page.dart';
 import 'package:solace_mobile/features/profile/profile_controller.dart';
 
@@ -228,5 +229,55 @@ void main() {
 
     expect(find.text('The user had a long day at work.'), findsNothing);
     expect(chat.activeConversation!.messages, isNotEmpty);
+  });
+
+  testWidgets('all four glance stat tiles have identical height', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final chat = ChatController(preferences: await SharedPreferences.getInstance());
+    await tester.runAsync(() async {
+      await chat.load();
+      await chat.addMessage(
+        ChatMessageRecord(
+          id: 'm1',
+          isUser: true,
+          text: 'A long day.',
+          timestamp: DateTime(2026, 10, 20),
+        ),
+      );
+      await chat.setSummary(
+        chat.activeConversation!.id,
+        'The user had a long day at work.',
+        'm1',
+      );
+    });
+
+    tester.view.physicalSize = const Size(1080, 4400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WhatSolRemembersPage(
+          moments: moments,
+          memory: memory,
+          consent: consent,
+          profileController: profile,
+          chat: chat,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tiles = find.byType(StatTile);
+    expect(tiles, findsNWidgets(4));
+    expect(find.text('waiting'), findsOneWidget);
+    expect(find.text('waiting for you'), findsNothing);
+
+    final heights = List.generate(4, (i) => tester.getSize(tiles.at(i)).height);
+    for (final h in heights) {
+      expect(h, equals(heights.first));
+    }
   });
 }
