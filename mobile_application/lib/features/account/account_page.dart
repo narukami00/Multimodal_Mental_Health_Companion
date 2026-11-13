@@ -1143,7 +1143,10 @@ class AccountEntryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
                           identity == null
@@ -1155,7 +1158,6 @@ class AccountEntryCard extends StatelessWidget {
                             color: kitInk,
                           ),
                         ),
-                        const SizedBox(width: 8),
                         StatusPill(
                           identity == null ? 'Optional' : 'Connected',
                           color: identity == null ? kitAmber : sage,
@@ -1190,14 +1192,18 @@ class AccountEntryCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              identity == null
-                                  ? 'Sign in or create account'
-                                  : 'Manage account',
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                color: kitInk,
+                            Flexible(
+                              child: Text(
+                                identity == null
+                                    ? 'Sign in or create account'
+                                    : 'Manage account',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: kitInk,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 4),
