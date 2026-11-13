@@ -11,6 +11,8 @@ import '../sessions/session_controller.dart';
 import '../insights/mood_tab.dart' show moodColors;
 import '../checkin/check_in_mode_page.dart';
 import 'reading_status.dart';
+import '../../domain/journal/journal_search.dart';
+import '../chat/highlighted_text.dart';
 import '../consent/emotion_consent_sheets.dart';
 import 'session_detail_page.dart';
 
@@ -25,20 +27,45 @@ class JournalPage extends StatefulWidget {
   State<JournalPage> createState() => _JournalPageState();
 }
 
-/// What the journal is narrowed to. Empty sets mean "everything".
+/// What the journal is narrowed to. Empty sets and null dates mean "everything".
 class JournalFilter {
-  const JournalFilter({this.moods = const {}, this.modes = const {}});
+  const JournalFilter({
+    this.moods = const {},
+    this.modes = const {},
+    this.startDate,
+    this.endDate,
+  });
 
   /// Display words (Upbeat, Calm, Even, Low, Tense) or [notRead].
   final Set<String> moods;
   final Set<CaptureMode> modes;
+  final DateTime? startDate;
+  final DateTime? endDate;
 
   static const notRead = 'Not read yet';
   static const moodWords = ['Upbeat', 'Calm', 'Even', 'Low', 'Tense'];
 
-  bool get isActive => moods.isNotEmpty || modes.isNotEmpty;
+  bool get hasDateRange => startDate != null || endDate != null;
+
+  bool get isActive => moods.isNotEmpty || modes.isNotEmpty || hasDateRange;
 
   bool matches(SessionRecord s) {
+    if (startDate != null) {
+      final floor = DateTime(startDate!.year, startDate!.month, startDate!.day);
+      if (s.createdAt.isBefore(floor)) return false;
+    }
+    if (endDate != null) {
+      final ceil = DateTime(
+        endDate!.year,
+        endDate!.month,
+        endDate!.day,
+        23,
+        59,
+        59,
+        999,
+      );
+      if (s.createdAt.isAfter(ceil)) return false;
+    }
     if (modes.isNotEmpty && !modes.contains(s.mode)) return false;
     if (moods.isEmpty) return true;
     final mood = s.effectiveMood;
@@ -49,10 +76,79 @@ class JournalFilter {
 
 class _JournalPageState extends State<JournalPage> {
   JournalFilter _filter = const JournalFilter();
+  bool _searchOpen = false;
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
 
   SessionController get sessionController => widget.sessionController;
 
   static const _ink = JournalPage._ink;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searchOpen = !_searchOpen;
+      if (!_searchOpen) {
+        _searchQuery = '';
+        _searchController.clear();
+        _searchFocus.unfocus();
+      }
+    });
+    if (_searchOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocus.requestFocus();
+      });
+    }
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _filter = const JournalFilter();
+      _searchQuery = '';
+      _searchController.clear();
+      _searchOpen = false;
+    });
+    _searchFocus.unfocus();
+  }
+
+  String _shortDate(DateTime d) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}';
+  }
+
+  String? _rangeLabel() {
+    final s = _filter.startDate;
+    final e = _filter.endDate;
+    if (s == null && e == null) return null;
+    if (s != null && e != null) {
+      if (s.year == e.year && s.month == e.month && s.day == e.day) {
+        return _shortDate(s);
+      }
+      return '${_shortDate(s)} – ${_shortDate(e)}';
+    }
+    if (s != null) return 'From ${_shortDate(s)}';
+    return 'Until ${_shortDate(e!)}';
+  }
 
   Future<void> _openFilter() async {
     final next = await showModalBottomSheet<JournalFilter>(
@@ -83,68 +179,218 @@ class _JournalPageState extends State<JournalPage> {
             animation: sessionController,
             builder: (context, _) {
               final all = sessionController.sessions;
-              final sessions = all.where(_filter.matches).toList();
+              final hasSearch = _searchQuery.trim().isNotEmpty;
+              final sessions = all
+                  .where(
+                    (s) =>
+                        _filter.matches(s) &&
+                        matchesJournalQuery(s, _searchQuery),
+                  )
+                  .toList();
+              final rangeText = _rangeLabel();
               return SafeArea(
                 child: CustomScrollView(
                   slivers: [
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(22, 22, 22, 6),
                       sliver: SliverToBoxAdapter(
-                        child: Row(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'YOUR DAYS, GENTLY KEPT',
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 1.2,
-                                      color: Color(0xFFD08018),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'YOUR DAYS, GENTLY KEPT',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 1.2,
+                                          color: Color(0xFFD08018),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      const Text(
+                                        'Journal',
+                                        style: TextStyle(
+                                          fontSize: 29,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.5,
+                                          color: _ink,
+                                          height: 1.1,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  key: const ValueKey('journal-search'),
+                                  onPressed: _toggleSearch,
+                                  tooltip: _searchOpen
+                                      ? 'Close search'
+                                      : 'Search entries',
+                                  icon: Icon(
+                                    _searchOpen
+                                        ? Icons.close_rounded
+                                        : Icons.search_rounded,
+                                    size: 20,
+                                  ),
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size(40, 40),
+                                    maximumSize: const Size(40, 40),
+                                    backgroundColor: (_searchOpen || hasSearch)
+                                        ? const Color(0x55FFB534)
+                                        : const Color(0xB8FFFFFF),
+                                    foregroundColor: const Color(0xFF6C5E50),
+                                    side: const BorderSide(
+                                      color: Color(0x143B2F26),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  const Text(
-                                    'Journal',
-                                    style: TextStyle(
-                                      fontSize: 29,
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  key: const ValueKey('journal-filter'),
+                                  onPressed: _openFilter,
+                                  tooltip: 'Filter entries',
+                                  icon: Badge(
+                                    isLabelVisible: _filter.isActive,
+                                    smallSize: 9,
+                                    backgroundColor: const Color(0xFFD9825B),
+                                    child: const Icon(
+                                      Icons.tune_rounded,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size(40, 40),
+                                    maximumSize: const Size(40, 40),
+                                    backgroundColor: _filter.isActive
+                                        ? const Color(0x55FFB534)
+                                        : const Color(0xB8FFFFFF),
+                                    foregroundColor: const Color(0xFF6C5E50),
+                                    side: const BorderSide(
+                                      color: Color(0x143B2F26),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_searchOpen || hasSearch) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFFDF6),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: const Color(0x45D6AA50),
+                                  ),
+                                ),
+                                child: TextField(
+                                  key: const ValueKey('journal-search-field'),
+                                  controller: _searchController,
+                                  focusNode: _searchFocus,
+                                  onChanged: (v) =>
+                                      setState(() => _searchQuery = v),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: _ink,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Search entries & keywords...',
+                                    hintStyle: const TextStyle(
+                                      fontSize: 13.5,
+                                      color: Color(0xFF9E8D74),
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.search_rounded,
+                                      size: 19,
+                                      color: Color(0xFF8C7A60),
+                                    ),
+                                    suffixIcon: hasSearch
+                                        ? IconButton(
+                                            key: const ValueKey(
+                                              'journal-search-clear',
+                                            ),
+                                            onPressed: () {
+                                              _searchController.clear();
+                                              setState(() => _searchQuery = '');
+                                            },
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                              size: 18,
+                                              color: Color(0xFF8C7A60),
+                                            ),
+                                          )
+                                        : null,
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (_filter.isActive || hasSearch) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${sessions.length} ${sessions.length == 1 ? 'entry' : 'entries'}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.5,
-                                      color: _ink,
-                                      height: 1.1,
+                                      color: Color(0xFF8A7458),
+                                    ),
+                                  ),
+                                  if (rangeText != null) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0x33FFB534),
+                                        borderRadius: BorderRadius.circular(99),
+                                      ),
+                                      child: Text(
+                                        rangeText,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: _ink,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  const Spacer(),
+                                  GestureDetector(
+                                    key: const ValueKey('journal-active-clear'),
+                                    onTap: _clearAllFilters,
+                                    child: const Text(
+                                      'Clear all',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFFB26E0F),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                            IconButton(
-                              key: const ValueKey('journal-filter'),
-                              onPressed: _openFilter,
-                              tooltip: 'Filter entries',
-                              icon: Badge(
-                                isLabelVisible: _filter.isActive,
-                                smallSize: 9,
-                                backgroundColor: const Color(0xFFD9825B),
-                                child: const Icon(Icons.tune_rounded, size: 20),
-                              ),
-                              style: IconButton.styleFrom(
-                                minimumSize: const Size(40, 40),
-                                maximumSize: const Size(40, 40),
-                                backgroundColor: _filter.isActive
-                                    ? const Color(0x55FFB534)
-                                    : const Color(0xB8FFFFFF),
-                                foregroundColor: const Color(0xFF6C5E50),
-                                side: const BorderSide(
-                                  color: Color(0x143B2F26),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                            ),
+                            ],
                           ],
                         ),
                       ),
@@ -162,10 +408,7 @@ class _JournalPageState extends State<JournalPage> {
                     else if (sessions.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
-                        child: _NothingMatches(
-                          onClear: () =>
-                              setState(() => _filter = const JournalFilter()),
-                        ),
+                        child: _NothingMatches(onClear: _clearAllFilters),
                       )
                     else
                       SliverPadding(
@@ -178,6 +421,7 @@ class _JournalPageState extends State<JournalPage> {
                             return _JournalDayGroup(
                               date: group.date,
                               sessions: group.sessions,
+                              searchQuery: _searchQuery,
                               onOpen: (session) =>
                                   _openSession(context, session),
                             );
@@ -225,7 +469,7 @@ class _NothingMatches extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'No entries match this filter.',
+              'No entries match your search or filter.',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -260,6 +504,101 @@ class _FilterSheet extends StatefulWidget {
 class _FilterSheetState extends State<_FilterSheet> {
   late Set<String> _moods = {...widget.initial.moods};
   late Set<CaptureMode> _modes = {...widget.initial.modes};
+  late DateTime? _startDate = widget.initial.startDate;
+  late DateTime? _endDate = widget.initial.endDate;
+
+  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  bool _sameDay(DateTime? a, DateTime? b) =>
+      a != null &&
+      b != null &&
+      a.year == b.year &&
+      a.month == b.month &&
+      a.day == b.day;
+
+  String _formatDate(DateTime d) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final today = _dateOnly(now);
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: today.add(const Duration(days: 1)),
+      initialDateRange: (_startDate != null && _endDate != null)
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+      helpText: 'Select journal time range',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: const Color(0xFFB26E0F),
+                onPrimary: Colors.white,
+                surface: const Color(0xFFFFFDF6),
+                onSurface: const Color(0xFF3A3125),
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _startDate = _dateOnly(picked.start);
+        _endDate = _dateOnly(picked.end);
+      });
+    }
+  }
+
+  Future<void> _pickSingleDate({required bool isStart}) async {
+    final now = _dateOnly(DateTime.now());
+    final initial = isStart ? (_startDate ?? _endDate ?? now) : (_endDate ?? _startDate ?? now);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(now) ? now : initial,
+      firstDate: DateTime(2020),
+      lastDate: now.add(const Duration(days: 1)),
+      helpText: isStart ? 'Start date' : 'End date',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: const Color(0xFFB26E0F),
+                onPrimary: Colors.white,
+                surface: const Color(0xFFFFFDF6),
+                onSurface: const Color(0xFF3A3125),
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) {
+      final d = _dateOnly(picked);
+      setState(() {
+        if (isStart) {
+          _startDate = d;
+          if (_endDate != null && _endDate!.isBefore(d)) _endDate = d;
+        } else {
+          _endDate = d;
+          if (_startDate != null && _startDate!.isAfter(d)) _startDate = d;
+        }
+      });
+    }
+  }
 
   int _countMood(String word) => widget.sessions.where((s) {
     final m = s.effectiveMood;
@@ -392,28 +731,201 @@ class _FilterSheetState extends State<_FilterSheet> {
                   ),
               ],
             ),
+            const SizedBox(height: 16),
+            const Text('TIME RANGE', style: heading),
+            const SizedBox(height: 8),
+            Builder(
+              builder: (context) {
+                final today = _dateOnly(DateTime.now());
+                final last7Start = today.subtract(const Duration(days: 6));
+                final last30Start = today.subtract(const Duration(days: 29));
+                final isAll = _startDate == null && _endDate == null;
+                final isToday = _sameDay(_startDate, today) && _sameDay(_endDate, today);
+                final is7d = _sameDay(_startDate, last7Start) && _sameDay(_endDate, today);
+                final is30d = _sameDay(_startDate, last30Start) && _sameDay(_endDate, today);
+                final isCustom = !isAll && !isToday && !is7d && !is30d;
+
+                Widget rangeChip({
+                  required Key key,
+                  required String label,
+                  required bool selected,
+                  required VoidCallback onTap,
+                }) {
+                  return FilterChip(
+                    key: key,
+                    selected: selected,
+                    showCheckmark: false,
+                    onSelected: (_) => onTap(),
+                    label: Text(label),
+                    backgroundColor: const Color(0xFFFFF8E8),
+                    selectedColor: const Color(0xFFFFE2B0),
+                    side: BorderSide(
+                      color: selected
+                          ? const Color(0xFFD9A441)
+                          : const Color(0x66D6AA50),
+                    ),
+                    labelStyle: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3A3125),
+                    ),
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        rangeChip(
+                          key: const ValueKey('filter-range-all'),
+                          label: 'All time',
+                          selected: isAll,
+                          onTap: () => setState(() {
+                            _startDate = null;
+                            _endDate = null;
+                          }),
+                        ),
+                        rangeChip(
+                          key: const ValueKey('filter-range-today'),
+                          label: 'Today',
+                          selected: isToday,
+                          onTap: () => setState(() {
+                            _startDate = today;
+                            _endDate = today;
+                          }),
+                        ),
+                        rangeChip(
+                          key: const ValueKey('filter-range-7d'),
+                          label: 'Last 7 days',
+                          selected: is7d,
+                          onTap: () => setState(() {
+                            _startDate = last7Start;
+                            _endDate = today;
+                          }),
+                        ),
+                        rangeChip(
+                          key: const ValueKey('filter-range-30d'),
+                          label: 'Last 30 days',
+                          selected: is30d,
+                          onTap: () => setState(() {
+                            _startDate = last30Start;
+                            _endDate = today;
+                          }),
+                        ),
+                        rangeChip(
+                          key: const ValueKey('filter-range-custom'),
+                          label: 'Pick range…',
+                          selected: isCustom,
+                          onTap: _pickDateRange,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('filter-date-from'),
+                            onPressed: () => _pickSingleDate(isStart: true),
+                            icon: const Icon(Icons.calendar_today_rounded, size: 15),
+                            label: Text(
+                              _startDate == null
+                                  ? 'From: Any'
+                                  : 'From: ${_formatDate(_startDate!)}',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF3A3125),
+                              side: const BorderSide(color: Color(0x66D6AA50)),
+                              backgroundColor: const Color(0xFFFFF8E8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('filter-date-to'),
+                            onPressed: () => _pickSingleDate(isStart: false),
+                            icon: const Icon(Icons.event_rounded, size: 15),
+                            label: Text(
+                              _endDate == null
+                                  ? 'To: Any'
+                                  : 'To: ${_formatDate(_endDate!)}',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF3A3125),
+                              side: const BorderSide(color: Color(0x66D6AA50)),
+                              backgroundColor: const Color(0xFFFFF8E8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 18),
-            Row(
-              children: [
-                TextButton(
-                  key: const ValueKey('filter-reset'),
-                  onPressed: () => setState(() {
-                    _moods = {};
-                    _modes = {};
-                  }),
-                  child: const Text('Reset'),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    key: const ValueKey('filter-apply'),
-                    onPressed: () => Navigator.of(
-                      context,
-                    ).pop(JournalFilter(moods: _moods, modes: _modes)),
-                    child: const Text('Apply'),
-                  ),
-                ),
-              ],
+            Builder(
+              builder: (context) {
+                final draft = JournalFilter(
+                  moods: _moods,
+                  modes: _modes,
+                  startDate: _startDate,
+                  endDate: _endDate,
+                );
+                final matchCount = widget.sessions.where(draft.matches).length;
+                return Row(
+                  children: [
+                    TextButton(
+                      key: const ValueKey('filter-reset'),
+                      onPressed: () => setState(() {
+                        _moods = {};
+                        _modes = {};
+                        _startDate = null;
+                        _endDate = null;
+                      }),
+                      child: const Text('Reset'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        key: const ValueKey('filter-apply'),
+                        onPressed: () => Navigator.of(context).pop(draft),
+                        child: Text(
+                          draft.isActive ? 'Apply · $matchCount' : 'Apply',
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -478,11 +990,13 @@ class _JournalDayGroup extends StatelessWidget {
     required this.date,
     required this.sessions,
     required this.onOpen,
+    this.searchQuery = '',
   });
 
   final DateTime date;
   final List<SessionRecord> sessions;
   final ValueChanged<SessionRecord> onOpen;
+  final String searchQuery;
 
   @override
   Widget build(BuildContext context) {
@@ -518,6 +1032,7 @@ class _JournalDayGroup extends StatelessWidget {
             _StitchedEntry(
               session: sessions[index],
               isLast: index == sessions.length - 1,
+              searchQuery: searchQuery,
               onTap: () => onOpen(sessions[index]),
             ),
         ],
@@ -563,11 +1078,13 @@ class _StitchedEntry extends StatelessWidget {
     required this.session,
     required this.isLast,
     required this.onTap,
+    this.searchQuery = '',
   });
 
   final SessionRecord session;
   final bool isLast;
   final VoidCallback onTap;
+  final String searchQuery;
 
   static const _calm = Color(0xFF8FB083);
 
@@ -698,8 +1215,9 @@ class _StitchedEntry extends StatelessWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 7),
-                                Text(
-                                  snippet,
+                                HighlightedText(
+                                  journalSearchSnippet(snippet, searchQuery),
+                                  query: searchQuery,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
