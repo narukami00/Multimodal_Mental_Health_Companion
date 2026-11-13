@@ -65,7 +65,9 @@ class FakeEmotion:
 
 def client(stt=None, emotion=None) -> TestClient:
     app = FastAPI()
-    app.include_router(build_router(stt or FakeStt(), emotion or FakeEmotion()))
+    async def test_authorize(request, session_id):
+        pass  # These tests cover inference only; auth denial/cross-user tests live in test_auth_http.py.
+    app.include_router(build_router(stt or FakeStt(), emotion or FakeEmotion(), authorize=test_authorize))
     return TestClient(app)
 
 

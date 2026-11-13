@@ -46,13 +46,17 @@ def _emotion_view(res: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
             "arousal": d.get("arousal"), "estimate": res.get("estimate"), "model_version": res.get("model_version")}
 
 
-def build_router(stt: Any, emotion: Any) -> APIRouter:
+def build_router(stt: Any, emotion: Any, *, authorize=None) -> APIRouter:
+    if authorize is None:
+        from auth_http import server_auth
+        authorize = server_auth.require_http_session
     router = APIRouter(prefix="/v1/journal")
     stt_lock = asyncio.Lock()
     first_frame_at: Dict[str, float] = {}
 
     @router.post("/text")
-    async def journal_text(entry: TextEntry) -> Dict[str, Any]:
+    async def journal_text(entry: TextEntry, request: Request) -> Dict[str, Any]:
+        await authorize(request, entry.session_id)
         text = entry.text.strip()
         if not text or len(text) > MAX_TEXT_CHARS:
             raise HTTPException(400, "text is empty or too long")
@@ -63,6 +67,7 @@ def build_router(stt: Any, emotion: Any) -> APIRouter:
 
     @router.post("/frame")
     async def journal_frame(request: Request, session_id: str) -> Dict[str, Any]:
+        await authorize(request, session_id)
         if not (FACE_SERVER_ENABLED and emotion.usable):
             return {"usable": None, "accepted": False}
         jpeg = await request.body()
@@ -77,6 +82,7 @@ def build_router(stt: Any, emotion: Any) -> APIRouter:
     async def journal_face_features(request: Request, session_id: str) -> Dict[str, Any]:
         """A phone that read the face ITSELF sends only the 1,400 resulting numbers (float32), never pictures. They are
         used for this session's emotion reading instead of camera frames."""
+        await authorize(request, session_id)
         raw = await request.body()
         if len(raw) != FACE_VECTOR_BYTES:
             raise HTTPException(400, f"expected {FACE_VECTOR_BYTES} bytes (1,400 float32 values)")
@@ -88,6 +94,7 @@ def build_router(stt: Any, emotion: Any) -> APIRouter:
                             words: Optional[str] = None) -> Dict[str, Any]:
         """[words]: what a phone with its own speech model already wrote down. They are used as they are (this server's
         speech model does not run), and the audio is still read for emotion."""
+        await authorize(request, session_id)
         if not 8000 <= sample_rate <= 48000:
             raise HTTPException(400, "sample_rate out of range")
         supplied = (words or "").strip()

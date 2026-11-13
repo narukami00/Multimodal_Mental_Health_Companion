@@ -41,6 +41,9 @@ async def serve_video(websocket: WebSocket, session_id: str, live: Dict[str, Any
     dropped, last_at, started = 0, 0.0, False
 
     async def forward(seq: int, jpeg: bytes) -> None:
+        if live.get(session_id) is not session:
+            await websocket.close(code=REFUSED_CODE)
+            return
         result = await session.video_frame(jpeg)
         if "refused" in result:
             await websocket.send_json({"type": "video.refused", "reason": result["refused"]})
@@ -71,7 +74,7 @@ async def serve_video(websocket: WebSocket, session_id: str, live: Dict[str, Any
                 await websocket.send_json({"type": "video.refused", "reason": "bad_start"})
                 await websocket.close(code=REFUSED_CODE)
                 return
-            if not session.face_allowed():  # consent can be withdrawn mid-call: stop at the very next frame, decode nothing
+            if live.get(session_id) is not session or not session.face_allowed():  # stop when the parent call ends or consent is revoked
                 await websocket.send_json({"type": "video.refused", "reason": "no_consent"})
                 await websocket.close(code=REFUSED_CODE)
                 return

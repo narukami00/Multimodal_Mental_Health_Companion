@@ -1,22 +1,21 @@
 import asyncio
 import logging
 import os
-import time
-from typing import Any, Dict, Optional
-from uuid import uuid4
 
-from fastapi import FastAPI, Query, WebSocket
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 
 from llm_service import LlmService
-from session import LIVE_SESSIONS, RECORDINGS_DIR, Session
+from session import LIVE_SESSIONS, Session
 from stt_service import SttService
 from tts_engine import get_tts_engine
 from video_socket import serve_video
 from journal_api import build_router as build_journal_router
 from emotion_client import default_client
 from model_files import build_router as build_model_files_router
+from auth_http import server_auth, protect_api
+from auth_service import AuthSettings
+from session_api import build_router as build_session_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,34 +37,24 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def on_startup():
+    # Refuse accidental unauthenticated or emulator-configured production deployments.
+    AuthSettings.from_env()
     logger.info("Server startup: warming up STT, LLM & TTS services in background...")
     asyncio.create_task(asyncio.to_thread(stt.initialize))
     asyncio.create_task(asyncio.to_thread(llm.initialize))
     asyncio.create_task(asyncio.to_thread(tts.warmup))
 
-# Enable CORS for local Flutter development (web, emulator, LAN)
+# Native clients do not need CORS. Browser origins must be configured explicitly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[origin.strip() for origin in os.environ.get("SOLACE_CORS_ORIGINS", "").split(",") if origin.strip() and origin.strip() != "*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-# In-memory session registry for Phase 1
-active_sessions: Dict[str, Dict[str, Any]] = {}
 
-class CreateSessionRequest(BaseModel):
-    client: str = Field(default="flutter-client", description="Client identifier/platform")
-    thread_id: Optional[str] = Field(default=None, description="Thread or conversation ID")
-    capabilities: Optional[Dict[str, bool]] = Field(
-        default_factory=lambda: {"audio": True, "text": True, "emotion": True}
-    )
-
-class CreateSessionResponse(BaseModel):
-    session_id: str
-    ws_url: str
-    token: str
+protect_api(app)
 
 @app.get("/healthz")
 async def healthz():
@@ -92,7 +81,6 @@ async def healthz():
         "tts_ready": tts.is_ready,
         "tts_engine": tts.name,
         "tts_sample_rate": tts.default_sample_rate,
-        "recordings_dir": str(RECORDINGS_DIR),
         # Whether emotion readings can be made right now: "off" / "ready" / "unavailable" (switched on but not answering).
         # The app uses it to explain WHY there is no reading instead of guessing.
         "emotion": await default_client().health(),
@@ -133,48 +121,15 @@ async def get_voices():
         "voices": tts.get_available_voices(),
     }
 
-@app.post("/v1/sessions", response_model=CreateSessionResponse)
-async def create_session(req: CreateSessionRequest):
-    """Session initiation endpoint per specifications section 11."""
-    session_id = f"sess_{uuid4().hex[:8]}"
-    token = f"tok_{uuid4().hex[:12]}"
-    active_sessions[session_id] = {
-        "session_id": session_id,
-        "client": req.client,
-        "thread_id": req.thread_id or f"thread_{uuid4().hex[:6]}",
-        "capabilities": req.capabilities,
-        "created_at": int(time.time() * 1000),
-        "last_active": int(time.time() * 1000),
-    }
-    logger.info(f"Created session {session_id} for client {req.client}")
-    return CreateSessionResponse(
-        session_id=session_id,
-        ws_url="/ws/v1/session",
-        token=token
-    )
-
-
-@app.websocket("/ws/v1/session")
-async def websocket_session(
-    websocket: WebSocket,
-    session_id: Optional[str] = Query(None),
-    token: Optional[str] = Query(None)
-):
-    """One client connection: chat, push-to-talk voice and live duplex calls.
-
-    The protocol and the turn-taking live in `session.Session`.
-    """
-    await Session(websocket, stt=stt, llm=llm, tts=tts, session_id=session_id).run()
-
-
-app.include_router(build_journal_router(stt, default_client()))  # journal check-ins: transcribe + read the emotion, no chat model
+app.include_router(build_journal_router(stt, default_client(), authorize=server_auth.require_http_session))
 app.include_router(build_model_files_router())  # the on-phone speech model, downloaded once by the app with the person's OK
 
 
-@app.websocket("/ws/v1/video")
-async def websocket_video(websocket: WebSocket, session_id: str = Query(...)):
-    """Camera frames for the optional emotion module (own socket; refused without the app's separate camera consent)."""
-    await serve_video(websocket, session_id, LIVE_SESSIONS)
+def create_transport(websocket, session_id):
+    return Session(websocket, stt=stt, llm=llm, tts=tts, session_id=session_id)
+
+
+app.include_router(build_session_router(server_auth, create_transport, LIVE_SESSIONS, serve_video))
 
 
 if __name__ == "__main__":

@@ -1,11 +1,18 @@
 @echo off
 rem One-click start: emotion service (GPU) -> USB link to the phone -> companion server (STT + LLM + TTS) on port 8000.
-rem Double-click it. Close the windows (or Ctrl+C here) to stop. Everything is local; nothing is sent anywhere.
+rem Double-click it. Close the windows (or Ctrl+C here) to stop. The companion and emotion models run locally; automatic TTS can use a cloud voice when local voice weights are unavailable. See companion_server/README.md.
 setlocal
 title Solace - starting
 set ROOT=%~dp0
-set EMO_DIR=F:\__Downloads\dataset\scripts\emotion_service
-set EMO_PY=F:\__Downloads\envs\face\Scripts\python.exe
+if not defined SOLACE_EMOTION_DIR set "EMO_DIR=%ROOT%emotion_server"
+if defined SOLACE_EMOTION_DIR set "EMO_DIR=%SOLACE_EMOTION_DIR%"
+if defined SOLACE_EMOTION_PYTHON (
+    set "EMO_PY=%SOLACE_EMOTION_PYTHON%"
+) else if exist "%EMO_DIR%\.venv\Scripts\python.exe" (
+    set "EMO_PY=%EMO_DIR%\.venv\Scripts\python.exe"
+) else (
+    set "EMO_PY=python"
+)
 set EMO_URL=http://127.0.0.1:8766
 set SOLACE_EMOTION=0
 set SOLACE_EMOTION_URL=%EMO_URL%
@@ -17,7 +24,8 @@ if /i "%~1"=="noface" set SOLACE_EMOTION_FACE=0
 
 echo.
 echo  [1/4] Emotion service (voice + text + camera emotion model)
-if not exist "%EMO_PY%" goto emo_missing
+if not exist "%EMO_DIR%\emotion_api.py" goto emo_missing
+if not "%EMO_PY%"=="python" if not exist "%EMO_PY%" goto emo_missing
 rem -f: only a real success counts, so another program answering on this port (a 404) cannot pass for the service
 curl -sf -m 2 %EMO_URL%/healthz >nul 2>&1
 if errorlevel 1 goto emo_launch
@@ -103,7 +111,7 @@ echo        no phone found over USB (plug it in, USB debugging on). Tailscale / 
 
 echo.
 echo  [4/4] Companion server on port 8000 (first start loads the models, about 30-60 s)
-echo        health: http://127.0.0.1:8000/healthz     Tailscale: ws://100.88.46.59:8000/ws/v1/session
+echo        health: http://127.0.0.1:8000/healthz
 echo.
 title Solace companion server
 rem An older companion server would keep its old settings (and block the port): replace it
