@@ -41,6 +41,33 @@ abstract final class Moods {
         _ => null,
       };
 
+  /// Resolves an internal mood from [readingMood] and, when an older reading
+  /// abstained with `null`, recovers `'Quiet'` if neutral leads (`>= 0.50`) or,
+  /// when [allowPolarFallback] is true, a polar mood from valence and arousal.
+  static String? fromReadingWithFallback({
+    required String? readingMood,
+    Map<String, double>? valenceProbs,
+    Map<String, double>? arousalProbs,
+    double? arousal,
+    bool allowPolarFallback = false,
+  }) {
+    final direct = fromReadingMood(readingMood);
+    if (direct != null) return direct;
+    if (valenceProbs == null) return null;
+    final neg = valenceProbs['negative'] ?? 0.0;
+    final neu = valenceProbs['neutral'] ?? 0.0;
+    final pos = valenceProbs['positive'] ?? 0.0;
+    final best = neg >= pos ? neg : pos;
+    if (neu >= best && neu >= 0.50) return 'Quiet';
+    if (allowPolarFallback && best > neu && best >= 0.45) {
+      final high = arousalProbs != null ? (arousalProbs['high'] ?? 0.0) : (arousal ?? 0.0);
+      final low = arousalProbs != null ? (arousalProbs['low'] ?? 0.0) : 0.0;
+      if (pos >= neg) return high >= low ? 'Bright' : 'Steady';
+      return high >= low ? 'Wobbly' : 'Tender';
+    }
+    return null;
+  }
+
   /// A coarse ordering of the mood words, from -1 (lowest) to 1 (brightest).
   ///
   /// The words are not a scale and were never meant to be one, so this is an

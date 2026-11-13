@@ -177,7 +177,12 @@ class SessionRecord {
       return MoodProvenance.userReported;
     }
     final r = reading;
-    final modelMood = r == null ? null : Moods.fromReadingMood(r.mood);
+    final modelMood = r == null
+        ? null
+        : Moods.fromReadingWithFallback(
+            readingMood: r.mood,
+            valenceProbs: r.valenceProbs,
+          );
     if (review != null &&
         review.status == MoodReviewStatus.accepted &&
         review.matchesReading(r) &&
@@ -207,7 +212,12 @@ class SessionRecord {
     final trimmed = mood?.trim();
     if (trimmed != null && trimmed.isNotEmpty) return mood;
     final r = reading;
-    if (r != null) return Moods.fromReadingMood(r.mood);
+    if (r != null) {
+      return Moods.fromReadingWithFallback(
+        readingMood: r.mood,
+        valenceProbs: r.valenceProbs,
+      );
+    }
     return null;
   }
 

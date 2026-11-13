@@ -98,6 +98,22 @@ void main() {
       expect(controller.forInsights, isEmpty);
     });
 
+    test('load purges stale pending pattern_theme prompts', () async {
+      await repository.save(
+        MemoryMoment(
+          id: 'stale_pt',
+          text: 'Wind-down routines have often helped me settle lately.',
+          createdAt: now,
+          occurredOn: '2026-10-20',
+          source: MomentSource.journal,
+          state: MomentState.pending,
+          sourceRef: 'pattern_theme:helpful:wind_down_routines',
+        ),
+      );
+      await controller.load();
+      expect(controller.pending, isEmpty);
+    });
+
     test('yes keeps it, and a warm confirmed moment reaches Insights and Sol', () async {
       final moment = (await controller.consider(_entry(warm)))!;
       await controller.confirm(moment.id);

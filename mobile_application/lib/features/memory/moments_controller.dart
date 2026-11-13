@@ -53,8 +53,12 @@ class MomentsController extends ChangeNotifier {
   Future<void> _expireOld() async {
     final now = _clock();
     for (final moment in _moments.toList()) {
-      if (moment.state == MomentState.pending &&
-          now.difference(moment.createdAt) > pendingLifetime) {
+      final isStalePatternPrompt =
+          moment.state == MomentState.pending &&
+          (moment.sourceRef?.startsWith('pattern_theme:') ?? false);
+      if (isStalePatternPrompt ||
+          (moment.state == MomentState.pending &&
+              now.difference(moment.createdAt) > pendingLifetime)) {
         await _repository.delete(moment.id, at: now);
         _moments = [for (final m in _moments) if (m.id != moment.id) m];
       }

@@ -171,7 +171,13 @@ class _MessageReadingCardState extends State<MessageReadingCard> {
       );
 
   Widget _card(EmotionResult r) {
-    final internal = Moods.fromReadingMood(r.mood);
+    final internal = Moods.fromReadingWithFallback(
+      readingMood: r.mood,
+      valenceProbs: r.valenceProbs,
+      arousalProbs: r.arousalProbs,
+      arousal: r.arousal,
+      allowPolarFallback: true,
+    );
     final color = moodColors[internal] ?? const Color(0xFFFFB534);
     final lv = r.valenceProbs;
     final la = r.arousalProbs;
@@ -188,7 +194,7 @@ class _MessageReadingCardState extends State<MessageReadingCard> {
           children: [
             Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
             const SizedBox(width: 8),
-            Text(Moods.display(internal),
+            Text(internal == null ? 'Unsure' : Moods.display(internal),
                 key: const ValueKey('message-reading-word'),
                 style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: _ink)),
             if (energy != null) ...[

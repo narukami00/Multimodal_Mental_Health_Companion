@@ -152,6 +152,24 @@ void main() {
       expect(round.effectiveMood, 'Bright');
       final old = SessionRecord.fromMap({'id': 'x', 'createdAt': '2026-01-01T00:00:00', 'mode': 'text', 'text': 'hi', 'mood': 'steady', 'emotionResults': []});
       expect(old.effectiveMood, 'Steady');
+
+      final oldNeutral = entry(
+        results: [
+          EmotionResult(
+            sessionId: 's',
+            modality: EmotionModality.voice,
+            timestamp: DateTime(2026, 10, 12),
+            modelVersion: 'test',
+            classes: const {'neutral': 0.58, 'happy': 0.2, 'sad': 0.22},
+            valenceProbs: const {'negative': 0.2, 'neutral': 0.58, 'positive': 0.22},
+            arousalProbs: const {'low': 0.3, 'mid': 0.5, 'high': 0.2},
+            mood: null,
+            tier: null,
+            pattern: 'AT',
+          ),
+        ],
+      );
+      expect(oldNeutral.effectiveMood, 'Quiet');
     });
     testWidgets('reading card offers Does this fit? Yes / Not quite / Skip and None fits', (tester) async {
       ({MoodReviewStatus status, String? correctedMood})? picked;

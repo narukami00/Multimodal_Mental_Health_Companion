@@ -9,25 +9,13 @@ class ReadMessage {
   ReadMessage(this.message, this.reading)
       : score = scoreOf(reading),
         energy = energyOf(reading),
-        mood = Moods.fromReadingMood(reading.mood) ?? _fallbackMood(reading);
-
-  static String? _fallbackMood(EmotionResult r) {
-    final vp = r.valenceProbs;
-    if (vp == null) return null;
-    final neg = vp['negative'] ?? 0.0;
-    final neu = vp['neutral'] ?? 0.0;
-    final pos = vp['positive'] ?? 0.0;
-    final best = neg >= pos ? neg : pos;
-    if (neu >= best && neu >= 0.50) return 'Quiet';
-    if (best > neu && best >= 0.45) {
-      final ap = r.arousalProbs;
-      final high = ap != null ? (ap['high'] ?? 0.0) : (r.arousal ?? 0.0);
-      final low = ap != null ? (ap['low'] ?? 0.0) : 0.0;
-      if (pos >= neg) return high >= low ? 'Bright' : 'Steady';
-      return high >= low ? 'Wobbly' : 'Tender';
-    }
-    return null;
-  }
+        mood = Moods.fromReadingWithFallback(
+          readingMood: reading.mood,
+          valenceProbs: reading.valenceProbs,
+          arousalProbs: reading.arousalProbs,
+          arousal: reading.arousal,
+          allowPolarFallback: true,
+        );
 
   final ChatMessageRecord message;
   final EmotionResult reading;

@@ -1128,6 +1128,42 @@ class AccountEntryCard extends StatelessWidget {
           if (saved == true) onProfileSaved?.call();
         }
 
+        Widget actionChip(String label) => Container(
+              key: const ValueKey('open-account'),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E8),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE7DBC0)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: kitInk,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 14,
+                    color: kitInk,
+                  ),
+                ],
+              ),
+            );
+
         return KitCard(
           onTap: openAccount,
           child: Row(
@@ -1140,85 +1176,84 @@ class AccountEntryCard extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          identity == null
-                              ? 'Optional online account'
-                              : 'Your account',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: kitInk,
-                          ),
-                        ),
-                        StatusPill(
-                          identity == null ? 'Optional' : 'Connected',
-                          color: identity == null ? kitAmber : sage,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      identity?.email ??
-                          'Use email or Google for online features while keeping history on this device.',
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        height: 1.35,
-                        fontWeight: FontWeight.w600,
-                        color: kitSoft,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        key: const ValueKey('open-account'),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF8E8),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE7DBC0)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                identity == null
-                                    ? 'Sign in or create account'
-                                    : 'Manage account',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 12.5,
+                child: identity == null
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              const Text(
+                                'Optional online account',
+                                style: TextStyle(
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w800,
                                   color: kitInk,
                                 ),
                               ),
+                              StatusPill('Optional', color: kitAmber),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          const Text(
+                            'Use email or Google for online features while keeping history on this device.',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                              color: kitSoft,
                             ),
-                            const SizedBox(width: 4),
-                            const Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 14,
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: actionChip('Sign in or create account'),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Your account',
+                            style: TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w800,
                               color: kitInk,
                             ),
+                          ),
+                          if (identity.email != null &&
+                              identity.email!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              identity.email!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: kitSoft,
+                              ),
+                            ),
                           ],
-                        ),
+                          const SizedBox(height: 3),
+                          const Text(
+                            'History stays on this device',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: sage,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ),
+              if (identity != null) ...[
+                const SizedBox(width: 10),
+                actionChip('Manage'),
+              ],
             ],
           ),
         );
