@@ -20,7 +20,7 @@ Every `/v1/*` HTTP call must carry `Authorization: Bearer <Firebase ID token>` i
 
 1. `POST /v1/sessions` with `{ "purpose": "chat" }` or `{ "purpose": "journal" }` returns `{ "session_id": "...", "ws_url": "/ws/v1/session", "expires_at": 1234567890 }`. `expires_at` is UNIX epoch seconds. Legacy client/thread/capability metadata is accepted for compatibility but confers no authority. The response contains no reusable session token.
 2. Native Flutter chat/call transport connects to `/ws/v1/session?session_id=...` with the Firebase bearer token in the **WebSocket handshake Authorization header**. Video uses `/ws/v1/video?session_id=...` with the same header and chat session ID. Query-string `token`, `access_token` and `id_token` fields are rejected. Browser WebSocket clients that cannot set headers are not supported by this authentication transport.
-3. Journal text, audio, camera frames and face vectors all use a server-issued `purpose=journal` session ID and bearer headers. A client-generated local journal ID remains local; it is not an authorization credential. All uploads must use the same issued ID for that entry. Another account, an unknown ID, an expired lease or a chat-purpose ID is refused before inference.
+3. Journal text, audio, camera frames and face vectors all use a server-issued `purpose=journal` session ID and bearer headers. A client-generated local journal ID remains local; it is not an authorization credential. All uploads must use the same issued ID for that entry. Another account, an unknown ID, an expired lease or a chat-purpose ID is refused before inference. `/v1/journal/*` also enforces explicit `X-Solace-Consent-Emotion: 1` and `X-Solace-Consent-Face: 1` headers at processing time (failing closed when omitted or `0`).
 
 Leases are bound to the verified Firebase UID and purpose, use cryptographically random IDs, and expire at the earlier of one hour or the issuing token's expiry. One chat transport is allowed per issued chat ID (duplicate connection: close 4409); reconnect after disconnect while the lease remains valid, or issue a fresh ID. WebSockets close at token/lease expiry (4401). Ownership/purpose denial closes 4403. Refresh the Firebase ID token before expiry and issue a new lease as needed. A token refresh does not extend an existing lease. Video also stops accepting frames once its parent live call ends, in addition to the existing per-frame camera-consent checks.
 
@@ -75,7 +75,8 @@ It is stored under `models/llm/`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SOLACE_TTS` | `auto` | `auto`, `piper`, `kokoro`, `edge`, `mock`. `auto` uses local Kokoro/Piper weights when present, otherwise the cloud Edge voice. |
+| `SOLACE_TTS` | `auto` | `auto`, `piper`, `kokoro`, `edge`, `local`, `mock`. `auto` uses local Kokoro/Piper weights when present, otherwise the cloud Edge voice unless `SOLACE_TTS_LOCAL_ONLY=1`. |
+| `SOLACE_TTS_LOCAL_ONLY` | `0` | `1` disables cloud Edge TTS fallback on the server (`EdgeTtsEngine`). Clients can also set `tts.local_only: true` in `session.configure`. |
 | `SOLACE_ESPEAK_DATA` | `models/tts/espeak-ng-data` | The espeak-ng data folder local voices need. |
 | `SOLACE_LLM_MODEL` | `Qwen/Qwen2.5-0.5B-Instruct` | Any Qwen2 / Llama-style chat model. A 1.5B model is affordable on a GPU. |
 | `SOLACE_LLM_BACKEND` | `auto` | `hf` forces the slower Transformers path. |

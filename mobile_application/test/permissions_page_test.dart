@@ -140,13 +140,21 @@ void main() {
     await pumpPage(tester);
 
     expect(find.text('WHAT LEAVES THIS DEVICE'), findsOneWidget);
+    expect(
+      find.textContaining('encrypted on this device'),
+      findsOneWidget,
+    );
     // Audio genuinely leaves the device, so the page must not claim otherwise.
     expect(
-      find.textContaining('send audio to the companion server'),
+      find.textContaining('send audio to your companion server'),
       findsOneWidget,
     );
     expect(
-      find.textContaining('sends your chat text to the Solace companion'),
+      find.textContaining('sends text to your configured companion server'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Local-only voice mode'),
       findsOneWidget,
     );
     // Live camera frames genuinely leave the device when face reading is on, so it says so too.

@@ -20,7 +20,14 @@ A device remembers the first explicitly accepted account UID. Signing out keeps 
 
 Firebase manages credential persistence. Never put passwords, ID tokens, service account keys or token values in app preferences, logs, screenshots, source or backups. Backend credentials belong only on the server. The app supplies refreshed Firebase ID tokens to protected APIs; authentication failures leave the local journal available.
 
+## Local encryption, mood review, and data lifecycle
+
+- **At-rest encryption & backup exclusion**: Sensitive repositories (journal sessions, safety events, consent ledger, user profile, therapist contact, memory moments, chat conversations) and queued offline recordings (`.pcm.enc` / `.face.enc`) are encrypted at rest via `AndroidKeystoreCipher` (`AES/GCM/NoPadding`, 256-bit key in `AndroidKeyStore`, atomic `.tmp` write-readback-rename) and excluded from Android Auto Backup and device-to-device transfers (`backup_rules.xml`, `data_extraction_rules.xml`).
+- **Offline queue & consent**: Pending recordings recheck both emotion and face consents independently at upload time; revoking face consent deletes pending `.face` vectors before upload. Orphaned and expired (>14 days) pending recordings are reconciled automatically.
+- **Mood confirmation & trajectory review**: Journal reading cards preserve model abstention and let the person confirm or correct *How I felt then* (stored separately from model estimates). Chat conversations record independent shift-fit and proposed-context agreement statistics without mutating model scores.
+- **Deletion & local-only TTS**: Erasing app data clears encrypted stores, avatars, pending recordings, and cancels all scheduled local notifications (`CheckInReminderService.cancelAllNotifications`). Chat/call voice configuration sends `tts.local_only` (default `true`) so speech synthesis does not silently fall back to cloud TTS.
+
 ## Checks
 
-Run `flutter analyze` and `flutter test test/account_service_test.dart test/account_page_test.dart test/onboarding_flow_test.dart test/profile_controller_settings_test.dart test/data_registry_test.dart`.
-The account tests use fake provider and ownership boundaries. Native Google sign-in, email delivery, Firebase project configuration and signing fingerprints also need a device check with the configured project; unit tests cannot verify them.
+Run `flutter analyze`, `flutter test`, and `flutter build apk --debug`.
+The account tests use fake provider and ownership boundaries. Native Google sign-in, email delivery, Firebase project configuration (`android/app/google-services.json`), and signing fingerprints require a live Firebase project and device verification; unit tests cannot verify them.
