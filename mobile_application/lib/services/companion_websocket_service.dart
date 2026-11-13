@@ -70,6 +70,31 @@ class CompanionWebSocketService {
   String? get sessionId => _sessionId;
   String? get threadId => _threadId;
 
+  /// Ask the companion LLM for a concise 2-5 word thread title. Returns null if unavailable.
+  Future<String?> generateConversationTitle(
+    List<Map<String, String>> turns,
+  ) async {
+    if (turns.isEmpty || _status != CompanionConnectionStatus.connected) {
+      return null;
+    }
+    final base = _connectedBase ?? Uri(scheme: 'http', host: host, port: port);
+    try {
+      final reply = await _http.request(
+        method: 'POST',
+        uri: base.replace(path: '/v1/conversations/title', query: ''),
+        headers: const {'Content-Type': 'application/json'},
+        body: utf8.encode(jsonEncode({'turns': turns})),
+        timeout: const Duration(seconds: 6),
+      );
+      if (reply.status != 200) return null;
+      final data = jsonDecode(reply.body) as Map<String, dynamic>;
+      final title = (data['title'] as String? ?? '').trim();
+      return title.isEmpty ? null : title;
+    } catch (_) {
+      return null;
+    }
+  }
+
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   Timer? _heartbeatTimer;

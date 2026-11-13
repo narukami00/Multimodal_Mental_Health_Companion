@@ -132,9 +132,9 @@ class ChatConversationRecord {
     if (lastUserMsg.isVoice) {
       if (lastUserMsg.transcription != null &&
           lastUserMsg.transcription!.trim().isNotEmpty) {
-        return '🎤 "${lastUserMsg.transcription!.trim()}"';
+        return lastUserMsg.transcription!.trim();
       }
-      return '🎤 Voice note (${lastUserMsg.voiceDuration})';
+      return 'Voice note (${lastUserMsg.voiceDuration})';
     }
     return lastUserMsg.text.trim();
   }

@@ -497,10 +497,7 @@ class _ConversationHistorySheetState extends State<ConversationHistorySheet> {
                                             ),
                                           ),
                                           child: Icon(
-                                            thread.hasVoice
-                                                ? Icons.mic_none_rounded
-                                                : Icons
-                                                      .chat_bubble_outline_rounded,
+                                            Icons.chat_bubble_outline_rounded,
                                             size: 16,
                                             color: isActive || isHighlighted
                                                 ? Colors.white

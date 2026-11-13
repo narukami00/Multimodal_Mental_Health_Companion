@@ -129,7 +129,7 @@ def create_transport(websocket, session_id):
     return Session(websocket, stt=stt, llm=llm, tts=tts, session_id=session_id)
 
 
-app.include_router(build_session_router(server_auth, create_transport, LIVE_SESSIONS, serve_video))
+app.include_router(build_session_router(server_auth, create_transport, LIVE_SESSIONS, serve_video, llm=llm))
 
 
 if __name__ == "__main__":

@@ -551,6 +551,7 @@ class _ChatPageState extends State<ChatPage> {
           ?.copyWith(origin: EmotionOrigin.chat, inContext: true);
       if (reading != null) _chatController.attachToLatestUserMessage(reading);
     });
+    _chatController.titleGenerator ??= _wsService.generateConversationTitle;
 
     final draft = widget.initialDraft?.trim();
     if (draft != null && draft.isNotEmpty) {
@@ -568,6 +569,13 @@ class _ChatPageState extends State<ChatPage> {
         _wsStatus != CompanionConnectionStatus.connecting) {
       _wsService.connect(sessionId: _chatController.activeConversation?.id);
     }
+  }
+
+  String _formatSeconds(int totalSeconds) {
+    final s = totalSeconds < 0 ? 0 : totalSeconds;
+    final m = s ~/ 60;
+    final rem = s % 60;
+    return '$m:${rem.toString().padLeft(2, '0')}';
   }
 
   List<String> _generateLocalSuggestions(String text) {
@@ -883,7 +891,7 @@ class _ChatPageState extends State<ChatPage> {
 
     final sec = _recordingSeconds < 1 ? 1 : _recordingSeconds;
     final durMs = sec * 1000;
-    final durStr = '0:${sec.toString().padLeft(2, '0')}';
+    final durStr = _formatSeconds(sec);
 
     final voiceRecord = ChatMessageRecord(
       id: 'msg_${DateTime.now().microsecondsSinceEpoch}',
@@ -1694,7 +1702,7 @@ class _ChatPageState extends State<ChatPage> {
           const _RecordingDot(),
           const SizedBox(width: 8),
           Text(
-            '0:${_recordingSeconds.toString().padLeft(2, '0')}',
+            _formatSeconds(_recordingSeconds),
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,

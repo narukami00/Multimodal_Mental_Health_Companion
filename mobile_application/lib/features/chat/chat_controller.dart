@@ -32,6 +32,11 @@ class ChatController extends ChangeNotifier {
   bool _isLoaded = false;
   String? _highlightQuery;
 
+  /// Optional LLM callback that turns recent turns into a 2-5 word thread title.
+  Future<String?> Function(List<Map<String, String>> turns)? titleGenerator;
+  final Set<String> _llmTitledIds = <String>{};
+  final Set<String> _titlingInFlight = <String>{};
+
   /// Transient UI filter/highlight query when jumping to a searched conversation.
   String? get highlightQuery => _highlightQuery;
 
@@ -238,7 +243,10 @@ class ChatController extends ChangeNotifier {
     await _saveToPrefs();
     notifyListeners();
     if (message.isUser && !message.isVoice) onUserMessage?.call(message);
-    if (message.isUser) await _givePendingReading(message);
+    if (message.isUser) {
+      await _givePendingReading(message);
+      _maybeGenerateTitle(updatedConv.id);
+    }
   }
 
   /// Update an existing message (e.g. adding transcription or finishing LLM stream).
@@ -281,6 +289,11 @@ class ChatController extends ChangeNotifier {
     _conversations[activeIdx] = updatedConv;
     await _saveToPrefs();
     notifyListeners();
+    if (updatedMessage.isUser &&
+        updatedMessage.transcription != null &&
+        updatedMessage.transcription!.trim().isNotEmpty) {
+      _maybeGenerateTitle(updatedConv.id);
+    }
   }
 
   // --- how each of the person's messages read ---------------------------------
@@ -481,6 +494,48 @@ class ChatController extends ChangeNotifier {
     final words = cleaned.split(' ');
     if (words.length <= 5) return cleaned;
     return '${words.take(5).join(' ')}...';
+  }
+
+  void _maybeGenerateTitle(String conversationId) {
+    final generator = titleGenerator;
+    if (generator == null) return;
+    if (_llmTitledIds.contains(conversationId) ||
+        _titlingInFlight.contains(conversationId)) {
+      return;
+    }
+    final idx = _conversations.indexWhere((c) => c.id == conversationId);
+    if (idx < 0) return;
+    final conv = _conversations[idx];
+    final turns = <Map<String, String>>[
+      for (final m in conv.messages)
+        if ((m.isUser ? m.spokenText : m.text).trim().isNotEmpty &&
+            m.spokenText != 'Audio reflection')
+          {
+            'role': m.isUser ? 'user' : 'assistant',
+            'text': m.isUser ? m.spokenText : m.text.trim(),
+          },
+    ];
+    if (turns.isEmpty) return;
+    _titlingInFlight.add(conversationId);
+    () async {
+      try {
+        final generated = await generator(turns);
+        final cleaned = generated?.trim() ?? '';
+        if (cleaned.isEmpty) return;
+        final targetIdx =
+            _conversations.indexWhere((c) => c.id == conversationId);
+        if (targetIdx < 0) return;
+        _llmTitledIds.add(conversationId);
+        _conversations[targetIdx] =
+            _conversations[targetIdx].copyWith(title: cleaned);
+        await _saveToPrefs();
+        notifyListeners();
+      } catch (_) {
+        // Fallback title stays in place when offline or LLM is unavailable.
+      } finally {
+        _titlingInFlight.remove(conversationId);
+      }
+    }();
   }
 
   Future<void> _saveToPrefs() async {

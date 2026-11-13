@@ -795,6 +795,49 @@ class LlmService:
             logger.warning(f"Summary generation failed, using extractive: {e}")
         return {"summary": fallback, "method": "extractive"}
 
+    async def generate_title_async(
+        self,
+        turns: List[Dict[str, str]],
+    ) -> str:
+        """Generate a concise 2-5 word thread title from recent turns. Returns '' if unavailable."""
+        cleaned_turns = [
+            f"{t.get('role', 'user')}: {str(t.get('text', '')).strip()}"
+            for t in turns[-4:]
+            if str(t.get("text", "")).strip()
+        ]
+        if not self._is_ready or not cleaned_turns:
+            return ""
+        prompt_messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Write a short 2 to 5 word title summarizing the topic of this conversation, "
+                    "like a ChatGPT or Claude thread title (for example: 'Casual greeting', "
+                    "'Lost bag situation', 'Exam stress check-in'). "
+                    "Output ONLY the plain title with no quotes, no numbering, and no trailing period."
+                ),
+            },
+            {
+                "role": "user",
+                "content": "\n".join(cleaned_turns),
+            },
+        ]
+        try:
+            parts: List[str] = []
+            async for chunk in self.generate_stream_async(
+                prompt_messages, max_new_tokens=20, temperature=0.3, top_p=0.9
+            ):
+                parts.append(chunk)
+            raw = "".join(parts).strip().splitlines()[0].strip() if "".join(parts).strip() else ""
+            raw = raw.strip('"\'`*_#-:.!? ').replace("\n", " ")
+            words = [w for w in raw.split() if w]
+            if not words:
+                return ""
+            return " ".join(words[:5])[:48].strip()
+        except Exception as e:  # noqa: BLE001 - title generation is best-effort
+            logger.warning(f"Title generation failed: {e}")
+            return ""
+
     async def generate_suggestions_async(
         self,
         assistant_text: str,

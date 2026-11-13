@@ -672,36 +672,80 @@ class _TrajectoryAgreementCard extends StatelessWidget {
       sessions: const [],
       conversations: [conversation],
     ).trajectory;
+    final total = stats.shiftsTotal;
+    final fit = stats.shiftAgreed;
+    final reviewed = stats.shiftReviewed;
+    final otherReviewed = (reviewed - fit).clamp(0, total);
+    final skipped = stats.shiftSkipped;
+    final pending = stats.shiftUnanswered;
     return _Card(
       key: const ValueKey('breakdown-agreement-stats'),
       title: 'Your review coverage',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Shifts: ${stats.shiftAgreed} of ${stats.shiftReviewed} reviewed fit '
-            '(${stats.shiftsTotal} detected · ${stats.shiftSkipped} skipped · ${stats.shiftUnanswered} unanswered)',
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF3A3125),
+          if (total > 0) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: SizedBox(
+                height: 8,
+                child: Row(
+                  children: [
+                    if (fit > 0)
+                      Expanded(flex: fit, child: Container(color: const Color(0xFF2E9E66))),
+                    if (otherReviewed > 0)
+                      Expanded(flex: otherReviewed, child: Container(color: const Color(0xFFE09F3E))),
+                    if (skipped > 0)
+                      Expanded(flex: skipped, child: Container(color: const Color(0xFFD6CEC2))),
+                    if (pending > 0)
+                      Expanded(flex: pending, child: Container(color: const Color(0xFFEFE8DC))),
+                  ],
+                ),
+              ),
             ),
+            const SizedBox(height: 12),
+          ],
+          Row(
+            children: [
+              _CoverageStat(label: 'Detected', value: total),
+              const SizedBox(width: 8),
+              _CoverageStat(label: 'Reviewed', value: reviewed),
+              const SizedBox(width: 8),
+              _CoverageStat(label: 'Fit', value: fit, accent: const Color(0xFF2E9E66)),
+              const SizedBox(width: 8),
+              _CoverageStat(label: 'Pending', value: pending + skipped),
+            ],
           ),
           if (stats.reasonProposedTotal > 0) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Context guesses: ${stats.reasonAgreed} of ${stats.reasonReviewed} reviewed fit '
-              '(${stats.reasonProposedTotal} proposed · ${stats.reasonSkipped} skipped · ${stats.reasonUnanswered} unanswered)',
-              style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF3A3125),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFDF8F0),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE8DEC8)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome_outlined, size: 14, color: Color(0xFF8A7A61)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Context guesses: ${stats.reasonAgreed}/${stats.reasonReviewed} fit (${stats.reasonProposedTotal} shown)',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF3A3125),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           const Text(
-            'User-reported agreement only — not clinical accuracy or classifier accuracy.',
+            'Your feedback only — not clinical or classifier accuracy.',
             style: TextStyle(
               fontSize: 11.5,
               height: 1.35,
@@ -710,6 +754,50 @@ class _TrajectoryAgreementCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CoverageStat extends StatelessWidget {
+  const _CoverageStat({required this.label, required this.value, this.accent});
+
+  final String label;
+  final int value;
+  final Color? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBF6EE),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFEBE2D2)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              '$value',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: accent ?? const Color(0xFF3A3125),
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF8A7A61),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

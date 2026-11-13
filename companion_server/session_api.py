@@ -1,7 +1,7 @@
 """Authenticated session issuance and native WebSocket routes; models injected by main."""
 import asyncio
 import time
-from typing import Any, Dict, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal
 from fastapi import APIRouter, Query, Request, WebSocket, HTTPException
 from pydantic import BaseModel, Field
 from auth_service import AuthError
@@ -20,7 +20,15 @@ class CreateSessionResponse(BaseModel):
     expires_at: int
 
 
-def build_router(auth, session_factory, live, video_handler):
+class ConversationTitleRequest(BaseModel):
+    turns: List[Dict[str, str]] = Field(default_factory=list)
+
+
+class ConversationTitleResponse(BaseModel):
+    title: str
+
+
+def build_router(auth, session_factory, live, video_handler, llm=None):
     router = APIRouter()
     connecting = set()
     @router.post("/v1/sessions", response_model=CreateSessionResponse)
@@ -83,6 +91,16 @@ def build_router(auth, session_factory, live, video_handler):
                                    timeout=max(0.01, min(lease.expires_at, identity.expires_at) - time.time()))
         except asyncio.TimeoutError:
             await websocket.close(code=4401)
+
+    @router.post("/v1/conversations/title", response_model=ConversationTitleResponse)
+    async def conversation_title(req: ConversationTitleRequest, request: Request):
+        """Generate a short 2-5 word thread title via the companion LLM."""
+        try:
+            await auth.http_identity(request)
+        except AuthError as exc:
+            raise HTTPException(exc.status, exc.detail) from None
+        title = await llm.generate_title_async(req.turns) if llm is not None else ""
+        return ConversationTitleResponse(title=title)
 
 
     return router
