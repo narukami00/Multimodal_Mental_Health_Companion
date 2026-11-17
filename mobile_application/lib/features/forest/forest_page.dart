@@ -64,15 +64,17 @@ class _ForestPageState extends State<ForestPage> with TickerProviderStateMixin {
   bool _disposed = false;
   Size _size = Size.zero;
   double _startZoom = 1;
+  int _habitatMinute = -1;
 
   @override
   void initState() {
     super.initState();
+    final tree = widget.controller.visibleTree;
     _world
       ..setFinished(_shown.finished)
-      ..species = _shown.currentSpecies
-      ..dispS = _shown.stage;
-    _stageIndex = _shown.stage.floor().clamp(0, 7);
+      ..species = tree.species
+      ..dispS = tree.stage;
+    _stageIndex = tree.stage.floor().clamp(0, 7);
     _count = _shown.finished.length;
     _ticker = createTicker(_onFrame)..start();
     WidgetsBinding.instance.addPostFrameCallback((_) => _play());
@@ -88,8 +90,15 @@ class _ForestPageState extends State<ForestPage> with TickerProviderStateMixin {
     final dt = (elapsed - _last).inMicroseconds / 1e6;
     _last = elapsed;
     final now = widget.controller.now;
+    final minute = now.millisecondsSinceEpoch ~/ Duration.millisecondsPerMinute;
+    if (minute != _habitatMinute) {
+      _habitatMinute = minute;
+      unawaited(widget.controller.tendHabitat(centerX: _world.camX, canPlace: _world.canPlaceProp));
+    }
     _world
       ..hour = now.hour + now.minute / 60 + now.second / 3600
+      ..props = widget.controller.habitat.props
+      ..habitatNow = widget.controller.habitat.timeAt(now)
       ..weather = widget.controller.weather
       ..update(dt);
     _frame.value++;
@@ -111,9 +120,14 @@ class _ForestPageState extends State<ForestPage> with TickerProviderStateMixin {
   void dispose() {
     _disposed = true;
     _captionExpiry?.cancel();
-    for (final c in _active.toList()) {
-      _active.remove(c);
-      c.dispose();
+    if (_watering case final clock?) {
+      widget.controller.pauseWatering((
+        eventId: _wateringId!,
+        progress: clock.value,
+        species: _world.species,
+        stage: _world.dispS,
+      ));
+      clock.dispose();
     }
     _ticker?.dispose();
     _frame.dispose();
@@ -121,33 +135,11 @@ class _ForestPageState extends State<ForestPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  int _ms(int ms) => _world.reducedMotion ? (ms / 5).round() : ms;
-
-  Future<void> _wait(int ms) => Future<void>.delayed(Duration(milliseconds: _ms(ms)));
-
-  /// Runs [apply] with 0..1 over [ms] (eased).
-  Future<void> _tween(int ms, void Function(double t) apply, {Curve curve = Curves.easeInOut}) async {
-    if (_disposed) return;
-    final c = AnimationController(vsync: this, duration: Duration(milliseconds: _ms(ms)));
-    _active.add(c);
-    final curved = CurvedAnimation(parent: c, curve: curve);
-    curved.addListener(() {
-      if (!_disposed) apply(curved.value);
-    });
-    try {
-      await c.forward().orCancel;
-    } on TickerCanceled {
-      // the page went away mid-animation
-    } finally {
-      if (_active.remove(c)) c.dispose();
-    }
-  }
-
-  /// The animations still running, so leaving the page can stop them all.
-  final _active = <AnimationController>{};
+  AnimationController? _watering;
+  String? _wateringId;
 
   void _say(String text, {bool settle = false}) {
-    if (_disposed) return;
+    if (_disposed || text == _caption) return;
     _captionExpiry?.cancel();
     setState(() => _caption = text);
     if (settle) {
@@ -157,111 +149,113 @@ class _ForestPageState extends State<ForestPage> with TickerProviderStateMixin {
     }
   }
 
-  int _total(Garden g) => g.finished.length * g.config.watersPerTree + g.currentProgress;
-
-  Future<void> _growTo(double target, int ms) {
-    final from = _world.dispS;
-    return _tween((ms * math.max(0.6, math.min(1.6, (target - from).abs()))).round(), (t) => _world.dispS = lerp(from, target, t));
-  }
-
   Future<void> _play() async {
     final controller = widget.controller;
-    final waiting = controller.waiting;
-    if (waiting.isEmpty) return;
-    var prev = controller.garden;
-    _world.camTargetX = 0;
-    await _wait(900);
-    for (var i = 1; i <= waiting.length && !_disposed; i++) {
-      final after = controller.gardenAfter(i);
-      final grew = _total(after) - _total(prev);
-      _say(_kindText[waiting[i - 1].kind] ?? '');
-      await _wait(800);
-      if (_disposed) return;
+    while (!_disposed) {
+      final waiting = controller.waiting;
+      if (waiting.isEmpty) return;
+      final water = waiting.first;
+      final before = controller.garden;
+      // The existing watched timestamp also commits any waters with this exact timestamp.
+      final after = controller.gardenAfter(waiting.takeWhile((w) => w.at.isAtSameMomentAs(water.at)).length);
+      final finishes = after.finished.length > before.finished.length;
+      final grows = finishes || after.stage > before.stage;
+      final target = finishes ? 7.0 : after.stage;
+      const growAt = 3600.0;
+      final growEnd = growAt + (grows ? 4800 * (target - before.stage).clamp(0.6, 1.6) : 2200);
+      final slideAt = growEnd + 3600;
+      final slideEnd = slideAt + 3200;
+      final duration = finishes ? slideEnd + 3000 : growEnd + 2900;
+      final saved = controller.pausedWatering;
+      final clock = AnimationController(
+        vsync: this,
+        duration: Duration(milliseconds: (duration / (_world.reducedMotion ? 5 : 1)).round()),
+        value: saved?.eventId == water.id ? saved!.progress.clamp(0.0, 1.0) : 0,
+      );
+      _watering = clock;
+      _wateringId = water.id;
+      var movedTree = false;
 
-      // the can tips and pours over the tree
-      _world.canShower = _world.dispS >= 4;
-      unawaited(_tween(2800, (t) => _world.canK = t, curve: Curves.linear));
-      await _wait(1900);
-      if (_disposed) return;
+      void paintFrame() {
+        final ms = clock.value * duration;
+        final growth = Curves.easeInOut.transform(((ms - growAt) / (growEnd - growAt)).clamp(0.0, 1.0));
+        _world
+          ..dispS = lerp(before.stage, target, growth)
+          ..canK = ms >= 1700 && ms < 4500 ? (ms - 1700) / 2800 : -1
+          ..canShower = before.stage >= 4;
 
-      if (grew == 0) {
-        _say('It still counts. The tree is resting for today.');
-        await _wait(2200);
-      } else {
-        final finishes = after.finished.length > prev.finished.length;
-        final before = _world.dispS.floor();
-        await _growTo(finishes ? 7.0 : after.stage, 4800);
-        if (_disposed) return;
-        if (finishes) {
-          await _celebrate(after);
-        } else {
-          setState(() => _shown = after);
-          final now = _world.dispS.floor().clamp(0, 7);
-          if (now > before) {
-            final p = _world.crownPoint();
+        if (finishes && ms >= slideAt) {
+          if (!movedTree) {
+            movedTree = true;
+            final done = after.finished.last;
+            if (_focus != null) _home();
             _world
-              ..glowTarget = 0.8
-              ..sparkleBurst(p.dx, p.dy, 14, _world.crownRadius);
-            _say(_stageLines[now]);
-            await _wait(1700);
-            _world.glowTarget = 0;
-            await _wait(1100);
-          } else {
-            _say('A little taller.');
+              ..setFinished(after.finished)
+              ..slideSpecies = done.species
+              ..slideTo = _world.slotOf(after.finished.length - 1)
+              ..species = after.currentSpecies;
+            setState(() {
+              _shown = after;
+              _count = after.finished.length;
+            });
           }
+          _world
+            ..dispS = after.stage
+            ..glowTarget = 0
+            ..slideK = ms < slideEnd ? (ms - slideAt) / (slideEnd - slideAt) : -1
+            ..hideFinished = ms < slideEnd ? after.finished.length - 1 : -1
+            ..seedFade = ((ms - slideEnd) / 1600).clamp(0.0, 1.0);
+          _say(ms < slideEnd ? 'Fully grown. It stays in your forest.' : 'A new seed, waiting in the soil.');
+        } else if (ms >= growEnd && grows) {
+          final stage = target.floor().clamp(0, 7);
+          final line = finishes
+              ? 'Fully grown, with ${_touchText(treeSpecies[before.currentSpecies].touch)}.'
+              : stage > before.stage.floor() ? _stageLines[stage] : 'A little taller.';
+          if (!finishes && !identical(_shown, after)) setState(() => _shown = after);
+          if (_caption != line) {
+            final p = _world.crownPoint();
+            _world.sparkleBurst(p.dx, p.dy, 14, _world.crownRadius);
+          }
+          _world.glowTarget = ms < growEnd + 1700 ? (finishes ? 1 : 0.8) : 0;
+          _say(line);
+        } else if (!grows && ms >= growAt) {
+          _say('It still counts. The tree is resting for today.');
+        } else if (ms >= 900) {
+          _say(_kindText[water.kind] ?? '');
         }
       }
-      _world.canK = -1;
-      prev = after;
-      await _wait(1500);
-    }
-    if (_disposed) return;
-    await _wait(1500);
-    _say(_settled[widget.controller.now.millisecond % _settled.length], settle: true);
-    await widget.controller.markWatched();
-  }
 
-  /// A finished tree: a soft glow and sparkles, then it walks back to its place in the forest and a new seed appears.
-  Future<void> _celebrate(Garden after) async {
-    final done = after.finished.last;
-    final sp = treeSpecies[done.species];
-    _world
-      ..glowTarget = 1
-      ..bigGlow = 1;
-    _say('Fully grown, with ${_touchText(sp.touch)}. It stays in your forest for good.');
-    for (var w = 0; w < 3; w++) {
-      final p = _world.crownPoint();
-      _world.sparkleBurst(p.dx, p.dy, 16, _world.crownRadius * 1.1);
-      await _wait(1300);
+      clock.addListener(paintFrame);
+      paintFrame();
+      try {
+        await clock.forward().orCancel;
+      } on TickerCanceled {
+        return;
+      }
+      if (_disposed) return;
+      _watering = null;
+      _wateringId = null;
+      clock.dispose();
+      _world
+        ..canK = -1
+        ..glowTarget = 0;
+      await controller.markWatched(through: water);
+      if (_disposed) return;
+      final current = controller.garden;
+      _world
+        ..setFinished(current.finished)
+        ..species = current.currentSpecies
+        ..dispS = current.stage;
+      setState(() {
+        _shown = current;
+        _count = current.finished.length;
+      });
+      if (!controller.waterWaiting) {
+        _say(_settled[controller.now.millisecond % _settled.length], settle: true);
+        return;
+      }
+      _say('');
     }
-    _world.glowTarget = 0;
-    await _wait(1300);
-    if (_disposed) return;
-    // the finished tree walks back to its place while a new seed is set in the planting spot
-    if (_focus != null) _home();
-    _world
-      ..setFinished(after.finished)
-      ..hideFinished = after.finished.length - 1
-      ..slideSpecies = done.species
-      ..slideTo = _world.slotOf(after.finished.length - 1)
-      ..species = after.currentSpecies
-      ..dispS = after.stage
-      ..seedFade = 0
-      ..bigGlow = 0
-      ..camTargetX = _world.slotOf(after.finished.length - 1).x * 0.3;
-    setState(() {
-      _shown = after;
-      _count = after.finished.length;
-    });
-    await _tween(3200, (t) => _world.slideK = t, curve: Curves.linear);
-    if (_disposed) return;
-    _world
-      ..slideK = -1
-      ..hideFinished = -1
-      ..camTargetX = 0;
-    await _tween(1600, (t) => _world.seedFade = t);
-    _say('A new seed, waiting in the soil.');
-    await _wait(1400);
   }
 
   String _touchText(String touch) => switch (touch) {

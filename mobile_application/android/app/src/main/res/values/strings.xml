@@ -13,6 +13,7 @@
     <string name="widget_light_night">Moonlight</string>
     <string name="widget_write_description">Write a check-in</string>
     <string name="widget_voice_description">Talk a check-in</string>
+    <string name="widget_water_waiting">Watering waiting</string>
     <string name="quick_write_hint">One word is enough</string>
     <string name="quick_write_save">Save</string>
     <string name="quick_write_cancel">Not now</string>

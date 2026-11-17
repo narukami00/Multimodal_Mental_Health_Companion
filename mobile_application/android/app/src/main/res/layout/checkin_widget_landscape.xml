@@ -21,4 +21,16 @@
         android:layout_marginEnd="16dp"
         android:importantForAccessibility="no"
         android:src="@drawable/widget_orb" />
+    <ImageView
+        android:id="@+id/widget_water"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="46dp"
+        android:layout_marginEnd="18dp"
+        android:background="@drawable/widget_button"
+        android:contentDescription="@string/widget_water_waiting"
+        android:padding="5dp"
+        android:src="@drawable/ic_widget_water"
+        android:visibility="gone" />
 </FrameLayout>

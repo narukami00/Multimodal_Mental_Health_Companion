@@ -57,7 +57,7 @@ void main() {
   test('only visible growth and species changes invalidate the sprite', () {
     String sig(double stage, {int species = 0}) =>
         ForestWidgetService.signature(species: species, stage: stage);
-    expect(sig(3.0), sig(3.1));
+    expect(sig(3.0), sig(3.002));
     expect(sig(3.0), isNot(sig(3.3)));
     expect(sig(3.0), isNot(sig(3.0, species: 2)));
   });

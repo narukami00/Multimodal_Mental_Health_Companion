@@ -21,6 +21,7 @@ class ForestWidgetService {
 
   // Matches CheckInWidgetProvider.KEY_TREE. Old scene files used a wide crop.
   static const treeKey = 'forest_tree_path';
+  static const waterKey = 'forest_water_waiting';
   static const _size = 160.0;
   static const _density = 2.0;
 
@@ -29,7 +30,7 @@ class ForestWidgetService {
 
   @visibleForTesting
   static String signature({required int species, required double stage}) =>
-      '$species|${(stage * 4).round()}';
+      '$species|${(stage * 100).round()}';
 
   @visibleForTesting
   static Future<Uint8List> renderTree({
@@ -79,9 +80,9 @@ class ForestWidgetService {
   }
 
   /// Serialize writes so a slower render cannot replace a newer tree.
-  Future<void> push({required int species, required double stage}) {
+  Future<void> push({required int species, required double stage, required bool waterWaiting}) {
     return _pending = _pending.then((_) async {
-      final sig = signature(species: species, stage: stage);
+      final sig = '${signature(species: species, stage: stage)}|$waterWaiting';
       if (sig == _lastSignature) return;
       try {
         final dir = await getApplicationSupportDirectory();
@@ -94,6 +95,7 @@ class ForestWidgetService {
         );
         await temporary.rename(path);
         await HomeWidget.saveWidgetData<String>(treeKey, path);
+        await HomeWidget.saveWidgetData<bool>(waterKey, waterWaiting);
         await HomeWidget.updateWidget(
           androidName: CheckInWidgetService.androidWidgetName,
         );

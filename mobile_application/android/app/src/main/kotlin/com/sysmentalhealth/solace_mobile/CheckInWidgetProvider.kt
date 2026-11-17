@@ -61,6 +61,10 @@ class CheckInWidgetProvider : HomeWidgetProvider() {
                 setTextViewText(R.id.widget_prompt, prompt)
                 setViewVisibility(R.id.widget_prompt, if (layout == Layout.Compact) View.GONE else View.VISIBLE)
                 if (tree != null) setImageViewBitmap(R.id.widget_tree, tree)
+                setViewVisibility(
+                    R.id.widget_water,
+                    if (widgetData.getBoolean(KEY_WATER, false)) View.VISIBLE else View.GONE,
+                )
                 setOnClickPendingIntent(R.id.widget_root, open)
                 setOnClickPendingIntent(R.id.widget_write, write)
                 setOnClickPendingIntent(R.id.widget_voice, voice)
@@ -110,6 +114,7 @@ class CheckInWidgetProvider : HomeWidgetProvider() {
     companion object {
         const val KEY_PROMPT = "checkin_prompt"
         const val KEY_TREE = "forest_tree_path"
+        const val KEY_WATER = "forest_water_waiting"
         const val LAUNCH_URI = "solace://checkin"
         const val VOICE_URI = "solace://voice"
 

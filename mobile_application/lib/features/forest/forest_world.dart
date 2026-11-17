@@ -4,9 +4,12 @@ import 'dart:ui' as ui;
 import 'dart:ui' show Color, Offset, Rect, Size;
 
 import '../../domain/forest/forest_garden.dart';
+import '../../domain/forest/forest_habitat.dart';
+import '../../domain/forest/forest_river.dart';
 import '../../domain/forest/forest_sky.dart';
 import '../../domain/forest/tree_geometry.dart';
 import 'forest_card_scene.dart' show geometryFor;
+import 'forest_prop_painter.dart';
 import 'tree_painter.dart' hide Rgb;
 
 /// The forest scene, ported from the approved prototype: the sky of the hour, clouds, hills, ground, grass, the trees at
@@ -103,9 +106,9 @@ final (List<_Star>, List<_Cloud>) _scenery = () {
 }();
 
 class _Drift {
-  _Drift(this.x, this.y, this.ty, this.vx, this.vy, this.rot, this.vr, this.col, this.blossom, this.ph, this.max);
+  _Drift(this.x, this.y, this.z, this.ty, this.vx, this.vy, this.rot, this.vr, this.col, this.blossom, this.ph, this.max);
   double x, y, vx, vy, rot, life = 0;
-  final double ty, vr, ph, max;
+  final double z, ty, vr, ph, max;
   final Color col;
   final bool blossom;
 }
@@ -161,8 +164,9 @@ class _Firefly {
 }
 
 class _Tuft {
-  _Tuft(this.z, this.wx, this.fl, this.side);
+  _Tuft(this.z, this.wx, this.fl, this.side, this.kind);
   final double z, wx, fl, side;
+  final int kind;
 }
 
 /// What the tap landed on: a finished tree (by index) or the tree being grown.
@@ -204,6 +208,55 @@ class ForestWorld {
   // what is shown
   List<FinishedTree> finished = const [];
   final List<Slot> slots = [];
+  final _terrainSlots = <Slot>[];
+  final _rivers = <int, ForestRiver>{};
+  List<int> _riverRegions = [0];
+  final _visibleRivers = <ForestRiver>[];
+  double riverWetness = 0;
+  List<ForestProp> props = const [];
+  DateTime habitatNow = DateTime.now();
+  final _visibleProps = <ForestProp>[];
+  final _propPictures = <int, ({int key, ui.Picture picture})>{};
+
+  /// Check the whole reserved terrain, including rivers and trees that have yet
+  /// to be revealed. A later forest expansion must not flood or displace a prop.
+  bool canPlaceProp(double x, double z, ForestPropKind kind) {
+    final y = depthY(z), pad = kind == ForestPropKind.log ? 40.0 : 32.0;
+    if (math.pow(x / (66 + pad * 0.3), 2) + math.pow((y - depthY(mainZ)) / 27, 2) < 1) return false;
+    final limit = ((x.abs() + 160) / 31).ceil() + 8;
+    while (_terrainSlots.length < limit) {
+      _terrainSlots.add(forestSlot(_terrainSlots));
+    }
+    for (final slot in _terrainSlots.take(limit)) {
+      if (math.pow((x - slot.x) / (45 + pad * 0.4), 2) +
+          math.pow((y - depthY(slot.z)) / 22, 2) < 1) {
+        return false;
+      }
+    }
+    final region = ((x - 160) / riverRegionWidth).round();
+    for (var r = region - 1; r <= region + 1; r++) {
+      if (_riverAt(r).excludes(x, y, margin: pad)) return false;
+    }
+    return true;
+  }
+
+  /// Stable channels revealed by the extent of the trees, including the home river.
+  List<ForestRiver> get rivers => [for (final region in _riverRegions) _riverAt(region)];
+
+  ForestRiver _riverAt(int region) => _rivers.putIfAbsent(region, () {
+    final center = region * riverRegionWidth + 160;
+    // Later tree indices have a minimum |x| of 110 + floor(index / 2) * 62.
+    // Reserve all indices that could reach this channel before fixing its shape.
+    final limit = ((center.abs() + 450) / 31).ceil() + 8;
+    while (_terrainSlots.length < limit) {
+      _terrainSlots.add(forestSlot(_terrainSlots));
+    }
+    return ForestRiver(region, [
+      const Offset(0, 519.8),
+      for (final slot in _terrainSlots.take(limit))
+        if ((slot.x - center).abs() < 450) Offset(slot.x, depthY(slot.z)),
+    ]);
+  });
   int species = 0;
   double dispS = 0, wet = 0, glow = 0, glowTarget = 0, bigGlow = 0, seedFade = 1;
   int hideFinished = -1;
@@ -252,6 +305,12 @@ class ForestWorld {
   void setFinished(List<FinishedTree> trees) {
     finished = trees;
     if (trees.isNotEmpty) slotOf(trees.length - 1);
+    var left = 0.0, right = 0.0;
+    for (final slot in slots.take(trees.length)) {
+      left = math.min(left, slot.x);
+      right = math.max(right, slot.x);
+    }
+    _riverRegions = riverRegions(left, right).toList();
   }
 
   Slot slotOf(int index) {
@@ -267,6 +326,10 @@ class ForestWorld {
     for (final s in slots.take(finished.length)) {
       lo = math.min(lo, s.x - 80);
       hi = math.max(hi, s.x + 80);
+    }
+    for (final river in rivers) {
+      lo = math.min(lo, river.anchor - designW * 0.5);
+      hi = math.max(hi, river.anchor + designW * 0.35);
     }
     return (lo, hi);
   }
@@ -372,6 +435,8 @@ class ForestWorld {
       _sceneLight = _quantised(mixRgb(sky.treeLight, [255, 255, 255], sky.night * 0.34));
     }
     final sk = sky;
+    final wetTarget = sk.weather.rain > 0 ? 1.0 : 0.0;
+    riverWetness += (wetTarget - riverWetness) * math.min(1, dt * (wetTarget > riverWetness ? 0.20 : 0.035));
     _fadeStep = reducedMotion ? 1 : math.min(1, dt * 8);
     _updateCamera(dt);
     _updateParticles(dt, sk);
@@ -481,7 +546,7 @@ class ForestWorld {
       if (p.y < p.ty) {
         p.vy = math.min(p.vy + 6 * dt, 26);
         p.x += (p.vx + windX + math.sin(p.life * 1.4 + p.ph) * 10) * dt;
-        p.y += p.vy * dt;
+        p.y = math.min(p.ty, p.y + p.vy * dt);
         p.rot += p.vr * dt;
       }
     }
@@ -525,9 +590,13 @@ class ForestWorld {
         _horizon + 10 + _rnd.nextDouble() * 300,
       );
 
-  void _spawnDrift(double x, double y, double ty, Color col, bool blossom) {
+  void _spawnDrift(Slot slot, Offset crown, Color col, bool blossom) {
     if (_motion == 0 || _drift.length >= 26) return;
-    _drift.add(_Drift(x, y, ty, (_rnd.nextDouble() - 0.5) * 8, 6 + _rnd.nextDouble() * 6, _rnd.nextDouble() * _tau, (_rnd.nextDouble() - 0.5) * 2.4, col, blossom, _rnd.nextDouble() * _tau, 9 + _rnd.nextDouble() * 5));
+    final ground = depthY(slot.z);
+    _drift.add(_Drift(slot.x + crown.dx / depthParallax(slot.z), ground + crown.dy, slot.z,
+        ground + 4 + _rnd.nextDouble() * 10, (_rnd.nextDouble() - 0.5) * 8,
+        6 + _rnd.nextDouble() * 6, _rnd.nextDouble() * _tau, (_rnd.nextDouble() - 0.5) * 2.4,
+        col, blossom, _rnd.nextDouble() * _tau, 9 + _rnd.nextDouble() * 5));
   }
 
   /// A burst of sparkles around (x, y) in design space.
@@ -682,6 +751,7 @@ class ForestWorld {
     _drawBat(canvas);
     _drawHills(canvas, sk);
     _drawGround(canvas, sk, bottom);
+    _drawRivers(canvas, sk, bottom);
 
     // trees far to near, with grass layered between depths
     final items = <({double z, void Function() draw})>[];
@@ -690,6 +760,42 @@ class ForestWorld {
     final target = selection == null ? null : selection < 0 ? const Slot(0, mainZ) : slotOf(selection);
     final focus = target == null ? null : _treeHit(selection!, screenOf(target.x, target.z), target.z, 0).rect;
     final focusDepth = target?.z ?? 0.0;
+    _visibleProps.clear();
+    final propIds = <int>{};
+    for (final prop in props) {
+      if (prop.expired(habitatNow) || habitatNow.isBefore(prop.born)) continue;
+      final p = screenOf(prop.x, prop.z), sc = depthScale(clamp01(prop.z)) * _zf(prop.z);
+      final bounds = Rect.fromLTRB(p.dx - 64 * sc, p.dy - 55 * sc,
+          p.dx + 64 * sc, p.dy + 16 * sc);
+      if (bounds.right < -20 || bounds.left > designW + 20 || bounds.top > bottom || bounds.bottom < top) continue;
+      propIds.add(prop.id);
+      if (prop.occupies(habitatNow)) _visibleProps.add(prop);
+      final muted = focus != null && prop.z < focusDepth && bounds.overlaps(focus);
+      items.add((z: prop.z, draw: () {
+        final key = Object.hash((prop.ageAt(habitatNow) * 32).floor(),
+          (prop.returnFraction(habitatNow) * 256).floor(), sk.weather.rain > 0,
+          (snowCover * 16).floor(), _light[0], _light[1], _light[2]);
+        var stamp = _propPictures[prop.id];
+        if (stamp == null || stamp.key != key) {
+          stamp?.picture.dispose();
+          final recorder = ui.PictureRecorder();
+          paintForestProp(ui.Canvas(recorder), prop, habitatNow, light: _light,
+              wet: sk.weather.rain > 0, snow: snowCover);
+          stamp = (key: key, picture: recorder.endRecording());
+          _propPictures[prop.id] = stamp;
+        }
+        canvas.save();
+        if (muted) canvas.saveLayer(bounds, ui.Paint()..color = const Color(0x33FFFFFF));
+        canvas.translate(p.dx, p.dy);
+        canvas.scale(sc, sc);
+        canvas.drawPicture(stamp.picture);
+        if (muted) canvas.restore();
+        canvas.restore();
+      }));
+    }
+    for (final id in _propPictures.keys.where((id) => !propIds.contains(id)).toList()) {
+      _propPictures.remove(id)!.picture.dispose();
+    }
     for (var i = 0; i < finished.length; i++) {
       if (i == hideFinished) continue;
       final tr = finished[i], slot = slotOf(i), sp = treeSpecies[tr.species];
@@ -714,7 +820,7 @@ class ForestWorld {
                   : sp.touch == 'autumn'
                       ? const [Color(0xFFD9542B), Color(0xFFF08A2E), Color(0xFFF2B13C)][0]
                       : _col(rgbFromHex(sp.leaf[1]));
-              _spawnDrift(p.dx + cl.x * sc, p.dy + cl.y * sc, p.dy + 4 + _rnd.nextDouble() * 10, col, sp.touch == 'blossom');
+              _spawnDrift(slot, Offset(cl.x + cl.y * shear, cl.y) * depthScale(slot.z), col, sp.touch == 'blossom');
             }
           }
         },
@@ -765,7 +871,8 @@ class ForestWorld {
           if (alpha > 0.7 && _motion > 0 && dispS > 6.5 && (mainSp.touch == 'blossom' || mainSp.touch == 'autumn') && _rnd.nextDouble() < 0.01) {
             final cl = geo.clumps.isEmpty ? null : geo.clumps[_rnd.nextInt(geo.clumps.length)];
             if (cl != null) {
-              _spawnDrift(mp.dx + cl.x * mz, mp.dy + cl.y * mz, mp.dy + 8 + _rnd.nextDouble() * 30, mainSp.touch == 'blossom' ? const Color(0xFFF7C3D2) : const Color(0xFFE9772C), mainSp.touch == 'blossom');
+              _spawnDrift(const Slot(0, mainZ), Offset(cl.x + cl.y * shear, cl.y) * rv.sc,
+                  mainSp.touch == 'blossom' ? const Color(0xFFF7C3D2) : const Color(0xFFE9772C), mainSp.touch == 'blossom');
             }
           }
         },
@@ -779,7 +886,7 @@ class ForestWorld {
       zPrev = it.z;
       it.draw();
     }
-    _drawGrass(canvas, sk, t, tufts, -3, zPrev, bottom, focus, focusDepth);
+    _drawGrass(canvas, sk, t, tufts, -4.5, zPrev, bottom, focus, focusDepth);
     hits = newHits;
     _drawButterflies(canvas);
 
@@ -819,7 +926,8 @@ class ForestWorld {
     for (final p in _drift) {
       final a = 1 - smooth(p.max - 2, p.max, p.life);
       canvas.save();
-      canvas.translate(p.x, p.y);
+      canvas.translate(screenOf(p.x, p.z).dx, _projectY(p.y, p.z));
+      canvas.scale(_zf(p.z));
       canvas.rotate(p.rot);
       canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: (p.blossom ? 2.4 : 3.2) * 2, height: (p.blossom ? 1.6 : 2.0) * 2), ui.Paint()..color = p.col.withValues(alpha: a));
       canvas.restore();
@@ -1007,6 +1115,206 @@ class ForestWorld {
     }
   }
 
+
+  void _drawRivers(ui.Canvas canvas, SkyState sk, double bottom) {
+    _visibleRivers.clear();
+    final endY = math.max(1000.0, 455 + (bottom - lift - 455) / math.max(0.3, zoom) + 80);
+    for (final river in rivers) {
+      // Reject distant regions before allocating their channel paths. At the
+      // horizon the projection is smallest, so this bound remains conservative.
+      final reach = river.bend + 13 + 76 + 24;
+      const horizonDepth = (536 - 358) / 162;
+      if (screenOf(river.anchor + reach, horizonDepth).dx < -30 ||
+          screenOf(river.anchor - reach, horizonDepth).dx > designW + 30) {
+        continue;
+      }
+      final samples = <({double y, double x, double width})>[];
+      var minX = double.infinity, maxX = double.negativeInfinity;
+      for (var y = 358.0; y <= endY + 6; y += 6) {
+        final x = river.centerAt(y), width = river.halfWidthAt(y);
+        samples.add((y: y, x: x, width: width));
+        final z = (536 - y) / 162;
+        minX = math.min(minX, screenOf(x - width - 24, z).dx);
+        maxX = math.max(maxX, screenOf(x + width + 24, z).dx);
+      }
+      if (maxX < -30 || minX > designW + 30) continue;
+      _visibleRivers.add(river);
+
+      ui.Path channel(double bank) {
+        final shape = ui.Path();
+        for (var i = 0; i < samples.length; i++) {
+          final sample = samples[i], z = (536 - sample.y) / 162;
+          final width = sample.width + bank * smooth(358, 435, sample.y);
+          final left = screenOf(sample.x - width, z);
+          if (i == 0) {
+            shape.moveTo(left.dx, left.dy);
+          } else {
+            shape.lineTo(left.dx, left.dy);
+          }
+        }
+        for (final sample in samples.reversed) {
+          final z = (536 - sample.y) / 162;
+          final width = sample.width + bank * smooth(358, 435, sample.y);
+          final right = screenOf(sample.x + width, z);
+          shape.lineTo(right.dx, right.dy);
+        }
+        return shape..close();
+      }
+
+      final snowy = snowCover * 0.7;
+      final bankGreen = mixRgb(sk.groundBot, [101, 126, 89], 0.42);
+      final earth = mixRgb(sk.groundBot, [157, 141, 107], 0.55);
+      final damp = mixRgb(sk.groundBot, [68, 99, 91], 0.72);
+      canvas.drawPath(channel(22), ui.Paint()..color = _col(mixRgb(bankGreen, [200, 209, 205], snowy)));
+      canvas.drawPath(channel(15), ui.Paint()..color = _col(mixRgb(earth, damp, riverWetness * 0.62)));
+      canvas.drawPath(channel(7), ui.Paint()..color = _col(damp));
+      final water = channel(2.4 * riverWetness);
+      final deep = mixRgb(sk.skyTop, [32, 90, 101], sk.night > 0.5 ? 0.28 : 0.50);
+      final shallow = mixRgb(sk.skyBot, [88, 147, 145], 0.39);
+      canvas.drawPath(
+        water,
+        ui.Paint()..shader = ui.Gradient.linear(
+          Offset(0, _projectY(358, 1)),
+          Offset(0, bottom),
+          [_col(shallow), _col(mixRgb(sk.skyMid, deep, 0.43)), _col(deep)],
+          [0, 0.35, 1],
+        ),
+      );
+      canvas.save();
+      canvas.clipPath(water);
+      final roughness = 0.35 + sk.wind * 0.65 + riverWetness * 0.2;
+      final reflection = mixRgb(sk.skyBot, [236, 242, 223], 0.27);
+      final linePaint = ui.Paint()
+        ..style = ui.PaintingStyle.stroke
+        ..strokeCap = ui.StrokeCap.round;
+      // World-anchored flow bands remain attached to the channel while panning.
+      for (var i = 0; i < 56; i++) {
+        final y = 374 + i * 9.4 + (t * (4 + roughness * 7)) % 9.4;
+        final z = (536 - y) / 162, factor = _zf(z);
+        final width = river.halfWidthAt(y);
+        final center = river.centerAt(y);
+        final offset = math.sin(i * 7.13 + river.phase) * width * 0.55;
+        final p = screenOf(center + offset, z);
+        final length = (2 + width * 0.17) * factor;
+        final sway = math.sin(t * 1.1 + i) * roughness * factor;
+        linePaint
+          ..color = _col(reflection, 0.10 + 0.11 * roughness)
+          ..strokeWidth = 0.65 * factor;
+        canvas.drawPath(
+          ui.Path()
+            ..moveTo(p.dx - length, p.dy)
+            ..quadraticBezierTo(p.dx, p.dy + sway, p.dx + length, p.dy),
+          linePaint,
+        );
+      }
+      // A broken column of reflected sunlight or moonlight follows the sky body.
+      final body = sk.night > 0.5 ? sk.moon : sk.sun;
+      if (body.a > 0.01) {
+        final color = sk.night > 0.5 ? const Color(0xFFE2E6C9) : _col(mixRgb(sk.skyBot, [255, 218, 151], 0.60));
+        for (var i = 0; i < 34; i++) {
+          final y = 388 + i * 7.4, z = (536 - y) / 162, factor = _zf(z);
+          final width = river.halfWidthAt(y);
+          final shimmer = math.sin(t * 1.4 + i * 2.3 + river.phase);
+          final p = screenOf(river.centerAt(y) + (body.x / designW - 0.5) * width * 0.8 + shimmer * 1.8, z);
+          final rx = (1.6 + width * 0.22) * factor * (0.65 + 0.25 * shimmer);
+          canvas.drawOval(
+            Rect.fromCenter(center: p, width: rx * 2, height: (0.6 + i * 0.02) * factor),
+            ui.Paint()..color = color.withValues(alpha: (0.08 + 0.16 * (i / 34)) * body.a),
+          );
+        }
+      }
+      if (sk.weather.rain > 0) {
+        final rainPaint = ui.Paint()
+          ..style = ui.PaintingStyle.stroke
+          ..strokeWidth = 0.7
+          ..color = _col(sk.skyBot, 0.34);
+        final count = sk.weather.rain > 100 ? 40 : 22;
+        for (var i = 0; i < count; i++) {
+          final y = 405.0 + (i * 29.7) % 265, z = (536 - y) / 162;
+          final phase = (t * 1.1 + i * 0.381) % 1;
+          final width = river.halfWidthAt(y);
+          final p = screenOf(river.centerAt(y) + math.sin(i * 19.2) * width * 0.85, z);
+          final factor = _zf(z);
+          rainPaint
+            ..color = _col(sk.skyBot, (1 - phase) * 0.38)
+            ..strokeWidth = 0.7 * factor;
+          canvas.drawOval(Rect.fromCenter(center: p, width: (1 + phase * 10) * factor, height: (0.4 + phase * 2.8) * factor), rainPaint);
+        }
+      }
+      canvas.restore();
+      // Pebbles, damp edges and a few reeds belong to the bank, outside high water.
+      for (var i = 0; i < 23; i++) {
+        final y = 393.0 + i * 13.8, z = (536 - y) / 162, factor = _zf(z);
+        final side = i.isEven ? -1.0 : 1.0;
+        final edge = river.halfWidthAt(y) + 9;
+        final p = screenOf(river.centerAt(y) + side * edge, z);
+        if (p.dx < -30 || p.dx > designW + 30 || p.dy > bottom + 12) continue;
+        canvas.drawOval(
+          Rect.fromCenter(center: p, width: (3 + i % 3) * factor, height: 1.8 * factor),
+          ui.Paint()..color = _col(mixRgb(earth, [198, 204, 182], i % 2 * 0.4)),
+        );
+        if (i % 4 == 0) {
+          final blade = ui.Paint()
+            ..style = ui.PaintingStyle.stroke
+            ..strokeCap = ui.StrokeCap.round
+            ..strokeWidth = 0.9 * factor
+            ..color = _col(mixRgb(sk.groundBot, [40, 92, 69], 0.58));
+          for (var j = 0; j < 3; j++) {
+            final sw = math.sin(t * 0.8 + j + i) * sk.wind * 2 * _motion;
+            canvas.drawPath(
+              ui.Path()
+                ..moveTo(p.dx + j * factor * side, p.dy)
+                ..quadraticBezierTo(p.dx + (j * side + sw) * factor, p.dy - 7 * factor, p.dx + (j * side + sw + 2) * factor, p.dy - (12 + j * 3) * factor),
+              blade,
+            );
+          }
+        }
+      }
+      if (snowCover > 0.02) {
+        final frost = ui.Paint()
+          ..style = ui.PaintingStyle.stroke
+          ..strokeWidth = 2.0
+          ..color = _col([208, 221, 220], snowCover * 0.48);
+        canvas.drawPath(channel(5), frost);
+      }
+    }
+  }
+
+  void _drawRiverFireflies(ui.Canvas canvas, SkyState sk) {
+    for (final river in _visibleRivers) {
+      for (var i = 0; i < 12; i++) {
+        final fly = _flies[i];
+        if (fly.a < 0.02) continue;
+        final y = 422 + i * 17.4 + math.sin(fly.p * 0.43) * 6;
+        final z = (536 - y) / 162, factor = _zf(z);
+        final side = i.isEven ? -1.0 : 1.0;
+        final x = river.centerAt(y) + side * (river.halfWidthAt(y) + 9 + 5 * math.sin(fly.p * 0.51));
+        final base = screenOf(x, z), p = base - Offset(0, (7 + math.sin(fly.p * 0.7) * 3) * factor);
+        if (p.dx < -24 || p.dx > designW + 24) continue;
+        final alpha = fly.a * sk.night * (0.40 + 0.60 * (0.5 + 0.5 * math.sin(fly.p * 1.2 + i)));
+        // Local pools of light on the bank, plus the insect's smaller halo.
+        canvas.drawOval(
+          Rect.fromCenter(center: base, width: 20 * factor, height: 7 * factor),
+          ui.Paint()..shader = ui.Gradient.radial(base, 11 * factor, [
+            Color.fromRGBO(204, 220, 119, alpha * 0.14),
+            const Color(0x00CCD879),
+          ]),
+        );
+        canvas.drawCircle(
+          p, 6 * factor,
+          ui.Paint()..shader = ui.Gradient.radial(p, 6 * factor, [
+            Color.fromRGBO(246, 244, 174, alpha * 0.95),
+            Color.fromRGBO(223, 236, 135, alpha * 0.22),
+            const Color(0x00DFEC87),
+          ], [0, 0.3, 1]),
+        );
+        final reflected = screenOf(river.centerAt(y) + side * river.halfWidthAt(y) * 0.74, z) + Offset(0, 3 * factor);
+        canvas.drawOval(Rect.fromCenter(center: reflected, width: 3 * factor, height: 0.8 * factor),
+            ui.Paint()..color = Color.fromRGBO(230, 237, 165, alpha * 0.26));
+      }
+    }
+  }
+
   void _drawGround(ui.Canvas c, SkyState sk, double bottom) {
     final snowy = snowCover * 0.75 * (1 - sk.night * 0.5);
     final topC = mixRgb(sk.groundTop, [238, 242, 246], snowy), botC = mixRgb(sk.groundBot, [214, 222, 230], snowy);
@@ -1020,6 +1328,7 @@ class ForestWorld {
         ..close(),
       ui.Paint()..shader = ui.Gradient.linear(Offset(0, yh), Offset(0, math.max(yh + 1, bottom)), [_col(topC), _col(botC)]),
     );
+    _drawMeadowBed(c, sk, bottom);
     if (puddles > 0.02) {
       final paint = ui.Paint()..color = _col(mixRgb(sk.skyMid, [120, 140, 160], 0.4), 0.35 * puddles);
       for (final p in const [[-120.0, 590.0, 34.0], [95.0, 612.0, 26.0], [260.0, 575.0, 30.0], [-300.0, 600.0, 28.0], [430.0, 620.0, 36.0]]) {
@@ -1035,46 +1344,133 @@ class ForestWorld {
   // screens and a zoomed camera still have grass to the bottom edge.
   static const _grassTile = 1080.0;
   static final _grass = <_Tuft>[
-    for (var row = 0; row < 35; row++) ...[
-      for (var cell = 0; cell < (row < 10 ? 54 : 72); cell++) _grassTuft(row, cell),
+    for (var row = 0; row < 57; row++) ...[
+      for (var cell = 0; cell < 96; cell++) _grassTuft(row, cell),
     ],
   ];
 
   static _Tuft _grassTuft(int row, int cell) {
     final r = mulberry32(6619 + row * 34567 + cell * 7349);
-    return _Tuft(0.98 - row * 0.092 + (r() - 0.5) * 0.082, (cell + r()) * (row < 10 ? 20 : 15), r(), r());
+    return _Tuft(0.98 - row * 0.085 + (r() - 0.5) * 0.12,
+        (cell + r()) * (_grassTile / 96), r(), r(), (r() * 6).floor());
   }
 
   ui.Image? _grassSprite;
-  static const _grassSource = Rect.fromLTWH(0, 0, 40, 40);
+  static final _grassSources = [for (var i = 0; i < 10; i++) Rect.fromLTWH(i * 64.0, 0, 64, 64)];
+
+  static double _meadowAt(double x, double y) =>
+      0.5 + math.sin(x * 0.019 + math.sin(y * 0.021) * 1.7) * 0.24 +
+      math.sin(x * 0.043 - y * 0.032) * 0.19;
 
   ui.Image get _grassStamp {
     final existing = _grassSprite;
     if (existing != null) return existing;
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder)..scale(2, 2);
-    final path = ui.Path();
-    for (final (spread, height) in const [(-5.0, 8.0), (-2.0, 13.0), (0.0, 15.0), (3.0, 12.0), (6.0, 8.0)]) {
-      final root = 10 + spread * 0.18;
-      path
-        ..moveTo(root, 17)
-        ..quadraticBezierTo(10 + spread * 0.44, 12, 10 + spread, 17 - height)
-        ..quadraticBezierTo(10 + spread * 0.60, 14, root + 0.86, 17)
-        ..close();
+    final white = ui.Paint()..color = const Color(0xFFFFFFFF);
+    for (var kind = 0; kind < 10; kind++) {
+      canvas.save();
+      canvas.translate(kind * 32.0, 0);
+      if (kind == 9) {
+        canvas.save();
+        canvas.translate(16, 27);
+        canvas.scale(1, 0.26);
+        canvas.drawCircle(Offset.zero, 15, ui.Paint()..shader = ui.Gradient.radial(
+          Offset.zero, 15, const [Color(0xCCFFFFFF), Color(0x00FFFFFF)], [0, 1]));
+        canvas.restore();
+      } else if (kind == 3 || kind == 4) {
+        // Round ground cover alternates with the pointed blade silhouettes.
+        for (var j = 0; j < (kind == 3 ? 4 : 7); j++) {
+          final x = 6.0 + j * (kind == 3 ? 6 : 3.1);
+          final y = 25 - (j % 3) * 2.8;
+          if (kind == 3) {
+            canvas.drawLine(Offset(x, 28), Offset(x, y - 3), ui.Paint()
+              ..color = const Color(0xB3FFFFFF)..strokeWidth = 0.7);
+            for (var k = 0; k < 3; k++) {
+              final a = k * _tau / 3;
+              canvas.drawOval(Rect.fromCenter(center: Offset(x + math.cos(a) * 2.0,
+                  y - 3 + math.sin(a) * 1.8), width: 4.3, height: 3.1), white);
+            }
+          } else {
+            canvas.save();
+            canvas.translate(x, y);
+            canvas.rotate((j.isEven ? -1 : 1) * 0.55);
+            canvas.drawOval(const Rect.fromLTWH(-2.6, -5, 5.2, 8.1), white);
+            canvas.restore();
+          }
+        }
+      } else if (kind >= 6) {
+        // Petals keep their own colors; the whole sprite receives scene light.
+        for (var j = 0; j < 3; j++) {
+          final x = 7.0 + j * 8, top = 15.0 + (j == 1 ? -3 : 2);
+          canvas.drawPath(ui.Path()..moveTo(x - 1, 28)
+            ..quadraticBezierTo(x + 2, 22, x, top), ui.Paint()
+              ..color = const Color(0xFF678752)..style = ui.PaintingStyle.stroke..strokeWidth = 1);
+          canvas.drawOval(Rect.fromCenter(center: Offset(x + 2.3, 23), width: 5.0, height: 2.0),
+              ui.Paint()..color = const Color(0xFF8BA565));
+          final petals = ui.Paint()..color = const [Color(0xFFF7F0D8), Color(0xFFECD18F), Color(0xFFC9B6D7)][kind - 6];
+          for (var k = 0; k < 5; k++) {
+            final a = k * _tau / 5;
+            canvas.drawOval(Rect.fromCenter(center: Offset(x + math.cos(a) * 2.2,
+                top + math.sin(a) * 2.1), width: 3.5, height: 3.1), petals);
+          }
+          canvas.drawCircle(Offset(x, top), 1.25, ui.Paint()..color = const Color(0xFFD9AB59));
+        }
+      } else {
+        final path = ui.Path();
+        for (var j = 0; j < 5; j++) {
+          final spread = (j - 2) * (kind == 2 ? 4.6 : 3.4);
+          final height = (kind == 1 ? 19.0 : kind == 2 ? 11.0 : 12.0) - (j - 2).abs() * 2.3;
+          final root = 16 + spread * 0.32;
+          final tip = 16 + spread * (kind == 2 ? 1.25 : 1);
+          path..moveTo(root, 28)
+            ..quadraticBezierTo(root + spread * 0.4, 23 - height * 0.15, tip, 28 - height)
+            ..quadraticBezierTo(root + spread * 0.12 + (kind == 2 ? 2.8 : 1.2),
+                26 - height * 0.25, root + (kind == 2 ? 2 : 0.9), 28)..close();
+          if (kind == 5 && j.isOdd) {
+            canvas.drawLine(Offset(root, 28), Offset(tip, 10 + j * 1.3), ui.Paint()
+              ..color = const Color(0xD9FFFFFF)..strokeWidth = 0.65);
+            for (var k = 0; k < 3; k++) {
+              canvas.drawOval(Rect.fromCenter(center: Offset(tip + (k.isEven ? -0.8 : 0.8),
+                  11 + j * 1.3 + k * 1.6), width: 2.2, height: 3.1), white);
+            }
+          }
+        }
+        canvas.drawPath(path, white);
+      }
+      canvas.restore();
     }
-    canvas.drawPath(path, ui.Paint()..color = const Color(0xFFFFFFFF));
     final picture = recorder.endRecording();
     try {
-      return _grassSprite = picture.toImageSync(40, 40);
+      return _grassSprite = picture.toImageSync(640, 64);
     } finally {
       picture.dispose();
     }
   }
 
+  void _drawMeadowBed(ui.Canvas canvas, SkyState sk, double bottom) {
+    final transforms = <ui.RSTransform>[], rects = <Rect>[], colors = <Color>[];
+    final left = camX - _grassTile / 2;
+    final moss = mixRgb(sk.groundBot, [77, 119, 65], 0.46 * (1 - sk.night));
+    for (var i = 0; i < _grass.length; i += 17) {
+      final tuft = _grass[i], z = tuft.z;
+      final x = (tuft.wx - left) % _grassTile + left;
+      final p = screenOf(x, z), factor = _zf(z);
+      if (p.dx < -70 || p.dx > designW + 70 || p.dy < _farY(_horizon) || p.dy > bottom + 30) continue;
+      final scale = (1.2 + _meadowAt(x, depthY(z)) * 2.2) * factor;
+      transforms.add(ui.RSTransform.fromComponents(rotation: 0, scale: scale / 2,
+          anchorX: 32, anchorY: 54, translateX: p.dx, translateY: p.dy));
+      rects.add(_grassSources[9]);
+      colors.add(_col(moss, 0.17 * (1 - snowCover * 0.9)));
+    }
+    canvas.drawAtlas(_grassStamp, transforms, rects, colors, ui.BlendMode.modulate, null, _stampPaint);
+  }
+
   void _drawGrass(ui.Canvas c, SkyState sk, double t, List<_Tuft> tufts, double zMin, double zMax, double bottom, Rect? focus, double focusDepth) {
     final sway = (0.010 + sk.wind * 0.030) * 8 * _motion;
     final ground = mixRgb(sk.groundBot, [156, 174, 184], snowCover * 0.78);
-    final tones = [shadeRgb(ground, -0.36), shadeRgb(ground, -0.16), shadeRgb(ground, 0.12)];
+    final tones = [mixRgb(ground, [62, 111, 64], (1 - sk.night) * 0.50),
+      shadeRgb(ground, -0.16), mixRgb(ground, [172, 191, 110], (1 - sk.night) * 0.37)];
     final colors = [
       for (final a in const [0.84, 0.22])
         for (final tone in tones) _col(tone, a),
@@ -1082,25 +1478,37 @@ class ForestWorld {
     final transforms = <ui.RSTransform>[], rects = <Rect>[], tints = <Color>[];
     final top = _farY(_horizon);
     final tileLeft = camX - _grassTile / 2;
-    final flower = ui.Paint()..color = _col(mixRgb([247, 234, 182], [76, 107, 89], sk.night), 0.85);
+    final flowerLight = mixRgb([255, 255, 255], sk.groundTop, sk.night * 0.8 + sk.weather.dim * 0.5);
     for (final tf in tufts) {
       final z = tf.z;
       if (z < zMin || z >= zMax) continue;
       final worldX = (tf.wx - tileLeft) % _grassTile + tileLeft;
+      if (_visibleRivers.any((river) => river.excludes(worldX, depthY(z), margin: 12))) continue;
+      if (_visibleProps.any((prop) => math.pow((worldX - prop.x) /
+          (prop.kind == ForestPropKind.log ? 34 : 26), 2) + math.pow((z - prop.z) * 162 / 9, 2) < 1)) {
+        continue;
+      }
       final zf = _zf(z);
       final x = _cx + (worldX - camX) * depthParallax(z) * zf;
       if (x < -20 || x > designW + 20) continue;
       final y = _projectY(depthY(z), z);
       if (y < top || y > bottom + 24) continue;
-      final s = lerp(1.55, 0.43, clamp01((z + 0.56) / 1.55)) * (0.66 + tf.side * 0.52) * math.sqrt(zf);
-      final turn = math.sin(t * 0.9 + worldX * 0.035) * sway;
+      final patch = _meadowAt(worldX, depthY(z));
+      final s = lerp(1.45, 0.42, clamp01((z + 0.56) / 1.55)) *
+          (0.62 + tf.side * 0.62) * (0.72 + patch * 0.48) * math.sqrt(zf);
+      var kind = tf.kind;
+      if (patch > 0.64 && kind == 0) kind = 3;
+      if (patch < 0.26 && kind == 3) kind = 0;
+      final flowering = tf.fl < 0.045 && patch > 0.52 && z < 0.55 && snowCover < 0.35;
+      if (flowering) kind = 6 + ((math.sin(worldX * 0.017 + depthY(z) * 0.023) + 1) * 1.49).floor();
+      final turn = math.sin(t * 0.9 + worldX * 0.035 + tf.side * 2) * sway *
+          (kind == 3 || kind == 4 ? 0.25 : 1);
       final muted = focus != null && z < focusDepth && x > focus.left && x < focus.right && y > focus.top && y - 21 * s < focus.bottom;
-      transforms.add(ui.RSTransform.fromComponents(rotation: turn, scale: s / 2, anchorX: 20, anchorY: 34, translateX: x, translateY: y));
-      rects.add(_grassSource);
-      tints.add(colors[(tf.side * 3).floor() + (muted ? 3 : 0)]);
-      if (!muted && tf.fl < 0.026 && z < 0.5 && snowCover < 0.45) {
-        c.drawOval(Rect.fromCenter(center: Offset(x + turn * 13 * s, y - 13 * s), width: 3.6 * s, height: 2.7 * s), flower);
-      }
+      transforms.add(ui.RSTransform.fromComponents(rotation: turn, scale: s / 2, anchorX: 32, anchorY: 56, translateX: x, translateY: y));
+      rects.add(_grassSources[kind]);
+      tints.add(flowering ? _col(flowerLight, muted ? 0.22 : 0.92) : kind == 5
+          ? _col(mixRgb(ground, [181, 174, 112], 0.50 * (1 - sk.night)), muted ? 0.22 : 0.74)
+          : colors[((patch + tf.side) * 1.49).floor().clamp(0, 2) + (muted ? 3 : 0)]);
     }
     if (transforms.isNotEmpty) {
       c.drawAtlas(_grassStamp, transforms, rects, tints, ui.BlendMode.modulate, null, ui.Paint()..filterQuality = ui.FilterQuality.low);
@@ -1206,13 +1614,7 @@ class ForestWorld {
     if (sk.tintA > 0.005) c.drawRect(wash, ui.Paint()..color = _col(sk.tint, sk.tintA * (1 - 0.25 * sk.night)));
     c.drawRect(wash, ui.Paint()..shader = ui.Gradient.radial(const Offset(_cx, 380), 520, [const Color(0x000A0F1E), Color.fromRGBO(10, 15, 30, 0.22 + sk.night * 0.2)], [220 / 520, 1]));
 
-    for (final f in _flies) {
-      if (f.a < 0.02) continue;
-      final x = _cx + (f.wx - camX * 0.9) + math.sin(f.p * 0.21 * f.f) * 30, y = f.y + math.sin(f.p * 0.33 * f.f) * 18;
-      if (x < -20 || x > designW + 20) continue;
-      final a = f.a * (0.35 + 0.65 * (0.5 + 0.5 * math.sin(f.p * 0.9 + f.wx)));
-      c.drawCircle(Offset(x, y), 9, ui.Paint()..shader = ui.Gradient.radial(Offset(x, y), 9, [Color.fromRGBO(250, 255, 180, 0.9 * a), Color.fromRGBO(220, 255, 140, 0.45 * a), const Color(0x00C8FF78)], [0, 0.25, 1]));
-    }
+    _drawRiverFireflies(c, sk);
     if (glow > 0.01) {
       final geo = geometryFor(species), rv = revealAt(dispS), mp = screenOf(0, mainZ), mz = _zf(mainZ);
       final cy = mp.dy - math.max(30.0, geo.height * rv.sc * 0.55) * mz, r = (90 + 120 * rv.sc + bigGlow * 60) * mz;
@@ -1301,6 +1703,10 @@ class ForestWorld {
   }
 
   void dispose() {
+    for (final stamp in _propPictures.values) {
+      stamp.picture.dispose();
+    }
+    _propPictures.clear();
     for (final i in _treeImages.values) {
       i?.dispose();
     }

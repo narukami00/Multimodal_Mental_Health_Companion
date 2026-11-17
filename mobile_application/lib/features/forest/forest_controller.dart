@@ -6,16 +6,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/models/session_input.dart';
 import '../../domain/forest/forest_garden.dart';
+import '../../domain/forest/forest_habitat.dart';
 import '../../domain/forest/forest_sky.dart' show ForestWeather;
 import '../goals/goals_controller.dart';
 import '../sessions/session_controller.dart';
 import '../suggestions/suggestion_controller.dart';
 
+typedef WateringFrame = ({String eventId, double progress, int species, double stage});
+
 /// What the forest remembers: the waterings (append-only, so a tree never shrinks even if an entry is later deleted),
 /// which entries have already been looked at, and how far the person has watched.
 class ForestData {
-  ForestData({this.initialised = false, Set<String>? seen, List<WaterEvent>? events, this.watchedThrough})
+  ForestData({this.initialised = false, Set<String>? seen, List<WaterEvent>? events, this.watchedThrough, this.wateringFrame, ForestHabitat? habitat})
       : seen = seen ?? <String>{},
+        habitat = habitat ?? ForestHabitat(),
         events = events ?? <WaterEvent>[];
 
   /// False until the first scan has run.
@@ -23,21 +27,33 @@ class ForestData {
   final Set<String> seen;
   final List<WaterEvent> events;
   DateTime? watchedThrough;
+  WateringFrame? wateringFrame;
+  final ForestHabitat habitat;
 
   Map<String, Object?> toMap() => {
         'initialised': initialised,
         'seen': seen.toList(),
         'events': [for (final e in events) e.toMap()],
         'watchedThrough': watchedThrough?.toIso8601String(),
+        'habitat': habitat.toMap(),
+        if (wateringFrame case final frame?)
+          'wateringFrame': [frame.eventId, frame.progress, frame.species, frame.stage],
       };
 
   static ForestData fromMap(Object? raw) {
     if (raw is! Map) return ForestData();
+    final frame = switch (raw['wateringFrame']) {
+      [final String eventId, final num progress, final int species, final num stage] =>
+        (eventId: eventId, progress: progress.toDouble(), species: species, stage: stage.toDouble()),
+      _ => null,
+    };
     return ForestData(
       initialised: raw['initialised'] == true,
       seen: {for (final s in (raw['seen'] as List? ?? const [])) '$s'},
       events: [for (final e in (raw['events'] as List? ?? const [])) ?WaterEvent.fromMap(e)],
       watchedThrough: DateTime.tryParse('${raw['watchedThrough']}'),
+      wateringFrame: frame,
+      habitat: ForestHabitat.fromMap(raw['habitat']),
     );
   }
 }
@@ -101,6 +117,7 @@ class ForestController extends ChangeNotifier {
   ForestData _data = ForestData();
   bool _loaded = false;
   bool _scanning = false;
+  bool _disposed = false;
 
   bool get isLoaded => _loaded;
   DateTime get now => _clock();
@@ -138,6 +155,7 @@ class ForestController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _clockTick?.cancel();
     _sessions.removeListener(_scan);
     _suggestions?.removeListener(_scan);
@@ -197,18 +215,72 @@ class ForestController extends ChangeNotifier {
   /// Whether the can should be standing by the tree.
   bool get waterWaiting => waiting.isNotEmpty;
 
+  ForestHabitat get habitat => _data.habitat;
+  bool _tendingHabitat = false, _habitatDirty = false;
+
+  Future<void> tendHabitat({required double centerX,
+    required bool Function(double x, double z, ForestPropKind kind) canPlace}) async {
+    if (!_loaded || _disposed || _tendingHabitat) return;
+    _tendingHabitat = true;
+    try {
+      _habitatDirty = habitat.advance(now: now, weather: weather, centerX: centerX,
+          canPlace: canPlace) || _habitatDirty;
+      if (_habitatDirty) {
+        await _store.save(_data);
+        _habitatDirty = false;
+      }
+    } catch (error) {
+      debugPrint('Could not save forest habitat: $error');
+    } finally {
+      _tendingHabitat = false;
+    }
+  }
+
+  WateringFrame? get pausedWatering {
+    final frame = _data.wateringFrame;
+    return frame != null && frame.eventId == waiting.firstOrNull?.id ? frame : null;
+  }
+
+  ({int species, double stage}) get visibleTree {
+    final frame = pausedWatering;
+    if (frame != null) return (species: frame.species, stage: frame.stage);
+    final current = garden;
+    return (species: current.currentSpecies, stage: current.stage);
+  }
+
+  void pauseWatering(WateringFrame frame) {
+    if (_disposed || waiting.firstOrNull?.id != frame.eventId) return;
+    _data.wateringFrame = frame;
+    // A route can be disposed while Flutter is finalizing the widget tree.
+    scheduleMicrotask(() {
+      if (!_disposed) notifyListeners();
+    });
+    unawaited(_savePausedWatering());
+  }
+
+  Future<void> _savePausedWatering() async {
+    try {
+      await _store.save(_data);
+    } catch (error) {
+      debugPrint('Could not save paused watering: $error');
+    }
+  }
+
   /// The garden after the first [count] waiting waters have been poured, for playing them one at a time.
   Garden gardenAfter(int count) {
     final shown = displayedEvents(_data.events, _data.watchedThrough, now);
     return growGarden([...shown, ...waiting.take(count)], config);
   }
 
-  /// The person has watched everything that was waiting.
-  Future<void> markWatched() async {
-    final last = waiting.isEmpty ? null : waiting.last.at;
+  /// Commit the water that finished playing, or all waiting waters when omitted.
+  Future<void> markWatched({WaterEvent? through}) async {
+    final pending = waiting;
+    if (through != null && !pending.any((event) => event.id == through.id)) return;
+    final last = through?.at ?? pending.lastOrNull?.at;
     if (last == null) return;
     _data.watchedThrough = last;
+    _data.wateringFrame = null;
     await _store.save(_data);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

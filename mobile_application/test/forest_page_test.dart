@@ -126,13 +126,27 @@ void main() {
     expect(find.byKey(const ValueKey('tree-breakdown')), findsNothing);
   });
 
-  testWidgets('leaving while it is pouring is safe', (tester) async {
+  testWidgets('leaving mid-growth keeps the frame and resumes the same watering', (tester) async {
     await sessions.saveSession(mode: CaptureMode.text, mood: 'Steady');
     await pumpPage(tester);
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 1000));
     await tester.pumpWidget(const SizedBox());
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
-    await tester.pump(const Duration(milliseconds: 200));
+    final first = forest.pausedWatering!;
+    expect(first.stage, greaterThan(0));
+    expect(first.stage, lessThan(1));
+    expect(forest.visibleTree.stage, first.stage);
+    expect(forest.waterWaiting, isTrue);
+
+    await pumpPage(tester);
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pumpWidget(const SizedBox());
+    expect(forest.pausedWatering!.eventId, first.eventId);
+    expect(forest.visibleTree.stage, greaterThan(first.stage));
+
+    await pumpPage(tester);
+    await playOut(tester);
+    expect(forest.visibleTree.stage, 1);
+    expect(forest.waterWaiting, isFalse);
     expect(tester.takeException(), isNull);
   });
 }
