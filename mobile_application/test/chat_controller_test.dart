@@ -42,9 +42,7 @@ void main() {
       final active = controller.activeConversation;
       expect(active, isNotNull);
       expect(active!.title, 'Holding space today');
-      expect(active.messages.length, 1);
-      expect(active.messages.first.isUser, isFalse);
-      expect(active.messages.first.text, contains("you don't have to carry it"));
+      expect(active.messages, isEmpty);
     });
 
     test('conversations only count in history when user has messaged', () async {
@@ -89,7 +87,7 @@ void main() {
       await controller.addMessage(userMsg);
 
       final active = controller.activeConversation!;
-      expect(active.messages.length, 2);
+      expect(active.messages.length, 1);
       expect(active.messages.last.text, 'Feeling overwhelmed by work today');
       expect(active.title, 'Feeling overwhelmed by work today');
     });
@@ -113,7 +111,7 @@ void main() {
       await controller.addMessage(voiceMsg);
 
       final active = controller.activeConversation!;
-      expect(active.messages.length, 2);
+      expect(active.messages.length, 1);
       expect(active.hasVoice, isTrue);
       expect(active.messages.last.isVoice, isTrue);
       expect(active.messages.last.voiceDuration, '0:18');
@@ -198,7 +196,7 @@ void main() {
 
       expect(controller2.conversations.length, 1);
       final reloaded = controller2.activeConversation!;
-      expect(reloaded.messages.length, 2);
+      expect(reloaded.messages.length, 1);
       expect(reloaded.messages.last.text, 'Saving persistent reflection test');
     });
   });
